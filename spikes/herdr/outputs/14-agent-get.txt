@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike agent get t1-refine-1
+exit=0

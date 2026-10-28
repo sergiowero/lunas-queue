@@ -1,0 +1,12 @@
+ ▝▝   ▝▝   ~/.herdr/worktrees/toy/lunasq-t1
+▎ [✻] [✻] [✻] · Share Claude Code and earn $10 in usage
+▎ credits · /passes
+❯ Llama a la tool whoami del servidor lunasq y responde
+  solo con su texto.
+  Called lunasq
+⏺ run token: run-herdr-0003
+✻ Baked for 5s · done 4:30 PM
+─────────────────────────────────────────────────────────
+❯
+─────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 3 agents

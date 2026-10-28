@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike agent start t1-refine-1 --kind claude --pane w2:p2 --timeout 60000 -- --mcp-config /Users/sergio.sanchez/workspace/lunas-queue-uw-00/spikes/run-token/mcp-run-env.json --strict-mcp-config --model haiku --allowedTools mcp__lunasq__whoami
+exit=1

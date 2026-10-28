@@ -1,0 +1,1 @@
+{"error":{"code":"worktree_create_failed","message":"Preparing worktree (checking out 'lunasq/t1')\nfatal: '/Users/sergio.sanchez/.herdr/worktrees/toy/lunasq-t1' already exists"},"id":"cli:worktree:create"}

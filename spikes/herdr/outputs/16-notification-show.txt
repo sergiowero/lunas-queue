@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike notification show LunasQ: t1 necesita atención --body spike UW-00 --sound none
+exit=0

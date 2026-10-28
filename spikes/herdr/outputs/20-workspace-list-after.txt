@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike workspace list
+exit=0

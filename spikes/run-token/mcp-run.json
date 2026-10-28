@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "lunasq": {
+      "type": "http",
+      "url": "http://127.0.0.1:4518/mcp",
+      "headers": { "X-LunasQ-Run-Token": "run-literal-0001" }
+    }
+  }
+}

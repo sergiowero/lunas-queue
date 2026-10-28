@@ -1,0 +1,16 @@
+{
+  "name": "spike-mcp-sdk",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "spike": "node spike.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/hono": "^2.0.2",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "hono": "^4.13.14",
+    "zod": "^4.6.7"
+  }
+}

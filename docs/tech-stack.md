@@ -13,7 +13,7 @@ Un solo lenguaje de punta a punta y cero infraestructura que operar: LunasQ corr
 | Runtime | Node.js 26 LTS | Entra a LTS el 28 de octubre de 2026 y tiene soporte hasta abril de 2029 ([calendario](https://dev.to/royce_fabbd83cb268312e928/node-22-vs-node-24-in-2026-current-lts-upgrade-guide-1oa5)) |
 | Lenguaje | TypeScript en modo estricto, en backend y front end | Tipos compartidos entre API, MCP y UI; SDK oficial de MCP en TypeScript |
 | Base de datos | SQLite en modo WAL | Un archivo local, sin servidor; suficiente para un usuario y una máquina |
-| Driver de SQLite | better-sqlite3 | Estable y síncrono; `node:sqlite` sigue en release candidate ([estado](https://better-auth.com/docs/adapters/sqlite.md)) |
+| Driver de SQLite | better-sqlite3 13.x con prebuilds N-API | Estable y síncrono; trae binarios para Node 26 sin compilar ([ADR 0003](decisions/0003-sqlite-driver-node26.md)) |
 | Acceso a datos | Drizzle ORM + drizzle-kit | Esquema en TypeScript, migraciones versionadas, transacciones síncronas para el claim atómico |
 | Servidor HTTP | Hono sobre `@hono/node-server` | Ligero, tipado, y el SDK de MCP trae helpers para Hono |
 | Validación y esquemas | Zod v4 | Es la dependencia del SDK de MCP; exporta JSON Schema para los handoffs |
@@ -70,7 +70,7 @@ Cada componente del diseño queda resuelto con piezas de la misma base, sin serv
 | Outbox | Tabla outbox en SQLite + publicador en proceso | Mismo proceso, mismo archivo: la publicación lee la tabla después del commit |
 | Scheduler | Módulo en proceso que reacciona a eventos del outbox y a un tick periódico | Cálculo de ready set y score en memoria a partir de la base |
 | Dispatcher y reconciliación | Módulo en proceso con loop de reconciliación | Usa el adapter de herdr; un solo dispatcher en v1 |
-| LunasQ MCP | SDK oficial de MCP para TypeScript, transporte Streamable HTTP en `localhost`, montado en Hono | Las tools usan los mismos esquemas Zod que el resto del backend |
+| LunasQ MCP | SDK oficial de MCP v2 (`@modelcontextprotocol/server` + `@modelcontextprotocol/hono`), transporte Streamable HTTP stateless en `localhost`, montado en Hono ([ADR 0001](decisions/0001-mcp-sdk.md)) | Las tools usan los mismos esquemas Zod que el resto del backend |
 | Esquemas de handoff | Zod v4 como fuente; JSON Schema generado y versionado en el repo | El validador del MCP y la UI usan la misma definición |
 | Usage collector | Endpoints OTLP/HTTP con JSON (`/v1/metrics`, `/v1/logs`) dentro de Hono | Claude Code soporta `http/json`, así que no hace falta un OpenTelemetry Collector aparte |
 | Gate de tests y hooks | Ejecución en un pane de herdr con un wrapper que registra código de salida y salida | Lo ves en herdr como cualquier agente |
@@ -154,9 +154,9 @@ Cuatro puntos se validan en la primera ola, antes de construir encima, porque de
 
 | Punto | Riesgo | Verificación y plan B |
 | --- | --- | --- |
-| SDK de MCP para TypeScript | La generación v2 (paquetes `@modelcontextprotocol/server` y middleware para Hono) era pre‑estable durante 2026 ([SDK](https://github.com/modelcontextprotocol/typescript-sdk)) | Usar v2 si ya tiene release estable; si no, la línea v1.x, que sigue con soporte. La capa del LunasQ MCP queda aislada para migrar sin tocar el dominio |
-| Run token hacia el LunasQ MCP | El agente debe enviar su run token en cada llamada | Preferido: el dispatcher genera un archivo de configuración MCP por Run con el token en el header y lo pasa a Claude Code con `--mcp-config` en los args. Validarlo en UW-02/UW-16 |
-| better-sqlite3 en Node 26 | Módulo nativo: depende de binarios precompilados para la versión de Node | Confirmar prebuilds para Node 26; plan B: `node:sqlite` cuando sea estable, detrás de la misma capa de Drizzle |
-| herdr pre‑1.0 | Cambios en CLI y socket entre versiones | Fijar versión mínima en `lunasq doctor` y correr las pruebas de contrato del adapter en cada actualización |
+| SDK de MCP para TypeScript | La generación v2 (paquetes `@modelcontextprotocol/server` y middleware para Hono) era pre‑estable durante 2026 ([SDK](https://github.com/modelcontextprotocol/typescript-sdk)) | Resuelto en UW-00: v2 es estable (server 2.4.0, hono 2.0.2) y se usa v2 ([ADR 0001](decisions/0001-mcp-sdk.md)). La capa del LunasQ MCP queda aislada para migrar sin tocar el dominio |
+| Run token hacia el LunasQ MCP | El agente debe enviar su run token en cada llamada | Resuelto en UW-00: un archivo de configuración MCP estable con el header `X-LunasQ-Run-Token: ${LUNASQ_RUN_TOKEN}`, pasado con `--mcp-config --strict-mcp-config`; el token solo vive en el entorno del pane ([ADR 0002](decisions/0002-run-token-mcp-config.md)) |
+| better-sqlite3 en Node 26 | Módulo nativo: depende de binarios precompilados para la versión de Node | Resuelto en UW-00: better-sqlite3 13 trae prebuilds N-API; en pnpm se declara `allowBuilds: { better-sqlite3: false }` para no compilar. Plan B sin cambios: `node:sqlite` detrás de Drizzle ([ADR 0003](decisions/0003-sqlite-driver-node26.md)) |
+| herdr pre‑1.0 | Cambios en CLI y socket entre versiones | Versión mínima 0.9.5 (protocol 22), verificada por `lunasq doctor`; pruebas de contrato del adapter en cada actualización. Diferencias con el diseño en [ADR 0004](decisions/0004-herdr-version-y-cli.md) |
 
-Nada de esto cambia la elección del stack; solo fija qué validar primero.
+Los cuatro puntos se validaron en UW-00 sin cambiar la elección del stack; las decisiones están en `docs/decisions/`.

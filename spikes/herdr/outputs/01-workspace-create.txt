@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike workspace create --cwd /private/tmp/claude-501/-Users-sergio-sanchez-workspace-lunas-queue/a222ccc0-848d-4bb7-ba58-b7583fc21e42/scratchpad/toy --label proj-toy --no-focus
+exit=0

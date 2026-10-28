@@ -1,0 +1,6 @@
+tools: echo, whoami
+echo inputSchema: {"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"$schema":"https://json-schema.org/draft/2020-12/schema"}
+callTool echo: ok
+input inválido -> isError: [{"type":"text","text":"Input validation error: Invalid arguments for tool echo: text: Invalid input: expected string, r
+whoami: [{"type":"text","text":"run token: tok-123"}]
+requests vistas: POST initialize token=tok-123 | POST notifications/initialized token=tok-123 | GET - token=tok-123 | POST tools/list token=tok-123 | POST tools/call token=tok-123 | POST tools/call token=tok-123 | POST tools/call token=tok-123

@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike worktree create --workspace w1 --branch lunasq/t1 --base main --label t1 --no-focus
+exit=1

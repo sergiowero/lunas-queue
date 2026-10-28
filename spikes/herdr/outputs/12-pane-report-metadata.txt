@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike pane report-metadata w2:p2 --source lunasq --title t1 · refine #1 --token task=t1 --token phase=refine --token iter=1
+exit=0

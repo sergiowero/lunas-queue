@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike pane close w2:p2
+exit=0
