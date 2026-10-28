@@ -80,7 +80,7 @@ Las 30 unidades en orden de ola. Todas dependen de UW-00, que va primero; despu�
 | ID | Unit of work | Épica | Ola | Depende de | Estado |
 | --- | --- | --- | --- | --- | --- |
 | UW-00 | Monorepo y validaciones técnicas | Base del proyecto | Base | — | Hecho |
-| UW-01 | Modelo de datos y persistencia | Datos y dominio | 0 | — | Pendiente |
+| UW-01 | Modelo de datos y persistencia | Datos y dominio | 0 | — | Hecho |
 | UW-02 | Adapter de herdr | Orquestación y ejecución | 0 | — | Pendiente |
 | UW-03 | Esquemas JSON de handoff | Contrato con agentes | 0 | — | Hecho |
 | UW-04 | Máquina de estados y Event log | Datos y dominio | 1 | UW-01 | Pendiente |

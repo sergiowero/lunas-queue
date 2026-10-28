@@ -9,10 +9,17 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@lunasq/domain": "workspace:*",
     "@lunasq/schemas": "workspace:*",
-    "@lunasq/domain": "workspace:*"
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "drizzle-kit": "^0.31.11"
   }
 }

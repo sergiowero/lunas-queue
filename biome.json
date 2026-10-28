@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!spikes", "!**/dist", "!**/*.md"]
+    "includes": ["**", "!spikes", "!**/dist", "!**/*.md", "!pnpm-lock.yaml", "!packages/db/drizzle"]
   },
   "formatter": {
     "enabled": true,
