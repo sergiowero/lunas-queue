@@ -19,7 +19,7 @@ Node 26.13.0 (ABI 147), macOS arm64, pnpm 11.22.0, better-sqlite3 13.0.3, drizzl
 
 - better-sqlite3 13 trae **prebuilds N-API dentro del paquete** (`prebuilds/{darwin,linux,linuxmusl,win32}-{x64,arm64}.node`), independientes de la versión de Node, y declara `"gypfile": false`.
 - pnpm 11 bloquea los build scripts por defecto (`ERR_PNPM_IGNORED_BUILDS`, exit 1). Si se permiten, pnpm corre `node-gyp rebuild` solo porque existe `binding.gyp` (compila con éxito, pero hace falta toolchain y es innecesario). Con **`allowBuilds: { better-sqlite3: false }`** la instalación termina en exit 0, no compila nada y el módulo carga el prebuild.
-- Con el prebuild: `journal_mode=WAL` confirmado (SQLite 3.53.4), claim atómico con `UPDATE … WHERE state = 'queued'` en `db.transaction()` (el segundo claim falla), rollback ante excepción y transacción síncrona con Drizzle sobre la misma conexión. Salida en `spikes/sqlite/output.txt`.
+- Con el prebuild: `journal_mode=WAL` confirmado (SQLite 3.53.4), claim atómico con `UPDATE … WHERE state = 'queued'` en `db.transaction()` (el segundo claim falla), rollback ante excepción y transacción síncrona con Drizzle sobre la misma conexión. Salida en `spikes/sqlite/output.txt`; instalación, prebuilds y `node:sqlite` en `spikes/sqlite/install-log.txt`.
 - `node:sqlite` carga en Node 26 sin warning experimental (SQLite 3.54.0), pero `DatabaseSync` no tiene helper de transacción y la ventaja de better-sqlite3 no cambia.
 
 ## Decisión

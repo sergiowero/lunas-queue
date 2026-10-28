@@ -1,1 +1,1 @@
-{"id":"cli:worktree:remove","result":{"forced":false,"path":"/Users/sergio.sanchez/.herdr/worktrees/toy/lunasq-t1","type":"worktree_removed","workspace_id":"w2"}}
+{"id":"cli:worktree:remove","result":{"forced":false,"path":"~/.herdr/worktrees/toy/lunasq-t1","type":"worktree_removed","workspace_id":"w2"}}

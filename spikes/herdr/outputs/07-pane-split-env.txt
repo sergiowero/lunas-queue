@@ -1,2 +1,2 @@
-$ herdr --session lunasq-spike pane split w2:p1 --direction right --cwd /Users/sergio.sanchez/.herdr/worktrees/toy/lunasq-t1 --env LUNASQ_RUN_TOKEN=run-herdr-0003 --env LUNASQ_TASK_ID=t1 --no-focus
+$ herdr --session lunasq-spike pane split w2:p1 --direction right --cwd ~/.herdr/worktrees/toy/lunasq-t1 --env LUNASQ_RUN_TOKEN=run-herdr-0003 --env LUNASQ_TASK_ID=t1 --no-focus
 exit=0

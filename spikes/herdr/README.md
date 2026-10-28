@@ -12,4 +12,4 @@ node flood.ts <socket> <workspace_id> <n> <lote>   # ráfaga de workspace.report
 herdr --session lunasq-spike server stop && herdr session delete lunasq-spike
 ```
 
-`outputs/` guarda la salida real de cada paso del flujo del dispatcher (01–22), el schema de la API (`api-schema.json`), la skill oficial (`herdr-skill.md`) y los eventos capturados (`events*.ndjson`). El socket de la sesión es `~/.config/herdr/sessions/lunasq-spike/herdr.sock`.
+`outputs/` guarda la salida real de cada paso del flujo del dispatcher (01–22), el schema de la API (`api-schema.json`) y los eventos capturados (`events*.ndjson`). El socket de la sesión es `~/.config/herdr/sessions/lunasq-spike/herdr.sock`.

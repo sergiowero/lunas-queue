@@ -1,6 +1,6 @@
 
 lunasq-t1 on  lunasq/t1
-❯ claude --mcp-config /Users/sergio.sanchez/workspace/lun
+❯ claude --mcp-config ~/workspace/lun
 as-queue-uw-00/spikes/run-token/mcp-run-env.json --strict
 -mcp-config --model haiku --allowedTools mcp__lunasq__who
 ami
@@ -8,7 +8,7 @@ ami
 ─────────────────────────────────────────────────────────
  Accessing workspace:
 
- /Users/sergio.sanchez/.herdr/worktrees/toy/lunasq-t1
+ ~/.herdr/worktrees/toy/lunasq-t1
 
  Quick safety check: Is this a project you created or
  one you trust? (Like your own code, a well-known open

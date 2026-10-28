@@ -20,7 +20,7 @@
   - `listTools` devuelve el `inputSchema` generado desde Zod como JSON Schema draft 2020‑12.
   - `callTool` funciona; un argumento inválido vuelve como `isError: true` con el error de validación de Zod, sin excepción en el cliente.
   - Los headers de la request están disponibles en el handler de Hono en cada llamada (base del spike b).
-- Claude Code 2.1.312 envía además `server/discover` antes de `initialize`; el SDK v2 lo atiende sin configuración extra.
+- Claude Code 2.1.312 envía además `server/discover` antes de `initialize`; el SDK v2 lo atiende sin configuración extra (ver `spikes/run-token/seen-*.ndjson`). Las versiones y fechas de npm salen de `npm view <paquete> dist-tags time.modified` al 2026‑10‑28.
 
 Salida en `spikes/mcp-sdk/output.txt`.
 
