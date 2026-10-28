@@ -1,0 +1,47 @@
+import { homedir } from "node:os";
+import { describe, expect, it } from "vitest";
+import { normalizePath, toAgent, toEvent } from "./wire.ts";
+
+describe("traducción del protocolo de herdr", () => {
+  it("traduce los eventos de ciclo de vida con sus dos formas de payload", () => {
+    expect(
+      toEvent("pane_closed", { pane_id: "w2:p2", type: "pane_closed", workspace_id: "w2" }),
+    ).toEqual({ type: "pane_closed", paneId: "w2:p2", workspaceId: "w2" });
+    expect(toEvent("pane_exited", { pane_id: "w2:p2", workspace_id: "w2" })).toEqual({
+      type: "pane_exited",
+      paneId: "w2:p2",
+      workspaceId: "w2",
+    });
+    expect(toEvent("workspace_closed", { workspace_id: "w2", workspace: {} })).toEqual({
+      type: "workspace_closed",
+      workspaceId: "w2",
+    });
+    expect(toEvent("worktree_created", { workspace: { workspace_id: "w3" } })).toEqual({
+      type: "worktree_created",
+      workspaceId: "w3",
+    });
+  });
+
+  it("ignora los eventos que el adapter no expone", () => {
+    expect(toEvent("workspace_metadata_updated", { workspace_id: "w1" })).toBeUndefined();
+  });
+
+  it("expande el ~ con que herdr colapsa el home", () => {
+    expect(normalizePath("~/.herdr/no-existe")).toBe(`${homedir()}/.herdr/no-existe`);
+  });
+
+  it("descarta tokens nulos y conserva la identidad de sesión del agente", () => {
+    const agent = toAgent({
+      name: "t1-refine-1",
+      agent: "claude",
+      pane_id: "w2:p2",
+      workspace_id: "w2",
+      agent_status: "done",
+      tokens: { task: "t1", phase: null },
+      agent_session: { agent: "claude", kind: "id", source: "herdr:claude", value: "uuid" },
+    });
+    expect(agent.tokens).toEqual({ task: "t1" });
+    expect(agent.session).toEqual({ kind: "id", source: "herdr:claude", value: "uuid" });
+    expect(agent.title).toBeUndefined();
+  });
+});

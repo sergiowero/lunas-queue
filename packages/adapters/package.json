@@ -9,9 +9,11 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "test:herdr": "LUNASQ_HERDR_INTEGRATION=1 vitest run src/herdr/real.integration.test.ts"
   },
   "dependencies": {
-    "@lunasq/schemas": "workspace:*"
+    "@lunasq/schemas": "workspace:*",
+    "zod": "4.6.7"
   }
 }

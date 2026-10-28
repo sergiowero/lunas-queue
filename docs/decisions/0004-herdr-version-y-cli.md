@@ -49,3 +49,14 @@ Otros comportamientos del socket y la CLI:
 
 - **UW-16 / UW-28 — confianza de carpeta de Claude Code**: cada worktree nuevo arranca `blocked` por el diálogo de confianza. Opciones a validar: pre‑aceptar la confianza para el directorio de worktrees en la configuración de Claude Code durante `lunasq install`, o que el dispatcher detecte ese diálogo concreto y lo acepte. No se decide aquí.
 - **UW-06 / UW-28 — notificaciones**: con `ui.toast.delivery = "off"` herdr no muestra nada; decidir si `lunasq install` lo cambia o solo `doctor` avisa.
+
+## Adenda UW-02 (2026-10-28)
+
+Comportamientos encontrados al implementar el adapter (`packages/adapters/src/herdr/`), cubiertos por su suite de contrato:
+
+- **Un workspace creado con `workspace create` no trae `worktree` (checkout) en `workspace list` ni en el snapshot.** El adapter no puede reencontrar el workspace de un proyecto por su cwd: `ensureWorkspace` usa el id guardado en Project y, si ya no existe, el workspace principal con el mismo label. LunasQ controla los labels de sus proyectos.
+- **Rutas:** herdr reporta a veces la ruta pedida y a veces la real (`/var` → `/private/var` en macOS) y colapsa el home a `~`. El adapter normaliza (expande `~` y resuelve symlinks) toda ruta que devuelve.
+- **Una conexión por suscripción:** una segunda request `events.subscribe` por la misma conexión hace que herdr la cierre. El adapter abre una conexión por suscripción. Si herdr rechaza una suscripción (respuesta `error`, p. ej. un pane que ya no existe), emite `subscription_failed` y no reintenta.
+- **Códigos de error usados para la idempotencia:** `workspace_not_found` (`workspace close`, `worktree remove`), `pane_not_found`, `agent_not_found`, `agent_name_taken` (arranque concurrente con el mismo nombre), `agent_not_ready` (arrancó bloqueado) y `timeout` (`agent wait`/`start`).
+- **`agent prompt`:** el texto va como posicional, aunque empiece con `-`. Detrás de `--` herdr lo rechaza.
+- **Suite real sin Claude Code:** `pane report-agent` permite que cualquier proceso se reporte como agente. La suite usa un `claude` stub que entra al PATH del pane vía `ZDOTDIR`, porque el shell de login de macOS reescribe el `PATH` heredado. Requiere zsh y se corre con `pnpm --filter @lunasq/adapters test:herdr`.
