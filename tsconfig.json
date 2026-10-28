@@ -1,0 +1,29 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/schemas"
+    },
+    {
+      "path": "packages/domain"
+    },
+    {
+      "path": "packages/db"
+    },
+    {
+      "path": "packages/adapters"
+    },
+    {
+      "path": "packages/server"
+    },
+    {
+      "path": "packages/web"
+    },
+    {
+      "path": "packages/cli"
+    },
+    {
+      "path": "tooling"
+    }
+  ]
+}

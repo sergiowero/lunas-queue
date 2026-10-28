@@ -1,0 +1,12 @@
+{"method":"POST","rpc":"server/discover","token":"run-literal-0001"}
+{"method":"POST","rpc":"initialize","token":"run-literal-0001"}
+{"method":"POST","rpc":"notifications/initialized","token":"run-literal-0001"}
+{"method":"GET","token":"run-literal-0001"}
+{"method":"POST","rpc":"tools/list","token":"run-literal-0001"}
+{"method":"POST","rpc":"tools/call","token":"run-literal-0001"}
+{"method":"POST","rpc":"server/discover","token":"run-env-0002"}
+{"method":"POST","rpc":"initialize","token":"run-env-0002"}
+{"method":"POST","rpc":"notifications/initialized","token":"run-env-0002"}
+{"method":"GET","token":"run-env-0002"}
+{"method":"POST","rpc":"tools/list","token":"run-env-0002"}
+{"method":"POST","rpc":"tools/call","token":"run-env-0002"}

@@ -1,0 +1,6 @@
+{"method":"POST","rpc":"server/discover","token":"run-herdr-0003"}
+{"method":"POST","rpc":"initialize","token":"run-herdr-0003"}
+{"method":"POST","rpc":"notifications/initialized","token":"run-herdr-0003"}
+{"method":"GET","token":"run-herdr-0003"}
+{"method":"POST","rpc":"tools/list","token":"run-herdr-0003"}
+{"method":"POST","rpc":"tools/call","token":"run-herdr-0003"}

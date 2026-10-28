@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike agent prompt t1-refine-1 Llama a la tool whoami del servidor lunasq y responde solo con su texto. --wait --timeout 120000
+exit=0

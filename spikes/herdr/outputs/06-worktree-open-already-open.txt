@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike worktree open --workspace w1 --branch lunasq/t1 --no-focus
+exit=0

@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike agent wait t1-refine-1 --until idle --timeout 60000
+exit=0

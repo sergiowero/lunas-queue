@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+# SQLite local (tests y desarrollo); las migraciones sí se versionan
+*.db
+*.db-wal
+*.db-shm
+*.sqlite

@@ -186,7 +186,7 @@ El dispatcher es un worker de larga vida con dos entradas (eventos de la BD y ev
 | Aislamiento por tarea | `worktree create`: crea checkout + branch y lo abre como workspace agrupado bajo el del proyecto |
 | Levantar un agente | `agent start` con nombre único y `--kind` (claude en v1) sobre un pane de shell libre |
 | Enviar la instrucción de fase | `agent prompt` (opcionalmente con wait) |
-| Saber si trabaja, terminó o pide permiso | `events.subscribe` a `pane.agent_status_changed`, o `agent wait` |
+| Saber si trabaja, terminó o pide permiso | `events.subscribe` a `pane.agent_status_changed` (suscripción por pane; ver ADR 0004), o `agent wait` |
 | Mostrar tarea y fase en el sidebar | `pane report-metadata` con tokens (task id, fase, iteración) |
 | Avisar al humano | `notification show` |
 | Reconstruir estado tras caídas | `session.snapshot` |
@@ -196,8 +196,8 @@ El dispatcher es un worker de larga vida con dos entradas (eventos de la BD y ev
 
 1. **Claim.** El scheduler elige la tarea de mayor score del ready set y la reclama de forma atómica en la BD, creando un Run con un token único. Si el claim falla, la tarea ya fue tomada.
 2. **Asegurar workspace del proyecto.** Si no existe en herdr, crearlo; guardar su id en Project.
-3. **Asegurar checkout de la tarea.** Siempre, en todas las fases. La primera vez `worktree create` crea branch y checkout desde la rama base; en fases siguientes y loops de rework `worktree open` reabre el mismo.
-4. **Levantar agente.** Crear pane/tab, `agent start` con nombre determinístico (p. ej. `t<id>-<fase>-<n>`, cumple el patrón de nombres de herdr) y el perfil de esa fase: kind como --kind; modelo y argumentos extra después de --. El nombre determinístico hace la operación idempotente.
+3. **Asegurar checkout de la tarea.** Siempre, en todas las fases. La primera vez `worktree create` crea branch y checkout desde la rama base (no es idempotente: antes se consulta `worktree list` y se usa `open` si ya existe; ADR 0004); en fases siguientes y loops de rework `worktree open` reabre el mismo.
+4. **Levantar agente.** Crear pane/tab (con `pane split --env`, que fija las variables del Run en el pane), `agent start` con nombre determinístico (p. ej. `t<id>-<fase>-<n>`, cumple el patrón de nombres de herdr) y el perfil de esa fase: kind como --kind; modelo y argumentos extra después de --. El nombre determinístico hace la operación idempotente.
 5. **Prompt de fase.** Enviar un prompt corto que invoque la skill de la fase y le indique el task id; el agente obtiene el contexto completo vía MCP, no por el prompt.
 6. **Observar.** El Run pasa a running; el dispatcher escucha los cambios de estado del pane en herdr y arranca el timer de la fase.
 7. **Cerrar fase.** La señal primaria es la tool MCP de fin de fase con salida estructurada. Se aplica la transición en la BD, se guarda la identidad de sesión en el Run, se cierra el pane y se libera el slot.
@@ -208,7 +208,7 @@ Una tarea = un worktree = un branch, desde el primer despacho hasta el merge; to
 
 | Momento | Acción | Notas |
 | --- | --- | --- |
-| Primer despacho (refinamiento) | Crear worktree y branch desde la rama base | Branch con nombre determinístico derivado del task id; operación idempotente |
+| Primer despacho (refinamiento) | Crear worktree y branch desde la rama base | Branch con nombre determinístico derivado del task id; idempotente consultando `worktree list` y usando `open` si ya existe (ADR 0004) |
 | Worktree creado | Correr el bootstrap del proyecto | Instalar dependencias, copiar config local; se puede disparar con el evento `worktree.created` de herdr |
 | Fases siguientes y rework | Reabrir el mismo worktree | El agente nuevo hereda el estado del código, no el contexto de la sesión |
 | Tarea dependiente | Crear su worktree desde la rama base, que ya incluye el merge de sus dependencias | Sin stacked branches |
@@ -241,7 +241,7 @@ El Run registra también qué fuente se usó, para saber si la sesión se puede 
 
 **Loop de reconciliación**
 
-Cada N segundos y al reconectar con herdr: tomar `session.snapshot`, compararlo con los Runs activos en la BD y corregir. Runs sin pane → reintentar. Panes con prefijo del sistema sin Run → cerrar (huérfanos). Esto cubre el caso documentado de `events_lost`, donde herdr corta la suscripción si el consumidor se atrasa.
+Cada N segundos y al reconectar con herdr: tomar `session.snapshot`, compararlo con los Runs activos en la BD y corregir. Runs sin pane → reintentar. Panes con prefijo del sistema sin Run → cerrar (huérfanos). Esto cubre el caso documentado de `events_lost` (en protocol 22 herdr cierra el stream sin mensaje explícito: todo cierre cuenta como pérdida; ADR 0004), donde herdr corta la suscripción si el consumidor se atrasa.
 
 **Dónde vive el dispatcher: servicio externo (decidido)**
 

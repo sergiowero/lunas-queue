@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike worktree remove --workspace w2
+exit=0

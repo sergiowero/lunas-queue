@@ -1,0 +1,6 @@
+$ node spike.ts
+node 26.13.0 (ABI 147)
+journal_mode=wal, sqlite 3.53.4
+claim atómico: primero gana, segundo falla
+rollback ante excepción: ok
+drizzle-orm/better-sqlite3: transacción y consulta ok

@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike workspace create --cwd <scratchpad>/toy --label proj-toy --no-focus
+exit=0

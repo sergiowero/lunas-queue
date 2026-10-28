@@ -1,0 +1,2 @@
+$ herdr --session lunasq-spike api snapshot
+exit=0
