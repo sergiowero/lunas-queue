@@ -1,0 +1,73 @@
+{
+  "description": "Dos veredictos para el mismo criterio",
+  "expectedErrors": [
+    {
+      "path": "body.criteriaVerdicts[1].criterionId",
+      "message": "AC-1"
+    }
+  ],
+  "handoff": {
+    "schemaVersion": 1,
+    "taskId": "42",
+    "runId": "42-verification-1",
+    "phase": "verification",
+    "result": "completed",
+    "summary": "Ambos criterios verificados; un hallazgo de UX refutado.",
+    "relevantFiles": ["src/orders/order.ts"],
+    "decisions": [],
+    "knownRisks": [],
+    "body": {
+      "verdict": "pass",
+      "criteriaVerdicts": [
+        {
+          "criterionId": "AC-1",
+          "verdict": "pass",
+          "evidence": "order.test.ts cubre el caso y falla al revertir order.ts"
+        },
+        {
+          "criterionId": "AC-1",
+          "verdict": "pass",
+          "evidence": "order.test.ts rechaza la cancelación de un pedido enviado"
+        }
+      ],
+      "reviewers": {
+        "lunasq-security-reviewer": {
+          "status": "ran",
+          "findings": []
+        },
+        "lunasq-ux-reviewer": {
+          "status": "ran",
+          "findings": [
+            {
+              "severity": "minor",
+              "file": "web/orders/OrderView.tsx",
+              "evidence": "No hay confirmación antes de cancelar",
+              "criterionId": "AC-1"
+            }
+          ]
+        },
+        "lunasq-ui-reviewer": {
+          "status": "ran",
+          "findings": []
+        },
+        "lunasq-code-reviewer": {
+          "status": "ran",
+          "findings": []
+        }
+      },
+      "mustFix": [],
+      "refuted": [
+        {
+          "finding": {
+            "severity": "minor",
+            "file": "web/orders/OrderView.tsx",
+            "evidence": "No hay confirmación antes de cancelar",
+            "criterionId": "AC-1"
+          },
+          "reason": "La confirmación existe en ConfirmDialog, que el revisor no abrió"
+        }
+      ],
+      "riskLabel": "low"
+    }
+  }
+}

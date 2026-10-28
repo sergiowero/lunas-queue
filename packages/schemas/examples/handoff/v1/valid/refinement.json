@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "taskId": "42",
+  "runId": "42-refinement-1",
+  "phase": "refinement",
+  "result": "completed",
+  "summary": "Spec para cancelar pedidos pendientes desde la vista del cliente.",
+  "relevantFiles": ["src/orders/order.ts", "src/orders/cancel-order.ts"],
+  "decisions": [
+    {
+      "decision": "La cancelación es un comando del agregado Order",
+      "rationale": "La invariante de estado vive en el agregado",
+      "discarded": ["Servicio de aplicación que cambia el estado directo en la BD"]
+    }
+  ],
+  "knownRisks": ["Los pedidos ya facturados requieren reembolso, fuera de alcance"],
+  "body": {
+    "domainModel": {
+      "boundedContext": "Pedidos",
+      "glossary": [
+        { "term": "Pedido pendiente", "definition": "Pedido confirmado que aún no se envía" }
+      ],
+      "aggregates": [{ "name": "Order", "entities": ["OrderLine"] }],
+      "invariants": ["Solo un pedido pendiente puede cancelarse"],
+      "events": [
+        { "name": "OrderCancelled", "description": "El cliente canceló un pedido pendiente" }
+      ]
+    },
+    "criteria": [
+      {
+        "id": "AC-1",
+        "given": "un pedido pendiente",
+        "when": "el cliente lo cancela",
+        "then": "el pedido queda cancelado y se emite OrderCancelled"
+      },
+      {
+        "id": "AC-2",
+        "given": "un pedido enviado",
+        "when": "el cliente intenta cancelarlo",
+        "then": "la cancelación se rechaza con un motivo"
+      }
+    ],
+    "taskList": [
+      { "id": "T-1", "title": "Comando cancel en Order", "criterionIds": ["AC-1", "AC-2"] },
+      {
+        "id": "T-2",
+        "title": "Botón de cancelar en la vista del cliente",
+        "criterionIds": ["AC-1"]
+      }
+    ],
+    "assumptions": ["El cliente solo ve sus propios pedidos"]
+  }
+}

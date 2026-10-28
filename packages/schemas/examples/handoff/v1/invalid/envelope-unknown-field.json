@@ -1,0 +1,70 @@
+{
+  "description": "Campo que no está en el esquema",
+  "expectedErrors": [
+    {
+      "path": "(raíz)",
+      "message": "notes"
+    }
+  ],
+  "handoff": {
+    "schemaVersion": 1,
+    "taskId": "42",
+    "runId": "42-implementation-1",
+    "phase": "implementation",
+    "result": "completed",
+    "summary": "Cancelación de pedidos pendientes con su comando, evento y botón.",
+    "relevantFiles": [
+      "src/orders/order.ts",
+      "src/orders/order.test.ts",
+      "web/orders/OrderView.tsx"
+    ],
+    "decisions": [
+      {
+        "decision": "El botón se oculta si el pedido no es cancelable"
+      }
+    ],
+    "knownRisks": [],
+    "body": {
+      "criterionTests": [
+        {
+          "criterionId": "AC-1",
+          "tests": [
+            {
+              "file": "src/orders/order.test.ts",
+              "name": "un pedido pendiente se cancela"
+            },
+            {
+              "file": "web/orders/OrderView.test.tsx",
+              "name": "el cliente cancela desde la vista"
+            }
+          ]
+        },
+        {
+          "criterionId": "AC-2",
+          "tests": [
+            {
+              "file": "src/orders/order.test.ts",
+              "name": "un pedido enviado no se cancela"
+            }
+          ]
+        }
+      ],
+      "commits": ["3f9c2a1", "b7e04d9c2f"],
+      "changesByModule": [
+        {
+          "module": "src/orders",
+          "summary": "Comando cancel y evento OrderCancelled"
+        },
+        {
+          "module": "web/orders",
+          "summary": "Botón de cancelar con confirmación"
+        }
+      ],
+      "howToTest": {
+        "commands": ["pnpm test"]
+      },
+      "specDeviations": []
+    },
+    "notes": "texto libre"
+  }
+}

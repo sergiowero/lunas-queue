@@ -1,0 +1,70 @@
+{
+  "description": "Revisor omitido sin justificación",
+  "expectedErrors": [
+    {
+      "path": "body.reviewers.lunasq-ux-reviewer.justification"
+    }
+  ],
+  "handoff": {
+    "schemaVersion": 1,
+    "taskId": "42",
+    "runId": "42-verification-2",
+    "phase": "verification",
+    "result": "completed",
+    "summary": "AC-2 falla: un pedido enviado se puede cancelar.",
+    "relevantFiles": ["src/orders/order.ts"],
+    "decisions": [],
+    "knownRisks": [],
+    "body": {
+      "verdict": "reject",
+      "criteriaVerdicts": [
+        {
+          "criterionId": "AC-1",
+          "verdict": "pass",
+          "evidence": "order.test.ts en verde"
+        },
+        {
+          "criterionId": "AC-2",
+          "verdict": "fail",
+          "evidence": "El test pasa con cualquier implementación: no comprueba el estado"
+        }
+      ],
+      "reviewers": {
+        "lunasq-security-reviewer": {
+          "status": "ran",
+          "findings": []
+        },
+        "lunasq-ux-reviewer": {
+          "status": "skipped"
+        },
+        "lunasq-ui-reviewer": {
+          "status": "skipped",
+          "justification": "El diff no toca el front end"
+        },
+        "lunasq-code-reviewer": {
+          "status": "ran",
+          "findings": [
+            {
+              "severity": "major",
+              "file": "src/orders/order.test.ts",
+              "line": 31,
+              "evidence": "La aserción solo comprueba que no se lanzó una excepción",
+              "criterionId": "AC-2"
+            }
+          ]
+        }
+      },
+      "mustFix": [
+        {
+          "severity": "major",
+          "file": "src/orders/order.test.ts",
+          "line": 31,
+          "evidence": "La aserción solo comprueba que no se lanzó una excepción",
+          "criterionId": "AC-2"
+        }
+      ],
+      "refuted": [],
+      "riskLabel": "medium"
+    }
+  }
+}
