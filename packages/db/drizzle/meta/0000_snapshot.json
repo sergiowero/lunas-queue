@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0fc1e231-2e4f-45bf-ad80-2f5d4b978509",
+  "id": "2e74979d-4e9a-4dc7-ab5e-d0d205806c05",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "events": {
@@ -72,7 +72,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -175,9 +175,9 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "outbox_attempts_nonneg": {
-          "name": "outbox_attempts_nonneg",
-          "value": "\"outbox\".\"attempts\" >= 0"
+        "outbox_attempts_unsigned": {
+          "name": "outbox_attempts_unsigned",
+          "value": "typeof(\"outbox\".\"attempts\") = 'integer' and \"outbox\".\"attempts\" >= 0"
         }
       }
     },
@@ -454,6 +454,21 @@
           "notNull": true,
           "autoincrement": false
         },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "iteration": {
+          "name": "iteration",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
         "herdr_workspace": {
           "name": "herdr_workspace",
           "type": "text",
@@ -540,6 +555,14 @@
             "task_id"
           ],
           "isUnique": false
+        },
+        "runs_one_active_per_task": {
+          "name": "runs_one_active_per_task",
+          "columns": [
+            "task_id"
+          ],
+          "isUnique": true,
+          "where": "\"runs\".\"ended_at\" is null"
         }
       },
       "foreignKeys": {
@@ -571,6 +594,10 @@
         "runs_result_enum": {
           "name": "runs_result_enum",
           "value": "\"runs\".\"result\" in ('success', 'failure', 'cancelled')"
+        },
+        "runs_iteration_unsigned": {
+          "name": "runs_iteration_unsigned",
+          "value": "typeof(\"runs\".\"iteration\") = 'integer' and \"runs\".\"iteration\" >= 0"
         }
       }
     },
@@ -955,11 +982,11 @@
       "checkConstraints": {
         "tasks_priority_unsigned": {
           "name": "tasks_priority_unsigned",
-          "value": "typeof(\"tasks\".\"priority\") = 'integer' and \"tasks\".\"priority\" >= 0"
+          "value": "typeof(\"tasks\".\"priority\") = 'integer' and \"tasks\".\"priority\" between 0 and 9007199254740991"
         },
-        "tasks_verification_iteration_nonneg": {
-          "name": "tasks_verification_iteration_nonneg",
-          "value": "\"tasks\".\"verification_iteration\" >= 0"
+        "tasks_verification_iteration_unsigned": {
+          "name": "tasks_verification_iteration_unsigned",
+          "value": "typeof(\"tasks\".\"verification_iteration\") = 'integer' and \"tasks\".\"verification_iteration\" >= 0"
         },
         "tasks_state_enum": {
           "name": "tasks_state_enum",
@@ -1049,6 +1076,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "source_ref": {
+          "name": "source_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "pricing_version": {
           "name": "pricing_version",
           "type": "text",
@@ -1072,6 +1106,15 @@
             "run_id"
           ],
           "isUnique": false
+        },
+        "usage_records_source_ref_unique": {
+          "name": "usage_records_source_ref_unique",
+          "columns": [
+            "run_id",
+            "source",
+            "source_ref"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -1092,21 +1135,21 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "usage_records_input_tokens_nonneg": {
-          "name": "usage_records_input_tokens_nonneg",
-          "value": "\"usage_records\".\"input_tokens\" >= 0"
+        "usage_records_input_tokens_unsigned": {
+          "name": "usage_records_input_tokens_unsigned",
+          "value": "typeof(\"usage_records\".\"input_tokens\") = 'integer' and \"usage_records\".\"input_tokens\" >= 0"
         },
-        "usage_records_output_tokens_nonneg": {
-          "name": "usage_records_output_tokens_nonneg",
-          "value": "\"usage_records\".\"output_tokens\" >= 0"
+        "usage_records_output_tokens_unsigned": {
+          "name": "usage_records_output_tokens_unsigned",
+          "value": "typeof(\"usage_records\".\"output_tokens\") = 'integer' and \"usage_records\".\"output_tokens\" >= 0"
         },
-        "usage_records_cache_read_tokens_nonneg": {
-          "name": "usage_records_cache_read_tokens_nonneg",
-          "value": "\"usage_records\".\"cache_read_tokens\" >= 0"
+        "usage_records_cache_read_tokens_unsigned": {
+          "name": "usage_records_cache_read_tokens_unsigned",
+          "value": "typeof(\"usage_records\".\"cache_read_tokens\") = 'integer' and \"usage_records\".\"cache_read_tokens\" >= 0"
         },
-        "usage_records_cache_write_tokens_nonneg": {
-          "name": "usage_records_cache_write_tokens_nonneg",
-          "value": "\"usage_records\".\"cache_write_tokens\" >= 0"
+        "usage_records_cache_write_tokens_unsigned": {
+          "name": "usage_records_cache_write_tokens_unsigned",
+          "value": "typeof(\"usage_records\".\"cache_write_tokens\") = 'integer' and \"usage_records\".\"cache_write_tokens\" >= 0"
         },
         "usage_records_cost_usd_nonneg": {
           "name": "usage_records_cost_usd_nonneg",

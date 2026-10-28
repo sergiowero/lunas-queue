@@ -26,6 +26,7 @@ import {
   sqliteTable,
   text,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 /** Criterio de aceptación direccionable: el verificador emite un veredicto por id. */
@@ -57,10 +58,13 @@ function inEnum(name: string, column: AnySQLiteColumn, values: readonly string[]
   return check(name, sql`${column} in (${sql.raw(list)})`);
 }
 
-const nonNegative = (name: string, column: AnySQLiteColumn): ReturnType<typeof check> =>
-  check(name, sql`${column} >= 0`);
-
 const isInteger = (column: AnySQLiteColumn): SQL => sql`typeof(${column}) = 'integer'`;
+
+const nonNegative = (name: string, column: AnySQLiteColumn) => check(name, sql`${column} >= 0`);
+
+/** Contadores: enteros no negativos (sin el typeof, SQLite aceptaría reales). */
+const unsignedInt = (name: string, column: AnySQLiteColumn) =>
+  check(name, sql`${isInteger(column)} and ${column} >= 0`);
 
 export const projects = sqliteTable("projects", {
   id: id(),
@@ -94,7 +98,7 @@ export const tasks = sqliteTable(
     state: text("state", { enum: values(TaskState) })
       .notNull()
       .default("draft"),
-    // Solo los estados con agente tienen sub-estado; el resto lo deja en NULL.
+    // Solo los estados con agente tienen sub-estado; la coherencia con state es de UW-04.
     subState: text("sub_state", { enum: values(SubState) }).default("queued"),
     verificationIteration: integer("verification_iteration").notNull().default(0),
     branch: text("branch"),
@@ -109,8 +113,12 @@ export const tasks = sqliteTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    check("tasks_priority_unsigned", sql`${isInteger(t.priority)} and ${t.priority} >= 0`),
-    nonNegative("tasks_verification_iteration_nonneg", t.verificationIteration),
+    // Tope en Number.MAX_SAFE_INTEGER: la columna se lee como number en JS.
+    check(
+      "tasks_priority_unsigned",
+      sql`${isInteger(t.priority)} and ${t.priority} between 0 and ${sql.raw(String(Number.MAX_SAFE_INTEGER))}`,
+    ),
+    unsignedInt("tasks_verification_iteration_unsigned", t.verificationIteration),
     inEnum("tasks_state_enum", t.state, values(TaskState)),
     inEnum("tasks_sub_state_enum", t.subState, values(SubState)),
     inEnum("tasks_pr_state_enum", t.prState, values(PrState)),
@@ -177,6 +185,9 @@ export const runs = sqliteTable(
       .references(() => tasks.id, { onDelete: "cascade" }),
     phase: text("phase", { enum: values(Phase) }).notNull(),
     agentKind: text("agent_kind", { enum: values(AgentKind) }).notNull(),
+    model: text("model"),
+    // Iteración de verificación de la tarea al despachar: separa rework de reintentos.
+    iteration: integer("iteration").notNull().default(0),
     herdrWorkspace: text("herdr_workspace"),
     herdrPane: text("herdr_pane"),
     herdrName: text("herdr_name"),
@@ -193,7 +204,10 @@ export const runs = sqliteTable(
     inEnum("runs_phase_enum", t.phase, values(Phase)),
     inEnum("runs_agent_kind_enum", t.agentKind, values(AgentKind)),
     inEnum("runs_result_enum", t.result, values(RunResult)),
+    unsignedInt("runs_iteration_unsigned", t.iteration),
     index("runs_task_idx").on(t.taskId),
+    // Solo el Run activo puede mover la tarea: a lo sumo uno sin ended_at por tarea.
+    uniqueIndex("runs_one_active_per_task").on(t.taskId).where(sql`${t.endedAt} is null`),
   ],
 );
 
@@ -238,17 +252,20 @@ export const usageRecords = sqliteTable(
     // Estimado en USD; NULL cuando el agente no lo reporta y aún no se calcula.
     costUsd: real("cost_usd"),
     source: text("source", { enum: values(UsageSource) }).notNull(),
+    // Id del mensaje o request en la fuente; deduplica reingestas de OTel o transcript.
+    sourceRef: text("source_ref"),
     pricingVersion: text("pricing_version"),
     createdAt: createdAt(),
   },
   (t) => [
-    nonNegative("usage_records_input_tokens_nonneg", t.inputTokens),
-    nonNegative("usage_records_output_tokens_nonneg", t.outputTokens),
-    nonNegative("usage_records_cache_read_tokens_nonneg", t.cacheReadTokens),
-    nonNegative("usage_records_cache_write_tokens_nonneg", t.cacheWriteTokens),
+    unsignedInt("usage_records_input_tokens_unsigned", t.inputTokens),
+    unsignedInt("usage_records_output_tokens_unsigned", t.outputTokens),
+    unsignedInt("usage_records_cache_read_tokens_unsigned", t.cacheReadTokens),
+    unsignedInt("usage_records_cache_write_tokens_unsigned", t.cacheWriteTokens),
     nonNegative("usage_records_cost_usd_nonneg", t.costUsd),
     inEnum("usage_records_source_enum", t.source, values(UsageSource)),
     index("usage_records_run_idx").on(t.runId),
+    unique("usage_records_source_ref_unique").on(t.runId, t.source, t.sourceRef),
   ],
 );
 
@@ -256,9 +273,10 @@ export const events = sqliteTable(
   "events",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    // Append-only: una tarea con eventos no se puede borrar.
     taskId: text("task_id")
       .notNull()
-      .references(() => tasks.id, { onDelete: "cascade" }),
+      .references(() => tasks.id, { onDelete: "restrict" }),
     type: text("type").notNull(),
     actor: text("actor", { enum: values(Actor) }).notNull(),
     payload: text("payload", { mode: "json" }),
@@ -285,7 +303,7 @@ export const outbox = sqliteTable(
     attempts: integer("attempts").notNull().default(0),
   },
   (t) => [
-    nonNegative("outbox_attempts_nonneg", t.attempts),
+    unsignedInt("outbox_attempts_unsigned", t.attempts),
     index("outbox_pending_idx").on(t.id).where(sql`${t.publishedAt} is null`),
   ],
 );

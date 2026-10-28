@@ -59,6 +59,21 @@ describe("tasks", () => {
     expect(insertTask(db, p.id, { priority: 2 ** 31 }).priority).toBe(2 ** 31);
   });
 
+  it("prioridad no pasa de Number.MAX_SAFE_INTEGER", () => {
+    const db = migratedDatabase();
+    const p = insertProject(db);
+    expect(insertTask(db, p.id, { priority: Number.MAX_SAFE_INTEGER }).priority).toBe(
+      Number.MAX_SAFE_INTEGER,
+    );
+    expect(() =>
+      db.$client
+        .prepare(
+          "insert into tasks (id, project_id, intent, priority) values ('big', ?, 'x', 9007199254740992)",
+        )
+        .run(p.id),
+    ).toThrow(CHECK);
+  });
+
   it("prioridad rechaza negativos, no enteros y NULL", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
@@ -179,6 +194,29 @@ describe("specs", () => {
 });
 
 describe("runs", () => {
+  it("guarda modelo e iteración, con iteración 0 por defecto y no negativa", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id);
+    const r = insertRun(db, t.id, { model: "claude-opus-5-5" });
+    expect(r.model).toBe("claude-opus-5-5");
+    expect(r.iteration).toBe(0);
+    expect(() => insertRun(db, t.id, { iteration: -1 })).toThrow(CHECK);
+    expect(() => insertRun(db, t.id, { iteration: 0.5 })).toThrow(CHECK);
+  });
+
+  it("una tarea tiene a lo sumo un Run activo (sin ended_at)", () => {
+    const db = migratedDatabase();
+    const p = insertProject(db);
+    const t = insertTask(db, p.id);
+    const first = insertRun(db, t.id);
+    expect(() => insertRun(db, t.id)).toThrow(UNIQUE);
+    insertRun(db, insertTask(db, p.id).id);
+    db.$client
+      .prepare("update runs set ended_at = 1, result = 'failure' where id = ?")
+      .run(first.id);
+    expect(() => insertRun(db, t.id)).not.toThrow();
+  });
+
   it("run_token es único", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
@@ -270,12 +308,42 @@ describe("usage_records", () => {
         .run(),
     ).toThrow(CHECK);
     expect(() =>
+      db
+        .insert(usageRecords)
+        .values({ ...base, inputTokens: 1.5 })
+        .run(),
+    ).toThrow(CHECK);
+    expect(() =>
       db.$client
         .prepare(
           "insert into usage_records (id, run_id, model, source, created_at) values ('u', ?, 'm', 'guess', 0)",
         )
         .run(r.id),
     ).toThrow(CHECK);
+  });
+});
+
+describe("usage_records: deduplicación", () => {
+  it("source_ref es único por Run y fuente; sin source_ref no se deduplica", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id);
+    const r = insertRun(db, t.id);
+    const base = { runId: r.id, model: "m", source: "otel" as const };
+    db.insert(usageRecords)
+      .values({ ...base, sourceRef: "msg-1" })
+      .run();
+    expect(() =>
+      db
+        .insert(usageRecords)
+        .values({ ...base, sourceRef: "msg-1" })
+        .run(),
+    ).toThrow(UNIQUE);
+    db.insert(usageRecords)
+      .values({ ...base, source: "transcript", sourceRef: "msg-1" })
+      .run();
+    db.insert(usageRecords).values(base).run();
+    db.insert(usageRecords).values(base).run();
+    expect(db.select().from(usageRecords).all()).toHaveLength(4);
   });
 });
 
@@ -329,27 +397,30 @@ describe("events y outbox", () => {
 });
 
 describe("borrado de una tarea", () => {
-  it("arrastra specs, runs, questions, usage, events y outbox", () => {
+  it("arrastra specs, runs, questions, usage y aristas cuando no tiene eventos", () => {
     const db = migratedDatabase();
-    const t = insertTask(db, insertProject(db).id);
+    const p = insertProject(db);
+    const t = insertTask(db, p.id);
+    const other = insertTask(db, p.id);
     const r = insertRun(db, t.id);
     db.insert(specs).values({ taskId: t.id, version: 1 }).run();
     db.insert(questions).values({ taskId: t.id, runId: r.id, question: "?" }).run();
     db.insert(usageRecords).values({ runId: r.id, model: "m", source: "otel" }).run();
-    const [e] = db
-      .insert(events)
-      .values({ taskId: t.id, type: "task.created", actor: "human" })
-      .returning()
-      .all();
-    db.insert(outbox)
-      .values({ eventId: e?.id ?? 0, topic: "t" })
-      .run();
+    db.insert(taskDependencies).values({ taskId: other.id, dependsOnId: t.id }).run();
 
     db.delete(tasks).where(eq(tasks.id, t.id)).run();
 
-    for (const table of [specs, questions, usageRecords, events, outbox]) {
+    for (const table of [specs, questions, usageRecords, taskDependencies]) {
       expect(db.select().from(table).all()).toEqual([]);
     }
     expect(db.$client.prepare("select count(*) from runs").pluck().get()).toBe(0);
+  });
+
+  it("el Event log es append-only: una tarea con eventos no se puede borrar", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id);
+    db.insert(events).values({ taskId: t.id, type: "task.created", actor: "human" }).run();
+    expect(() => db.delete(tasks).where(eq(tasks.id, t.id)).run()).toThrow(FK);
+    expect(db.select().from(events).all()).toHaveLength(1);
   });
 });

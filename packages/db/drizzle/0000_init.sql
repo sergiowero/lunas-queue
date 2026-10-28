@@ -5,7 +5,7 @@ CREATE TABLE `events` (
 	`actor` text NOT NULL,
 	`payload` text,
 	`created_at` integer DEFAULT (cast(unixepoch('subsec') * 1000 as integer)) NOT NULL,
-	FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON UPDATE no action ON DELETE restrict,
 	CONSTRAINT "events_actor_enum" CHECK("events"."actor" in ('human', 'agent', 'system'))
 );
 --> statement-breakpoint
@@ -19,7 +19,7 @@ CREATE TABLE `outbox` (
 	`published_at` integer,
 	`attempts` integer DEFAULT 0 NOT NULL,
 	FOREIGN KEY (`event_id`) REFERENCES `events`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "outbox_attempts_nonneg" CHECK("outbox"."attempts" >= 0)
+	CONSTRAINT "outbox_attempts_unsigned" CHECK(typeof("outbox"."attempts") = 'integer' and "outbox"."attempts" >= 0)
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `outbox_event_id_unique` ON `outbox` (`event_id`);--> statement-breakpoint
@@ -64,6 +64,8 @@ CREATE TABLE `runs` (
 	`task_id` text NOT NULL,
 	`phase` text NOT NULL,
 	`agent_kind` text NOT NULL,
+	`model` text,
+	`iteration` integer DEFAULT 0 NOT NULL,
 	`herdr_workspace` text,
 	`herdr_pane` text,
 	`herdr_name` text,
@@ -77,11 +79,13 @@ CREATE TABLE `runs` (
 	FOREIGN KEY (`task_id`) REFERENCES `tasks`(`id`) ON UPDATE no action ON DELETE cascade,
 	CONSTRAINT "runs_phase_enum" CHECK("runs"."phase" in ('refine', 'implement', 'verify', 'deliver')),
 	CONSTRAINT "runs_agent_kind_enum" CHECK("runs"."agent_kind" in ('claude')),
-	CONSTRAINT "runs_result_enum" CHECK("runs"."result" in ('success', 'failure', 'cancelled'))
+	CONSTRAINT "runs_result_enum" CHECK("runs"."result" in ('success', 'failure', 'cancelled')),
+	CONSTRAINT "runs_iteration_unsigned" CHECK(typeof("runs"."iteration") = 'integer' and "runs"."iteration" >= 0)
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `runs_run_token_unique` ON `runs` (`run_token`);--> statement-breakpoint
 CREATE INDEX `runs_task_idx` ON `runs` (`task_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `runs_one_active_per_task` ON `runs` (`task_id`) WHERE "runs"."ended_at" is null;--> statement-breakpoint
 CREATE TABLE `specs` (
 	`id` text PRIMARY KEY NOT NULL,
 	`task_id` text NOT NULL,
@@ -131,8 +135,8 @@ CREATE TABLE `tasks` (
 	`updated_at` integer DEFAULT (cast(unixepoch('subsec') * 1000 as integer)) NOT NULL,
 	FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON UPDATE no action ON DELETE restrict,
 	FOREIGN KEY (`caused_by`) REFERENCES `tasks`(`id`) ON UPDATE no action ON DELETE set null,
-	CONSTRAINT "tasks_priority_unsigned" CHECK(typeof("tasks"."priority") = 'integer' and "tasks"."priority" >= 0),
-	CONSTRAINT "tasks_verification_iteration_nonneg" CHECK("tasks"."verification_iteration" >= 0),
+	CONSTRAINT "tasks_priority_unsigned" CHECK(typeof("tasks"."priority") = 'integer' and "tasks"."priority" between 0 and 9007199254740991),
+	CONSTRAINT "tasks_verification_iteration_unsigned" CHECK(typeof("tasks"."verification_iteration") = 'integer' and "tasks"."verification_iteration" >= 0),
 	CONSTRAINT "tasks_state_enum" CHECK("tasks"."state" in ('draft', 'refined', 'in_progress', 'verification', 'completed', 'needs_human', 'cancelled')),
 	CONSTRAINT "tasks_sub_state_enum" CHECK("tasks"."sub_state" in ('queued', 'running', 'waiting_human')),
 	CONSTRAINT "tasks_pr_state_enum" CHECK("tasks"."pr_state" in ('open', 'merged', 'closed')),
@@ -151,15 +155,17 @@ CREATE TABLE `usage_records` (
 	`cache_write_tokens` integer DEFAULT 0 NOT NULL,
 	`cost_usd` real,
 	`source` text NOT NULL,
+	`source_ref` text,
 	`pricing_version` text,
 	`created_at` integer DEFAULT (cast(unixepoch('subsec') * 1000 as integer)) NOT NULL,
 	FOREIGN KEY (`run_id`) REFERENCES `runs`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "usage_records_input_tokens_nonneg" CHECK("usage_records"."input_tokens" >= 0),
-	CONSTRAINT "usage_records_output_tokens_nonneg" CHECK("usage_records"."output_tokens" >= 0),
-	CONSTRAINT "usage_records_cache_read_tokens_nonneg" CHECK("usage_records"."cache_read_tokens" >= 0),
-	CONSTRAINT "usage_records_cache_write_tokens_nonneg" CHECK("usage_records"."cache_write_tokens" >= 0),
+	CONSTRAINT "usage_records_input_tokens_unsigned" CHECK(typeof("usage_records"."input_tokens") = 'integer' and "usage_records"."input_tokens" >= 0),
+	CONSTRAINT "usage_records_output_tokens_unsigned" CHECK(typeof("usage_records"."output_tokens") = 'integer' and "usage_records"."output_tokens" >= 0),
+	CONSTRAINT "usage_records_cache_read_tokens_unsigned" CHECK(typeof("usage_records"."cache_read_tokens") = 'integer' and "usage_records"."cache_read_tokens" >= 0),
+	CONSTRAINT "usage_records_cache_write_tokens_unsigned" CHECK(typeof("usage_records"."cache_write_tokens") = 'integer' and "usage_records"."cache_write_tokens" >= 0),
 	CONSTRAINT "usage_records_cost_usd_nonneg" CHECK("usage_records"."cost_usd" >= 0),
 	CONSTRAINT "usage_records_source_enum" CHECK("usage_records"."source" in ('otel', 'transcript', 'calculated'))
 );
 --> statement-breakpoint
-CREATE INDEX `usage_records_run_idx` ON `usage_records` (`run_id`);
+CREATE INDEX `usage_records_run_idx` ON `usage_records` (`run_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `usage_records_source_ref_unique` ON `usage_records` (`run_id`,`source`,`source_ref`);
