@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "generate": "node scripts/generate-json-schema.ts && biome format --write json-schema"
   },
   "dependencies": {
     "zod": "^4.6.7"

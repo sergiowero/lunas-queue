@@ -116,8 +116,10 @@ describe("handoff: versiones", () => {
       "lunasq-code-reviewer",
     ]);
     const handoff = validExample("verification-pass");
-    (handoff.body as { reviewers: Record<string, unknown> }).reviewers["lunasq-extra-reviewer"] =
-      { status: "ran", findings: [] };
+    (handoff.body as { reviewers: Record<string, unknown> }).reviewers["lunasq-extra-reviewer"] = {
+      status: "ran",
+      findings: [],
+    };
     expect(expectErrors(handoff)).toContainEqual({
       path: "body.reviewers",
       message: expect.stringContaining("lunasq-extra-reviewer"),

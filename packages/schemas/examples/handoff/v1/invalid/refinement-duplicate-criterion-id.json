@@ -50,13 +50,13 @@
           "id": "AC-1",
           "given": "un pedido pendiente",
           "when": "el cliente lo cancela",
-          "then": "el pedido queda cancelado y se emite OrderCancelled"
+          "outcome": "el pedido queda cancelado y se emite OrderCancelled"
         },
         {
           "id": "AC-1",
           "given": "un pedido enviado",
           "when": "el cliente intenta cancelarlo",
-          "then": "la cancelación se rechaza con un motivo"
+          "outcome": "la cancelación se rechaza con un motivo"
         }
       ],
       "taskList": [

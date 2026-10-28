@@ -1,0 +1,965 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lunasq:handoff:v1:handoff",
+  "description": "Handoff v1 de LunasQ, generado desde @lunasq/schemas. Las reglas entre campos (ids únicos, veredicto coherente, tamaño máximo de 32768 bytes) las aplica el validador Zod.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "taskId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "result": {
+          "type": "string",
+          "enum": ["completed", "partial"]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "relevantFiles": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "decisions": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "decision": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "discarded": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              }
+            },
+            "required": ["decision"],
+            "additionalProperties": false
+          }
+        },
+        "knownRisks": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "phase": {
+          "type": "string",
+          "const": "refinement"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "domainModel": {
+              "type": "object",
+              "properties": {
+                "boundedContext": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "glossary": {
+                  "minItems": 1,
+                  "maxItems": 100,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "term": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      "definition": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": ["term", "definition"],
+                    "additionalProperties": false
+                  }
+                },
+                "aggregates": {
+                  "minItems": 1,
+                  "maxItems": 50,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      "entities": {
+                        "maxItems": 50,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      }
+                    },
+                    "required": ["name", "entities"],
+                    "additionalProperties": false
+                  }
+                },
+                "invariants": {
+                  "maxItems": 50,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "events": {
+                  "maxItems": 50,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": ["name", "description"],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": ["boundedContext", "glossary", "aggregates", "invariants", "events"],
+              "additionalProperties": false
+            },
+            "criteria": {
+              "minItems": 1,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^AC-[1-9]\\d*$"
+                  },
+                  "given": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "when": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "outcome": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["id", "given", "when", "outcome"],
+                "additionalProperties": false
+              }
+            },
+            "taskList": {
+              "minItems": 1,
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^T-[1-9]\\d*$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "criterionIds": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^AC-[1-9]\\d*$"
+                    }
+                  }
+                },
+                "required": ["id", "title", "criterionIds"],
+                "additionalProperties": false
+              }
+            },
+            "assumptions": {
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            }
+          },
+          "required": ["domainModel", "criteria", "taskList", "assumptions"],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "taskId",
+        "runId",
+        "result",
+        "summary",
+        "relevantFiles",
+        "decisions",
+        "knownRisks",
+        "phase",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "taskId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "result": {
+          "type": "string",
+          "enum": ["completed", "partial"]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "relevantFiles": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "decisions": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "decision": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "discarded": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              }
+            },
+            "required": ["decision"],
+            "additionalProperties": false
+          }
+        },
+        "knownRisks": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "phase": {
+          "type": "string",
+          "const": "implementation"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "criterionTests": {
+              "minItems": 1,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "criterionId": {
+                    "type": "string",
+                    "pattern": "^AC-[1-9]\\d*$"
+                  },
+                  "tests": {
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "file": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 300
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      },
+                      "required": ["file", "name"],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": ["criterionId", "tests"],
+                "additionalProperties": false
+              }
+            },
+            "commits": {
+              "minItems": 1,
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{7,40}$"
+              }
+            },
+            "changesByModule": {
+              "minItems": 1,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "module": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["module", "summary"],
+                "additionalProperties": false
+              }
+            },
+            "howToTest": {
+              "type": "object",
+              "properties": {
+                "commands": {
+                  "minItems": 1,
+                  "maxItems": 20,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                }
+              },
+              "required": ["commands"],
+              "additionalProperties": false
+            },
+            "specDeviations": {
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "deviation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["deviation", "reason"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "criterionTests",
+            "commits",
+            "changesByModule",
+            "howToTest",
+            "specDeviations"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "taskId",
+        "runId",
+        "result",
+        "summary",
+        "relevantFiles",
+        "decisions",
+        "knownRisks",
+        "phase",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "taskId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "result": {
+          "type": "string",
+          "enum": ["completed", "partial"]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "relevantFiles": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "decisions": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "decision": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "discarded": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              }
+            },
+            "required": ["decision"],
+            "additionalProperties": false
+          }
+        },
+        "knownRisks": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "phase": {
+          "type": "string",
+          "const": "verification"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "verdict": {
+              "type": "string",
+              "enum": ["pass", "reject"]
+            },
+            "criteriaVerdicts": {
+              "minItems": 1,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "criterionId": {
+                    "type": "string",
+                    "pattern": "^AC-[1-9]\\d*$"
+                  },
+                  "verdict": {
+                    "type": "string",
+                    "enum": ["pass", "fail"]
+                  },
+                  "evidence": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["criterionId", "verdict", "evidence"],
+                "additionalProperties": false
+              }
+            },
+            "reviewers": {
+              "type": "object",
+              "properties": {
+                "lunasq-security-reviewer": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "ran"
+                        },
+                        "findings": {
+                          "maxItems": 100,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "severity": {
+                                "type": "string",
+                                "enum": ["critical", "major", "minor"]
+                              },
+                              "file": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                              },
+                              "line": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "evidence": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "criterionId": {
+                                "type": "string",
+                                "pattern": "^AC-[1-9]\\d*$"
+                              }
+                            },
+                            "required": ["severity", "file", "evidence"],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": ["status", "findings"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "skipped"
+                        },
+                        "justification": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": ["status", "justification"],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "lunasq-ux-reviewer": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "ran"
+                        },
+                        "findings": {
+                          "maxItems": 100,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "severity": {
+                                "type": "string",
+                                "enum": ["critical", "major", "minor"]
+                              },
+                              "file": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                              },
+                              "line": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "evidence": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "criterionId": {
+                                "type": "string",
+                                "pattern": "^AC-[1-9]\\d*$"
+                              }
+                            },
+                            "required": ["severity", "file", "evidence"],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": ["status", "findings"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "skipped"
+                        },
+                        "justification": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": ["status", "justification"],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "lunasq-ui-reviewer": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "ran"
+                        },
+                        "findings": {
+                          "maxItems": 100,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "severity": {
+                                "type": "string",
+                                "enum": ["critical", "major", "minor"]
+                              },
+                              "file": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                              },
+                              "line": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "evidence": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "criterionId": {
+                                "type": "string",
+                                "pattern": "^AC-[1-9]\\d*$"
+                              }
+                            },
+                            "required": ["severity", "file", "evidence"],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": ["status", "findings"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "skipped"
+                        },
+                        "justification": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": ["status", "justification"],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "lunasq-code-reviewer": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "ran"
+                        },
+                        "findings": {
+                          "maxItems": 100,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "severity": {
+                                "type": "string",
+                                "enum": ["critical", "major", "minor"]
+                              },
+                              "file": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                              },
+                              "line": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "evidence": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 2000
+                              },
+                              "criterionId": {
+                                "type": "string",
+                                "pattern": "^AC-[1-9]\\d*$"
+                              }
+                            },
+                            "required": ["severity", "file", "evidence"],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": ["status", "findings"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "const": "skipped"
+                        },
+                        "justification": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        }
+                      },
+                      "required": ["status", "justification"],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "lunasq-security-reviewer",
+                "lunasq-ux-reviewer",
+                "lunasq-ui-reviewer",
+                "lunasq-code-reviewer"
+              ],
+              "additionalProperties": false
+            },
+            "mustFix": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "severity": {
+                    "type": "string",
+                    "enum": ["critical", "major", "minor"]
+                  },
+                  "file": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "line": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "evidence": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "criterionId": {
+                    "type": "string",
+                    "pattern": "^AC-[1-9]\\d*$"
+                  }
+                },
+                "required": ["severity", "file", "evidence"],
+                "additionalProperties": false
+              }
+            },
+            "refuted": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "finding": {
+                    "type": "object",
+                    "properties": {
+                      "severity": {
+                        "type": "string",
+                        "enum": ["critical", "major", "minor"]
+                      },
+                      "file": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 300
+                      },
+                      "line": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "evidence": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      },
+                      "criterionId": {
+                        "type": "string",
+                        "pattern": "^AC-[1-9]\\d*$"
+                      }
+                    },
+                    "required": ["severity", "file", "evidence"],
+                    "additionalProperties": false
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["finding", "reason"],
+                "additionalProperties": false
+              }
+            },
+            "riskLabel": {
+              "type": "string",
+              "enum": ["low", "medium", "high"]
+            }
+          },
+          "required": [
+            "verdict",
+            "criteriaVerdicts",
+            "reviewers",
+            "mustFix",
+            "refuted",
+            "riskLabel"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "taskId",
+        "runId",
+        "result",
+        "summary",
+        "relevantFiles",
+        "decisions",
+        "knownRisks",
+        "phase",
+        "body"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

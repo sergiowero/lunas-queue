@@ -1,0 +1,93 @@
+import { z } from "zod";
+import { CriterionId, checkUnique, FilePath, list, Text } from "./common.ts";
+import { envelopeShape } from "./envelope.ts";
+
+export const Finding = z.strictObject({
+  severity: z.enum(["critical", "major", "minor"]),
+  file: FilePath,
+  line: z.int().positive().optional(),
+  evidence: Text,
+  criterionId: CriterionId.optional(),
+});
+
+export const ReviewerReport = z.discriminatedUnion(
+  "status",
+  [
+    z.strictObject({ status: z.literal("ran"), findings: list(Finding) }),
+    z.strictObject({ status: z.literal("skipped"), justification: Text }),
+  ],
+  {
+    error: (issue) =>
+      issue.input === undefined
+        ? "falta el reporte del revisor o la justificación de por qué no se lanzó"
+        : undefined,
+  },
+);
+
+// Los 4 revisores de la fase de verificación; cada uno reporta o queda omitido con justificación.
+export const Reviewers = z.strictObject({
+  "lunasq-security-reviewer": ReviewerReport,
+  "lunasq-ux-reviewer": ReviewerReport,
+  "lunasq-ui-reviewer": ReviewerReport,
+  "lunasq-code-reviewer": ReviewerReport,
+});
+export const REVIEWER_NAMES = Reviewers.keyof().options;
+
+// Se muestra como bajo / medio / alto en la UI y en el PR.
+export const RiskLabel = z.enum(["low", "medium", "high"]);
+
+export const VerificationBody = z
+  .strictObject({
+    verdict: z.enum(["pass", "reject"]),
+    criteriaVerdicts: list(
+      z.strictObject({
+        criterionId: CriterionId,
+        verdict: z.enum(["pass", "fail"]),
+        evidence: Text,
+      }),
+      50,
+    ).min(1),
+    reviewers: Reviewers,
+    mustFix: list(Finding),
+    refuted: list(z.strictObject({ finding: Finding, reason: Text })),
+    riskLabel: RiskLabel,
+  })
+  .superRefine((body, ctx) => {
+    checkUnique(
+      ctx,
+      body.criteriaVerdicts,
+      (c) => c.criterionId,
+      (i) => ["criteriaVerdicts", i, "criterionId"],
+      "veredicto de criterio",
+    );
+    if (body.verdict === "pass") {
+      body.criteriaVerdicts.forEach((c, i) => {
+        if (c.verdict === "fail") {
+          ctx.addIssue({
+            code: "custom",
+            path: ["criteriaVerdicts", i, "verdict"],
+            message: `un veredicto pass exige que todos los criterios pasen; ${c.criterionId} falla`,
+          });
+        }
+      });
+      if (body.mustFix.length > 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["mustFix"],
+          message: "un veredicto pass no admite must-fix pendientes",
+        });
+      }
+    } else if (body.mustFix.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["mustFix"],
+        message: "un veredicto reject exige al menos un must-fix con su evidencia",
+      });
+    }
+  });
+
+export const VerificationHandoff = z.strictObject({
+  ...envelopeShape,
+  phase: z.literal("verification"),
+  body: VerificationBody,
+});
