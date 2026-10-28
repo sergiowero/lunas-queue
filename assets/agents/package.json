@@ -1,0 +1,10 @@
+{
+  "name": "@lunasq/assets-agents",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Subagentes revisores de Claude Code",
+  "scripts": {
+    "test": "vitest run"
+  }
+}

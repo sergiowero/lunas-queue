@@ -1,0 +1,20 @@
+{
+  "name": "@lunasq/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Hono: API, SSE, LunasQ MCP, OTLP, scheduler y dispatcher",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@lunasq/domain": "workspace:*",
+    "@lunasq/db": "workspace:*",
+    "@lunasq/adapters": "workspace:*",
+    "@lunasq/schemas": "workspace:*"
+  }
+}

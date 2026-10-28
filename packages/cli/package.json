@@ -1,0 +1,17 @@
+{
+  "name": "@lunasq/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Binario lunasq: start, install, doctor",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@lunasq/server": "workspace:*"
+  }
+}

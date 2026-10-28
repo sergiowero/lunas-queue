@@ -1,0 +1,17 @@
+{
+  "name": "@lunasq/adapters",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Adapters de herdr, gh, git y ejecución de procesos, con sus fakes",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@lunasq/schemas": "workspace:*"
+  }
+}

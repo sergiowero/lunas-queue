@@ -1,0 +1,18 @@
+{
+  "name": "@lunasq/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Esquema Drizzle, migraciones, repositorios y outbox",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@lunasq/schemas": "workspace:*",
+    "@lunasq/domain": "workspace:*"
+  }
+}

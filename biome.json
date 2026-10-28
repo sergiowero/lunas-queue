@@ -1,0 +1,225 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": ["**", "!spikes", "!**/dist", "!**/*.md"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended"
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/schemas/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@lunasq/*"],
+                    "message": "Frontera: schemas solo puede importar paquetes externos (docs/tech-stack.md)."
+                  },
+                  {
+                    "group": [
+                      "node:*",
+                      "fs",
+                      "fs/*",
+                      "child_process",
+                      "net",
+                      "http",
+                      "better-sqlite3",
+                      "drizzle-orm",
+                      "drizzle-orm/*",
+                      "hono",
+                      "hono/*",
+                      "@hono/*",
+                      "@modelcontextprotocol/*"
+                    ],
+                    "message": "Frontera: schemas es TypeScript puro; no conoce base de datos, HTTP, procesos ni herdr."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/domain/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@lunasq/*", "!@lunasq/schemas", "!@lunasq/schemas/**"],
+                    "message": "Frontera: domain solo puede importar @lunasq/schemas (docs/tech-stack.md)."
+                  },
+                  {
+                    "group": [
+                      "node:*",
+                      "fs",
+                      "fs/*",
+                      "child_process",
+                      "net",
+                      "http",
+                      "better-sqlite3",
+                      "drizzle-orm",
+                      "drizzle-orm/*",
+                      "hono",
+                      "hono/*",
+                      "@hono/*",
+                      "@modelcontextprotocol/*"
+                    ],
+                    "message": "Frontera: domain es TypeScript puro; no conoce base de datos, HTTP, procesos ni herdr."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/db/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@lunasq/*",
+                      "!@lunasq/schemas",
+                      "!@lunasq/domain",
+                      "!@lunasq/schemas/**",
+                      "!@lunasq/domain/**"
+                    ],
+                    "message": "Frontera: db solo puede importar @lunasq/schemas, @lunasq/domain (docs/tech-stack.md)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/adapters/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@lunasq/*", "!@lunasq/schemas", "!@lunasq/schemas/**"],
+                    "message": "Frontera: adapters solo puede importar @lunasq/schemas (docs/tech-stack.md)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/server/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@lunasq/*",
+                      "!@lunasq/domain",
+                      "!@lunasq/db",
+                      "!@lunasq/adapters",
+                      "!@lunasq/schemas",
+                      "!@lunasq/domain/**",
+                      "!@lunasq/db/**",
+                      "!@lunasq/adapters/**",
+                      "!@lunasq/schemas/**"
+                    ],
+                    "message": "Frontera: server solo puede importar @lunasq/domain, @lunasq/db, @lunasq/adapters, @lunasq/schemas (docs/tech-stack.md)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/web/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@lunasq/*", "!@lunasq/schemas", "!@lunasq/schemas/**"],
+                    "message": "Frontera: web solo puede importar @lunasq/schemas (docs/tech-stack.md)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/cli/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@lunasq/*", "!@lunasq/server", "!@lunasq/server/**"],
+                    "message": "Frontera: cli solo puede importar @lunasq/server (docs/tech-stack.md)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
