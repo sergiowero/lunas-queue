@@ -1,0 +1,12 @@
+{
+  "name": "spike-sqlite",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "spike": "node spike.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "drizzle-orm": "^0.45.4"
+  }
+}

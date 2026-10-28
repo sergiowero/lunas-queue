@@ -1,7 +1,14 @@
+# Global del repo: sistema, editores y artefactos comunes a todos los componentes.
+# Cada paquete, asset y spike tiene su propio .gitignore con lo específico.
 node_modules/
 dist/
-*.tsbuildinfo
 coverage/
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
 .DS_Store
-spikes/**/node_modules/
-spikes/**/*.db*
+.idea/
+.vscode/*
+!.vscode/extensions.json
