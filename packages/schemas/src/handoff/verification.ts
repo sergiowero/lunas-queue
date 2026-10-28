@@ -17,10 +17,14 @@ export const ReviewerReport = z.discriminatedUnion(
     z.strictObject({ status: z.literal("skipped"), justification: Text }),
   ],
   {
-    error: (issue) =>
-      issue.input === undefined
-        ? "falta el reporte del revisor o la justificación de por qué no se lanzó"
-        : undefined,
+    error: (issue) => {
+      if (issue.input === undefined) {
+        return "falta el reporte del revisor o la justificación de por qué no se lanzó";
+      }
+      return issue.code === "invalid_union"
+        ? "estado de revisor inválido: se esperaba ran o skipped"
+        : undefined;
+    },
   },
 );
 
@@ -32,6 +36,9 @@ export const Reviewers = z.strictObject({
   "lunasq-code-reviewer": ReviewerReport,
 });
 export const REVIEWER_NAMES = Reviewers.keyof().options;
+
+// Quién originó un hallazgo consolidado: un revisor o el propio approver.
+export const FindingSource = z.enum([...REVIEWER_NAMES, "approver"]);
 
 // Se muestra como bajo / medio / alto en la UI y en el PR.
 export const RiskLabel = z.enum(["low", "medium", "high"]);
@@ -48,8 +55,8 @@ export const VerificationBody = z
       50,
     ).min(1),
     reviewers: Reviewers,
-    mustFix: list(Finding),
-    refuted: list(z.strictObject({ finding: Finding, reason: Text })),
+    mustFix: list(Finding.extend({ source: FindingSource })),
+    refuted: list(z.strictObject({ finding: Finding, reason: Text, source: FindingSource })),
     riskLabel: RiskLabel,
   })
   .superRefine((body, ctx) => {

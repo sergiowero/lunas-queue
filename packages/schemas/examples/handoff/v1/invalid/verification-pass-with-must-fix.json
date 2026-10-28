@@ -60,7 +60,8 @@
           "severity": "minor",
           "file": "web/orders/OrderView.tsx",
           "evidence": "No hay confirmación antes de cancelar",
-          "criterionId": "AC-1"
+          "criterionId": "AC-1",
+          "source": "approver"
         }
       ],
       "refuted": [
@@ -71,7 +72,8 @@
             "evidence": "No hay confirmación antes de cancelar",
             "criterionId": "AC-1"
           },
-          "reason": "La confirmación existe en ConfirmDialog, que el revisor no abrió"
+          "reason": "La confirmación existe en ConfirmDialog, que el revisor no abrió",
+          "source": "lunasq-ux-reviewer"
         }
       ],
       "riskLabel": "low"

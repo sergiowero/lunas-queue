@@ -52,6 +52,10 @@ describe("handoff v1: ejemplos válidos", () => {
 describe("handoff v1: ejemplos inválidos", () => {
   it.each(readExamples<InvalidExample>("invalid"))("rechaza %s", (_file, example) => {
     const errors = expectErrors(example.handoff);
+    // Cada ejemplo falla solo por la razón que declara.
+    expect(errors.map((e) => e.path).sort(), example.description).toEqual(
+      example.expectedErrors.map((e) => e.path).sort(),
+    );
     for (const expected of example.expectedErrors) {
       const match = errors.find(
         (error) =>
@@ -85,6 +89,34 @@ describe("handoff: errores claros", () => {
     ]);
   });
 
+  it("explica qué estados admite un revisor", () => {
+    const handoff = validExample("verification-pass");
+    (handoff.body as { reviewers: Record<string, unknown> }).reviewers["lunasq-ui-reviewer"] = {
+      status: "bogus",
+    };
+    expect(expectErrors(handoff)).toEqual([
+      {
+        path: "body.reviewers.lunasq-ui-reviewer.status",
+        message: expect.stringContaining("ran o skipped"),
+      },
+    ]);
+  });
+
+  it("distingue una versión escrita como texto", () => {
+    const handoff = { ...validExample("implementation"), schemaVersion: "1" };
+    expect(expectErrors(handoff)).toEqual([
+      { path: "schemaVersion", message: expect.stringContaining('"1"') },
+    ]);
+  });
+
+  it("devuelve errores en vez de lanzar con entradas no serializables", () => {
+    const handoff: Record<string, unknown> = validExample("implementation");
+    handoff.self = handoff;
+    expect(expectErrors(handoff)).toEqual([
+      { path: "(raíz)", message: expect.stringContaining("serializable") },
+    ]);
+  });
+
   it("rechaza un handoff sin versión de esquema", () => {
     const { schemaVersion: _, ...rest } = validExample("implementation");
     expect(expectErrors(rest)).toEqual([
@@ -94,9 +126,10 @@ describe("handoff: errores claros", () => {
 });
 
 describe("handoff: tamaño acotado", () => {
-  it(`rechaza un handoff de más de ${HANDOFF_MAX_BYTES} bytes`, () => {
+  it(`mide en bytes UTF-8 y rechaza un handoff de más de ${HANDOFF_MAX_BYTES} bytes`, () => {
     const handoff = validExample("implementation");
-    handoff.knownRisks = Array.from({ length: 100 }, () => "ñ".repeat(500));
+    handoff.knownRisks = Array.from({ length: 20 }, () => "ñ".repeat(1000));
+    expect(JSON.stringify(handoff).length).toBeLessThan(HANDOFF_MAX_BYTES);
     expect(expectErrors(handoff)).toEqual([
       { path: "(raíz)", message: expect.stringContaining(`${HANDOFF_MAX_BYTES} bytes`) },
     ]);

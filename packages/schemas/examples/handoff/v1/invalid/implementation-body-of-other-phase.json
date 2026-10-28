@@ -3,6 +3,22 @@
   "expectedErrors": [
     {
       "path": "body.criterionTests"
+    },
+    {
+      "path": "body.commits"
+    },
+    {
+      "path": "body.changesByModule"
+    },
+    {
+      "path": "body.howToTest"
+    },
+    {
+      "path": "body.specDeviations"
+    },
+    {
+      "path": "body",
+      "message": "verdict"
     }
   ],
   "handoff": {
@@ -71,7 +87,8 @@
             "evidence": "No hay confirmación antes de cancelar",
             "criterionId": "AC-1"
           },
-          "reason": "La confirmación existe en ConfirmDialog, que el revisor no abrió"
+          "reason": "La confirmación existe en ConfirmDialog, que el revisor no abrió",
+          "source": "lunasq-ux-reviewer"
         }
       ],
       "riskLabel": "low"

@@ -60,7 +60,8 @@
           "file": "src/orders/order.test.ts",
           "line": 31,
           "evidence": "La aserción solo comprueba que no se lanzó una excepción",
-          "criterionId": "AC-2"
+          "criterionId": "AC-2",
+          "source": "lunasq-code-reviewer"
         }
       ],
       "refuted": [],

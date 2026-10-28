@@ -18,14 +18,29 @@
     "domainModel": {
       "boundedContext": "Pedidos",
       "glossary": [
-        { "term": "Pedido pendiente", "definition": "Pedido confirmado que aún no se envía" }
+        {
+          "term": "Pedido pendiente",
+          "definition": "Pedido confirmado que aún no se envía"
+        }
       ],
-      "aggregates": [{ "name": "Order", "entities": ["OrderLine"] }],
+      "aggregates": [
+        {
+          "name": "Order",
+          "entities": ["OrderLine"]
+        }
+      ],
       "invariants": ["Solo un pedido pendiente puede cancelarse"],
       "events": [
-        { "name": "OrderCancelled", "description": "El cliente canceló un pedido pendiente" }
+        {
+          "name": "OrderCancelled",
+          "description": "El cliente canceló un pedido pendiente"
+        }
       ]
     },
+    "requirements": [
+      "El cliente puede cancelar un pedido pendiente desde su vista de pedidos",
+      "Un pedido enviado no se puede cancelar"
+    ],
     "criteria": [
       {
         "id": "AC-1",
@@ -41,7 +56,11 @@
       }
     ],
     "taskList": [
-      { "id": "T-1", "title": "Comando cancel en Order", "criterionIds": ["AC-1", "AC-2"] },
+      {
+        "id": "T-1",
+        "title": "Comando cancel en Order",
+        "criterionIds": ["AC-1", "AC-2"]
+      },
       {
         "id": "T-2",
         "title": "Botón de cancelar en la vista del cliente",

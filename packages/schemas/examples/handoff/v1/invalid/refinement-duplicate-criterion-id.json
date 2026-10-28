@@ -45,6 +45,10 @@
           }
         ]
       },
+      "requirements": [
+        "El cliente puede cancelar un pedido pendiente desde su vista de pedidos",
+        "Un pedido enviado no se puede cancelar"
+      ],
       "criteria": [
         {
           "id": "AC-1",
@@ -63,7 +67,7 @@
         {
           "id": "T-1",
           "title": "Comando cancel en Order",
-          "criterionIds": ["AC-1", "AC-2"]
+          "criterionIds": ["AC-1"]
         },
         {
           "id": "T-2",

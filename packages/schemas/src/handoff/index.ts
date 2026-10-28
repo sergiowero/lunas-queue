@@ -45,10 +45,16 @@ export function parseHandoff(input: unknown): ParseHandoffResult {
     const supported = Object.keys(handoffSchemas).join(", ");
     return failure(
       "schemaVersion",
-      `versión de esquema no soportada: ${String(version)}; versiones soportadas: ${supported}`,
+      `versión de esquema no soportada: ${JSON.stringify(version) ?? "ausente"}; se esperaba un número, versiones soportadas: ${supported}`,
     );
   }
-  const bytes = utf8Length(JSON.stringify(input));
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(input);
+  } catch {
+    return failure(ROOT_PATH, "el handoff no es serializable como JSON");
+  }
+  const bytes = utf8Length(serialized);
   if (bytes > HANDOFF_MAX_BYTES) {
     return failure(
       ROOT_PATH,

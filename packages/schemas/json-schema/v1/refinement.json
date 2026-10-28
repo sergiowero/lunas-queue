@@ -170,6 +170,16 @@
           "required": ["boundedContext", "glossary", "aggregates", "invariants", "events"],
           "additionalProperties": false
         },
+        "requirements": {
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
         "criteria": {
           "minItems": 1,
           "maxItems": 50,
@@ -240,7 +250,7 @@
           }
         }
       },
-      "required": ["domainModel", "criteria", "taskList", "assumptions"],
+      "required": ["domainModel", "requirements", "criteria", "taskList", "assumptions"],
       "additionalProperties": false
     }
   },

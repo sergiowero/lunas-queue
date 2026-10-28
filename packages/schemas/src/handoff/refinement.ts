@@ -28,6 +28,7 @@ export const SpecTask = z.strictObject({
 export const RefinementBody = z
   .strictObject({
     domainModel: DomainModel,
+    requirements: list(Text, 50).min(1),
     criteria: list(AcceptanceCriterion, 50).min(1),
     taskList: list(SpecTask).min(1),
     assumptions: list(Text, 50),

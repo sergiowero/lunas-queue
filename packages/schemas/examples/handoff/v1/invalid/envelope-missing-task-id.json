@@ -43,6 +43,10 @@
           }
         ]
       },
+      "requirements": [
+        "El cliente puede cancelar un pedido pendiente desde su vista de pedidos",
+        "Un pedido enviado no se puede cancelar"
+      ],
       "criteria": [
         {
           "id": "AC-1",

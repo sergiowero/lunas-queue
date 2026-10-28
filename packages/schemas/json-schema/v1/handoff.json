@@ -172,6 +172,16 @@
               "required": ["boundedContext", "glossary", "aggregates", "invariants", "events"],
               "additionalProperties": false
             },
+            "requirements": {
+              "minItems": 1,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
             "criteria": {
               "minItems": 1,
               "maxItems": 50,
@@ -242,7 +252,7 @@
               }
             }
           },
-          "required": ["domainModel", "criteria", "taskList", "assumptions"],
+          "required": ["domainModel", "requirements", "criteria", "taskList", "assumptions"],
           "additionalProperties": false
         }
       },
@@ -879,9 +889,19 @@
                   "criterionId": {
                     "type": "string",
                     "pattern": "^AC-[1-9]\\d*$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "lunasq-security-reviewer",
+                      "lunasq-ux-reviewer",
+                      "lunasq-ui-reviewer",
+                      "lunasq-code-reviewer",
+                      "approver"
+                    ]
                   }
                 },
-                "required": ["severity", "file", "evidence"],
+                "required": ["severity", "file", "evidence", "source"],
                 "additionalProperties": false
               }
             },
@@ -925,9 +945,19 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 2000
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "lunasq-security-reviewer",
+                      "lunasq-ux-reviewer",
+                      "lunasq-ui-reviewer",
+                      "lunasq-code-reviewer",
+                      "approver"
+                    ]
                   }
                 },
-                "required": ["finding", "reason"],
+                "required": ["finding", "reason", "source"],
                 "additionalProperties": false
               }
             },

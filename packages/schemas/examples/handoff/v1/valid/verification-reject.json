@@ -11,7 +11,11 @@
   "body": {
     "verdict": "reject",
     "criteriaVerdicts": [
-      { "criterionId": "AC-1", "verdict": "pass", "evidence": "order.test.ts en verde" },
+      {
+        "criterionId": "AC-1",
+        "verdict": "pass",
+        "evidence": "order.test.ts en verde"
+      },
       {
         "criterionId": "AC-2",
         "verdict": "fail",
@@ -19,7 +23,10 @@
       }
     ],
     "reviewers": {
-      "lunasq-security-reviewer": { "status": "ran", "findings": [] },
+      "lunasq-security-reviewer": {
+        "status": "ran",
+        "findings": []
+      },
       "lunasq-ux-reviewer": {
         "status": "skipped",
         "justification": "El diff no toca el front end"
@@ -47,7 +54,8 @@
         "file": "src/orders/order.test.ts",
         "line": 31,
         "evidence": "La aserción solo comprueba que no se lanzó una excepción",
-        "criterionId": "AC-2"
+        "criterionId": "AC-2",
+        "source": "lunasq-code-reviewer"
       }
     ],
     "refuted": [],

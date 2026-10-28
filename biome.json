@@ -78,7 +78,11 @@
                 "deniedGlobals": {
                   "process": "Frontera: schemas es TypeScript puro; no conoce el proceso ni el sistema.",
                   "Buffer": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
-                  "require": "Frontera: schemas es TypeScript puro; usa import."
+                  "require": "Frontera: schemas es TypeScript puro; usa import.",
+                  "global": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
+                  "__dirname": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
+                  "__filename": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
+                  "setImmediate": "Frontera: schemas es TypeScript puro; usa APIs estándar."
                 }
               }
             }
