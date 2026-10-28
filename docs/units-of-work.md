@@ -2,14 +2,75 @@
 
 Oct 28, 2026 · @Sergio Sanchez
 
-LunasQ v1 se implementa en 30 unidades de trabajo: UW-00 como base y 29 más, agrupadas en 8 épicas y ordenadas en 9 olas, sobre el stack definido en el doc de tech stack; cada unidad se puede construir y probar por separado, y sus dependencias indican qué contrato debe existir antes (puede reemplazarse por un fake mientras tanto). Diseño de referencia: Doc.
+LunasQ v1 se implementa en 30 unidades de trabajo: UW-00 como base y 29 más, agrupadas en 8 épicas y ordenadas en 9 olas, sobre el stack definido en el doc de tech stack; cada unidad se puede construir y probar por separado, y sus dependencias indican qué contrato debe existir antes (puede reemplazarse por un fake mientras tanto). Diseño de referencia: [design.md](design.md) · Tech stack: [tech-stack.md](tech-stack.md).
 
 ## Orden de implementación
 
 UW-00 va antes que todo y cada ola depende solo de olas anteriores; dentro de una ola, las unidades se pueden trabajar en paralelo. La ruta crítica (base → datos → estados → tareas → scheduler → dispatcher → reconciliación → verificación → entrega → piloto) marca el mínimo de pasos secuenciales.
 
-&#91;embedded content: orden de implementación · 9 olas, ruta crítica resaltada\]
+![Orden de implementación: UW-00 y las 9 olas, con la ruta crítica resaltada](images/olas-de-implementacion.png)
 
+<details>
+<summary>Fuente Mermaid</summary>
+
+```mermaid
+flowchart TB
+    classDef critical fill:#e3eefb,stroke:#2c78d4,stroke-width:2px
+    subgraph B["Base"]
+        U00["UW-00 Monorepo y spikes"]
+    end
+    subgraph O0["Ola 0"]
+        U01["UW-01 Modelo de datos"]
+        U02["UW-02 Adapter herdr"]
+        U03["UW-03 Esquemas handoff"]
+    end
+    subgraph O1["Ola 1"]
+        U04["UW-04 Máquina de estados"]
+        U05["UW-05 API proyectos"]
+        U06["UW-06 Notificaciones"]
+    end
+    subgraph O2["Ola 2"]
+        U07["UW-07 API tareas y DAG"]
+        U08["UW-08 Outbox eventos"]
+        U09["UW-09 Worktrees"]
+        U10["UW-10 Hooks por fase"]
+        U11["UW-11 Gate de tests"]
+    end
+    subgraph O3["Ola 3"]
+        U13["UW-13 Scheduler"]
+        U12["UW-12 Specs y aprobación"]
+        U14["UW-14 Adapter GitHub"]
+    end
+    subgraph O4["Ola 4"]
+        U16["UW-16 Dispatcher"]
+        U15["UW-15 LunasQ MCP"]
+    end
+    subgraph O5["Ola 5"]
+        U17["UW-17 Reconciliación"]
+        U18["UW-18 Skills de fase"]
+        U19["UW-19 Revisores"]
+        U20["UW-20 Usage collector"]
+        U21["UW-21 Front end base"]
+    end
+    subgraph O6["Ola 6"]
+        U23["UW-23 Verificación"]
+        U22["UW-22 Preguntas"]
+        U24["UW-24 Evidencia"]
+        U25["UW-25 Vistas DAG y hooks"]
+    end
+    subgraph O7["Ola 7"]
+        U26["UW-26 Entrega"]
+        U27["UW-27 Bandeja"]
+        U28["UW-28 Instalador"]
+    end
+    subgraph O8["Ola 8"]
+        U29["UW-29 Piloto E2E"]
+    end
+    U00 --> U01 --> U04 --> U07 --> U13 --> U16 --> U17 --> U23 --> U26 --> U29
+    class U00,U01,U04,U07,U13,U16,U17,U23,U26,U29 critical
+```
+
+</details>
 Para adelantar trabajo fuera de la ruta crítica, el adapter de herdr incluye un fake en memoria y los esquemas de handoff se definen primero, así orquestación y contrato con agentes avanzan sin esperar a herdr ni a Claude Code.
 
 ## Backlog

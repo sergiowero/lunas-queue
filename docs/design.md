@@ -4,7 +4,7 @@ Oct 28, 2026 · @Sergio Sanchez
 
 ## Objetivo y principios
 
-LunasQ (repositorio \`lunas-queue\`) es una cola de tareas multi‑proyecto donde un humano define el intent y agentes de codificación (Claude Code en v1) la refinan, implementan, verifican y entregan como PR; herdr es la capa de ejecución y observación, no la fuente de verdad.
+LunasQ (repositorio `lunas-queue`) es una cola de tareas multi‑proyecto donde un humano define el intent y agentes de codificación (Claude Code en v1) la refinan, implementan, verifican y entregan como PR; herdr es la capa de ejecución y observación, no la fuente de verdad.
 
 **Modelo de factory:** LunasQ es una AI software factory *lights‑on*: agentes especializados refinan, implementan y verifican con memoria opcional del proyecto (engram), y el humano conserva dos gates, aprobar la spec y mergear cada PR.
 
@@ -48,8 +48,31 @@ Decisiones de modelado:
 
 Se conservan tus cinco estados con New renombrado a Draft; Draft incluye la tarea recién creada y el refinamiento en curso, Refined es el único gate humano y el loop de calidad vive entre In progress y Verification.
 
-&#91;embedded content: máquina de estados · 5 estados, 2 loops, 2 salidas laterales\]
+![Máquina de estados: Draft, Refined, In progress, Verification y Completed, con los loops de cambios pedidos y rework](images/maquina-de-estados.png)
 
+<details>
+<summary>Fuente Mermaid</summary>
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Draft
+    Draft --> Refined: spec lista
+    Refined --> Draft: cambios pedidos
+    Refined --> InProgress: aprobada (gate humano)
+    InProgress --> Verification: terminada
+    Verification --> InProgress: rework, iteración + 1
+    Verification --> Completed: pass
+    Completed --> [*]
+    InProgress: In progress
+    note right of Completed
+        Desde cualquier estado: Needs human
+        (bloqueo, reintentos o iteraciones agotadas)
+        o Cancelled
+    end note
+```
+
+</details>
 Cada estado con agente tiene un sub‑estado: `queued` (esperando slot o dependencias), `running` (agente vivo en herdr) o `waiting_human` (pregunta abierta). Así la columna del tablero no cambia mientras la tarea espera.
 
 | Transición | Disparador | Guard | Actor |
@@ -67,8 +90,46 @@ Cada estado con agente tiene un sub‑estado: `queued` (esperando slot o depende
 
 Cuatro piezas propias (front end, backend, scheduler, dispatcher) y un MCP propio; herdr y GitHub (vía el CLI gh) son dependencias externas detrás de adapters; engram es opcional y solo lo usan los agentes.
 
-&#91;embedded content: arquitectura · control plane, datos, herdr y git host\]
+![Arquitectura: control plane, datos, herdr como execution plane, usage collector, GitHub y engram opcional](images/arquitectura.png)
 
+<details>
+<summary>Fuente Mermaid</summary>
+
+```mermaid
+flowchart TB
+    FE["Front end<br/>tablero, aprobaciones, DAG"]
+    subgraph CP["Control plane"]
+        API["Backend API<br/>tareas, specs, aprobaciones, eventos"]
+        SCH["Scheduler<br/>ready set, score, límites de WIP"]
+        DIS["Dispatcher<br/>claim, despacho, reconciliación"]
+        MCP["LunasQ MCP<br/>salidas estructuradas de los agentes"]
+    end
+    subgraph DATA["Datos"]
+        DB[("Base de datos SQL<br/>tasks, deps, specs, runs, event log")]
+        OUT["Eventos / outbox<br/>cambios de estado hacia el scheduler"]
+    end
+    subgraph HERDR["herdr · execution plane"]
+        subgraph WS["Workspace por proyecto"]
+            A1["Claude Code<br/>worktree tarea A"]
+            A2["Claude Code<br/>worktree tarea B"]
+        end
+    end
+    UC["Usage collector<br/>tokens y costo por Run"]
+    GH["GitHub (gh CLI)<br/>PR, reviews, estado de CI"]
+    EN["engram (opcional)<br/>memoria opcional"]
+
+    FE --> API
+    API <-->|lee / escribe| DB
+    OUT -->|eventos| SCH
+    DIS <-->|comandos y estado| HERDR
+    A1 & A2 -->|MCP tools| MCP
+    HERDR -->|push y PR| GH
+    HERDR -->|OTel y transcripts| UC
+    UC -->|UsageRecords| DB
+    HERDR <-->|engram MCP| EN
+```
+
+</details>
 | Componente | Responsabilidad | Notas |
 | --- | --- | --- |
 | Front end | Crear tareas, aprobar specs, ver cola, DAG, historial y consumo | No habla con herdr; todo pasa por el backend |
@@ -135,7 +196,7 @@ El dispatcher es un worker de larga vida con dos entradas (eventos de la BD y ev
 
 1. **Claim.** El scheduler elige la tarea de mayor score del ready set y la reclama de forma atómica en la BD, creando un Run con un token único. Si el claim falla, la tarea ya fue tomada.
 2. **Asegurar workspace del proyecto.** Si no existe en herdr, crearlo; guardar su id en Project.
-3. **Asegurar checkout de la tarea.** Siempre, en todas las fases. La primera vez \`worktree create\` crea branch y checkout desde la rama base; en fases siguientes y loops de rework \`worktree open\` reabre el mismo.
+3. **Asegurar checkout de la tarea.** Siempre, en todas las fases. La primera vez `worktree create` crea branch y checkout desde la rama base; en fases siguientes y loops de rework `worktree open` reabre el mismo.
 4. **Levantar agente.** Crear pane/tab, `agent start` con nombre determinístico (p. ej. `t<id>-<fase>-<n>`, cumple el patrón de nombres de herdr) y el perfil de esa fase: kind como --kind; modelo y argumentos extra después de --. El nombre determinístico hace la operación idempotente.
 5. **Prompt de fase.** Enviar un prompt corto que invoque la skill de la fase y le indique el task id; el agente obtiene el contexto completo vía MCP, no por el prompt.
 6. **Observar.** El Run pasa a running; el dispatcher escucha los cambios de estado del pane en herdr y arranca el timer de la fase.

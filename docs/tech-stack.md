@@ -2,7 +2,7 @@
 
 Oct 28, 2026 · @Sergio Sanchez
 
-LunasQ v1 se construye en TypeScript sobre Node.js, con SQLite como base de datos y React + Vite en el front end, todo en un solo monorepo (`lunas-queue`) y un solo proceso local. Diseño: Doc · Units of work: Doc.
+LunasQ v1 se construye en TypeScript sobre Node.js, con SQLite como base de datos y React + Vite en el front end, todo en un solo monorepo (`lunas-queue`) y un solo proceso local. Diseño: [design.md](design.md) · Units of work: [units-of-work.md](units-of-work.md).
 
 ## Decisiones base
 
@@ -26,8 +26,37 @@ El objetivo es un monolito modular: módulos con fronteras claras (dominio, sche
 
 Todo LunasQ es un proceso Node.js en `localhost`: recibe la UI por HTTP y SSE, a los agentes por MCP y la telemetría por OTLP, y habla con herdr y GitHub a través de sus CLIs.
 
-&#91;embedded content: topología en runtime · un proceso, tres entradas, tres dependencias externas\]
+![Topología en runtime: un proceso lunasq en Node.js con API, MCP, usage collector, scheduler, dispatcher y adapters](images/topologia-runtime.png)
 
+<details>
+<summary>Fuente Mermaid</summary>
+
+```mermaid
+flowchart TB
+    BR["Navegador<br/>front end React"]
+    CC["Claude Code<br/>en panes de herdr, uno por fase"]
+    subgraph P["Proceso lunasq · Node.js 26"]
+        API["API + SSE<br/>Hono, sirve el front end"]
+        MCP["LunasQ MCP<br/>Streamable HTTP"]
+        UC["Usage collector<br/>OTLP /v1/metrics, /v1/logs"]
+        SCH["Scheduler<br/>ready set y score"]
+        DIS["Dispatcher<br/>y reconciliación"]
+        AD["Adapters<br/>herdr · gh · hooks"]
+        SCH --> DIS --> AD
+    end
+    DB[("SQLite (WAL)<br/>un archivo local")]
+    HE["herdr<br/>agentes y panes"]
+    GH["gh<br/>PRs y merges"]
+
+    BR <-->|HTTP + SSE| API
+    CC -->|MCP| MCP
+    CC -->|OTLP http/json| UC
+    P <-->|Drizzle| DB
+    AD -->|CLI y socket| HE
+    AD -->|CLI| GH
+```
+
+</details>
 ## Stack por componente
 
 Cada componente del diseño queda resuelto con piezas de la misma base, sin servicios externos adicionales.
