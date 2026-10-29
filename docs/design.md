@@ -272,7 +272,7 @@ Los hooks viven en el repo del proyecto, en `./lunasq/hooks/`, versionados con e
 
 - **Un directorio por punto de enganche:** `lunasq/hooks/before_delivery/`, `lunasq/hooks/after_merge/`, etc. Cada script ejecutable dentro es un hook.
 - **Orden:** los scripts de un mismo punto corren en orden alfabético del nombre de archivo, así un prefijo numérico (`10-bump-version`, `20-changelog`) define la secuencia.
-- **Ajustes por script:** timeout y política de fallo se declaran en `lunasq/hooks/config`; si un script no aparece ahí, usa los valores por defecto (política `block`).
+- **Ajustes por script:** timeout y política de fallo se declaran en `lunasq/hooks/config`, un JSON agrupado por punto y script (`{"before_delivery": {"10-bump-version": {"timeoutSeconds": 300, "policy": "warn"}}}`); si un script no aparece ahí, usa los valores por defecto (política `block`, 10 minutos). Detalle en [ADR uw-10-hooks](decisions/uw-10-hooks.md).
 - **Vista en el front end:** por proyecto, los hooks de cada punto con su contenido, tal como están en la rama base, y sus últimas ejecuciones por tarea con salida, duración y código de salida.
 
 La carpeta `lunasq/` del repo queda con dos partes: `hooks/` (configuración, versionada) y `tasks/` (archivos de evidencia por tarea).
