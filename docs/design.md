@@ -155,7 +155,7 @@ El scheduler no ordena una lista: calcula un **ready set** (tareas cuyas depende
 **Dependencias como DAG**
 
 - Se valida ausencia de ciclos al crear o editar una arista; se rechaza la operación si cierra un ciclo. Las aristas se agregan mientras la tarea dependiente está en Draft y no pueden apuntar a una tarea cancelada ([ADR 0010](decisions/0010-api-tareas-dag.md)).
-- Una tarea está *ready* cuando todas sus dependencias tienen su PR mergeado a la rama base. Aplica desde el refinamiento: con dependencias pendientes la tarea se queda en Draft sin agente. Si el PR de una dependencia se cierra sin merge, sus dependientes pasan a Needs human.
+- Una tarea está *ready* cuando todas sus dependencias tienen su PR mergeado a la rama base. Aplica desde el refinamiento: con dependencias pendientes la tarea se queda en Draft sin agente. Si el PR de una dependencia se cierra sin merge, o la dependencia se cancela sin PR mergeado, sus dependientes pasan a Needs human.
 - Dependencias cross‑project permitidas, pero visibles en la UI como riesgo.
 
 **Score de prioridad**
@@ -172,11 +172,11 @@ score = prioridad base + aging + boost por desbloqueo
 | Nivel | Qué limita | Por qué |
 | --- | --- | --- |
 | Global | Agentes vivos totales | CPU, memoria, rate limits de proveedores |
-| Por proyecto | Tareas en in progress por repo | Conflictos de merge, carga de CI |
+| Por proyecto | Agentes vivos por repo, en todas las fases | Conflictos de merge, carga de CI |
 | Por tipo de agente | Instancias por tipo de agente (en v1 solo Claude Code) | Cuotas y costo por proveedor |
 | Por fase | Refinamiento vs implementación | Refinar es barato y desbloquea al humano; conviene más slots |
 
-Todos los límites son configurables; el global tiene default de 5 y los demás son opcionales. Sin preemption: una tarea de mayor prioridad espera el siguiente slot libre. Los gates humanos no consumen slots: una tarea en refined esperando aprobación no tiene agente vivo.
+Todos los límites son configurables; el global tiene default de 5 y los demás son opcionales. Sin preemption: una tarea de mayor prioridad espera el siguiente slot libre. Los gates humanos no consumen slots: una tarea en refined esperando aprobación no tiene agente vivo. Una tarea con una pregunta abierta (`waiting_human`) sí ocupa su slot. Defaults del score, cálculo del aging, escalamiento de dependientes y contrato con el dispatcher: [ADR 0014](decisions/0014-scheduler.md).
 
 ## Dispatcher e integración con herdr (propuesta inicial)
 

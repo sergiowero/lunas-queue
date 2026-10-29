@@ -1,9 +1,16 @@
 // Suites de contrato de los puertos del dominio: corren contra la implementación en memoria y
 // contra la de @lunasq/db, para que ambas se comporten igual.
-import { Project, ProjectCreate } from "@lunasq/schemas";
+import {
+  Project,
+  ProjectCreate,
+  type PrState,
+  type SubState,
+  type TaskState,
+} from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import type { DependencyEdge, DependencyGraphReader } from "./dependency-graph.ts";
 import type { ProjectConfigReader } from "./project-config.ts";
+import type { SchedulerStateReader } from "./scheduler.ts";
 
 let seq = 0;
 
@@ -98,6 +105,103 @@ export function dependencyGraphReaderContract(
     it("sin aristas devuelve un grafo vacío", () => {
       const graph = setup([]).reader.snapshot();
       expect(graph.edges()).toEqual([]);
+    });
+  });
+}
+
+/** Tarea sembrada para la suite de SchedulerStateReader; los campos omitidos toman su default. */
+export type SchedulerSeed = {
+  name: string;
+  state: TaskState;
+  subState?: SubState | null;
+  priority?: number;
+  prState?: PrState | null;
+};
+
+/**
+ * Suite de contrato de SchedulerStateReader: corre contra el reader en memoria y contra el de
+ * @lunasq/db. `setup` crea las tareas y aristas por nombre (sub-estado null por default) y
+ * devuelve el reader y cómo traducir un nombre a su id. readySince lo calcula cada
+ * implementación y se prueba aparte.
+ */
+export function schedulerStateReaderContract(
+  name: string,
+  setup: (
+    tasks: SchedulerSeed[],
+    edges: DependencyEdge[],
+  ) => { reader: SchedulerStateReader; idOf: (name: string) => string },
+): void {
+  describe(`contrato de SchedulerStateReader: ${name}`, () => {
+    it("devuelve las tareas vivas con su estado, sub-estado, prioridad y PR", () => {
+      const { reader, idOf } = setup(
+        [
+          { name: "a", state: "draft", subState: "queued", priority: 300 },
+          { name: "b", state: "in_progress", subState: "running" },
+          { name: "c", state: "refined" },
+          { name: "d", state: "needs_human" },
+        ],
+        [],
+      );
+      const byId = new Map(reader.snapshot().tasks.map((t) => [t.id, t]));
+      expect(byId.size).toBe(4);
+      expect(byId.get(idOf("a"))).toMatchObject({
+        state: "draft",
+        subState: "queued",
+        priority: 300,
+        prState: null,
+      });
+      expect(byId.get(idOf("b"))).toMatchObject({ state: "in_progress", subState: "running" });
+      for (const t of byId.values()) {
+        expect(t.createdAt).toBeInstanceOf(Date);
+        expect(t.readySince).toBeInstanceOf(Date);
+      }
+    });
+
+    it("incluye las terminales que son dependencia de una viva y omite las demás", () => {
+      const { reader, idOf } = setup(
+        [
+          { name: "hecha", state: "completed", prState: "merged" },
+          { name: "cancelada", state: "cancelled" },
+          { name: "suelta", state: "completed", prState: "merged" },
+          { name: "fin", state: "completed", prState: "merged" },
+          { name: "viva", state: "draft", subState: "queued" },
+        ],
+        [
+          { taskId: "viva", dependsOnId: "hecha" },
+          { taskId: "viva", dependsOnId: "cancelada" },
+          { taskId: "fin", dependsOnId: "suelta" },
+        ],
+      );
+      const snapshot = reader.snapshot();
+      expect(snapshot.tasks.map((t) => t.id).sort()).toEqual(
+        [idOf("hecha"), idOf("cancelada"), idOf("viva")].sort(),
+      );
+      expect(snapshot.tasks.find((t) => t.id === idOf("hecha"))?.prState).toBe("merged");
+      // Solo las aristas de las tareas vivas: las terminales ya no esperan nada.
+      expect(snapshot.edges).toHaveLength(2);
+      expect(snapshot.edges).toEqual(
+        expect.arrayContaining([
+          { taskId: idOf("viva"), dependsOnId: idOf("hecha") },
+          { taskId: idOf("viva"), dependsOnId: idOf("cancelada") },
+        ]),
+      );
+    });
+
+    it("modificar el snapshot no cambia el siguiente", () => {
+      const { reader } = setup(
+        [{ name: "a", state: "draft", subState: "queued", priority: 100 }],
+        [],
+      );
+      const first = reader.snapshot();
+      const t = first.tasks[0];
+      if (!t) throw new Error("sin tareas");
+      t.priority = 999;
+      t.createdAt.setFullYear(1990);
+      first.edges.push({ taskId: "x", dependsOnId: "y" });
+      const second = reader.snapshot();
+      expect(second.tasks[0]?.priority).toBe(100);
+      expect(second.tasks[0]?.createdAt.getFullYear()).not.toBe(1990);
+      expect(second.edges).toEqual([]);
     });
   });
 }
