@@ -135,7 +135,7 @@ describe("HookService con git real", () => {
     ]);
     expect(readFileSync(join(wtPath, "order.log"), "utf8")).toBe("first\nsecond\n");
     // El worktree tenía cambios sin commit antes de los hooks: no se mezclan en un commit.
-    expect(res).toMatchObject({ outcome: "passed", commit: null, commitSkipped: true });
+    expect(res).toMatchObject({ outcome: "warned", commit: null, commitSkipped: true });
   });
 
   it("un cambio de hook entra en vigor cuando llega a la rama base", async () => {
@@ -147,5 +147,21 @@ describe("HookService con git real", () => {
     await service.run({ taskId: task.id, point: "before_delivery" });
 
     expect(readFileSync(join(wtPath, "order.log"), "utf8")).toBe("first-v2\nsecond\n");
+  });
+
+  it("after_merge corre en el commit mergeado aunque el checkout del proyecto esté atrasado", async () => {
+    const { seed, root, task, service } = await setup();
+    const out = join(root, "deployed");
+    write(seed, "lunasq/hooks/after_merge/10-deploy", `#!/bin/sh\ncat VERSION > ${out}\n`, true);
+    write(seed, "VERSION", "2.0.0\n");
+    git(seed, "add", "--all");
+    git(seed, "commit", "--quiet", "-m", "merge");
+    git(seed, "push", "--quiet", "origin", "main");
+
+    const res = await service.run({ taskId: task.id, point: "after_merge" });
+
+    expect(res.outcome).toBe("passed");
+    expect(readFileSync(out, "utf8")).toBe("2.0.0\n");
+    expect(git(join(root, "checkout"), "worktree", "list").trim().split("\n")).toHaveLength(2);
   });
 });

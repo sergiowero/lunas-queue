@@ -37,10 +37,23 @@ export class RealGit implements GitAdapter {
   }
 
   async fetch(input: { cwd: string; remote: string; branch: string }) {
-    const refspec = `+refs/heads/${input.branch}:refs/remotes/${input.remote}/${input.branch}`;
+    // El sha sale del remoto (ls-remote), no de releer `<remote>/<rama>` después del fetch: ese
+    // ref vive en el gitdir común y un worktree podría moverlo entre el fetch y la lectura.
+    const ref = `refs/heads/${input.branch}`;
+    const listed = await this.ok(input.cwd, ["ls-remote", "--end-of-options", input.remote, ref], {
+      timeoutMs: this.fetchTimeoutMs,
+    });
+    const sha = listed.stdout
+      .toString("utf8")
+      .split("\n")
+      .map((line) => line.split("\t"))
+      .find(([, name]) => name === ref)?.[0];
+    if (!sha) throw new GitError("git_failed", `${input.remote} no tiene ${ref}`);
+    const refspec = `+${ref}:refs/remotes/${input.remote}/${input.branch}`;
     await this.ok(input.cwd, ["fetch", "--quiet", "--no-tags", input.remote, refspec], {
       timeoutMs: this.fetchTimeoutMs,
     });
+    return this.resolveCommit({ cwd: input.cwd, ref: sha });
   }
 
   async resolveCommit(input: { cwd: string; ref: string }) {
@@ -83,8 +96,23 @@ export class RealGit implements GitAdapter {
     // asunto de una línea con `: ` (`chore(lunasq): …`) y los pega sin línea en blanco.
     const trailers = Object.entries(input.trailers).map(([k, v]) => `${k}: ${v}`);
     const paragraphs = trailers.length ? ["--message", trailers.join("\n")] : [];
-    await this.ok(input.cwd, ["commit", "--quiet", "--message", input.message, ...paragraphs]);
+    try {
+      await this.ok(input.cwd, ["commit", "--quiet", "--message", input.message, ...paragraphs]);
+    } catch (err) {
+      // Sin esto el índice queda preparado y el siguiente commit vería un worktree ya sucio.
+      await this.run(input.cwd, ["reset", "--quiet"]);
+      throw err;
+    }
     return this.resolveCommit({ cwd: input.cwd, ref: "HEAD" });
+  }
+
+  async addDetachedWorktree(input: { cwd: string; path: string; commit: string }) {
+    await this.ok(input.cwd, ["worktree", "add", "--quiet", "--detach", input.path, input.commit]);
+  }
+
+  async removeWorktree(input: { cwd: string; path: string }) {
+    await this.run(input.cwd, ["worktree", "remove", "--force", input.path]);
+    await this.ok(input.cwd, ["worktree", "prune"]);
   }
 
   private async lsTree(cwd: string, commit: string, path: string) {
@@ -117,11 +145,20 @@ export class RealGit implements GitAdapter {
     return new Promise((resolve, reject) => {
       execFile(
         this.bin,
-        args,
+        // Ningún comando de LunasQ ejecuta código del repo: ni hooks de git (que el branch de la
+        // tarea puede definir con core.hooksPath) ni el fsmonitor de la config compartida.
+        ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", ...args],
         {
           cwd,
-          // Sin prompts de credenciales: un fetch que pregunta se quedaría esperando.
-          env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
+          env: {
+            ...process.env,
+            // Sin prompts de credenciales: un fetch que pregunta se quedaría esperando.
+            GIT_TERMINAL_PROMPT: "0",
+            LC_ALL: "C",
+            // `git replace` desde un worktree cambiaría el contenido de cualquier objeto de la
+            // base para todos los checkouts del repo (refs/replace vive en el gitdir común).
+            GIT_NO_REPLACE_OBJECTS: "1",
+          },
           encoding: "buffer",
           maxBuffer: 64 * 1024 * 1024,
           timeout: timeoutMs,

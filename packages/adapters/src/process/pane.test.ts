@@ -51,6 +51,17 @@ describe("HerdrPaneRunner", () => {
     expect(res.stdout).toBe(`${dir}\nt-1\n`);
   });
 
+  it("el comando no lee la terminal: stdin es /dev/null", async () => {
+    const res = await runner.run({ command: "cat; echo fin", cwd: dir, timeoutMs: 2_000 });
+    expect(res).toMatchObject({ exitCode: 0, stdout: "fin\n", timedOut: false });
+  });
+
+  it("rechaza nombres de variable que no son de shell", async () => {
+    await expect(runner.run({ command: "true", cwd: dir, env: { "A;rm": "x" } })).rejects.toThrow(
+      /variable/,
+    );
+  });
+
   it("el comando llega intacto aunque tenga comillas y metacaracteres", async () => {
     const res = await runner.run({ command: `printf '%s' "a 'b' \\$c; d"`, cwd: dir });
     expect(res.stdout).toBe("a 'b' $c; d");

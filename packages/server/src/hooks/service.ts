@@ -3,7 +3,7 @@
 // tarea, los copia fuera del worktree y los ejecuta en orden en un pane de herdr. Cada ejecución
 // y el resultado del punto quedan en el Event log; un fallo con política block manda la tarea a
 // needs_human. Conectar cada punto con su fase es de quien la orquesta (UW-16, UW-23, UW-26).
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -68,7 +68,7 @@ export interface HookServiceDeps {
   worktrees: { ensure(taskId: string): Promise<EnsuredWorktree> };
   /** Runner que abre un pane a partir de `parentPaneId`; por defecto, HerdrPaneRunner. */
   runnerFor?: (parentPaneId: string) => ProcessRunner;
-  /** Dónde se copian los scripts leídos de la rama base; por defecto, bajo el tmpdir. */
+  /** Dónde se crea el directorio privado de cada ejecución; por defecto, el tmpdir. */
   scriptsDir?: string;
 }
 
@@ -121,6 +121,21 @@ const pointDir = (point: HookPoint) => `${HOOKS_DIR}/${point}`;
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
+interface Location {
+  cwd: string;
+  paneId: string;
+  branch: string;
+  /** Los cambios que dejen los hooks se commitean (solo en el worktree de la tarea). */
+  commits: boolean;
+}
+
+interface Prepared {
+  where: Location;
+  dir: string;
+  dirtyBefore: boolean;
+  cleanup(): Promise<void>;
+}
+
 /** Hooks leídos de un commit de la rama base. */
 interface BaseHooks {
   baseRef: string;
@@ -151,14 +166,15 @@ export class HookService {
     this.runnerFor =
       deps.runnerFor ??
       ((parentPaneId) => new HerdrPaneRunner({ herdr: deps.herdr, parentPaneId }));
-    this.scriptsDir = deps.scriptsDir ?? join(tmpdir(), "lunasq-hooks");
+    this.scriptsDir = deps.scriptsDir ?? tmpdir();
   }
 
   /**
    * Corre los hooks de `point` para la tarea, en orden, y devuelve el resultado del punto. Un
    * script con política block que falla detiene los siguientes y, salvo en after_merge y
-   * on_failure, manda la tarea a needs_human. Lanza solo si la tarea, el proyecto o el worktree
-   * no están disponibles.
+   * on_failure, manda la tarea a needs_human. Cualquier fallo al leer la base o preparar la
+   * ejecución (p. ej. el worktree) bloquea el punto y queda registrado. Lanza solo si la tarea o
+   * el proyecto no existen.
    */
   run(input: RunHooksInput): Promise<HookPointResult> {
     return this.locks.run(input.taskId, () => this.runLocked(input));
@@ -212,77 +228,120 @@ export class HookService {
       return this.finish(input, { ...emptyResult(point, null), error });
     }
 
-    const where = await this.location(project, input.taskId, point);
-    const dir = await this.materialize(project, base, point);
-    const commits = hookPointRunsInWorktree(point);
-    const dirtyBefore = commits && (await this.git.isDirty(where.cwd));
-    const env = this.env(project, input, where);
-    const runner = this.runnerFor(where.paneId);
-
-    const executions: HookExecution[] = [];
-    for (const hook of plan) {
-      const execution = await this.execute(runner, hook, join(dir, hook.script), where.cwd, env);
-      executions.push(execution);
-      appendEvent(
-        this.db,
-        {
-          taskId: input.taskId,
-          type: HOOK_EXECUTED,
-          actor: "system",
-          payload: HookExecutedPayload.parse({
-            point,
-            script: hook.script,
-            baseRef: base.baseRef,
-            runId,
-            policy: hook.policy,
-            timeoutSeconds: hook.timeoutSeconds,
-            exitCode: execution.exitCode,
-            timedOut: execution.timedOut,
-            durationMs: execution.durationMs,
-            passed: execution.passed,
-            output: execution.output,
-          }),
-        },
-        { publish: true },
-      );
-      if (hookStopsPoint(execution)) break;
+    let prepared: Prepared;
+    try {
+      prepared = await this.prepare(project, input, base);
+    } catch (err) {
+      const error = `no se pudieron preparar los hooks: ${message(err)}`;
+      return this.finish(input, { ...emptyResult(point, base.baseRef), error });
     }
 
-    const result: HookPointResult = {
-      ...emptyResult(point, base.baseRef),
-      outcome: hookPointOutcome(executions),
-      executions,
-      failedScript: executions.find(hookStopsPoint)?.script ?? null,
-    };
-    if (commits && result.outcome !== "blocked") {
-      await this.commitChanges(input, where.cwd, dirtyBefore, result);
+    try {
+      const { where, dir, dirtyBefore } = prepared;
+      const env = this.env(project, input, where);
+      const runner = this.runnerFor(where.paneId);
+
+      const executions: HookExecution[] = [];
+      for (const hook of plan) {
+        const execution = await this.execute(runner, hook, join(dir, hook.script), where.cwd, env);
+        executions.push(execution);
+        appendEvent(
+          this.db,
+          {
+            taskId: input.taskId,
+            type: HOOK_EXECUTED,
+            actor: "system",
+            payload: HookExecutedPayload.parse({
+              point,
+              script: hook.script,
+              baseRef: base.baseRef,
+              runId,
+              policy: hook.policy,
+              timeoutSeconds: hook.timeoutSeconds,
+              exitCode: execution.exitCode,
+              timedOut: execution.timedOut,
+              durationMs: execution.durationMs,
+              passed: execution.passed,
+              output: execution.output,
+            }),
+          },
+          { publish: true },
+        );
+        if (hookStopsPoint(execution)) break;
+      }
+
+      const result: HookPointResult = {
+        ...emptyResult(point, base.baseRef),
+        outcome: hookPointOutcome(executions),
+        executions,
+        failedScript: executions.find(hookStopsPoint)?.script ?? null,
+      };
+      if (where.commits && result.outcome !== "blocked") {
+        await this.commitChanges(input, where.cwd, dirtyBefore, result);
+      }
+      return this.finish(input, result);
+    } finally {
+      await prepared.cleanup();
     }
-    return this.finish(input, result);
   }
 
-  /** after_merge corre en el checkout de la rama base; los demás puntos en el worktree. */
-  private async location(project: Project, taskId: string, point: HookPoint) {
-    if (!hookPointRunsInWorktree(point)) {
-      const { rootPaneId } = await this.herdr.ensureWorkspace({
-        cwd: project.localPath,
-        label: project.name,
-      });
-      return { cwd: project.localPath, paneId: rootPaneId, branch: project.baseBranch };
+  /**
+   * Directorio privado de la ejecución (mkdtemp, 0700) con los archivos del punto copiados de la
+   * rama base, y el lugar donde corren: el worktree de la tarea o, para after_merge, un checkout
+   * temporal en HEAD detached en el commit de la base, que se borra al terminar.
+   */
+  private async prepare(
+    project: Project,
+    input: RunHooksInput,
+    base: BaseHooks,
+  ): Promise<Prepared> {
+    await mkdir(this.scriptsDir, { recursive: true, mode: 0o700 });
+    const runDir = await mkdtemp(join(this.scriptsDir, "lunasq-hooks-"));
+    let checkout: string | undefined;
+    const cleanup = async () => {
+      if (checkout) await this.git.removeWorktree({ cwd: project.localPath, path: checkout });
+      await rm(runDir, { recursive: true, force: true });
+    };
+    try {
+      const dir = await this.materialize(project, base, input.point, join(runDir, "hooks"));
+      let where: Location;
+      if (hookPointRunsInWorktree(input.point)) {
+        const worktree = await this.worktrees.ensure(input.taskId);
+        where = {
+          cwd: worktree.path,
+          paneId: worktree.rootPaneId,
+          branch: worktree.branch,
+          commits: true,
+        };
+      } else {
+        checkout = join(runDir, "checkout");
+        await this.git.addDetachedWorktree({
+          cwd: project.localPath,
+          path: checkout,
+          commit: base.baseRef,
+        });
+        const { rootPaneId } = await this.herdr.ensureWorkspace({
+          cwd: project.localPath,
+          label: project.name,
+        });
+        where = { cwd: checkout, paneId: rootPaneId, branch: project.baseBranch, commits: false };
+      }
+      const dirtyBefore = where.commits && (await this.git.isDirty(where.cwd));
+      return { where, dir, dirtyBefore, cleanup };
+    } catch (err) {
+      await cleanup().catch(() => {});
+      throw err;
     }
-    const worktree = await this.worktrees.ensure(taskId);
-    return { cwd: worktree.path, paneId: worktree.rootPaneId, branch: worktree.branch };
   }
 
   private fetchBase(project: Project): Promise<string> {
     return this.fetchLocks.run(project.localPath, async () => {
-      await this.git.fetch({
+      // El sha que devuelve fetch viene del remoto: no se relee `origin/<base>`, que vive en el
+      // gitdir común y el worktree de una tarea podría mover.
+      return this.git.fetch({
         cwd: project.localPath,
         remote: "origin",
         branch: project.baseBranch,
-      });
-      return this.git.resolveCommit({
-        cwd: project.localPath,
-        ref: `origin/${project.baseBranch}`,
       });
     });
   }
@@ -301,13 +360,9 @@ export class HookService {
     return content?.toString("utf8");
   }
 
-  /**
-   * Copia los archivos del punto (scripts y sus auxiliares) a un directorio por commit fuera del
-   * worktree: lo que corre es exactamente lo que hay en la rama base. Repetirlo reescribe lo mismo.
-   */
-  private async materialize(project: Project, base: BaseHooks, point: HookPoint) {
-    const dir = join(this.scriptsDir, base.baseRef, point);
-    await mkdir(dir, { recursive: true });
+  /** Copia los archivos del punto (scripts y auxiliares) del commit de la base a `dir`. */
+  private async materialize(project: Project, base: BaseHooks, point: HookPoint, dir: string) {
+    await mkdir(dir, { mode: 0o700 });
     for (const file of base.files) {
       const content = await this.git.readFile({
         cwd: project.localPath,
@@ -315,10 +370,10 @@ export class HookService {
         path: `${pointDir(point)}/${file.name}`,
       });
       if (!content) continue;
-      const target = join(dir, file.name);
-      const tmp = `${target}.${process.pid}.tmp`;
-      await writeFile(tmp, content, { mode: file.executable ? 0o755 : 0o644 });
-      await rename(tmp, target);
+      await writeFile(join(dir, file.name), content, {
+        mode: file.executable ? 0o700 : 0o600,
+        flag: "wx",
+      });
     }
     return dir;
   }
@@ -388,7 +443,9 @@ export class HookService {
     try {
       if (!(await this.git.isDirty(cwd))) return;
       if (dirtyBefore) {
+        // Lo que dejaron los hooks queda sin commitear: quien sigue (p. ej. el push) debe saberlo.
         result.commitSkipped = true;
+        result.outcome = "warned";
         return;
       }
       result.commit = await this.git.commitAll({

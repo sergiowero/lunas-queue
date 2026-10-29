@@ -1,6 +1,6 @@
 // HookService con fakes de git, herdr y runner. La prueba con git y procesos reales está en
 // service.git.test.ts.
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -60,6 +60,8 @@ async function setup(opts: { tree?: FakeTree; handler?: FakeProcessHandler } = {
   };
   const runner = new FakeProcessRunner(opts.handler);
   const panes: string[] = [];
+  /** Contenido de cada script y de sus vecinos en el momento de correrlo (después se borran). */
+  const seen: { name: string; content: string; dir: string[] }[] = [];
   const scriptsDir = mkdtempSync(join(tmpdir(), "lunasq-hooks-test-"));
   scriptsDirs.push(scriptsDir);
   const service = new HookService({
@@ -71,7 +73,17 @@ async function setup(opts: { tree?: FakeTree; handler?: FakeProcessHandler } = {
     worktrees,
     runnerFor: (paneId) => {
       panes.push(paneId);
-      return runner;
+      return {
+        run: (input) => {
+          const path = scriptPath(input);
+          seen.push({
+            name: path.split("/").at(-1) ?? "",
+            content: readFileSync(path, "utf8"),
+            dir: readdirSync(join(path, "..")).sort(),
+          });
+          return runner.run(input);
+        },
+      };
     },
     scriptsDir,
   });
@@ -88,6 +100,8 @@ async function setup(opts: { tree?: FakeTree; handler?: FakeProcessHandler } = {
     worktrees,
     runner,
     panes,
+    seen,
+    scriptsDir,
     service,
     events,
     taskRow,
@@ -133,14 +147,17 @@ describe("HookService.run", () => {
     ]);
   });
 
-  it("ejecuta el contenido de origin/<base>, copiado fuera del worktree junto a sus auxiliares", async () => {
-    const { task, wtPath, runner, service, git, project } = await setup();
+  it("ejecuta el contenido de origin/<base>, copiado fuera del worktree, y borra la copia", async () => {
+    const { task, wtPath, runner, seen, scriptsDir, service, git, project } = await setup();
     await service.run({ taskId: task.id, point: "before_delivery" });
 
-    const path = scriptPath(runner.calls[0] as ProcessInput);
-    expect(path.startsWith(wtPath)).toBe(false);
-    expect(readFileSync(path, "utf8")).toBe("#!/bin/sh\necho bump\n");
-    expect(readFileSync(join(path, "..", "lib.sh"), "utf8")).toBe("helper\n");
+    expect(scriptPath(runner.calls[0] as ProcessInput).startsWith(wtPath)).toBe(false);
+    expect(seen[0]).toEqual({
+      name: "10-bump",
+      content: "#!/bin/sh\necho bump\n",
+      dir: ["10-bump", "20-changelog", "lib.sh"],
+    });
+    expect(readdirSync(scriptsDir)).toEqual([]);
 
     // Un cambio al hook entra en vigor cuando llega a la rama base (su PR se mergeó).
     git.pushToRemote(project.localPath, "main", {
@@ -148,13 +165,11 @@ describe("HookService.run", () => {
       "lunasq/hooks/before_delivery/10-bump": sh("echo bump v2"),
     });
     await service.run({ taskId: task.id, point: "before_delivery" });
-    expect(readFileSync(scriptPath(runner.calls[2] as ProcessInput), "utf8")).toBe(
-      "#!/bin/sh\necho bump v2\n",
-    );
+    expect(seen[2]?.content).toBe("#!/bin/sh\necho bump v2\n");
   });
 
   it("un hook agregado o modificado en el branch de la tarea nunca se ejecuta", async () => {
-    const { task, wtPath, runner, service, git } = await setup();
+    const { task, wtPath, runner, seen, service, git } = await setup();
     // El worktree de la tarea tiene otro árbol (el agente cambió hooks) y cambios sin commit.
     git.addCheckout(wtPath, {
       branch: taskBranch(task.id),
@@ -170,9 +185,32 @@ describe("HookService.run", () => {
     await service.run({ taskId: task.id, point: "before_delivery" });
 
     expect(runner.calls.map(scriptName)).toEqual(["10-bump", "20-changelog"]);
-    for (const call of runner.calls) {
-      expect(readFileSync(scriptPath(call), "utf8")).not.toMatch(/evil/);
-    }
+    for (const { content } of seen) expect(content).not.toMatch(/evil/);
+  });
+
+  it("dos tareas en el mismo punto y la misma base no comparten directorio", async () => {
+    const a = await setup();
+    const results = await Promise.all([
+      a.service.run({ taskId: a.task.id, point: "on_failure" }),
+      a.service.run({ taskId: a.task.id, point: "before_delivery" }),
+    ]);
+    expect(results.map((r) => r.outcome)).toEqual(["passed", "passed"]);
+    const dirs = new Set(
+      a.runner.calls.map((c) => scriptPath(c).split("/").slice(0, -1).join("/")),
+    );
+    expect(dirs.size).toBe(2);
+  });
+
+  it("un fallo al preparar la ejecución (p. ej. el worktree) bloquea y queda registrado", async () => {
+    const { task, worktrees, runner, service, events, taskRow, scriptsDir } = await setup();
+    worktrees.ensure.mockRejectedValue(new Error("bootstrap_failed"));
+    const res = await service.run({ taskId: task.id, point: "before_delivery" });
+    expect(runner.calls).toEqual([]);
+    expect(res).toMatchObject({ outcome: "blocked", escalated: true });
+    expect(res.error).toMatch(/bootstrap_failed/);
+    expect(events(HOOK_POINT_COMPLETED)).toHaveLength(1);
+    expect(taskRow()?.state).toBe("needs_human");
+    expect(readdirSync(scriptsDir)).toEqual([]);
   });
 
   it("aplica timeout y política de lunasq/hooks/config de la rama base", async () => {
@@ -329,11 +367,11 @@ describe("HookService: commit de lo que dejan los hooks", () => {
     expect(ctx.git.commitLog).toHaveLength(1);
   });
 
-  it("si el worktree ya tenía cambios sin commit, no commitea y lo marca", async () => {
+  it("si el worktree ya tenía cambios sin commit, no commitea y avisa", async () => {
     const { task, wtPath, git, service } = await setup();
     git.setDirty(wtPath);
     const res = await service.run({ taskId: task.id, point: "before_delivery" });
-    expect(res).toMatchObject({ outcome: "passed", commit: null, commitSkipped: true });
+    expect(res).toMatchObject({ outcome: "warned", commit: null, commitSkipped: true });
     expect(git.commitLog).toEqual([]);
   });
 
@@ -362,23 +400,27 @@ describe("HookService: commit de lo que dejan los hooks", () => {
 });
 
 describe("HookService: after_merge y on_failure", () => {
-  it("after_merge corre en el checkout del proyecto, no commitea y un fallo no escala", async () => {
+  it("after_merge corre en un checkout temporal del commit de la base, no commitea y un fallo no escala", async () => {
     const ctx = await setup();
-    ctx.runner.respond(() => {
-      ctx.git.setDirty(ctx.project.localPath);
+    let checkout = "";
+    ctx.runner.respond((input) => {
+      checkout = input.cwd;
+      ctx.git.setDirty(input.cwd);
       return { exitCode: 1 };
     });
 
     const res = await ctx.service.run({ taskId: ctx.task.id, point: "after_merge" });
 
     expect(ctx.runner.calls.map(scriptName)).toEqual(["10-deploy"]);
-    expect(ctx.runner.calls[0]?.cwd).toBe(ctx.project.localPath);
+    expect(checkout).not.toBe(ctx.project.localPath);
     expect(ctx.runner.calls[0]?.env).toMatchObject({
-      LUNASQ_WORKTREE: ctx.project.localPath,
+      LUNASQ_WORKTREE: checkout,
       LUNASQ_BRANCH: "main",
     });
     expect(ctx.runner.calls[0]?.env).not.toHaveProperty("LUNASQ_PHASE");
     expect(ctx.worktrees.ensure).not.toHaveBeenCalled();
+    expect(ctx.git.hasCheckout(checkout)).toBe(false);
+    expect(ctx.git.commitLog).toEqual([]);
     expect(res).toMatchObject({ outcome: "blocked", escalated: false, commit: null });
     expect(ctx.taskRow()?.state).not.toBe("needs_human");
   });

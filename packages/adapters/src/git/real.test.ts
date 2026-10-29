@@ -2,6 +2,7 @@
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -65,6 +66,7 @@ gitContract("git real", async () => ({
   newRepo: async (files) => newRepo(files),
   pushToRemote: async (cwd, files) => commitTree(join(dirname(cwd), "pusher"), files),
   writeWorkingFile: async (cwd, path, content) => writeTree(cwd, { [path]: { content } }),
+  freePath: async () => join(root, `free${++repos}`),
   headMessage: async (cwd) => git(cwd, "log", "-1", "--format=%B"),
   cleanup: async () => {},
 }));
@@ -89,6 +91,57 @@ describe("RealGit", () => {
     expect(
       await adapter.readFile({ cwd, commit, path: "lunasq/hooks/after_merge/20-link" }),
     ).toBeUndefined();
+  });
+
+  it("git replace desde un worktree no cambia lo que se lee de la base", async () => {
+    const cwd = newRepo({
+      "lunasq/hooks/after_merge/10-ok": { content: "ok\n", executable: true },
+    });
+    const commit = await adapter.fetch({ cwd, remote: "origin", branch: "main" });
+    const wt = join(dirname(cwd), "wt");
+    git(cwd, "worktree", "add", "--quiet", "-b", "lunasq/t1", wt, "origin/main");
+    const evil = execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: wt, input: "evil\n" })
+      .toString("utf8")
+      .trim();
+    git(
+      wt,
+      "replace",
+      git(wt, "rev-parse", "origin/main:lunasq/hooks/after_merge/10-ok").trim(),
+      evil,
+    );
+
+    const content = await adapter.readFile({ cwd, commit, path: "lunasq/hooks/after_merge/10-ok" });
+    expect(content?.toString("utf8")).toBe("ok\n");
+  });
+
+  it("fetch devuelve el sha del remoto aunque otro checkout mueva el ref local", async () => {
+    const cwd = newRepo({ "a.txt": { content: "a" } });
+    const remoteSha = git(cwd, "rev-parse", "origin/main").trim();
+    git(cwd, "commit", "--quiet", "--allow-empty", "-m", "local");
+    const local = git(cwd, "rev-parse", "HEAD").trim();
+    const fetched = await adapter.fetch({ cwd, remote: "origin", branch: "main" });
+    git(cwd, "update-ref", "refs/remotes/origin/main", local);
+    expect(fetched).toBe(remoteSha);
+  });
+
+  it("commitAll no corre los hooks de git del repo y, si el commit falla, deja el índice limpio", async () => {
+    const cwd = newRepo({ "a.txt": { content: "a" } });
+    const marker = join(dirname(cwd), "hook-ran");
+    writeTree(cwd, {
+      ".githooks/pre-commit": { content: `#!/bin/sh\ntouch ${marker}\nexit 1\n`, executable: true },
+    });
+    git(cwd, "config", "core.hooksPath", ".githooks");
+    const sha = await adapter.commitAll({ cwd, message: "x", trailers: {} });
+    expect(sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(existsSync(marker)).toBe(false);
+
+    // Un commit que falla (el ref de la rama está bloqueado) no deja nada preparado.
+    writeFileSync(join(cwd, ".git/refs/heads/main.lock"), "");
+    writeTree(cwd, { "b.txt": { content: "b" } });
+    await expect(adapter.commitAll({ cwd, message: "y", trailers: {} })).rejects.toSatisfy((err) =>
+      isGitError(err, "git_failed"),
+    );
+    expect(git(cwd, "diff", "--cached", "--name-only")).toBe("");
   });
 
   it("un cwd inexistente es git_unavailable", async () => {

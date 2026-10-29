@@ -72,6 +72,7 @@ export class FakeGit implements GitAdapter {
       throw new GitError("git_failed", `couldn't find remote ref ${input.branch}`);
     }
     checkout.refs.set(`${input.remote}/${input.branch}`, sha);
+    return sha;
   }
 
   async resolveCommit(input: { cwd: string; ref: string }) {
@@ -115,6 +116,26 @@ export class FakeGit implements GitAdapter {
     checkout.dirty = false;
     this.commitLog.push({ cwd: input.cwd, sha, message: input.message, trailers: input.trailers });
     return sha;
+  }
+
+  async addDetachedWorktree(input: { cwd: string; path: string; commit: string }) {
+    this.requireCommit(input.cwd, input.commit);
+    if (this.checkouts.has(input.path)) throw new GitError("git_failed", `${input.path} ya existe`);
+    this.checkouts.set(input.path, {
+      refs: new Map([["HEAD", input.commit]]),
+      remote: new Map(),
+      dirty: false,
+    });
+  }
+
+  async removeWorktree(input: { cwd: string; path: string }) {
+    this.checkout(input.cwd);
+    this.checkouts.delete(input.path);
+  }
+
+  /** true si `path` es un checkout conocido (p. ej. un worktree temporal que no se borró). */
+  hasCheckout(path: string) {
+    return this.checkouts.has(path);
   }
 
   /** Mensaje del commit en HEAD de `cwd`. */

@@ -26,16 +26,24 @@ export interface HerdrPaneRunnerOptions {
   paneCheckMs?: number;
 }
 
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 /** Comilla simple para sh. */
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
 /**
  * Corre `cmd.sh` con /bin/sh, muestra su salida en el pane y la copia a `out.log`; el exit code
- * se escribe al final con un rename, así nunca se lee a medias.
+ * se escribe al final con un rename, así nunca se lee a medias. El cwd y el env se vuelven a fijar
+ * aquí porque los rc del shell del pane pueden cambiarlos, y stdin es /dev/null para que un
+ * comando que lee la terminal no se quede esperando.
  */
-const wrapper = (dir: string) => `#!/bin/sh
+const wrapper = (dir: string, input: ProcessInput) => `#!/bin/sh
 d=${shellQuote(dir)}
-{ /bin/sh "$d/cmd.sh"; echo $? > "$d/exit.tmp"; } 2>&1 | tee "$d/out.log"
+cd ${shellQuote(input.cwd)} || { echo 1 > "$d/exit"; exit 1; }
+${Object.entries(input.env ?? {})
+  .map(([k, v]) => `export ${k}=${shellQuote(v)}`)
+  .join("\n")}
+{ /bin/sh "$d/cmd.sh" </dev/null; echo $? > "$d/exit.tmp"; } 2>&1 | tee "$d/out.log"
 mv "$d/exit.tmp" "$d/exit"
 `;
 
@@ -59,10 +67,12 @@ export class HerdrPaneRunner implements ProcessRunner {
    * LunasQ. Lanza si herdr no puede abrir el pane.
    */
   async run(input: ProcessInput): Promise<ProcessResult> {
+    const badName = Object.keys(input.env ?? {}).find((name) => !ENV_NAME.test(name));
+    if (badName !== undefined) throw new Error(`nombre de variable inválido: ${badName}`);
     const dir = await mkdtemp(join(this.stateDir, "lunasq-pane-"));
     try {
       await writeFile(join(dir, "cmd.sh"), input.command);
-      await writeFile(join(dir, "run.sh"), wrapper(dir));
+      await writeFile(join(dir, "run.sh"), wrapper(dir, input));
       const pane = await this.herdr.splitPane({
         paneId: this.parentPaneId,
         cwd: input.cwd,

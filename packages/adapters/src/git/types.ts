@@ -10,8 +10,11 @@ export interface GitFile {
 }
 
 export interface GitAdapter {
-  /** `git fetch <remote> <branch>` en `cwd`; actualiza `<remote>/<branch>`. */
-  fetch(input: { cwd: string; remote: string; branch: string }): Promise<void>;
+  /**
+   * Trae `<branch>` de `<remote>` (actualiza `<remote>/<branch>`) y devuelve el sha que tiene en
+   * el remoto, sin releer el ref local, que otro checkout del repo podría mover.
+   */
+  fetch(input: { cwd: string; remote: string; branch: string }): Promise<string>;
   /** Sha del commit al que apunta `ref`; `ref_not_found` si no existe. */
   resolveCommit(input: { cwd: string; ref: string }): Promise<string>;
   /**
@@ -33,4 +36,8 @@ export interface GitAdapter {
     message: string;
     trailers: Record<string, string>;
   }): Promise<string | null>;
+  /** Checkout temporal en HEAD detached en `commit`, enlazado al repo de `cwd`. */
+  addDetachedWorktree(input: { cwd: string; path: string; commit: string }): Promise<void>;
+  /** Borra el checkout enlazado `path`, con cambios o sin ellos. Idempotente. */
+  removeWorktree(input: { cwd: string; path: string }): Promise<void>;
 }

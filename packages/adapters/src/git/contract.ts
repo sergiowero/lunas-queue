@@ -14,6 +14,8 @@ export interface GitContractHarness {
   pushToRemote(cwd: string, files: RepoFiles): Promise<void>;
   /** Escribe en el working tree del checkout sin commitear. */
   writeWorkingFile(cwd: string, path: string, content: string): Promise<void>;
+  /** Una ruta que todavía no existe, para un worktree temporal. */
+  freePath(): Promise<string>;
   /** Mensaje completo del commit en HEAD. */
   headMessage(cwd: string): Promise<string>;
   cleanup(): Promise<void>;
@@ -50,8 +52,9 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         await h.pushToRemote(cwd, { ...hooks, "CHANGELOG.md": { content: "v2\n" } });
         expect(await git.resolveCommit({ cwd, ref: "origin/main" })).toBe(before);
 
-        await git.fetch({ cwd, remote: "origin", branch: "main" });
+        const fetched = await git.fetch({ cwd, remote: "origin", branch: "main" });
         const after = await git.resolveCommit({ cwd, ref: "origin/main" });
+        expect(fetched).toBe(after);
         expect(after).toMatch(/^[0-9a-f]{40}$/);
         expect(after).not.toBe(before);
       });
@@ -104,6 +107,24 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
           path: "lunasq/hooks/before_delivery/10-bump",
         });
         expect(content?.toString("utf8")).toBe("#!/bin/sh\necho bump\n");
+      });
+    });
+
+    describe("worktrees temporales", () => {
+      it("addDetachedWorktree abre el commit en otra ruta y removeWorktree lo borra", async () => {
+        const cwd = await h.newRepo(hooks);
+        const commit = await git.resolveCommit({ cwd, ref: "origin/main" });
+        const path = await h.freePath();
+
+        await git.addDetachedWorktree({ cwd, path, commit });
+        expect(await git.resolveCommit({ cwd: path, ref: "HEAD" })).toBe(commit);
+        expect(await git.isDirty(path)).toBe(false);
+
+        await git.removeWorktree({ cwd, path });
+        await git.removeWorktree({ cwd, path });
+        await expect(git.isDirty(path)).rejects.toSatisfy((err) =>
+          isGitError(err, "git_unavailable"),
+        );
       });
     });
 
