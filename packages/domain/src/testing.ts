@@ -63,7 +63,9 @@ export function projectConfigReaderContract(
       const read = reader.get(config.id);
       if (!read) throw new Error("sin proyecto");
       read.agentProfiles.refine.args.push("--mutado");
+      read.createdAt.setFullYear(1990);
       expect(reader.get(config.id)?.agentProfiles.refine.args).toEqual([]);
+      expect(reader.get(config.id)?.createdAt).toEqual(config.createdAt);
     });
   });
 }

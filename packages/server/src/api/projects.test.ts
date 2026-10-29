@@ -1,4 +1,4 @@
-import { insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
+import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.ts";
 
@@ -133,5 +133,46 @@ describe("DELETE /api/projects/:id", () => {
     const res = await send("DELETE", `/api/projects/${project.id}`);
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ error: "has_tasks" });
+  });
+});
+
+describe("errores y PATCH por fase", () => {
+  it("responde 409 con localPath si la ruta ya existe", async () => {
+    const { send } = setup();
+    await created(send);
+    const res = await send("POST", "/api/projects", { ...input, name: "otro" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: "conflict", field: "localPath" });
+  });
+
+  it("PATCH con un nombre repetido responde 409", async () => {
+    const { send } = setup();
+    await created(send);
+    const other = await created(send, { ...input, name: "otro", localPath: "/repos/otro" });
+    const res = await send("PATCH", `/api/projects/${other.id}`, { name: input.name });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: "conflict", field: "name" });
+  });
+
+  it("PATCH de una fase conserva las demás", async () => {
+    const { send } = setup();
+    const project = await created(send, {
+      ...input,
+      agentProfiles: { implement: { kind: "claude", model: "opus" } },
+    });
+    const res = await send("PATCH", `/api/projects/${project.id}`, {
+      agentProfiles: { verify: { kind: "claude", model: "sonnet" } },
+    });
+    expect(await res.json()).toMatchObject({
+      agentProfiles: { implement: { model: "opus" }, verify: { model: "sonnet" } },
+    });
+  });
+
+  it("una fila inválida responde 500 en JSON", async () => {
+    const { db, send } = setup();
+    const row = insertProject(db, { agentProfiles: { verify: { kind: "codex" } } });
+    const res = await send("GET", `/api/projects/${row.id}`);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({ error: "invalid_row" });
   });
 });

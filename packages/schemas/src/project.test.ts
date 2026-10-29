@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { AgentProfiles, Project, ProjectCreate, ProjectLimits, ProjectUpdate } from "./index.ts";
+import {
+  AgentProfiles,
+  MAX_PHASE_TIMEOUT_MINUTES,
+  Project,
+  ProjectCreate,
+  ProjectLimits,
+  ProjectUpdate,
+  VerifyAgentProfile,
+} from "./index.ts";
 
 const validCreate = {
   name: "lunas-queue",
@@ -42,6 +50,16 @@ describe("AgentProfiles", () => {
   it("el perfil de verify solo acepta kind = claude", () => {
     expect(AgentProfiles.shape.verify.safeParse({ kind: "claude" }).success).toBe(true);
     expect(AgentProfiles.shape.verify.safeParse({ kind: "codex" }).success).toBe(false);
+  });
+
+  it("verify se ata al literal claude, no a AgentKind", () => {
+    // Hoy AgentKind solo tiene claude; esto sigue fallando si verify pasa a aceptar AgentKind.
+    expect(AgentProfiles.shape.verify.unwrap()).toBe(VerifyAgentProfile);
+    expect(VerifyAgentProfile.shape.kind.def.type).toBe("literal");
+    expect(VerifyAgentProfile.shape.kind.value).toBe("claude");
+    expect(ProjectUpdate.shape.agentProfiles.unwrap().shape.verify.unwrap()).toBe(
+      VerifyAgentProfile,
+    );
   });
 
   it("rechaza fases desconocidas y modelo vacío", () => {
@@ -135,5 +153,39 @@ describe("Project", () => {
       updatedAt: now,
     });
     expect(project.createdAt).toBe(now);
+  });
+});
+
+describe("normalización y formato", () => {
+  it.each(["/r/a/", "/r/./a", "//r//a", "/r/b/../a"])("normaliza %s a /r/a", (localPath) => {
+    expect(ProjectCreate.parse({ ...validCreate, localPath }).localPath).toBe("/r/a");
+  });
+
+  it.each(["/", "/..", "/./"])("rechaza la raíz (%s)", (localPath) => {
+    expect(ProjectCreate.safeParse({ ...validCreate, localPath }).success).toBe(false);
+  });
+
+  it("acepta owners con guion bajo", () => {
+    expect(ProjectCreate.safeParse({ ...validCreate, repo: "user_corp/repo.js" }).success).toBe(
+      true,
+    );
+  });
+
+  it.each(["-x/y", "x/..", "x/.", "_x/y"])("rechaza el repo %s", (repo) => {
+    expect(ProjectCreate.safeParse({ ...validCreate, repo }).success).toBe(false);
+  });
+
+  it("limita el timeout de fase a una semana", () => {
+    const at = (minutes: number) =>
+      ProjectLimits.safeParse({ phaseTimeoutMinutes: { implement: minutes } }).success;
+    expect(at(MAX_PHASE_TIMEOUT_MINUTES)).toBe(true);
+    expect(at(MAX_PHASE_TIMEOUT_MINUTES + 1)).toBe(false);
+  });
+
+  it("el PATCH de agentProfiles es parcial por fase y sin defaults", () => {
+    const patch = ProjectUpdate.parse({
+      agentProfiles: { verify: { kind: "claude", model: "sonnet" } },
+    });
+    expect(patch.agentProfiles).toEqual({ verify: { kind: "claude", model: "sonnet", args: [] } });
   });
 });

@@ -41,7 +41,9 @@ describe("ProjectRepository.create", () => {
 
   it("valida la entrada", () => {
     const { repo } = repository();
-    expect(() => repo.create({ ...input, agentProfiles: { verify: codex } })).toThrow();
+    expect(() => repo.create({ ...input, agentProfiles: { verify: codex } })).toThrow(
+      /"invalid_value"[\s\S]*"verify"/,
+    );
     expect(repo.list()).toEqual([]);
   });
 
@@ -95,7 +97,6 @@ describe("ProjectRepository.update", () => {
       name: input.name,
     });
     expect(updated?.agentProfiles.implement.model).toBe("opus");
-    expect(updated?.updatedAt.getTime()).toBeGreaterThanOrEqual(created.updatedAt.getTime());
   });
 
   it("un patch vacío devuelve el proyecto sin cambios", () => {
@@ -112,7 +113,9 @@ describe("ProjectRepository.update", () => {
   it("rechaza un perfil de verify con otro kind sin tocar la fila", () => {
     const { repo } = repository();
     const created = repo.create(input);
-    expect(() => repo.update(created.id, { agentProfiles: { verify: codex } })).toThrow();
+    expect(() => repo.update(created.id, { agentProfiles: { verify: codex } })).toThrow(
+      /"invalid_value"[\s\S]*"verify"/,
+    );
     expect(repo.get(created.id)).toEqual(created);
   });
 
@@ -147,4 +150,61 @@ projectConfigReaderContract("repositorio SQLite", (configs) => {
   const db = migratedDatabase();
   if (configs.length > 0) db.insert(projects).values(configs).run();
   return new ProjectRepository(db);
+});
+
+describe("ProjectRepository: hallazgos del review", () => {
+  it("update renueva updatedAt", () => {
+    const { db, repo } = repository();
+    const old = new Date("2020-01-01T00:00:00Z");
+    const row = insertProject(db, { createdAt: old, updatedAt: old });
+    const updated = repo.update(row.id, { baseBranch: "develop" });
+    expect(updated?.updatedAt.getTime()).toBeGreaterThan(old.getTime());
+    expect(updated?.createdAt).toEqual(old);
+  });
+
+  it("el PATCH de agentProfiles mezcla por fase", () => {
+    const { repo } = repository();
+    const created = repo.create({
+      ...input,
+      agentProfiles: { implement: { kind: "claude", model: "opus" } },
+    });
+    const updated = repo.update(created.id, {
+      agentProfiles: { verify: { kind: "claude", model: "sonnet" } },
+    });
+    expect(updated?.agentProfiles.implement.model).toBe("opus");
+    expect(updated?.agentProfiles.verify.model).toBe("sonnet");
+  });
+
+  it("revierte el update si la fila resultante no es válida", () => {
+    const { db, repo } = repository();
+    const row = insertProject(db, { agentProfiles: { verify: { kind: "codex" } } });
+    expect(errorOf(() => repo.update(row.id, { baseBranch: "develop" }))).toMatchObject({
+      code: "invalid_row",
+    });
+    const [stored] = db.select().from(projects).where(eq(projects.id, row.id)).all();
+    expect(stored?.baseBranch).toBe(row.baseBranch);
+  });
+
+  it("un PATCH puede corregir la fase inválida de una fila", () => {
+    const { db, repo } = repository();
+    const row = insertProject(db, { agentProfiles: { verify: { kind: "codex" } } });
+    const fixed = repo.update(row.id, { agentProfiles: { verify: { kind: "claude" } } });
+    expect(fixed?.agentProfiles.verify).toEqual({ kind: "claude", args: [] });
+  });
+
+  it("list falla con invalid_row si alguna fila no es válida", () => {
+    const { db, repo } = repository();
+    repo.create(input);
+    insertProject(db, { limits: { concurrency: 0 } });
+    expect(errorOf(() => repo.list())).toMatchObject({ code: "invalid_row" });
+  });
+
+  it("la unicidad de localPath usa la ruta normalizada", () => {
+    const { repo } = repository();
+    repo.create(input);
+    const error = errorOf(() =>
+      repo.create({ ...input, name: "otro", localPath: `${input.localPath}/` }),
+    );
+    expect(error).toMatchObject({ code: "conflict", field: "localPath" });
+  });
 });

@@ -29,20 +29,43 @@ export type AgentProfiles = z.infer<typeof AgentProfiles>;
 
 const positiveInt = z.int().min(1);
 
+// setTimeout trata más de 2^31-1 ms como 1 ms; una semana queda muy por debajo.
+export const MAX_PHASE_TIMEOUT_MINUTES = 7 * 24 * 60;
+
 export const ProjectLimits = z.strictObject({
   // Tareas en in progress del proyecto; sin valor, solo aplica el límite global.
   concurrency: positiveInt.optional(),
   // Sin valor para una fase, aplica el default de 30 minutos.
-  phaseTimeoutMinutes: z.partialRecord(Phase, positiveInt).optional(),
+  phaseTimeoutMinutes: z
+    .partialRecord(Phase, positiveInt.max(MAX_PHASE_TIMEOUT_MINUTES))
+    .optional(),
 });
 export type ProjectLimits = z.infer<typeof ProjectLimits>;
+
+/** Normaliza una ruta POSIX absoluta sin node:path: quita `//`, `.`, `..` y la `/` final. */
+function normalizePosixPath(path: string): string {
+  const parts: string[] = [];
+  for (const part of path.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") parts.pop();
+    else parts.push(part);
+  }
+  return `/${parts.join("/")}`;
+}
 
 const configFields = {
   name: nonEmpty,
   // owner/name en GitHub, como lo recibe `gh --repo`.
-  repo: z.string().regex(/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/, "repo debe ser owner/name"),
+  repo: z
+    .string()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*\/(?!\.{1,2}$)[A-Za-z0-9._-]+$/, "repo debe ser owner/name"),
   baseBranch: nonEmpty,
-  localPath: z.string().startsWith("/", "localPath debe ser una ruta absoluta"),
+  // Normalizada para que la unicidad de local_path no se salte con `/a/` o `/./a`.
+  localPath: z
+    .string()
+    .startsWith("/", "localPath debe ser una ruta absoluta")
+    .transform(normalizePosixPath)
+    .refine((path) => path !== "/", "localPath no puede ser la raíz"),
   agentProfiles: AgentProfiles.prefault({}),
   limits: ProjectLimits.default(() => ({})),
 };
@@ -54,13 +77,21 @@ export const ProjectCreate = z.strictObject({
 });
 export type ProjectCreate = z.input<typeof ProjectCreate>;
 
-// PATCH: cada campo presente reemplaza al guardado; null borra los opcionales.
+// PATCH: cada campo presente reemplaza al guardado, salvo agentProfiles, que se mezcla por fase;
+// null borra los opcionales.
 export const ProjectUpdate = z.strictObject({
   name: configFields.name.optional(),
   repo: configFields.repo.optional(),
   baseBranch: configFields.baseBranch.optional(),
   localPath: configFields.localPath.optional(),
-  agentProfiles: AgentProfiles.optional(),
+  agentProfiles: z
+    .strictObject({
+      refine: AgentProfile.optional(),
+      implement: AgentProfile.optional(),
+      verify: VerifyAgentProfile.optional(),
+      deliver: AgentProfile.optional(),
+    } satisfies Record<Phase, z.ZodType>)
+    .optional(),
   limits: ProjectLimits.optional(),
   testCommand: nonEmpty.nullable().optional(),
   bootstrap: nonEmpty.nullable().optional(),

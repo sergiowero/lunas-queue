@@ -19,22 +19,32 @@ export function phaseTimeoutMs(config: Project, phase: Phase): number {
   return minutes * 60_000;
 }
 
+/** Copia profunda validada; Project.parse no copia las fechas. */
+function copy(config: Project): Project {
+  const parsed = Project.parse(config);
+  return {
+    ...parsed,
+    createdAt: new Date(parsed.createdAt.getTime()),
+    updatedAt: new Date(parsed.updatedAt.getTime()),
+  };
+}
+
 /** Reader en memoria para tests de los módulos que consumen la configuración; devuelve copias. */
 export class InMemoryProjectConfigReader implements ProjectConfigReader {
   readonly #configs = new Map<string, Project>();
 
   constructor(configs: Project[] = []) {
-    for (const config of configs) this.#configs.set(config.id, Project.parse(config));
+    for (const config of configs) this.#configs.set(config.id, copy(config));
   }
 
   get(projectId: string): Project | null {
     const config = this.#configs.get(projectId);
-    return config ? Project.parse(config) : null;
+    return config ? copy(config) : null;
   }
 
   list(): Project[] {
     return [...this.#configs.values()]
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((config) => Project.parse(config));
+      .map((config) => copy(config));
   }
 }

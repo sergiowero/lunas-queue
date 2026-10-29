@@ -14,5 +14,8 @@
   },
   "dependencies": {
     "@lunasq/schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
   }
 }

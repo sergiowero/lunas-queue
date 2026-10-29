@@ -100,22 +100,34 @@ export class ProjectRepository implements ProjectConfigReader {
     return row ? toProject(row) : null;
   }
 
+  /** Falla con invalid_row si alguna fila no es válida: nadie despacha con una lista parcial. */
   list(): Project[] {
     return this.db.select().from(projects).orderBy(asc(projects.name)).all().map(toProject);
   }
 
-  /** Reemplaza los campos presentes en `patch`; null borra testCommand y bootstrap. */
+  /**
+   * Reemplaza los campos presentes en `patch` y mezcla `agentProfiles` por fase; null borra
+   * testCommand y bootstrap. Si el resultado no es válido, la escritura se revierte.
+   */
   update(projectId: string, patch: ProjectUpdate): Project | null {
-    const values = ProjectUpdate.parse(patch);
-    if (Object.keys(values).length === 0) return this.get(projectId);
+    const { agentProfiles, ...values } = ProjectUpdate.parse(patch);
     try {
-      const [row] = this.db
-        .update(projects)
-        .set(values)
-        .where(eq(projects.id, projectId))
-        .returning()
-        .all();
-      return row ? toProject(row) : null;
+      return this.db.transaction((tx) => {
+        const current = tx.select().from(projects).where(eq(projects.id, projectId)).get();
+        if (!current) return null;
+        const set = agentProfiles
+          ? { ...values, agentProfiles: { ...current.agentProfiles, ...agentProfiles } }
+          : values;
+        if (Object.keys(set).length === 0) return toProject(current);
+        const [row] = tx
+          .update(projects)
+          .set(set)
+          .where(eq(projects.id, projectId))
+          .returning()
+          .all();
+        if (!row) throw new Error("update de project sin fila");
+        return toProject(row);
+      });
     } catch (error) {
       translate(error);
     }
