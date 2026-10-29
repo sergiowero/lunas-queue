@@ -10,6 +10,11 @@ export { GitHubError, type GitHubErrorCode, isGitHubError } from "./github/error
 export { FakeGitHub, type FakeGitHubOptions } from "./github/fake.ts";
 export { RealGitHub, type RealGitHubOptions } from "./github/real.ts";
 export type * from "./github/types.ts";
+export {
+  showsTrustDialog,
+  TRUST_ACCEPT_KEYS,
+  TRUST_DIALOG_MARKER,
+} from "./herdr/claude-tui.ts";
 export type { HerdrContractHarness } from "./herdr/contract.ts";
 export { HerdrError, isHerdrError } from "./herdr/errors.ts";
 export { FakeHerdr, type FakeHerdrOptions } from "./herdr/fake.ts";

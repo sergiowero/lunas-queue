@@ -3,6 +3,7 @@ export const packageName = "@lunasq/db";
 export * from "./client.ts";
 export * from "./event-log.ts";
 export * from "./outbox.ts";
+export * from "./project-workspaces.ts";
 export * from "./projects.ts";
 export * from "./runs.ts";
 export * from "./scheduler-state.ts";

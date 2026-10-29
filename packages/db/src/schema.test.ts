@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { migrationsFolder } from "./client.ts";
 import {
   events,
   outbox,
@@ -265,6 +268,18 @@ describe("runs", () => {
     expect(() => set("agent_kind", "codex")).toThrow(CHECK);
     expect(() => set("result", "ok")).toThrow(CHECK);
     expect(() => set("result", "failure")).not.toThrow();
+    expect(() => set("agent_session_source", "otra")).toThrow(CHECK);
+    expect(() => set("agent_session_source", "native")).not.toThrow();
+  });
+
+  it("la migración del dispatcher conserva los Runs y su usage", () => {
+    // Las columnas nuevas entran con ADD COLUMN: recrear `runs` borraría usage en cascada.
+    const db = migratedDatabase();
+    const r = insertRun(db, insertTask(db, insertProject(db).id).id);
+    expect(r.agentSessionSource).toBeNull();
+    expect(r.launchedAt).toBeNull();
+    const migration = readFileSync(join(migrationsFolder, "0004_dispatcher.sql"), "utf8");
+    expect(migration).not.toMatch(/DROP TABLE/);
   });
 
   it("guarda handoff como JSON y requiere una tarea existente", () => {

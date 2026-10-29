@@ -10,6 +10,7 @@ import {
   QuestionStatus,
   RiskLabel,
   RunResult,
+  SessionSource,
   SpecApproval,
   type SpecContent,
   SubState,
@@ -78,6 +79,8 @@ export const projects = sqliteTable("projects", {
   limits: text("limits", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
   testCommand: text("test_command"),
   bootstrap: text("bootstrap"),
+  // Workspace de herdr del proyecto; herdr es efímero, así que es una pista que se revalida.
+  herdrWorkspaceId: text("herdr_workspace_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -197,10 +200,13 @@ export const runs = sqliteTable(
     herdrWorkspace: text("herdr_workspace"),
     herdrPane: text("herdr_pane"),
     herdrName: text("herdr_name"),
-    // Session id nativo del agente o nombre de sesión.
+    // Session id nativo del agente o nombre de sesión, y de dónde salió.
     agentSession: text("agent_session"),
+    agentSessionSource: text("agent_session_source", { enum: values(SessionSource) }),
     runToken: text("run_token").notNull().unique(),
     startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
+    // El prompt de fase ya se envió: retomar el despacho no lo repite.
+    launchedAt: integer("launched_at", { mode: "timestamp_ms" }),
     endedAt: integer("ended_at", { mode: "timestamp_ms" }),
     result: text("result", { enum: values(RunResult) }),
     failureReason: text("failure_reason"),
@@ -212,6 +218,7 @@ export const runs = sqliteTable(
     inEnum("runs_phase_enum", t.phase, values(Phase)),
     inEnum("runs_agent_kind_enum", t.agentKind, values(AgentKind)),
     inEnum("runs_result_enum", t.result, values(RunResult)),
+    inEnum("runs_agent_session_source_enum", t.agentSessionSource, values(SessionSource)),
     unsignedInt("runs_iteration_unsigned", t.iteration),
     index("runs_task_idx").on(t.taskId),
     // Solo el Run activo puede mover la tarea: a lo sumo uno sin ended_at por tarea.

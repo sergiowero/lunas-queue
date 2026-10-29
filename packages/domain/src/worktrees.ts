@@ -71,3 +71,12 @@ export interface TaskWorktreeStore {
   /** Conserva el branch: `worktree remove` no lo borra. */
   clearWorktreePath(taskId: string): void;
 }
+
+/**
+ * Id del workspace de herdr de cada proyecto (docs/design.md §Secuencia de despacho, paso 2). Es
+ * una pista: herdr es efímero y `ensureWorkspace` lo revalida; db lo implementa.
+ */
+export interface ProjectWorkspaceStore {
+  get(projectId: string): string | null;
+  record(projectId: string, workspaceId: string): void;
+}

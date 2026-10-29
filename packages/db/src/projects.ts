@@ -71,7 +71,9 @@ function translate(error: unknown): never {
 }
 
 function toProject(row: Row): Project {
-  const result = Project.safeParse(row);
+  // El workspace de herdr no es configuración: lo guarda el dispatcher (ProjectWorkspaceRepository).
+  const { herdrWorkspaceId: _herdrWorkspaceId, ...config } = row;
+  const result = Project.safeParse(config);
   if (!result.success) {
     throw new ProjectRepositoryError(
       "invalid_row",

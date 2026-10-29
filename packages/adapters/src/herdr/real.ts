@@ -238,6 +238,10 @@ export class RealHerdr implements HerdrAdapter {
     return this.cli.text(["agent", "read", input.name, ...lines]);
   }
 
+  async sendKeys(input: { name: string; keys: string[] }) {
+    await this.cli.json(["agent", "send-keys", input.name, ...input.keys]);
+  }
+
   async reportMetadata(input: { paneId: string; title?: string; tokens?: Record<string, string> }) {
     // herdr descarta en silencio un `seq` <= al último visto por `--source` (ADR 0004). Se deriva
     // del reloj para seguir siendo creciente aunque el proceso reinicie.

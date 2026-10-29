@@ -1,0 +1,108 @@
+// Reglas puras del despacho de una fase (docs/design.md §Secuencia de despacho y §Identidad de
+// sesión por Run, ADR 0002, ADR uw-16-dispatcher): nombre del agente en herdr, entorno del pane,
+// args de arranque, prompt de fase y qué identidad de sesión guarda el Run.
+import {
+  type AgentProfile,
+  RUN_ENV,
+  type SchedulablePhase,
+  type SessionSource,
+} from "@lunasq/schemas";
+
+export class DispatchRuleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DispatchRuleError";
+  }
+}
+
+/** Nombres de agente que acepta herdr 0.9.5 (`api schema`). */
+export const AGENT_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+
+/** Dígitos del task id en el nombre: un UUID entero no cabe en 32 caracteres. */
+const TASK_ID_DIGITS = 12;
+
+/**
+ * `t<12 hex del task id>-<fase>-<n>`, con `n` el ordinal del Run en esa fase. Determinístico: un
+ * despacho que se retoma encuentra el mismo agente en vez de arrancar otro.
+ */
+export function agentName(taskId: string, phase: SchedulablePhase, ordinal: number): string {
+  if (!Number.isInteger(ordinal) || ordinal < 1) {
+    throw new DispatchRuleError(`ordinal de Run inválido: ${ordinal}`);
+  }
+  const digits = taskId.replaceAll("-", "").slice(0, TASK_ID_DIGITS);
+  const name = `t${digits}-${phase}-${ordinal}`;
+  if (!/^[A-Za-z0-9]+$/.test(digits) || !AGENT_NAME_PATTERN.test(name)) {
+    throw new DispatchRuleError(`nombre de agente inválido para herdr: ${JSON.stringify(name)}`);
+  }
+  return name;
+}
+
+export type RunIdentity = {
+  runToken: string;
+  taskId: string;
+  runId: string;
+  phase: SchedulablePhase;
+};
+
+/** Entorno del pane del Run; `pane split --env` lo fija, `agent start` no lo acepta (ADR 0004). */
+export function runEnv(run: RunIdentity): Record<string, string> {
+  return {
+    [RUN_ENV.runToken]: run.runToken,
+    [RUN_ENV.taskId]: run.taskId,
+    [RUN_ENV.runId]: run.runId,
+    [RUN_ENV.phase]: run.phase,
+  };
+}
+
+/** Flags que pone siempre el dispatcher: el perfil no puede traerlos. */
+const RESERVED_FLAGS = ["--mcp-config", "--strict-mcp-config", "--session-id"];
+
+/**
+ * Args de Claude Code después de `--`: modelo del perfil, args del perfil (ahí va el modo Auto),
+ * el archivo MCP estable en modo estricto (ADR 0002) y el session id nativo del Run.
+ */
+export function agentArgs(
+  profile: AgentProfile,
+  opts: { mcpConfigPath: string; sessionId: string },
+): string[] {
+  const reserved = profile.model === undefined ? RESERVED_FLAGS : [...RESERVED_FLAGS, "--model"];
+  const clash = profile.args.find((arg) =>
+    reserved.some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
+  );
+  if (clash !== undefined) {
+    throw new DispatchRuleError(`el perfil de agente no puede traer ${clash}: lo fija LunasQ`);
+  }
+  return [
+    ...(profile.model === undefined ? [] : ["--model", profile.model]),
+    ...profile.args,
+    "--mcp-config",
+    opts.mcpConfigPath,
+    "--strict-mcp-config",
+    "--session-id",
+    opts.sessionId,
+  ];
+}
+
+const PHASE_SKILL: Record<SchedulablePhase, string> = {
+  refine: "refine-task",
+  implement: "implement-task",
+  verify: "verify-task",
+};
+
+/** Prompt corto de fase: el contexto completo llega por MCP, no por el prompt. */
+export function phasePrompt(phase: SchedulablePhase, taskId: string): string {
+  return `Usa la skill ${PHASE_SKILL[phase]} para la tarea ${taskId} de LunasQ. Empieza llamando get_task_context del MCP lunasq y termina con su tool de salida.`;
+}
+
+export type SessionIdentity = { value: string; source: SessionSource };
+
+/** Lo mejor disponible, en el orden del diseño: nativo, el de herdr, el nombre del agente. */
+export function resolveSession(input: {
+  nativeId?: string | null;
+  herdr?: { value: string } | undefined;
+  agentName: string;
+}): SessionIdentity {
+  if (input.nativeId) return { value: input.nativeId, source: "native" };
+  if (input.herdr?.value) return { value: input.herdr.value, source: "herdr" };
+  return { value: input.agentName, source: "name" };
+}

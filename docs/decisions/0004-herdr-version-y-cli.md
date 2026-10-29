@@ -47,7 +47,7 @@ Otros comportamientos del socket y la CLI:
 
 ## Pendientes para otras unidades
 
-- **UW-16 / UW-28 — confianza de carpeta de Claude Code**: cada worktree nuevo arranca `blocked` por el diálogo de confianza. Opciones a validar: pre‑aceptar la confianza para el directorio de worktrees en la configuración de Claude Code durante `lunasq install`, o que el dispatcher detecte ese diálogo concreto y lo acepte. No se decide aquí.
+- **UW-16 / UW-28 — confianza de carpeta de Claude Code**: cada worktree nuevo arranca `blocked` por el diálogo de confianza. Opciones a validar: pre‑aceptar la confianza para el directorio de worktrees en la configuración de Claude Code durante `lunasq install`, o que el dispatcher detecte ese diálogo concreto y lo acepte. Resuelto en [ADR uw-16-dispatcher](uw-16-dispatcher.md): el dispatcher reconoce el diálogo en la pantalla y lo acepta con `agent send-keys <a> down enter` (`sendKeys` en el adapter).
 - **UW-06 / UW-28 — notificaciones**: con `ui.toast.delivery = "off"` herdr no muestra nada. Resuelto en [ADR 0009](0009-notificaciones.md): `install` no lo cambia y `doctor` avisa.
 
 ## Adenda UW-02 (2026-10-28)
