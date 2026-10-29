@@ -33,7 +33,7 @@ const positiveInt = z.int().min(1);
 export const MAX_PHASE_TIMEOUT_MINUTES = 7 * 24 * 60;
 
 export const ProjectLimits = z.strictObject({
-  // Tareas en in progress del proyecto; sin valor, solo aplica el límite global.
+  // Agentes vivos del proyecto en todas las fases (ADR 0014); sin valor, solo aplica el global.
   concurrency: positiveInt.optional(),
   // Sin valor para una fase, aplica el default de 30 minutos.
   phaseTimeoutMinutes: z
