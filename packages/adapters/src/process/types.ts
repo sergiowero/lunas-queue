@@ -1,5 +1,6 @@
-// Ejecución de comandos de proyecto (bootstrap del worktree; después el gate de tests y los hooks).
-// El resto del sistema depende solo de esta interfaz; ShellProcessRunner y FakeProcessRunner la cumplen.
+// Ejecución de comandos de proyecto: bootstrap del worktree, hooks y gate de tests.
+// El resto del sistema depende solo de esta interfaz; ShellProcessRunner, HerdrPaneRunner (en un
+// pane de herdr) y FakeProcessRunner la cumplen.
 
 export interface ProcessInput {
   /** Línea de shell; se corre con `sh -c`. */
