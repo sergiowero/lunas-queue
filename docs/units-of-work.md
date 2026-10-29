@@ -93,7 +93,7 @@ Las 30 unidades en orden de ola. Todas dependen de UW-00, que va primero; despu�
 | UW-11 | Gate de tests | Calidad y verificación | 2 | UW-02, UW-04, UW-05 | Pendiente |
 | UW-12 | Specs y aprobación | Datos y dominio | 3 | UW-04, UW-07 | Hecho |
 | UW-13 | Scheduler | Orquestación y ejecución | 3 | UW-07, UW-08 | Hecho |
-| UW-14 | Adapter de GitHub (gh) | Entrega e integración | 3 | UW-04, UW-07 | Pendiente |
+| UW-14 | Adapter de GitHub (gh) | Entrega e integración | 3 | UW-04, UW-07 | Hecho |
 | UW-15 | LunasQ MCP | Contrato con agentes | 4 | UW-01, UW-03, UW-04, UW-12 | Pendiente |
 | UW-16 | Dispatcher | Orquestación y ejecución | 4 | UW-02, UW-04, UW-09, UW-13 | Pendiente |
 | UW-17 | Señales, timeouts y reconciliación | Orquestación y ejecución | 5 | UW-06, UW-16 | Pendiente |
