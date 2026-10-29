@@ -1,6 +1,7 @@
 // Fake en memoria del adapter de herdr. Reproduce el comportamiento observado en herdr 0.9.5
 // (ADR 0004): ids opacos `wN`, `wN:tN`, `wN:pN`; worktrees que sobreviven como branch tras
 // `remove`; eventos por pane; notificaciones apagadas por defecto. Cumple la suite de contrato.
+import { TRUST_DIALOG_MARKER } from "./claude-tui.ts";
 import { HerdrError } from "./errors.ts";
 import type {
   AgentSessionInfo,
@@ -17,6 +18,17 @@ import type {
 } from "./types.ts";
 
 const SETTLED: AgentStatus[] = ["idle", "done"];
+
+// Pantalla del diálogo como la captura `spikes/herdr/outputs/09-agent-read-blocked.txt`: el
+// cursor arranca en "No, exit", así que un Enter a secas cierra Claude Code.
+const trustDialog = (cursor: number) =>
+  [
+    " Quick safety check: Is this a project you created or",
+    " one you trust?",
+    ` ${cursor === 0 ? "❯" : " "} No, exit`,
+    ` ${cursor === 1 ? "❯" : " "} ${TRUST_DIALOG_MARKER}`,
+    " Enter to confirm · Esc to cancel",
+  ].join("\n");
 
 interface FakeWorkspace extends HerdrWorkspace {
   /** Checkout que abre el workspace; herdr solo lo publica para worktrees (ADR 0004, adenda). */
@@ -39,6 +51,9 @@ interface FakeAgent {
   args: string[];
   transcript: string[];
   session?: AgentSessionInfo;
+  /** Posición del cursor en el diálogo de confianza, mientras se muestra. */
+  trustCursor?: number;
+  keys: string[][];
 }
 
 interface FakeWorktree {
@@ -235,6 +250,8 @@ export class FakeHerdr implements HerdrAdapter {
       status: this.startStatus,
       args: input.args ?? [],
       transcript: [],
+      keys: [],
+      ...(this.startStatus === "blocked" && { trustCursor: 0 }),
     };
     this.agents.set(input.name, agent);
     return { agent: this.toAgent(agent), started: true };
@@ -297,8 +314,28 @@ export class FakeHerdr implements HerdrAdapter {
   }
 
   async readAgent(input: { name: string; lines?: number }) {
-    const { transcript } = this.requireAgent(input.name);
-    return transcript.slice(-(input.lines ?? transcript.length)).join("\n");
+    const agent = this.requireAgent(input.name);
+    const screen =
+      agent.trustCursor === undefined
+        ? agent.transcript
+        : [...agent.transcript, trustDialog(agent.trustCursor)];
+    return screen.slice(-(input.lines ?? screen.length)).join("\n");
+  }
+
+  async sendKeys(input: { name: string; keys: string[] }) {
+    const agent = this.requireAgent(input.name);
+    agent.keys.push([...input.keys]);
+    for (const key of input.keys) {
+      if (agent.trustCursor === undefined) continue;
+      if (key === "down") agent.trustCursor = 1;
+      else if (key === "up") agent.trustCursor = 0;
+      else if (key === "enter") {
+        const accepted = agent.trustCursor === 1;
+        delete agent.trustCursor;
+        if (accepted) this.setAgentStatus(agent.name, "idle");
+        else return this.exitAgent(agent.name);
+      }
+    }
   }
 
   async reportMetadata(input: { paneId: string; title?: string; tokens?: Record<string, string> }) {
@@ -377,6 +414,21 @@ export class FakeHerdr implements HerdrAdapter {
     if (pane)
       this.emit({ type: "pane_exited", paneId: pane.paneId, workspaceId: pane.workspaceId });
     for (const check of [...this.statusWaiters]) check();
+  }
+
+  /** Args con que arrancó el agente (los que van después de `--`). */
+  agentArgs(name: string): string[] {
+    return [...this.requireAgent(name).args];
+  }
+
+  /** Env con que se creó el pane (`pane split --env`). */
+  paneEnv(paneId: string): Record<string, string> {
+    return { ...this.requirePane(paneId).env };
+  }
+
+  /** Cada llamada a `sendKeys` que recibió el agente. */
+  sentKeys(name: string): string[][] {
+    return this.requireAgent(name).keys.map((k) => [...k]);
   }
 
   /** Simula cambios sin commit en el checkout `path`. */

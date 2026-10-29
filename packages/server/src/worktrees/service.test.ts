@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { FakeHerdr, FakeProcessRunner, type ProcessInput } from "@lunasq/adapters";
-import { ProjectRepository, TaskWorktreeRepository } from "@lunasq/db";
+import { ProjectRepository, ProjectWorkspaceRepository, TaskWorktreeRepository } from "@lunasq/db";
 import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { taskBranch } from "@lunasq/domain";
 import { describe, expect, it, vi } from "vitest";
@@ -217,6 +217,54 @@ describe("WorktreeService.ensure", () => {
     const first = await service.ensure(task.id);
     db.$client.prepare("update tasks set state = 'completed', pr_state = 'open'").run();
     expect((await service.ensure(task.id)).path).toBe(first.path);
+  });
+});
+
+describe("WorktreeService: workspace del proyecto", () => {
+  it("guarda el id del workspace y lo reutiliza aunque el proyecto cambie de nombre", async () => {
+    const db = migratedDatabase();
+    const project = insertProject(db);
+    const herdr = new FakeHerdr();
+    const workspaces = new ProjectWorkspaceRepository(db);
+    const projects = new ProjectRepository(db);
+    const service = new WorktreeService({
+      herdr,
+      processes: new FakeProcessRunner(),
+      projects,
+      tasks: new TaskWorktreeRepository(db),
+      workspaces,
+    });
+    const a = insertTask(db, project.id);
+    await service.ensure(a.id);
+    const stored = workspaces.get(project.id);
+    expect(stored).not.toBeNull();
+
+    projects.update(project.id, { name: `${project.name}-nuevo` });
+    const ensure = vi.spyOn(herdr, "ensureWorkspace");
+    await service.ensure(insertTask(db, project.id).id);
+
+    expect(ensure).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: stored }));
+    const snap = await herdr.snapshot();
+    expect(snap.workspaces.filter((w) => !w.linkedWorktree)).toHaveLength(1);
+    expect(workspaces.get(project.id)).toBe(stored);
+  });
+
+  it("si el workspace guardado ya no existe, guarda el nuevo", async () => {
+    const db = migratedDatabase();
+    const project = insertProject(db);
+    const herdr = new FakeHerdr();
+    const workspaces = new ProjectWorkspaceRepository(db);
+    workspaces.record(project.id, "w99");
+    const service = new WorktreeService({
+      herdr,
+      processes: new FakeProcessRunner(),
+      projects: new ProjectRepository(db),
+      tasks: new TaskWorktreeRepository(db),
+      workspaces,
+    });
+    await service.ensure(insertTask(db, project.id).id);
+    expect(workspaces.get(project.id)).not.toBe("w99");
+    expect(workspaces.get(project.id)).toMatch(/^w\d+$/);
   });
 });
 

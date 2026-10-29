@@ -1,6 +1,7 @@
 export const packageName = "@lunasq/server";
 
 export * from "./app.ts";
+export * from "./dispatcher/index.ts";
 export * from "./github/index.ts";
 export * from "./notifications/index.ts";
 export * from "./outbox/index.ts";

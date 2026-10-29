@@ -300,6 +300,14 @@ export function herdrContract(
         expect(await herdr.readAgent({ name, lines: 20 })).toContain(text);
       });
 
+      it("sendKeys llega al agente y falla con agent_not_found si no existe", async () => {
+        const { name } = await agentInNewPane();
+        await herdr.sendKeys({ name, keys: ["enter"] });
+        await expect(herdr.sendKeys({ name: unique("nadie-"), keys: ["enter"] })).rejects.toSatisfy(
+          (err) => isHerdrError(err, "agent_not_found"),
+        );
+      });
+
       it("waitAgent lanza timeout si el agente no llega al estado", async () => {
         const { name } = await agentInNewPane();
         await expect(

@@ -201,7 +201,7 @@ El dispatcher es un worker de larga vida con dos entradas (eventos de la BD y ev
 1. **Claim.** El scheduler elige la tarea de mayor score del ready set y la reclama de forma atómica en la BD, creando un Run con un token único. Si el claim falla, la tarea ya fue tomada.
 2. **Asegurar workspace del proyecto.** Si no existe en herdr, crearlo; guardar su id en Project.
 3. **Asegurar checkout de la tarea.** Siempre, en todas las fases. La primera vez `worktree create` crea branch y checkout desde la rama base (no es idempotente: antes se consulta `worktree list` y se usa `open` si ya existe; ADR 0004); en fases siguientes y loops de rework `worktree open` reabre el mismo.
-4. **Levantar agente.** Crear pane/tab (con `pane split --env`, que fija las variables del Run en el pane), `agent start` con nombre determinístico (p. ej. `t<id>-<fase>-<n>`, cumple el patrón de nombres de herdr) y el perfil de esa fase: kind como --kind; modelo y argumentos extra después de --. El nombre determinístico hace la operación idempotente.
+4. **Levantar agente.** Crear pane/tab (con `pane split --env`, que fija las variables del Run en el pane), `agent start` con nombre determinístico (`t<12 hex del task id>-<fase>-<n>`, que cabe en el patrón de 32 caracteres de herdr; [ADR uw-16-dispatcher](decisions/uw-16-dispatcher.md)) y el perfil de esa fase: kind como --kind; modelo y argumentos extra después de --. El nombre determinístico hace la operación idempotente.
 5. **Prompt de fase.** Enviar un prompt corto que invoque la skill de la fase y le indique el task id; el agente obtiene el contexto completo vía MCP, no por el prompt.
 6. **Observar.** El Run pasa a running; el dispatcher escucha los cambios de estado del pane en herdr y arranca el timer de la fase.
 7. **Cerrar fase.** La señal primaria es la tool MCP de fin de fase con salida estructurada. Se aplica la transición en la BD, se guarda la identidad de sesión en el Run, se cierra el pane y se libera el slot.
@@ -239,7 +239,7 @@ Restricciones: dos tareas nunca comparten branch ni worktree, y el reconciliador
 
 1. **Session id nativo del agente,** fijado por el dispatcher en los args de arranque si el CLI lo permite.
 2. **Session id reportado por herdr** en `agent_session`, cuando la integración oficial del agente lo publica.
-3. **Nombre de sesión** como respaldo: el nombre determinístico del agente en herdr (`t<id>-<fase>-<n>`) más la ruta del transcript si se conoce.
+3. **Nombre de sesión** como respaldo: el nombre determinístico del agente en herdr (`t<12 hex>-<fase>-<n>`) más la ruta del transcript si se conoce.
 
 El Run registra también qué fuente se usó, para saber si la sesión se puede reanudar o solo identificar.
 

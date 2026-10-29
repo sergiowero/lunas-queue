@@ -171,6 +171,11 @@ export interface HerdrAdapter {
     timeoutMs?: number;
   }): Promise<HerdrAgent>;
   readAgent(input: { name: string; lines?: number }): Promise<string>;
+  /**
+   * Teclas a la TUI del agente (`agent send-keys`), con los nombres de herdr: `enter`, `down`,
+   * `esc`… Sirve para aceptar el diálogo de confianza de carpeta (ADR 0004).
+   */
+  sendKeys(input: { name: string; keys: string[] }): Promise<void>;
 
   /** Título y tokens del sidebar (task id, fase, iteración). */
   reportMetadata(input: {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TRUST_DIALOG_MARKER } from "./claude-tui.ts";
 import { isHerdrError } from "./errors.ts";
 import { FakeHerdr } from "./fake.ts";
 import type { HerdrEvent } from "./types.ts";
@@ -56,6 +57,35 @@ describe("FakeHerdr: controles de test", () => {
     });
     expect(started).toBe(true);
     expect(agent.status).toBe("blocked");
+    expect(await fake.readAgent({ name: "t1-refine-1" })).toContain(TRUST_DIALOG_MARKER);
+  });
+
+  it("down enter acepta el diálogo de confianza y el agente queda idle", async () => {
+    const fake = new FakeHerdr({ startStatus: "blocked" });
+    const { rootPaneId } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
+    await fake.startAgent({ name: "t1-refine-1", kind: "claude", paneId: rootPaneId });
+    await fake.sendKeys({ name: "t1-refine-1", keys: ["down", "enter"] });
+    expect((await fake.getAgent("t1-refine-1"))?.status).toBe("idle");
+    expect(await fake.readAgent({ name: "t1-refine-1" })).not.toContain(TRUST_DIALOG_MARKER);
+  });
+
+  it("enter a secas elige 'No, exit' y el agente termina, como Claude Code", async () => {
+    const fake = new FakeHerdr({ startStatus: "blocked" });
+    const { rootPaneId } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
+    await fake.startAgent({ name: "t1-refine-1", kind: "claude", paneId: rootPaneId });
+    await fake.sendKeys({ name: "t1-refine-1", keys: ["enter"] });
+    expect(await fake.getAgent("t1-refine-1")).toBeUndefined();
+  });
+
+  it("guarda los args y las teclas recibidas para que los tests los inspeccionen", async () => {
+    const fake = new FakeHerdr();
+    const { rootPaneId } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj", env: {} });
+    const pane = await fake.splitPane({ paneId: rootPaneId, env: { A: "1" } });
+    await fake.startAgent({ name: "a", kind: "claude", paneId: pane.paneId, args: ["--x"] });
+    await fake.sendKeys({ name: "a", keys: ["enter"] });
+    expect(fake.agentArgs("a")).toEqual(["--x"]);
+    expect(fake.paneEnv(pane.paneId)).toEqual({ A: "1" });
+    expect(fake.sentKeys("a")).toEqual([["enter"]]);
   });
 
   it("setAgentSession publica la identidad de sesión del agente", async () => {

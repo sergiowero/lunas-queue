@@ -5,6 +5,7 @@ import { TASK_TRANSITIONED, type TaskState } from "@lunasq/schemas";
 import { and, eq, inArray, max, notInArray } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { events, taskDependencies, tasks } from "./schema.ts";
+import type { Tx } from "./task-transitions.ts";
 
 const TERMINAL: TaskState[] = ["completed", "cancelled"];
 
@@ -20,9 +21,10 @@ const columns = {
 };
 
 export class SchedulerStateRepository implements SchedulerStateReader {
-  private readonly db: LunasqDatabase;
+  private readonly db: LunasqDatabase | Tx;
 
-  constructor(db: LunasqDatabase) {
+  /** Acepta una transacción abierta: el claim del dispatcher lee el snapshot dentro de la suya. */
+  constructor(db: LunasqDatabase | Tx) {
     this.db = db;
   }
 

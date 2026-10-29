@@ -7,6 +7,7 @@ import {
   findOrphanWorktrees,
   type OrphanReason,
   type ProjectConfigReader,
+  type ProjectWorkspaceStore,
   type TaskWorktreeStore,
   taskBranch,
   worktreeReleased,
@@ -46,6 +47,8 @@ export interface WorktreeServiceDeps {
   processes: ProcessRunner;
   projects: ProjectConfigReader;
   tasks: TaskWorktreeStore;
+  /** Id del workspace de herdr por proyecto; sin él, herdr lo encuentra por label. */
+  workspaces?: ProjectWorkspaceStore;
   bootstrapTimeoutMs?: number;
 }
 
@@ -74,6 +77,7 @@ export class WorktreeService {
   private readonly processes: ProcessRunner;
   private readonly projects: ProjectConfigReader;
   private readonly tasks: TaskWorktreeStore;
+  private readonly workspaces: ProjectWorkspaceStore | undefined;
   private readonly bootstrapTimeoutMs: number;
   /** Serializa las operaciones de una misma tarea; tareas distintas corren en paralelo. */
   private readonly locks = new KeyedLock();
@@ -89,6 +93,7 @@ export class WorktreeService {
     this.processes = deps.processes;
     this.projects = deps.projects;
     this.tasks = deps.tasks;
+    this.workspaces = deps.workspaces;
     this.bootstrapTimeoutMs = deps.bootstrapTimeoutMs ?? DEFAULT_BOOTSTRAP_TIMEOUT_MS;
   }
 
@@ -197,12 +202,16 @@ export class WorktreeService {
     return project;
   }
 
+  /** Workspace del proyecto: el id guardado si sigue vivo; si no, por label o uno nuevo. */
   private async projectWorkspace(project: Project): Promise<string> {
-    // El id del workspace se guardará en Project con UW-16; mientras, herdr lo encuentra por label.
+    const stored = this.workspaces?.get(project.id) ?? undefined;
     const { workspace } = await this.herdr.ensureWorkspace({
       cwd: project.localPath,
       label: project.name,
+      ...(stored !== undefined && { workspaceId: stored }),
     });
+    if (workspace.workspaceId !== stored)
+      this.workspaces?.record(project.id, workspace.workspaceId);
     return workspace.workspaceId;
   }
 

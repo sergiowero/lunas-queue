@@ -40,5 +40,10 @@ export type RunResult = z.infer<typeof RunResult>;
 export const SpecApproval = z.enum(["pending", "approved", "changes_requested"]);
 export type SpecApproval = z.infer<typeof SpecApproval>;
 
+// De dónde salió la identidad de sesión de un Run (docs/design.md §Identidad de sesión por Run):
+// session id nativo fijado al arrancar, el que reporta herdr en `agent_session`, o solo el nombre.
+export const SessionSource = z.enum(["native", "herdr", "name"]);
+export type SessionSource = z.infer<typeof SessionSource>;
+
 export const UsageSource = z.enum(["otel", "transcript", "calculated"]);
 export type UsageSource = z.infer<typeof UsageSource>;
