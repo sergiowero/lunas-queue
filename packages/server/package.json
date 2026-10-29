@@ -12,9 +12,10 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@lunasq/domain": "workspace:*",
-    "@lunasq/db": "workspace:*",
     "@lunasq/adapters": "workspace:*",
-    "@lunasq/schemas": "workspace:*"
+    "@lunasq/db": "workspace:*",
+    "@lunasq/domain": "workspace:*",
+    "@lunasq/schemas": "workspace:*",
+    "hono": "^4.13.14"
   }
 }

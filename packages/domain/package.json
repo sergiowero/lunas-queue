@@ -5,7 +5,8 @@
   "description": "Máquina de estados, guards y reglas del scheduler y del DAG",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "test": "vitest run",

@@ -1,0 +1,132 @@
+// Repositorio de proyectos: valida con los esquemas de @lunasq/schemas lo que entra y lo que sale
+// de las columnas JSON, e implementa el puerto de lectura del dominio (ADR 0007).
+import type { ProjectConfigReader } from "@lunasq/domain";
+import { Project, ProjectCreate, ProjectUpdate } from "@lunasq/schemas";
+import { asc, eq } from "drizzle-orm";
+import type { LunasqDatabase } from "./client.ts";
+import { projects } from "./schema.ts";
+
+export type ProjectRepositoryErrorCode = "conflict" | "has_tasks" | "invalid_row";
+
+export class ProjectRepositoryError extends Error {
+  constructor(
+    readonly code: ProjectRepositoryErrorCode,
+    message: string,
+    readonly field?: "name" | "localPath",
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "ProjectRepositoryError";
+  }
+}
+
+type Row = typeof projects.$inferSelect;
+
+const UNIQUE_COLUMNS = { "projects.name": "name", "projects.local_path": "localPath" } as const;
+
+function sqliteCode(error: unknown): string | undefined {
+  for (let e = error; e instanceof Error; e = e.cause) {
+    if ("code" in e && typeof e.code === "string" && e.code.startsWith("SQLITE_")) return e.code;
+  }
+  return undefined;
+}
+
+function sqliteMessage(error: unknown): string {
+  for (let e = error; e instanceof Error; e = e.cause) {
+    if ("code" in e) return e.message;
+  }
+  return String(error);
+}
+
+/** Traduce las violaciones de restricciones de SQLite a errores del repositorio. */
+function translate(error: unknown): never {
+  const code = sqliteCode(error);
+  if (code === "SQLITE_CONSTRAINT_UNIQUE") {
+    const message = sqliteMessage(error);
+    for (const [column, field] of Object.entries(UNIQUE_COLUMNS)) {
+      if (message.includes(column)) {
+        throw new ProjectRepositoryError(
+          "conflict",
+          `ya existe un proyecto con ese ${field}`,
+          field,
+          {
+            cause: error,
+          },
+        );
+      }
+    }
+  }
+  // ON DELETE RESTRICT falla con SQLITE_CONSTRAINT_TRIGGER, no con _FOREIGNKEY.
+  if (code?.startsWith("SQLITE_CONSTRAINT") && /FOREIGN KEY/.test(sqliteMessage(error))) {
+    throw new ProjectRepositoryError("has_tasks", "el proyecto tiene tareas", undefined, {
+      cause: error,
+    });
+  }
+  throw error;
+}
+
+function toProject(row: Row): Project {
+  const result = Project.safeParse(row);
+  if (!result.success) {
+    throw new ProjectRepositoryError(
+      "invalid_row",
+      `configuración inválida en ${row.id}`,
+      undefined,
+      {
+        cause: result.error,
+      },
+    );
+  }
+  return result.data;
+}
+
+export class ProjectRepository implements ProjectConfigReader {
+  constructor(private readonly db: LunasqDatabase) {}
+
+  /** Valida `input` (lanza ZodError si no cumple) y guarda el proyecto. */
+  create(input: ProjectCreate): Project {
+    const values = ProjectCreate.parse(input);
+    try {
+      const [row] = this.db.insert(projects).values(values).returning().all();
+      if (!row) throw new Error("insert de project sin fila");
+      return toProject(row);
+    } catch (error) {
+      translate(error);
+    }
+  }
+
+  get(projectId: string): Project | null {
+    const row = this.db.select().from(projects).where(eq(projects.id, projectId)).get();
+    return row ? toProject(row) : null;
+  }
+
+  list(): Project[] {
+    return this.db.select().from(projects).orderBy(asc(projects.name)).all().map(toProject);
+  }
+
+  /** Reemplaza los campos presentes en `patch`; null borra testCommand y bootstrap. */
+  update(projectId: string, patch: ProjectUpdate): Project | null {
+    const values = ProjectUpdate.parse(patch);
+    if (Object.keys(values).length === 0) return this.get(projectId);
+    try {
+      const [row] = this.db
+        .update(projects)
+        .set(values)
+        .where(eq(projects.id, projectId))
+        .returning()
+        .all();
+      return row ? toProject(row) : null;
+    } catch (error) {
+      translate(error);
+    }
+  }
+
+  /** Devuelve false si no existía; lanza has_tasks si el proyecto tiene tareas. */
+  delete(projectId: string): boolean {
+    try {
+      return this.db.delete(projects).where(eq(projects.id, projectId)).run().changes > 0;
+    } catch (error) {
+      translate(error);
+    }
+  }
+}
