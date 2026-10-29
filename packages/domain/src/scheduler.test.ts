@@ -1,10 +1,11 @@
-import type { Project, SchedulerConfigInput } from "@lunasq/schemas";
+import type { Project, SchedulablePhase, SchedulerConfigInput } from "@lunasq/schemas";
 import { SchedulerConfig } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import type { DependencyEdge } from "./dependency-graph.ts";
 import { InMemoryProjectConfigReader } from "./project-config.ts";
 import {
   InMemorySchedulerStateReader,
+  Occupancy,
   pendingPhase,
   rankReady,
   type SchedulerSnapshot,
@@ -323,6 +324,28 @@ describe("límites de concurrencia", () => {
   });
 });
 
+describe("Occupancy", () => {
+  const reader = new InMemoryProjectConfigReader([alfa]);
+
+  it("revalida una decisión contra un snapshot más nuevo", () => {
+    const decision = plan([task("x")], [], { globalConcurrency: 1 }).dispatch[0];
+    if (!decision) throw new Error("sin decisión");
+    const occupancy = (tasks: SchedulerTask[]) => Occupancy.of({ tasks, edges: [] }, reader);
+    const slot = occupancy([]).slotFor(decision, decision.phase);
+    expect(occupancy([]).fits(slot, config({ globalConcurrency: 1 }))).toBe(true);
+    // Otro proceso despachó en medio: el claim ya no cabe.
+    const otro = [task("otro", { subState: "running" })];
+    expect(occupancy(otro).fits(slot, config({ globalConcurrency: 1 }))).toBe(false);
+  });
+
+  it("sin configuración del proyecto no cabe", () => {
+    const occupancy = Occupancy.of({ tasks: [], edges: [] }, reader);
+    const slot = occupancy.slotFor({ projectId: beta.id }, "refine");
+    expect(slot.agentKind).toBeUndefined();
+    expect(occupancy.fits(slot, config())).toBe(false);
+  });
+});
+
 describe("dependencias que ya no se entregarán", () => {
   it("escala a los dependientes de una dependencia con PR cerrado o cancelada", () => {
     const result = plan(
@@ -359,6 +382,18 @@ describe("dependencias que ya no se entregarán", () => {
         task("fin", { state: "cancelled", subState: null }),
       ],
       [edge("humano", "cancelada"), edge("fin", "cancelada")],
+    );
+    expect(result.escalate).toEqual([]);
+  });
+
+  it("no escala a un dependiente con su agente vivo: liberaría el slot con el agente corriendo", () => {
+    const result = plan(
+      [
+        task("cerrada", { state: "completed", subState: null, prState: "closed" }),
+        task("refinando", { subState: "running" }),
+        task("preguntando", { subState: "waiting_human" }),
+      ],
+      [edge("refinando", "cerrada"), edge("preguntando", "cerrada")],
     );
     expect(result.escalate).toEqual([]);
   });
@@ -412,7 +447,9 @@ describe("nunca se exceden los límites (DAGs aleatorios)", () => {
       return task(`t${i}`, {
         projectId: pick(projects).id,
         state,
-        subState: live ? (random() < 0.15 ? "running" : "queued") : null,
+        subState: live
+          ? pick(["running", "waiting_human", "queued", "queued", "queued"] as const)
+          : null,
         priority: Math.floor(random() * 1000),
         prState: state === "completed" ? pick(["merged", "open"] as const) : null,
         readySince: ago(random() * 48),
@@ -424,7 +461,8 @@ describe("nunca se exceden los límites (DAGs aleatorios)", () => {
       for (let j = 0; j < i; j++) if (random() < 0.06) edges.push(edge(`t${i}`, `t${j}`));
     }
 
-    const live = () => tasks.filter((t) => t.subState === "running");
+    const live = () =>
+      tasks.filter((t) => t.subState === "running" || t.subState === "waiting_human");
     const reader = new InMemoryProjectConfigReader(projects);
     for (let pass = 0; pass < 6; pass++) {
       const before = live().length;
@@ -452,6 +490,12 @@ describe("nunca se exceden los límites (DAGs aleatorios)", () => {
         for (const dep of edges.filter((e) => e.taskId === d.taskId)) {
           expect(tasks.find((t) => t.id === dep.dependsOnId)?.prState).toBe("merged");
         }
+      }
+      // Y no deja slots libres sin usar: toda tarea lista que quedó fuera ya no cabe.
+      const after = Occupancy.of({ tasks, edges }, reader);
+      for (const { task: waiting } of rankReady({ tasks, edges }, parsed, NOW)) {
+        const slot = after.slotFor(waiting, pendingPhase(waiting.state) as SchedulablePhase);
+        expect(after.fits(slot, parsed)).toBe(false);
       }
       // Algunos agentes terminan entre pasadas.
       tasks = tasks.map((t) =>

@@ -85,6 +85,8 @@ export class Scheduler {
       .then(() => this.loop())
       .finally(() => {
         this.running = undefined;
+        // Un pedido que llegó después del último chequeo de rerun (o un start tras stop).
+        if (this.rerun && !this.stopped) this.wake();
       });
     return this.running;
   }
@@ -143,16 +145,23 @@ export class Scheduler {
   }
 
   private escalate(escalation: DependencyEscalation): boolean {
-    const result = transitionTask(this.db, {
-      taskId: escalation.taskId,
-      actor: "system",
-      command: {
-        type: "escalate",
-        reason: "dependency_pr_closed",
-        note: `la dependencia ${escalation.dependsOnId} ya no se entregará`,
-      },
-      expected: escalation.expected,
-    });
+    // Un fallo (p. ej. de la base) se reporta con su escalamiento y no salta los despachos.
+    let result: ReturnType<typeof transitionTask>;
+    try {
+      result = transitionTask(this.db, {
+        taskId: escalation.taskId,
+        actor: "system",
+        command: {
+          type: "escalate",
+          reason: "dependency_pr_closed",
+          note: `la dependencia ${escalation.dependsOnId} ya no se entregará`,
+        },
+        expected: escalation.expected,
+      });
+    } catch (error) {
+      this.report(toError(error), escalation);
+      return false;
+    }
     if (result.ok) return true;
     // stale_state: la tarea se movió después de la lectura; la siguiente pasada la reevalúa.
     if (result.error.code !== "stale_state") {

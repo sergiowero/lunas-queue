@@ -27,8 +27,9 @@ export class SchedulerStateRepository implements SchedulerStateReader {
   }
 
   /**
-   * readySince = lo más reciente entre la creación, la última transición de la tarea y el último
-   * cambio de sus dependencias (el merge de su PR). Editar la prioridad no reinicia el aging.
+   * readySince = lo más reciente entre la creación, la última transición de la tarea (también un
+   * reintento: vuelve a esperar desde ahí) y el último cambio de sus dependencias mergeadas (el
+   * merge de su PR). Editar la prioridad no reinicia el aging.
    */
   snapshot(): SchedulerSnapshot {
     return this.db.transaction((tx) => {
@@ -66,7 +67,10 @@ export class SchedulerStateRepository implements SchedulerStateReader {
       );
 
       const rows = [...live, ...terminal];
-      const updatedAt = new Map(rows.map((t) => [t.id, t.updatedAt.getTime()]));
+      // Solo las dependencias ya mergeadas: lo que cambie en las demás no hace lista a la tarea.
+      const mergedAt = new Map(
+        rows.filter((t) => t.prState === "merged").map((t) => [t.id, t.updatedAt.getTime()]),
+      );
       const depsOf = new Map<string, string[]>();
       for (const e of edges) depsOf.set(e.taskId, [...(depsOf.get(e.taskId) ?? []), e.dependsOnId]);
 
@@ -74,7 +78,7 @@ export class SchedulerStateRepository implements SchedulerStateReader {
         const since = Math.max(
           row.createdAt.getTime(),
           lastTransition.get(row.id)?.getTime() ?? 0,
-          ...(depsOf.get(row.id) ?? []).map((id) => updatedAt.get(id) ?? 0),
+          ...(depsOf.get(row.id) ?? []).map((id) => mergedAt.get(id) ?? 0),
         );
         return {
           id: row.id,

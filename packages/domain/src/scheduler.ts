@@ -3,8 +3,9 @@
 // exceder ningún límite de concurrencia. Sin preemption: solo se reparten los slots libres.
 import type {
   AgentKind,
-  Phase,
+  Project,
   PrState,
+  SchedulablePhase,
   SchedulerConfig,
   StatePosition,
   SubState,
@@ -42,7 +43,7 @@ export interface SchedulerStateReader {
 export type DispatchDecision = {
   taskId: string;
   projectId: string;
-  phase: Phase;
+  phase: SchedulablePhase;
   agentKind: AgentKind;
   score: number;
   /** Posición leída; el claim la usa para rechazar si la tarea ya se movió. */
@@ -60,14 +61,14 @@ export type SchedulePlan = { dispatch: DispatchDecision[]; escalate: DependencyE
 
 export type RankedTask = { task: SchedulerTask; effectivePriority: number; score: number };
 
-const PHASE_BY_STATE: Partial<Record<TaskState, Phase>> = {
+const PHASE_BY_STATE: Partial<Record<TaskState, SchedulablePhase>> = {
   draft: "refine",
   in_progress: "implement",
   verification: "verify",
 };
 
 /** Fase cuyo agente espera una tarea en este estado; null si el estado no lleva agente. */
-export function pendingPhase(state: TaskState): Phase | null {
+export function pendingPhase(state: TaskState): SchedulablePhase | null {
   return PHASE_BY_STATE[state] ?? null;
 }
 
@@ -140,6 +141,68 @@ class Slots<K> {
   }
 }
 
+/** Un agente vivo o por despachar; `agentKind` falta si el proyecto no tiene configuración. */
+export type Slot = { projectId: string; phase: SchedulablePhase; agentKind: AgentKind | undefined };
+
+/**
+ * Agentes vivos por nivel de límite. `schedule` la usa para planear y el claim del dispatcher
+ * (UW-16) para volver a validar con un snapshot fresco, con las mismas reglas.
+ */
+export class Occupancy {
+  #global = 0;
+  readonly #byProject = new Slots<string>();
+  readonly #byPhase = new Slots<SchedulablePhase>();
+  readonly #byKind = new Slots<AgentKind>();
+  readonly #projects: (id: string) => Project | null;
+
+  private constructor(projects: Pick<ProjectConfigReader, "get">) {
+    this.#projects = memo((id: string) => projects.get(id));
+  }
+
+  /** Ocupación de los agentes vivos del snapshot. */
+  static of(snapshot: SchedulerSnapshot, projects: Pick<ProjectConfigReader, "get">): Occupancy {
+    const occupancy = new Occupancy(projects);
+    for (const task of snapshot.tasks) {
+      const phase = pendingPhase(task.state);
+      if (phase && holdsSlot(task)) occupancy.add(occupancy.slotFor(task, phase));
+    }
+    return occupancy;
+  }
+
+  /** El slot que ocuparía `task` en `phase`, con el tipo de agente del perfil del proyecto. */
+  slotFor(task: Pick<SchedulerTask, "projectId">, phase: SchedulablePhase): Slot {
+    const settings = this.#projects(task.projectId);
+    return {
+      projectId: task.projectId,
+      phase,
+      agentKind: settings ? phaseProfile(settings, phase).kind : undefined,
+    };
+  }
+
+  add(slot: Slot): void {
+    this.#global += 1;
+    this.#byProject.add(slot.projectId);
+    this.#byPhase.add(slot.phase);
+    if (slot.agentKind) this.#byKind.add(slot.agentKind);
+  }
+
+  globalFull(config: SchedulerConfig): boolean {
+    return this.#global >= config.globalConcurrency;
+  }
+
+  /** Si un agente más en `slot` cabe en los cuatro niveles; sin configuración de proyecto, no. */
+  fits(slot: Slot, config: SchedulerConfig): boolean {
+    const settings = this.#projects(slot.projectId);
+    if (!settings || !slot.agentKind) return false;
+    return (
+      !this.globalFull(config) &&
+      this.#byProject.fits(slot.projectId, settings.limits.concurrency) &&
+      this.#byPhase.fits(slot.phase, config.phaseConcurrency[slot.phase]) &&
+      this.#byKind.fits(slot.agentKind, config.agentKindConcurrency[slot.agentKind])
+    );
+  }
+}
+
 /**
  * Qué despachar y qué escalar en esta pasada. Las decisiones respetan, sumadas a los agentes
  * vivos del snapshot, los límites global, por proyecto, por fase y por tipo de agente.
@@ -150,47 +213,18 @@ export function schedule(
   config: SchedulerConfig,
   now: Date,
 ): SchedulePlan {
-  const project = memo((id: string) => projects.get(id));
-  const kindOf = (task: SchedulerTask, phase: Phase): AgentKind | undefined => {
-    const config = project(task.projectId);
-    return config ? phaseProfile(config, phase).kind : undefined;
-  };
-
-  let global = 0;
-  const byProject = new Slots<string>();
-  const byPhase = new Slots<Phase>();
-  const byKind = new Slots<AgentKind>();
-  const occupy = (task: SchedulerTask, phase: Phase, kind: AgentKind | undefined) => {
-    global += 1;
-    byProject.add(task.projectId);
-    byPhase.add(phase);
-    if (kind) byKind.add(kind);
-  };
-  for (const task of snapshot.tasks) {
-    const phase = pendingPhase(task.state);
-    if (phase && holdsSlot(task)) occupy(task, phase, kindOf(task, phase));
-  }
-
+  const occupancy = Occupancy.of(snapshot, projects);
   const dispatch: DispatchDecision[] = [];
   for (const { task, score } of rankReady(snapshot, config, now)) {
-    if (global >= config.globalConcurrency) break;
-    const phase = pendingPhase(task.state) as Phase;
-    const settings = project(task.projectId);
-    if (!settings) continue;
-    const kind = phaseProfile(settings, phase).kind;
-    if (
-      !byProject.fits(task.projectId, settings.limits.concurrency) ||
-      !byPhase.fits(phase, config.phaseConcurrency[phase]) ||
-      !byKind.fits(kind, config.agentKindConcurrency[kind])
-    ) {
-      continue;
-    }
-    occupy(task, phase, kind);
+    if (occupancy.globalFull(config)) break;
+    const slot = occupancy.slotFor(task, pendingPhase(task.state) as SchedulablePhase);
+    if (!slot.agentKind || !occupancy.fits(slot, config)) continue;
+    occupancy.add(slot);
     dispatch.push({
       taskId: task.id,
       projectId: task.projectId,
-      phase,
-      agentKind: kind,
+      phase: slot.phase,
+      agentKind: slot.agentKind,
       score,
       expected: { state: task.state, subState: task.subState },
     });
@@ -198,13 +232,17 @@ export function schedule(
   return { dispatch, escalate: blockedForever(snapshot) };
 }
 
-/** Dependientes vivos (salvo needs_human) con una dependencia que ya no se entregará. */
+/**
+ * Dependientes vivos con una dependencia que ya no se entregará. Se omiten los que están en
+ * needs_human y los que tienen un agente vivo: escalarlos liberaría su slot con el agente todavía
+ * corriendo; se escalan cuando su Run termina y vuelven a queued o salen del estado.
+ */
 function blockedForever(snapshot: SchedulerSnapshot): DependencyEscalation[] {
   const byId = new Map(snapshot.tasks.map((t) => [t.id, t]));
   const graph = DependencyGraph.from(snapshot.edges);
   const escalate: DependencyEscalation[] = [];
   for (const task of snapshot.tasks) {
-    if (isTerminal(task.state) || task.state === "needs_human") continue;
+    if (isTerminal(task.state) || task.state === "needs_human" || holdsSlot(task)) continue;
     const dependsOnId = graph.dependenciesOf(task.id).find((id) => {
       const dep = byId.get(id);
       return dep !== undefined && failed(dep);

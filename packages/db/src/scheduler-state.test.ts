@@ -91,6 +91,19 @@ describe("SchedulerStateRepository: readySince", () => {
     expect(readySince(task.id)).toBe(mergedAt.getTime());
   });
 
+  it("ignora los cambios de una dependencia que todavía no se mergea", () => {
+    const { db, project, readySince } = setup();
+    const createdAt = new Date("2026-10-01T00:00:00Z");
+    const dep = insertTask(db, project.id, { state: "in_progress", subState: "running" });
+    db.update(tasks)
+      .set({ updatedAt: new Date("2026-10-20T00:00:00Z") })
+      .where(eq(tasks.id, dep.id))
+      .run();
+    const task = insertTask(db, project.id, { createdAt });
+    db.insert(taskDependencies).values({ taskId: task.id, dependsOnId: dep.id }).run();
+    expect(readySince(task.id)).toBe(createdAt.getTime());
+  });
+
   it("lee también las aristas entre proyectos", () => {
     const { db, project, repo } = setup();
     const other = insertProject(db);

@@ -29,10 +29,11 @@ describe("SchedulerConfig", () => {
     { globalConcurrency: 1.5 },
     { phaseConcurrency: { refine: 0 } },
     { phaseConcurrency: { review: 1 } },
+    { phaseConcurrency: { deliver: 1 } },
     { agentKindConcurrency: { codex: 1 } },
     { agingPointsPerHour: -1 },
     { boostPerDescendant: -1 },
-    { tickIntervalMs: 0 },
+    { tickIntervalMs: 999 },
     { otro: 1 },
   ])("rechaza %j", (input) => {
     expect(SchedulerConfig.safeParse(input).success).toBe(false);

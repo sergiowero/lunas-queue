@@ -15,6 +15,7 @@ import { Scheduler, type SchedulerOptions } from "./scheduler.ts";
 const stoppables: { stop(): Promise<void> }[] = [];
 afterEach(async () => {
   await Promise.all(stoppables.splice(0).map((s) => s.stop()));
+  vi.useRealTimers();
 });
 
 /** Dispatcher falso: hace el claim (dispatch → running) como lo hará UW-16. */
@@ -144,6 +145,38 @@ describe("Scheduler", () => {
     expect(reads).toHaveBeenCalledTimes(2);
   });
 
+  it("un pedido que llega cuando la pasada ya está saliendo no se pierde", async () => {
+    const db = migratedDatabase();
+    const project = insertProject(db);
+    const state = new SchedulerStateRepository(db);
+    const reads = vi.spyOn(state, "snapshot");
+    const { dispatcher, scheduler } = setup({ db, state });
+    const first = scheduler.run();
+    // La pasada no tiene despachos: termina sin ceder. El pedido llega antes del finally.
+    await Promise.resolve();
+    await Promise.resolve();
+    insertTask(db, project.id);
+    scheduler.wake();
+    await first;
+    await vi.waitFor(() => expect(dispatcher.calls).toHaveLength(1));
+    expect(reads).toHaveBeenCalledTimes(2);
+  });
+
+  it("un fallo al escalar se reporta con su tarea y no salta los despachos", async () => {
+    const { db, project, dispatcher, scheduler, errors } = setup();
+    const dep = insertTask(db, project.id, { state: "cancelled", subState: null });
+    const bloqueada = insertTask(db, project.id);
+    db.insert(taskDependencies).values({ taskId: bloqueada.id, dependsOnId: dep.id }).run();
+    const libre = insertTask(db, project.id);
+    // Un trigger hace fallar la escritura del escalamiento.
+    db.$client.exec(`create trigger romper before update of state on tasks
+      when new.state = 'needs_human' begin select raise(abort, 'base rota'); end`);
+    const result = await scheduler.run();
+    expect(result.escalated).toEqual([]);
+    expect(dispatcher.calls.map((d) => d.taskId)).toEqual([libre.id]);
+    expect(errors.map((e) => e.message)).toEqual(["base rota"]);
+  });
+
   it("escala a los dependientes de una dependencia cancelada, una sola vez", async () => {
     const { db, project, dispatcher, scheduler } = setup();
     const publisher = new OutboxPublisher({ db, onError: () => {} });
@@ -197,13 +230,17 @@ describe("Scheduler", () => {
   });
 
   it("el tick recoge lo que no pasó por el outbox y stop lo detiene", async () => {
-    const { db, project, dispatcher, scheduler } = setup({ config: { tickIntervalMs: 10 } });
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const { db, project, dispatcher, scheduler } = setup({ config: { tickIntervalMs: 1000 } });
     await scheduler.start();
     insertTask(db, project.id);
+    expect(dispatcher.calls).toHaveLength(0);
+    vi.advanceTimersByTime(1000);
     await vi.waitFor(() => expect(dispatcher.calls).toHaveLength(1));
     await scheduler.stop();
     insertTask(db, project.id);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    vi.advanceTimersByTime(5000);
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(dispatcher.calls).toHaveLength(1);
   });
 
