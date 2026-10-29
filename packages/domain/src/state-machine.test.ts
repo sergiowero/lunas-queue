@@ -25,6 +25,7 @@ const passing: { [K in CommandInput["type"]]: Extract<CommandInput, { type: K }>
   verdict_rework: { type: "verdict_rework" },
   verdict_pass: {
     type: "verdict_pass",
+    verifierPassed: true,
     testGatePassed: true,
     testsCoherent: true,
     allCriteriaPassed: true,
@@ -72,9 +73,7 @@ add("refined/-", "approve", "in_progress/queued");
 add("in_progress/running", "submit_for_verification", "verification/queued");
 add("verification/running", "verdict_rework", "in_progress/queued");
 add("verification/running", "verdict_pass", "completed/-");
-add("verification/queued", "verdict_pass", "completed/-");
 add("verification/running", "delivery_conflict", "in_progress/queued");
-add("verification/queued", "delivery_conflict", "in_progress/queued");
 add("needs_human/-", "resume", "in_progress/queued");
 add("needs_human/-", "cancel", "cancelled/-");
 add("refined/-", "escalate", "needs_human/-");
@@ -125,7 +124,7 @@ describe("transition: tabla completa de estados × comandos", () => {
   it("la tabla cubre las 13 combinaciones y los 14 comandos", () => {
     expect(SNAPSHOTS).toHaveLength(13);
     expect(COMMANDS).toHaveLength(14);
-    expect(Object.keys(VALID)).toHaveLength(43);
+    expect(Object.keys(VALID)).toHaveLength(41);
   });
 });
 
@@ -166,7 +165,7 @@ describe("transition: actores", () => {
     submit_for_verification: snap("in_progress", "running"),
     verdict_rework: snap("verification", "running"),
     verdict_pass: snap("verification", "running"),
-    delivery_conflict: snap("verification", "queued"),
+    delivery_conflict: snap("verification", "running"),
     escalate: snap("in_progress", "running"),
     cancel: snap("in_progress", "running"),
     resume: snap("needs_human", null),
@@ -183,7 +182,7 @@ describe("transition: actores", () => {
       approve: ["human"],
       submit_for_verification: ["agent"],
       verdict_rework: ["agent"],
-      verdict_pass: ["agent", "system"],
+      verdict_pass: ["system"],
       delivery_conflict: ["system"],
       escalate: ["system"],
       cancel: ["human"],
@@ -235,8 +234,9 @@ describe("transition: guards", () => {
     }
   });
 
-  it("verdict_pass exige gate verde, tests coherentes, criterios en pass y PR", () => {
+  it("verdict_pass exige veredicto del verificador, gate verde, tests coherentes, criterios en pass y PR", () => {
     for (const field of [
+      "verifierPassed",
       "testGatePassed",
       "testsCoherent",
       "allCriteriaPassed",
@@ -245,7 +245,7 @@ describe("transition: guards", () => {
       rejects(
         snap("verification", "running"),
         { ...passing.verdict_pass, [field]: false },
-        "agent",
+        "system",
       );
     }
   });
@@ -254,6 +254,14 @@ describe("transition: guards", () => {
     for (const resumeTo of ["completed", "cancelled", "needs_human"] as const) {
       rejects(snap("needs_human", null), { type: "resume", resumeTo }, "human");
     }
+  });
+
+  it("el evento debe cumplir su esquema: nota vacía o larga y razón fuera del enum se rechazan", () => {
+    const from = snap("in_progress", "running");
+    rejects(from, { type: "escalate", reason: "blocked", note: "" }, "system");
+    rejects(from, { type: "escalate", reason: "blocked", note: "x".repeat(2001) }, "system");
+    rejects(from, { type: "escalate", reason: "aburrido" as never }, "system");
+    rejects(snap("refined", null), { type: "cancel", note: "" }, "human");
   });
 
   it("run_failed exige un intento entero positivo", () => {
@@ -305,7 +313,7 @@ describe("transition: loop de verificación", () => {
 
   it("delivery_conflict regresa a in progress sin subir la iteración", () => {
     const result = transition(
-      snap("verification", "queued", 2),
+      snap("verification", "running", 2),
       passing.delivery_conflict,
       "system",
     );
@@ -313,7 +321,7 @@ describe("transition: loop de verificación", () => {
   });
 
   it("verdict_pass conserva la iteración", () => {
-    const result = transition(snap("verification", "running", 2), passing.verdict_pass, "agent");
+    const result = transition(snap("verification", "running", 2), passing.verdict_pass, "system");
     expect(result).toMatchObject({ ok: true, next: snap("completed", null, 2) });
   });
 });
@@ -372,6 +380,16 @@ describe("transition: humano en el loop", () => {
         transition(snap("needs_human", null, 2), { type: "resume", resumeTo }, "human"),
       ).toMatchObject({ ok: true, next: snap(resumeTo, subState, 2) });
     }
+  });
+
+  it("resume con resetIteration concede un ciclo de verificación nuevo", () => {
+    expect(
+      transition(
+        snap("needs_human", null, 3),
+        { type: "resume", resumeTo: "in_progress", resetIteration: true },
+        "human",
+      ),
+    ).toMatchObject({ ok: true, next: snap("in_progress", "queued", 0) });
   });
 
   it("cancel guarda la nota en el evento", () => {

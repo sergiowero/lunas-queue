@@ -20,7 +20,9 @@ import { events, tasks } from "./schema.ts";
 export type TaskRow = typeof tasks.$inferSelect;
 
 /** Como CommandInput, pero resume toma su destino del último escalamiento registrado. */
-export type TransitionCommand = Exclude<CommandInput, { type: "resume" }> | { type: "resume" };
+export type TransitionCommand =
+  | Exclude<CommandInput, { type: "resume" }>
+  | Omit<Extract<CommandInput, { type: "resume" }>, "resumeTo">;
 
 export type TransitionTaskInput = {
   taskId: string;
@@ -74,7 +76,7 @@ export function transitionTask(
         if (!resumeTo) {
           return fail("no_escalation_found", `la tarea ${current.id} no tiene escalamiento`);
         }
-        command = { type: "resume", resumeTo };
+        command = { ...input.command, resumeTo };
       } else {
         command = input.command;
       }

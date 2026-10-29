@@ -71,9 +71,10 @@ describe("transitionTask", () => {
       },
       { actor: "system", command: { type: "dispatch" } },
       {
-        actor: "agent",
+        actor: "system",
         command: {
           type: "verdict_pass",
+          verifierPassed: true,
           testGatePassed: true,
           testsCoherent: true,
           allCriteriaPassed: true,
@@ -225,8 +226,30 @@ describe("transitionTask", () => {
       apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } }).task.state,
     ).toBe("needs_human");
     expect(
-      apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } }).task,
-    ).toMatchObject({ state: "verification", subState: "queued" });
+      apply(db, { taskId: t.id, actor: "human", command: { type: "resume", resetIteration: true } })
+        .task,
+    ).toMatchObject({ state: "verification", subState: "queued", verificationIteration: 0 });
+    apply(db, { taskId: t.id, actor: "system", command: { type: "dispatch" } });
+    expect(
+      apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } }).task,
+    ).toMatchObject({ state: "in_progress", verificationIteration: 1 });
+  });
+
+  it("un payload fuera de esquema no llega al log y la tarea sigue reanudable", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id, { state: "in_progress", subState: "running" });
+    expect(
+      transitionTask(db, {
+        taskId: t.id,
+        actor: "system",
+        command: { type: "escalate", reason: "blocked", note: "x".repeat(2001) },
+      }),
+    ).toMatchObject({ ok: false, error: { code: "guard_failed" } });
+    expect(listEvents(db, t.id)).toEqual([]);
+    apply(db, { taskId: t.id, actor: "system", command: { type: "escalate", reason: "blocked" } });
+    expect(
+      apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } }).task.state,
+    ).toBe("in_progress");
   });
 
   it("resume sin escalamiento registrado se rechaza", () => {

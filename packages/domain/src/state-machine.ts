@@ -8,7 +8,7 @@ import {
   TASK_TRANSITIONED,
   type TaskCommand,
   type TaskState,
-  type TaskTransitionedEvent,
+  TaskTransitionedEvent,
   type TaskTransitionedPayload,
 } from "@lunasq/schemas";
 
@@ -34,6 +34,8 @@ export type CommandInput =
   | { type: "verdict_rework"; maxIterations?: number }
   | {
       type: "verdict_pass";
+      // Veredicto pass registrado por el Run del verificador en la iteración actual.
+      verifierPassed: boolean;
       testGatePassed: boolean;
       testsCoherent: boolean;
       allCriteriaPassed: boolean;
@@ -42,7 +44,8 @@ export type CommandInput =
   | { type: "delivery_conflict" }
   | { type: "escalate"; reason: EscalationReason; note?: string }
   | { type: "cancel"; note?: string }
-  | { type: "resume"; resumeTo: TaskState }
+  // resetIteration: el humano concede un nuevo ciclo de verificación completo.
+  | { type: "resume"; resumeTo: TaskState; resetIteration?: boolean }
   | { type: "dispatch" }
   | { type: "ask_human" }
   | { type: "answer"; agentAlive: boolean }
@@ -62,8 +65,8 @@ export const COMMAND_ACTORS: Readonly<Record<TaskCommand, readonly Actor[]>> = {
   approve: ["human"],
   submit_for_verification: ["agent"],
   verdict_rework: ["agent"],
-  // El verificador emite el pass; la entrega lo confirma tras el PR.
-  verdict_pass: ["agent", "system"],
+  // El verificador registra su veredicto en el handoff; la entrega emite el pass tras el PR.
+  verdict_pass: ["system"],
   delivery_conflict: ["system"],
   escalate: ["system"],
   cancel: ["human"],
@@ -170,8 +173,9 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
     }
     case "verdict_pass":
       return {
-        from: at("verification", "running", "queued"),
+        from: at("verification", "running"),
         guard: requireAll({
+          verifierPassed: command.verifierPassed,
           testGatePassed: command.testGatePassed,
           testsCoherent: command.testsCoherent,
           allCriteriaPassed: command.allCriteriaPassed,
@@ -181,7 +185,7 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
       };
     case "delivery_conflict":
       return {
-        from: at("verification", "running", "queued"),
+        from: at("verification", "running"),
         outcome: () => ({ to: "in_progress" }),
       };
     case "escalate":
@@ -201,7 +205,10 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
           RESUMABLE_STATES.includes(command.resumeTo)
             ? undefined
             : `no se puede reanudar hacia ${command.resumeTo}`,
-        outcome: () => ({ to: command.resumeTo }),
+        outcome: () =>
+          command.resetIteration
+            ? { to: command.resumeTo, iteration: 0 }
+            : { to: command.resumeTo },
       };
     case "dispatch":
       return {
@@ -274,6 +281,11 @@ export function transition(
     verificationIteration: next.verificationIteration,
   };
   if (outcome.reason) payload.reason = outcome.reason;
-  if ("note" in command && command.note) payload.note = command.note;
-  return { ok: true, next, event: { type: TASK_TRANSITIONED, actor, payload } };
+  if ("note" in command && command.note !== undefined) payload.note = command.note;
+  // Valida el evento contra su esquema: lo que entra al log debe poder leerse después.
+  const event = TaskTransitionedEvent.safeParse({ type: TASK_TRANSITIONED, actor, payload });
+  if (!event.success) {
+    return fail("guard_failed", `${command.type}: evento inválido: ${event.error.message}`);
+  }
+  return { ok: true, next, event: event.data };
 }
