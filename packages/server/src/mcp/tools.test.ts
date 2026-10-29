@@ -441,6 +441,45 @@ describe("submit_verdict", () => {
     expect(runOf(h, run.id)?.handoff).toBeNull();
   });
 
+  it("un pass sobre un HEAD distinto del que pasó el gate de submit_for_verification se rechaza", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("verify", verifying);
+    // El verificador commiteó algo propio, p. ej. borrar los tests en rojo.
+    h.commitVerifier.headSha = "b".repeat(40);
+    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    expect(result.body).toMatchObject({ error: "head_changed" });
+    expect(h.testGate.calls).toHaveLength(0);
+    expect(runOf(h, run.id)?.handoff).toBeNull();
+
+    // Vale el último gate en verde: tras un rework, el HEAD nuevo.
+    h.gated(run.taskId, "b".repeat(40));
+    expect(
+      (await call("submit_verdict", { handoff: handoffFor("verification-pass", run) })).body,
+    ).toEqual({ verdict: "pass" });
+  });
+
+  it("sin gate en verde previo un pass se rechaza", async () => {
+    const h = mcpHarness();
+    const t = h.task(verifying);
+    const run = insertRun(h.db, t.id, { phase: "verify" });
+    const { call } = await h.connect(run.runToken);
+    await call("get_task_context");
+    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    expect(result.body).toMatchObject({ error: "head_changed" });
+  });
+
+  it("si el HEAD se movió mientras corría el gate del pass, se rechaza", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("verify", verifying);
+    h.testGate.run = async () => {
+      h.commitVerifier.headSha = "c".repeat(40);
+      return { passed: true, output: "" };
+    };
+    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    expect(result.body).toMatchObject({ error: "head_changed" });
+    expect(runOf(h, run.id)?.handoff).toBeNull();
+  });
+
   it("un reject no corre el gate", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);

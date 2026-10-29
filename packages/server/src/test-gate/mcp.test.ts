@@ -83,6 +83,10 @@ describe("gate de tests en el LunasQ MCP", () => {
     const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
     expect(result.body).toMatchObject({ error: "test_gate_failed" });
     expect(new RunRepository(h.db).get(run.id)?.handoff).toBeNull();
-    expect(h.gateEvents(task.id)).toMatchObject([{ trigger: "verdict_pass", passed: false }]);
+    // El primero es el gate en verde de submit_for_verification con que llega la tarea.
+    expect(h.gateEvents(task.id)).toMatchObject([
+      { trigger: "submit_for_verification", passed: true },
+      { trigger: "verdict_pass", passed: false, output: "FAIL order.test.ts\n" },
+    ]);
   });
 });

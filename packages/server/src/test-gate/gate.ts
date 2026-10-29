@@ -84,8 +84,10 @@ export class PaneTestGate implements TestGate {
   }
 
   async run(input: TestGateInput): Promise<TestGateResult> {
-    const execution = input.command
-      ? await this.execute(input, input.command)
+    // Un comando vacío cuenta como sin comando.
+    const command = input.command?.trim() ? input.command : null;
+    const execution = command
+      ? await this.execute(input, command)
       : {
           headSha: null,
           result: null,
@@ -105,7 +107,7 @@ export class PaneTestGate implements TestGate {
         payload: TestGateExecutedPayload.parse({
           runId: input.runId,
           trigger: input.trigger,
-          command: input.command,
+          command,
           headSha: execution.headSha,
           exitCode: result?.exitCode ?? null,
           timedOut: result?.timedOut ?? false,
@@ -135,7 +137,12 @@ export class PaneTestGate implements TestGate {
       .resolveCommit({ cwd: input.worktreePath, ref: "HEAD" })
       .catch(() => null);
     try {
-      const { rootPaneId } = await this.worktrees.ensure(input.taskId);
+      // ensure es idempotente: con el worktree ya listo solo devuelve su pane raíz.
+      const worktree = await this.worktrees.ensure(input.taskId);
+      if (worktree.path !== input.worktreePath) {
+        throw new Error(`el worktree de la tarea es ${worktree.path}, no ${input.worktreePath}`);
+      }
+      const { rootPaneId } = worktree;
       const result = await this.runnerFor(rootPaneId).run({
         command,
         cwd: input.worktreePath,

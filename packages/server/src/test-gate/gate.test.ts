@@ -159,6 +159,21 @@ describe("PaneTestGate", () => {
     ]);
   });
 
+  it("un comando vacío cuenta como sin comando y queda registrado", async () => {
+    const { gate, input, events, panes } = await setup();
+    expect((await gate.run(input("  "))).passed).toBe(false);
+    expect(panes).toEqual([]);
+    expect(events()).toMatchObject([{ command: null, passed: false }]);
+  });
+
+  it("si el worktree asegurado no es el del Run, falla cerrado sin correr la suite", async () => {
+    const { gate, input, events, panes } = await setup();
+    const result = await gate.run({ ...input("true"), worktreePath: "/otro/worktree" });
+    expect(result.passed).toBe(false);
+    expect(panes).toEqual([]);
+    expect(events()).toMatchObject([{ passed: false, error: expect.stringMatching(/otro/) }]);
+  });
+
   it("una suite que excede el tiempo límite no pasa", async () => {
     const { gate, input, events } = await setup({ timeoutMs: 200 });
     const result = await gate.run(input("echo empieza; sleep 5"));

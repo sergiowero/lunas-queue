@@ -20,7 +20,8 @@ export const TestGateExecutedPayload = z
     // Commit del worktree sobre el que corrió la suite; null si no se pudo leer.
     headSha: z
       .string()
-      .regex(/^[0-9a-f]{40}$/, "sha de commit")
+      // 40 caracteres en repos SHA-1, 64 en repos SHA-256.
+      .regex(/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/, "sha de commit")
       .nullable(),
     // null si la suite no llegó a correr.
     exitCode: z.int().nullable(),

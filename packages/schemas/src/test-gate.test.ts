@@ -24,6 +24,9 @@ describe("test_gate.executed", () => {
       }),
     ).toThrow();
     expect(() => TestGateExecutedPayload.parse({ ...executed, headSha: "HEAD" })).toThrow();
+    // Repos con object format SHA-256.
+    const sha256 = "b".repeat(64);
+    expect(TestGateExecutedPayload.parse({ ...executed, headSha: sha256 }).headSha).toBe(sha256);
   });
 
   it("sin comando o sin ejecución no hay exit code, y el gate no pasa", () => {

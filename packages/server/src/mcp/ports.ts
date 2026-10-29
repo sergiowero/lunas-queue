@@ -35,6 +35,8 @@ export interface CommitVerifier {
   missing(input: CommitCheckInput): Promise<string[]>;
   /** Archivos con cambios sin commitear: el gate debe correr sobre lo commiteado. */
   uncommitted(worktreePath: string): Promise<string[]>;
+  /** Sha del HEAD del worktree; null si no se puede leer. */
+  head(worktreePath: string): Promise<string | null>;
 }
 
 export const GATE_OUTPUT_LIMIT = 4000;
@@ -72,6 +74,14 @@ export class GitCommitVerifier implements CommitVerifier {
       if (result.exitCode !== 0) missing.push(sha);
     }
     return missing;
+  }
+
+  async head(worktreePath: string): Promise<string | null> {
+    const result = await this.#runner.run({
+      command: "git rev-parse --verify --quiet HEAD^{commit}",
+      cwd: worktreePath,
+    });
+    return result.exitCode === 0 ? result.stdout.trim() : null;
   }
 
   async uncommitted(worktreePath: string): Promise<string[]> {

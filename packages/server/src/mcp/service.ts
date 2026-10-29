@@ -10,6 +10,7 @@ import {
   createQuestion,
   type LunasqDatabase,
   latestChecklist,
+  listEvents,
   listQuestions,
   ProjectRepository,
   RunRepository,
@@ -30,6 +31,8 @@ import {
   type ReportFailureInput,
   type Spec,
   type TaskContext,
+  TEST_GATE_EXECUTED,
+  TestGateExecutedPayload,
   type TestGateTrigger,
   type UpdateChecklistInput,
 } from "@lunasq/schemas";
@@ -75,6 +78,8 @@ export type McpErrorCode =
   // Ya corre un gate de tests para este Run.
   | "gate_in_progress"
   | "test_gate_failed"
+  // Un pass sobre un HEAD distinto del que pasó el gate de submit_for_verification.
+  | "head_changed"
   | "verdict_already_recorded"
   | "no_worktree"
   // La máquina de estados rechazó la transición (estado de la tarea, guard o actor).
@@ -435,14 +440,51 @@ export class LunasqMcpService {
     }
   }
 
-  /** Worktree limpio y gate de tests en verde antes de aceptar un pass; null si todo pasa. */
+  /**
+   * Antes de aceptar un pass: worktree limpio, HEAD en el commit que pasó el gate de
+   * `submit_for_verification` y gate en verde otra vez; null si todo pasa. Así el verificador no
+   * puede aprobar un commit propio que, por ejemplo, borre los tests en rojo.
+   */
   async #checkPass(run: RunRow): Promise<Extract<Outcome<never>, { ok: false }> | null> {
     const { task, project } = this.#taskAndProject(run);
-    if (!task.worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
+    const worktreePath = task.worktreePath;
+    if (!worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
+    const expected = this.#gatedHead(run.taskId);
     // La prueba de reversión del verificador toca el código: el gate corre sobre lo commiteado.
-    const dirty = await this.#dirty(task.worktreePath);
-    if (dirty) return dirty;
-    return this.#runGate(run, task.worktreePath, project, "verdict_pass");
+    const unchanged = async () =>
+      (await this.#dirty(worktreePath)) ?? (await this.#sameHead(worktreePath, expected));
+    const before = await unchanged();
+    if (before) return before;
+    const gate = await this.#runGate(run, worktreePath, project, "verdict_pass");
+    if (gate) return gate;
+    // La suite puede tardar minutos: el worktree no debe haberse movido mientras corría.
+    return unchanged();
+  }
+
+  /** Sha que probó el último gate en verde de `submit_for_verification` de la tarea. */
+  #gatedHead(taskId: string): string | null {
+    let head: string | null = null;
+    for (const event of listEvents(this.#db, taskId)) {
+      if (event.type !== TEST_GATE_EXECUTED) continue;
+      const payload = TestGateExecutedPayload.safeParse(event.payload);
+      if (!payload.success || payload.data.trigger !== "submit_for_verification") continue;
+      if (payload.data.passed) head = payload.data.headSha;
+    }
+    return head;
+  }
+
+  async #sameHead(
+    worktreePath: string,
+    expected: string | null,
+  ): Promise<Extract<Outcome<never>, { ok: false }> | null> {
+    const head = await this.#commits.head(worktreePath);
+    if (expected !== null && head === expected) return null;
+    return fail(
+      "head_changed",
+      expected === null
+        ? "no hay un gate en verde de submit_for_verification con el que comparar el HEAD"
+        : `el HEAD del worktree (${head ?? "ilegible"}) no es el commit que pasó el gate de submit_for_verification (${expected})`,
+    );
   }
 
   async #dirty(worktreePath: string): Promise<Extract<Outcome<never>, { ok: false }> | null> {
