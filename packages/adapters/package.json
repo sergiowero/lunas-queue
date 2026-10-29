@@ -10,7 +10,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "test:herdr": "LUNASQ_HERDR_INTEGRATION=1 vitest run src/herdr/real.integration.test.ts"
+    "test:herdr": "LUNASQ_HERDR_INTEGRATION=1 vitest run src/herdr/real.integration.test.ts",
+    "test:gh": "LUNASQ_GH_INTEGRATION=1 vitest run src/github/real.integration.test.ts"
   },
   "dependencies": {
     "@lunasq/schemas": "workspace:*",
