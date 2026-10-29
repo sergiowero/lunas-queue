@@ -9,13 +9,18 @@ import { projects } from "./schema.ts";
 export type ProjectRepositoryErrorCode = "conflict" | "has_tasks" | "invalid_row";
 
 export class ProjectRepositoryError extends Error {
+  readonly code: ProjectRepositoryErrorCode;
+  readonly field: "name" | "localPath" | undefined;
+
   constructor(
-    readonly code: ProjectRepositoryErrorCode,
+    code: ProjectRepositoryErrorCode,
     message: string,
-    readonly field?: "name" | "localPath",
+    field?: "name" | "localPath",
     options?: ErrorOptions,
   ) {
     super(message, options);
+    this.code = code;
+    this.field = field;
     this.name = "ProjectRepositoryError";
   }
 }
@@ -81,7 +86,11 @@ function toProject(row: Row): Project {
 }
 
 export class ProjectRepository implements ProjectConfigReader {
-  constructor(private readonly db: LunasqDatabase) {}
+  private readonly db: LunasqDatabase;
+
+  constructor(db: LunasqDatabase) {
+    this.db = db;
+  }
 
   /** Valida `input` (lanza ZodError si no cumple) y guarda el proyecto. */
   create(input: ProjectCreate): Project {

@@ -3,12 +3,13 @@
 import type { Actor } from "@lunasq/schemas";
 import { asc, eq } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
+import { enqueueOutbox } from "./outbox.ts";
 import { events } from "./schema.ts";
 
 export type EventRow = typeof events.$inferSelect;
 
 // También acepta la transacción de Drizzle, que expone los mismos builders.
-type Writer = Pick<LunasqDatabase, "insert">;
+type Writer = Pick<LunasqDatabase, "insert" | "transaction">;
 type Reader = Pick<LunasqDatabase, "select">;
 
 export type AppendEventInput = {
@@ -18,10 +19,21 @@ export type AppendEventInput = {
   payload?: unknown;
 };
 
-export function appendEvent(db: Writer, input: AppendEventInput): EventRow {
-  const [row] = db.insert(events).values(input).returning().all();
-  if (!row) throw new Error("insert de evento sin fila");
-  return row;
+/**
+ * Con `publish` el evento también entra al outbox (ADR 0011), en la misma transacción: dentro
+ * de otra transacción es un savepoint, así que falla o se confirma junto con quien llama.
+ */
+export function appendEvent(
+  db: Writer,
+  input: AppendEventInput,
+  opts: { publish?: boolean } = {},
+): EventRow {
+  return db.transaction((tx) => {
+    const [row] = tx.insert(events).values(input).returning().all();
+    if (!row) throw new Error("insert de evento sin fila");
+    if (opts.publish) enqueueOutbox(tx, row);
+    return row;
+  });
 }
 
 /** Eventos de una tarea en orden de escritura. */

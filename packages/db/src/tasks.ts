@@ -39,14 +39,19 @@ export type TaskRepositoryErrorCode =
   | "invalid_row";
 
 export class TaskRepositoryError extends Error {
+  readonly code: TaskRepositoryErrorCode;
+  /** Con code `cycle`: el camino que cerraría la arista, de la dependiente a sí misma. */
+  readonly cycle: string[] | undefined;
+
   constructor(
-    readonly code: TaskRepositoryErrorCode,
+    code: TaskRepositoryErrorCode,
     message: string,
-    /** Con code `cycle`: el camino que cerraría la arista, de la dependiente a sí misma. */
-    readonly cycle?: string[],
+    cycle?: string[],
     options?: ErrorOptions,
   ) {
     super(message, options);
+    this.code = code;
+    this.cycle = cycle;
     this.name = "TaskRepositoryError";
   }
 }
@@ -74,7 +79,11 @@ function findRow(db: Reader, taskId: string): Row | undefined {
 const EDITABLE = ["intent", "tags", "priority"] as const;
 
 export class TaskRepository implements DependencyGraphReader {
-  constructor(private readonly db: LunasqDatabase) {}
+  private readonly db: LunasqDatabase;
+
+  constructor(db: LunasqDatabase) {
+    this.db = db;
+  }
 
   /** Valida `input` (lanza ZodError si no cumple) y crea la tarea en draft con sus aristas. */
   create(input: TaskCreate): Task {
