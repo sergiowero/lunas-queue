@@ -33,6 +33,11 @@ import {
 
 const SETTLED: AgentStatus[] = ["idle", "done"];
 
+/** Margen sobre el `--timeout` que se le pasa a herdr antes de matar el proceso del CLI. */
+const CLI_GRACE_MS = 10_000;
+/** Máximo de `agent start --timeout` en herdr; se usa como límite si no se indica otro. */
+const MAX_START_TIMEOUT_MS = 300_000;
+
 /** `--source` con el que LunasQ publica metadata en los panes. */
 export const METADATA_SOURCE = "lunasq";
 
@@ -123,7 +128,8 @@ export class RealHerdr implements HerdrAdapter {
 
   async removeWorktree(input: { workspaceId: string; force?: boolean }) {
     const force = input.force ? ["--force"] : [];
-    await this.cli.json(["worktree", "remove", "--workspace", input.workspaceId, ...force]);
+    const args = ["worktree", "remove", "--workspace", input.workspaceId, ...force];
+    await ignoring("workspace_not_found", this.cli.json(args));
   }
 
   async splitPane(input: {
@@ -161,7 +167,13 @@ export class RealHerdr implements HerdrAdapter {
     ];
     try {
       return {
-        agent: toAgent(agentInfoWire.parse(await this.cli.json(args)).agent),
+        agent: toAgent(
+          agentInfoWire.parse(
+            await this.cli.json(args, {
+              timeoutMs: (input.timeoutMs ?? MAX_START_TIMEOUT_MS) + CLI_GRACE_MS,
+            }),
+          ).agent,
+        ),
         started: true,
       };
     } catch (err) {
@@ -194,7 +206,9 @@ export class RealHerdr implements HerdrAdapter {
           String(input.wait.timeoutMs),
         ]
       : [];
-    const res = await this.cli.json(["agent", "prompt", input.name, input.text, ...wait]);
+    const res = await this.cli.json(["agent", "prompt", input.name, input.text, ...wait], {
+      ...(input.wait && { timeoutMs: input.wait.timeoutMs + CLI_GRACE_MS }),
+    });
     return toAgent(agentInfoWire.parse(res).agent);
   }
 
@@ -203,7 +217,9 @@ export class RealHerdr implements HerdrAdapter {
       ...["agent", "wait", input.name, ...untilArgs(input.until ?? SETTLED)],
       ...(input.timeoutMs !== undefined ? ["--timeout", String(input.timeoutMs)] : []),
     ];
-    return toAgent(agentInfoWire.parse(await this.cli.json(args)).agent);
+    // Sin `timeoutMs` herdr espera indefinidamente, y el CLI también.
+    const timeoutMs = input.timeoutMs !== undefined ? input.timeoutMs + CLI_GRACE_MS : 0;
+    return toAgent(agentInfoWire.parse(await this.cli.json(args, { timeoutMs })).agent);
   }
 
   async readAgent(input: { name: string; lines?: number }) {
@@ -244,10 +260,14 @@ export class RealHerdr implements HerdrAdapter {
       ...(input.lifecycle ? LIFECYCLE_SUBSCRIPTIONS : []),
     ];
     if (subscriptions.length === 0) throw new Error("subscribe: indica paneIds o lifecycle");
-    const stream = new EventStream({
+    const stream: EventStream = new EventStream({
       socketPath: this.socketPath,
       subscriptions,
-      onEvent,
+      onEvent: (event) => {
+        // Un rechazo es terminal: el stream ya no se puede cortar ni reabrir.
+        if (event.type === "subscription_failed") this.streams.delete(stream);
+        onEvent(event);
+      },
       ...(this.backoff && { backoff: this.backoff }),
     });
     this.streams.add(stream);

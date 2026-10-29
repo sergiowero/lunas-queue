@@ -58,5 +58,9 @@ Comportamientos encontrados al implementar el adapter (`packages/adapters/src/he
 - **Rutas:** herdr reporta a veces la ruta pedida y a veces la real (`/var` → `/private/var` en macOS) y colapsa el home a `~`. El adapter normaliza (expande `~` y resuelve symlinks) toda ruta que devuelve.
 - **Una conexión por suscripción:** una segunda request `events.subscribe` por la misma conexión hace que herdr la cierre. El adapter abre una conexión por suscripción. Si herdr rechaza una suscripción (respuesta `error`, p. ej. un pane que ya no existe), emite `subscription_failed` y no reintenta.
 - **Códigos de error usados para la idempotencia:** `workspace_not_found` (`workspace close`, `worktree remove`), `pane_not_found`, `agent_not_found`, `agent_name_taken` (arranque concurrente con el mismo nombre), `agent_not_ready` (arrancó bloqueado) y `timeout` (`agent wait`/`start`).
+- **`worktree remove` sobre el workspace del proyecto** (no worktree) falla con `not_linked_worktree`.
+- **Cerrar el último pane de un workspace cierra el workspace.**
+- **Una suscripción con un `pane_id` inexistente** se rechaza completa con `pane_not_found`, también al re‑suscribir tras una pérdida. Por eso conviene una suscripción por pane.
+- **Timeouts del CLI:** el adapter mata el proceso de `herdr` a los 30 s (`cli_timeout`). Los comandos que esperan reciben 10 s de margen sobre el `--timeout` que se le pasa a herdr; `agent wait` sin timeout no tiene límite.
 - **`agent prompt`:** el texto va como posicional, aunque empiece con `-`. Detrás de `--` herdr lo rechaza.
 - **Suite real sin Claude Code:** `pane report-agent` permite que cualquier proceso se reporte como agente. La suite usa un `claude` stub que entra al PATH del pane vía `ZDOTDIR`, porque el shell de login de macOS reescribe el `PATH` heredado. Requiere zsh y se corre con `pnpm --filter @lunasq/adapters test:herdr`.

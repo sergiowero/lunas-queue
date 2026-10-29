@@ -3,6 +3,7 @@
 // `remove`; eventos por pane; notificaciones apagadas por defecto. Cumple la suite de contrato.
 import { HerdrError } from "./errors.ts";
 import type {
+  AgentSessionInfo,
   AgentStatus,
   HerdrAdapter,
   HerdrAgent,
@@ -18,6 +19,8 @@ import type {
 const SETTLED: AgentStatus[] = ["idle", "done"];
 
 interface FakeWorkspace extends HerdrWorkspace {
+  /** Checkout que abre el workspace; herdr solo lo publica para worktrees (ADR 0004, adenda). */
+  repoPath: string;
   tabId: string;
   nextPane: number;
 }
@@ -35,6 +38,7 @@ interface FakeAgent {
   status: AgentStatus;
   args: string[];
   transcript: string[];
+  session?: AgentSessionInfo;
 }
 
 interface FakeWorktree {
@@ -53,11 +57,17 @@ export interface FakeHerdrOptions {
   promptDurationMs?: number;
   /** Simula `[ui.toast] delivery`; herdr lo trae apagado por defecto. */
   notificationsEnabled?: boolean;
+  /**
+   * Estado con que arrancan los agentes. `blocked` simula el diálogo de confianza de carpeta de
+   * Claude Code en un worktree nuevo (ADR 0004); herdr real responde `agent_not_ready`.
+   */
+  startStatus?: "idle" | "blocked";
 }
 
 export class FakeHerdr implements HerdrAdapter {
   private readonly promptDurationMs: number;
   private readonly notificationsEnabled: boolean;
+  private readonly startStatus: "idle" | "blocked";
   private nextWorkspace = 1;
   private readonly workspaces = new Map<string, FakeWorkspace>();
   private readonly panes = new Map<string, FakePane>();
@@ -73,6 +83,7 @@ export class FakeHerdr implements HerdrAdapter {
   constructor(opts: FakeHerdrOptions = {}) {
     this.promptDurationMs = opts.promptDurationMs ?? 5;
     this.notificationsEnabled = opts.notificationsEnabled ?? false;
+    this.startStatus = opts.startStatus ?? "idle";
   }
 
   async ensureWorkspace(input: {
@@ -97,12 +108,15 @@ export class FakeHerdr implements HerdrAdapter {
   }
 
   async closeWorkspace(workspaceId: string) {
-    const ws = this.workspaces.get(workspaceId);
-    if (!ws) return;
+    this.removeWorkspace(workspaceId);
+  }
+
+  private removeWorkspace(workspaceId: string) {
+    // Se borra primero para que cerrar su último pane no vuelva a cerrarlo.
+    if (!this.workspaces.delete(workspaceId)) return;
     for (const pane of [...this.panes.values()]) {
       if (pane.workspaceId === workspaceId) this.removePane(pane.paneId);
     }
-    this.workspaces.delete(workspaceId);
     for (const repo of this.worktrees.values()) {
       for (const wt of repo.values()) if (wt.workspaceId === workspaceId) delete wt.workspaceId;
     }
@@ -117,11 +131,11 @@ export class FakeHerdr implements HerdrAdapter {
     label?: string;
   }) {
     const project = this.workspaces.get(input.workspaceId);
-    if (!project?.checkoutPath) {
+    if (!project) {
       throw new HerdrError("workspace_not_found", `workspace ${input.workspaceId} not found`);
     }
-    const repo = this.worktrees.get(project.checkoutPath) ?? new Map<string, FakeWorktree>();
-    this.worktrees.set(project.checkoutPath, repo);
+    const repo = this.worktrees.get(project.repoPath) ?? new Map<string, FakeWorktree>();
+    this.worktrees.set(project.repoPath, repo);
     const label = input.label ?? input.branch;
 
     const existing = repo.get(input.branch);
@@ -141,17 +155,18 @@ export class FakeHerdr implements HerdrAdapter {
 
   async removeWorktree(input: { workspaceId: string; force?: boolean }) {
     const ws = this.workspaces.get(input.workspaceId);
-    if (!ws?.linkedWorktree) {
+    if (!ws) return;
+    if (!ws.linkedWorktree) {
       throw new HerdrError(
-        "worktree_not_found",
-        `workspace ${input.workspaceId} is not a worktree`,
+        "not_linked_worktree",
+        `workspace ${input.workspaceId} is not a linked worktree`,
       );
     }
     for (const repo of this.worktrees.values()) {
       for (const [branch, wt] of repo)
         if (wt.workspaceId === input.workspaceId) repo.delete(branch);
     }
-    await this.closeWorkspace(input.workspaceId);
+    this.removeWorkspace(input.workspaceId);
     this.emit({ type: "worktree_removed", workspaceId: input.workspaceId });
   }
 
@@ -187,7 +202,7 @@ export class FakeHerdr implements HerdrAdapter {
       name: input.name,
       kind: input.kind,
       paneId: input.paneId,
-      status: "idle",
+      status: this.startStatus,
       args: input.args ?? [],
       transcript: [],
     };
@@ -280,6 +295,16 @@ export class FakeHerdr implements HerdrAdapter {
 
   subscribe(input: SubscribeInput, onEvent: (event: HerdrEvent) => void): HerdrSubscription {
     const sub: FakeSubscription = { input, onEvent, closed: false };
+    const missing = input.paneIds?.find((paneId) => !this.panes.has(paneId));
+    if (missing) {
+      // herdr rechaza la suscripción completa si un pane no existe.
+      this.deliver(sub, {
+        type: "subscription_failed",
+        code: "pane_not_found",
+        message: `pane ${missing} not found`,
+      });
+      return { close: async () => {} };
+    }
     this.subscriptions.add(sub);
     this.deliver(sub, { type: "subscribed" });
     return {
@@ -309,6 +334,11 @@ export class FakeHerdr implements HerdrAdapter {
     for (const check of [...this.statusWaiters]) check();
   }
 
+  /** Publica la identidad de sesión del agente, como la integración oficial (`agent_session`). */
+  setAgentSession(name: string, session: AgentSessionInfo) {
+    this.requireAgent(name).session = session;
+  }
+
   /** Simula que el proceso del agente terminó: el pane queda abierto sin agente. */
   exitAgent(name: string) {
     const agent = this.requireAgent(name);
@@ -331,7 +361,7 @@ export class FakeHerdr implements HerdrAdapter {
 
   private createWorkspace(
     label: string,
-    checkoutPath: string,
+    repoPath: string,
     linkedWorktree: boolean,
     env: Record<string, string>,
   ) {
@@ -339,13 +369,14 @@ export class FakeHerdr implements HerdrAdapter {
     const ws: FakeWorkspace = {
       workspaceId: `w${n}`,
       label,
-      checkoutPath,
+      ...(linkedWorktree && { checkoutPath: repoPath }),
+      repoPath,
       linkedWorktree,
       tabId: `w${n}:t1`,
       nextPane: 1,
     };
     this.workspaces.set(ws.workspaceId, ws);
-    this.addPane(ws, checkoutPath, env);
+    this.addPane(ws, repoPath, env);
     return ws;
   }
 
@@ -369,6 +400,9 @@ export class FakeHerdr implements HerdrAdapter {
     for (const [name, agent] of this.agents) if (agent.paneId === paneId) this.agents.delete(name);
     this.emit({ type: "pane_closed", paneId, workspaceId: pane.workspaceId });
     for (const check of [...this.statusWaiters]) check();
+    // Como herdr: al cerrarse el último pane se cierra su workspace.
+    const empty = ![...this.panes.values()].some((p) => p.workspaceId === pane.workspaceId);
+    if (empty) this.removeWorkspace(pane.workspaceId);
   }
 
   private rootPane(ws: FakeWorkspace) {
@@ -403,6 +437,7 @@ export class FakeHerdr implements HerdrAdapter {
       status: agent.status,
       ...(pane?.title !== undefined && { title: pane.title }),
       tokens: { ...pane?.tokens },
+      ...(agent.session && { session: { ...agent.session } }),
     };
   }
 

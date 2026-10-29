@@ -10,11 +10,26 @@ export interface ExecResult {
   exitCode: number;
 }
 
-export type ExecFn = (file: string, args: string[]) => Promise<ExecResult>;
+/** `timeoutMs` 0 = sin límite. */
+export type ExecFn = (file: string, args: string[], timeoutMs: number) => Promise<ExecResult>;
 
-export const execHerdr: ExecFn = (file, args) =>
+/** Límite por defecto de un comando: herdr colgado no debe colgar al dispatcher. */
+export const DEFAULT_CLI_TIMEOUT_MS = 30_000;
+
+export const execHerdr: ExecFn = (file, args, timeoutMs) =>
   new Promise((resolve, reject) => {
-    execFile(file, args, { maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
+    const opts = {
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: timeoutMs,
+      killSignal: "SIGKILL" as const,
+    };
+    execFile(file, args, opts, (err, stdout, stderr) => {
+      if (err?.killed) {
+        reject(
+          new HerdrError("cli_timeout", `${args.join(" ")}: sin respuesta en ${timeoutMs} ms`),
+        );
+        return;
+      }
       if (err && typeof err.code !== "number") {
         reject(new HerdrError("cli_unavailable", `${file}: ${err.message}`));
         return;
@@ -43,8 +58,8 @@ export class HerdrCli {
   }
 
   /** Corre el comando y devuelve `result` de la respuesta JSON. */
-  async json(args: string[]): Promise<unknown> {
-    const stdout = await this.text(args);
+  async json(args: string[], opts: { timeoutMs?: number } = {}): Promise<unknown> {
+    const stdout = await this.text(args, opts);
     let parsed: unknown;
     try {
       parsed = JSON.parse(stdout);
@@ -58,9 +73,10 @@ export class HerdrCli {
   }
 
   /** Corre el comando y devuelve stdout tal cual (p. ej. `agent read`, `report-metadata`). */
-  async text(args: string[]): Promise<string> {
+  async text(args: string[], opts: { timeoutMs?: number } = {}): Promise<string> {
     const full = this.session ? ["--session", this.session, ...args] : args;
-    const { stdout, stderr, exitCode } = await this.exec(this.bin, full);
+    const timeoutMs = opts.timeoutMs ?? DEFAULT_CLI_TIMEOUT_MS;
+    const { stdout, stderr, exitCode } = await this.exec(this.bin, full, timeoutMs);
     if (exitCode !== 0) throw toError(args, stderr, exitCode);
     return stdout;
   }

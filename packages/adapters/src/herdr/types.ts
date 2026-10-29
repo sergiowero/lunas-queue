@@ -7,7 +7,10 @@ export type AgentStatus = "idle" | "working" | "blocked" | "done" | "unknown";
 export interface HerdrWorkspace {
   workspaceId: string;
   label: string;
-  /** Checkout del repo que abre el workspace, si herdr lo reporta. */
+  /**
+   * Checkout del repo que abre el workspace, si herdr lo reporta: siempre en worktrees, no en
+   * workspaces creados con `workspace create` (ADR 0004, adenda). No sirve para buscar proyectos.
+   */
   checkoutPath?: string;
   /** true si el workspace abre un worktree enlazado (tarea), false si es el checkout principal. */
   linkedWorktree: boolean;
@@ -73,7 +76,11 @@ export interface HerdrSubscription {
 }
 
 export interface SubscribeInput {
-  /** Panes cuyo `pane.agent_status_changed` se escucha (herdr exige suscripción por pane). */
+  /**
+   * Panes cuyo `pane.agent_status_changed` se escucha (herdr exige suscripción por pane). Si uno
+   * no existe, herdr rechaza la suscripción completa (`subscription_failed`), también al
+   * re‑suscribir tras una pérdida: conviene una suscripción por pane.
+   */
   paneIds?: string[];
   /** Eventos globales de ciclo de vida: panes cerrados o terminados, workspaces y worktrees. */
   lifecycle?: boolean;
@@ -102,7 +109,10 @@ export interface HerdrAdapter {
     path?: string;
     label?: string;
   }): Promise<{ worktree: HerdrWorktree; created: boolean }>;
-  /** Borra el checkout y cierra su workspace; conserva el branch. */
+  /**
+   * Borra el checkout y cierra su workspace; conserva el branch. Idempotente: si el workspace ya
+   * no existe no falla. Sobre un workspace que no es worktree lanza `not_linked_worktree`.
+   */
   removeWorktree(input: { workspaceId: string; force?: boolean }): Promise<void>;
 
   /** El env del Run se fija aquí: `agent start` no lo acepta (ADR 0004). */
@@ -112,7 +122,7 @@ export interface HerdrAdapter {
     cwd?: string;
     env?: Record<string, string>;
   }): Promise<HerdrPane>;
-  /** Idempotente: cerrar un pane que ya no existe no falla. */
+  /** Idempotente: cerrar un pane que ya no existe no falla. Cerrar el último pane cierra su workspace. */
   closePane(paneId: string): Promise<void>;
 
   /**
@@ -127,12 +137,19 @@ export interface HerdrAdapter {
     timeoutMs?: number;
   }): Promise<{ agent: HerdrAgent; started: boolean }>;
   getAgent(name: string): Promise<HerdrAgent | undefined>;
+  /**
+   * Con `wait`, herdr lanza `agent_prompt_stalled` si no ve `working`/`blocked` en 5 s y
+   * `timeout` si no llega a `until` a tiempo.
+   */
   promptAgent(input: {
     name: string;
     text: string;
     wait?: { timeoutMs: number; until?: AgentStatus[] };
   }): Promise<HerdrAgent>;
-  /** Lanza `HerdrError` con code `timeout` si no llega a ninguno de los estados. */
+  /**
+   * Lanza `HerdrError` con code `timeout` si no llega a ninguno de los estados. Sin `timeoutMs`
+   * espera indefinidamente.
+   */
   waitAgent(input: {
     name: string;
     until?: AgentStatus[];

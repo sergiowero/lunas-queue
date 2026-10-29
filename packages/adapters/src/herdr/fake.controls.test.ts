@@ -46,6 +46,42 @@ describe("FakeHerdr: controles de test", () => {
     expect((await fake.snapshot()).panes.map((p) => p.paneId)).toContain(pane.paneId);
   });
 
+  it("startStatus blocked simula el arranque bloqueado por el diálogo de confianza", async () => {
+    const fake = new FakeHerdr({ startStatus: "blocked" });
+    const { rootPaneId } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
+    const { agent, started } = await fake.startAgent({
+      name: "t1-refine-1",
+      kind: "claude",
+      paneId: rootPaneId,
+    });
+    expect(started).toBe(true);
+    expect(agent.status).toBe("blocked");
+  });
+
+  it("setAgentSession publica la identidad de sesión del agente", async () => {
+    const fake = new FakeHerdr();
+    await agentSetup(fake);
+    const session = { kind: "id", source: "herdr:claude", value: "uuid-1" };
+    fake.setAgentSession("t1-refine-1", session);
+    expect((await fake.getAgent("t1-refine-1"))?.session).toEqual(session);
+  });
+
+  it("los workspaces de proyecto no publican checkoutPath, como en herdr", async () => {
+    const fake = new FakeHerdr();
+    const { workspace } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
+    expect(workspace.checkoutPath).toBeUndefined();
+    const { worktree } = await fake.ensureWorktree({
+      workspaceId: workspace.workspaceId,
+      branch: "lunasq/t1",
+      base: "main",
+      path: "/wt/t1",
+    });
+    const snap = await fake.snapshot();
+    expect(snap.workspaces.find((w) => w.workspaceId === worktree.workspaceId)?.checkoutPath).toBe(
+      "/wt/t1",
+    );
+  });
+
   it("las notificaciones están apagadas por defecto, como en herdr", async () => {
     expect(await new FakeHerdr().notify({ title: "x" })).toEqual({
       shown: false,

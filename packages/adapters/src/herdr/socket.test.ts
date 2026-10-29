@@ -119,7 +119,7 @@ describe("EventStream", () => {
     await stream.close();
   });
 
-  it("sigue reintentando si el socket no está y reporta la pérdida una sola vez", async () => {
+  it("mientras la re-suscripción falla reporta la pérdida una sola vez", async () => {
     const r = recorder();
     const stream = new EventStream({ socketPath: server.path, subscriptions: [], ...r, backoff });
     await r.until((e) => e.length === 1);
@@ -143,6 +143,44 @@ describe("EventStream", () => {
     server.reply = () => '{"id":"lunasq-events","result":{"type":"subscription_started"}}';
     server.last.destroy();
     await r.until((e) => e.filter((x) => x.type === "subscribed").length === 2);
+    await stream.close();
+  });
+
+  it("si herdr no está al suscribirse reporta la pérdida y conecta cuando aparece", async () => {
+    const late = new FakeSocketServer();
+    const r = recorder();
+    const stream = new EventStream({ socketPath: late.path, subscriptions: [], ...r, backoff });
+    try {
+      await r.until((e) => e.length === 1);
+      expect(r.events).toEqual([{ type: "events_lost", reason: "stream closed" }]);
+      await late.listen();
+      await r.until((e) => e.some((x) => x.type === "subscribed"));
+      expect(r.events.filter((e) => e.type === "events_lost")).toHaveLength(1);
+    } finally {
+      await stream.close();
+      await late.close();
+    }
+  });
+
+  it("una excepción del consumidor no tumba el proceso ni corta el stream", async () => {
+    const errors: unknown[] = [];
+    const seen: HerdrEvent[] = [];
+    const onEvent = (e: HerdrEvent) => {
+      seen.push(e);
+      if (e.type === "subscribed") throw new Error("bug del consumidor");
+    };
+    const stream = new EventStream({
+      socketPath: server.path,
+      subscriptions: [],
+      onEvent,
+      onError: (err) => errors.push(err),
+      backoff,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    server.last.write(`${statusLine("working")}\n`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(errors).toHaveLength(1);
+    expect(seen.map((e) => e.type)).toEqual(["subscribed", "agent_status_changed"]);
     await stream.close();
   });
 

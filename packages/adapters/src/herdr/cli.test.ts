@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type ExecFn, HerdrCli } from "./cli.ts";
+import { type ExecFn, execHerdr, HerdrCli } from "./cli.ts";
 import { HerdrError } from "./errors.ts";
 
 function fakeExec(stdout: string, stderr = "", exitCode = 0) {
@@ -41,6 +41,10 @@ describe("HerdrCli", () => {
     await expect(new HerdrCli({ exec }).json(["pane", "nope"])).rejects.toMatchObject({
       code: "cli_usage",
     });
+  });
+
+  it("mata el proceso que no responde dentro del límite", async () => {
+    await expect(execHerdr("sleep", ["5"], 100)).rejects.toMatchObject({ code: "cli_timeout" });
   });
 
   it("rechaza una salida que no es JSON", async () => {

@@ -180,9 +180,34 @@ export function herdrContract(
         expect(again.created).toBe(true);
         expect(again.worktree.branch).toBe(branch);
       });
+
+      it("removeWorktree es idempotente y rechaza el workspace del proyecto", async () => {
+        const { workspace } = await projectWorkspace();
+        const branch = `lunasq/${unique("t")}`;
+        const path = h.worktreePath(branch.replace("/", "-"));
+        const { worktree } = await herdr.ensureWorktree({
+          workspaceId: workspace.workspaceId,
+          branch,
+          base: "main",
+          path,
+        });
+
+        await herdr.removeWorktree({ workspaceId: worktree.workspaceId });
+        await herdr.removeWorktree({ workspaceId: worktree.workspaceId });
+        await expect(
+          herdr.removeWorktree({ workspaceId: workspace.workspaceId }),
+        ).rejects.toSatisfy((err) => isHerdrError(err, "not_linked_worktree"));
+      });
     });
 
     describe("panes", () => {
+      it("cerrar el último pane cierra su workspace", async () => {
+        const { workspace, rootPaneId } = await projectWorkspace();
+        await herdr.closePane(rootPaneId);
+        const snap = await herdr.snapshot();
+        expect(snap.workspaces.map((w) => w.workspaceId)).not.toContain(workspace.workspaceId);
+      });
+
       it("splitPane abre un pane en el workspace y closePane es idempotente", async () => {
         const { workspace, rootPaneId } = await projectWorkspace();
         const pane = await herdr.splitPane({ paneId: rootPaneId, env: { LUNASQ_RUN_TOKEN: "x" } });
@@ -319,6 +344,20 @@ export function herdrContract(
             (e) => e.type === "agent_status_changed" && e.status === "working",
             resubscribed,
           );
+        } finally {
+          await c.sub.close();
+        }
+      });
+
+      it("suscribirse a un pane que no existe falla sin reintentar", async () => {
+        const { rootPaneId } = await projectWorkspace();
+        const pane = await herdr.splitPane({ paneId: rootPaneId });
+        await herdr.closePane(pane.paneId);
+        const c = collect((on) => herdr.subscribe({ paneIds: [pane.paneId] }, on));
+        try {
+          const failed = await c.next((e) => e.type === "subscription_failed");
+          expect(failed).toMatchObject({ code: "pane_not_found" });
+          expect(c.events.map((e) => e.type)).toEqual(["subscription_failed"]);
         } finally {
           await c.sub.close();
         }

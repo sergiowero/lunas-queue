@@ -57,8 +57,27 @@ describe.skipIf(!enabled)("herdr real", () => {
         stdio: "ignore",
       });
       server.unref();
+      const herdr = (...args: string[]) =>
+        execFileSync(herdrBin, ["--session", session, ...args], { stdio: "ignore" });
+      const teardown = () => {
+        try {
+          herdr("server", "stop");
+          herdr("session", "delete", session);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      };
       const socketPath = defaultSocketPath(session);
-      await waitFor(() => existsSync(socketPath), `el socket de ${session}`);
+      try {
+        await waitFor(() => existsSync(socketPath), `el socket de ${session}`);
+      } catch (err) {
+        // Sin harness no hay cleanup: no dejar la sesión ni el servidor huérfanos.
+        server.kill();
+        try {
+          teardown();
+        } catch {}
+        throw err;
+      }
 
       const adapter = new RealHerdr({
         bin: herdrBin,
@@ -67,8 +86,6 @@ describe.skipIf(!enabled)("herdr real", () => {
         backoff: { initialMs: 50, maxMs: 500 },
       });
       let repos = 0;
-      const herdr = (...args: string[]) =>
-        execFileSync(herdrBin, ["--session", session, ...args], { stdio: "ignore" });
 
       return {
         adapter,
@@ -95,14 +112,7 @@ describe.skipIf(!enabled)("herdr real", () => {
         agentKind: "claude",
         agentEnv: { ZDOTDIR: zdot, LUNASQ_STUB_BIN: bin },
         dropStreams: () => adapter.dropStreams(),
-        cleanup: async () => {
-          try {
-            herdr("server", "stop");
-            herdr("session", "delete", session);
-          } finally {
-            rmSync(dir, { recursive: true, force: true });
-          }
-        },
+        cleanup: async () => teardown(),
       };
     },
     { timeoutMs: 20_000 },

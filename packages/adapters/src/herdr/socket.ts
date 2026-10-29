@@ -10,6 +10,8 @@ export interface EventStreamOptions {
   socketPath: string;
   subscriptions: Record<string, unknown>[];
   onEvent: (event: HerdrEvent) => void;
+  /** Errores del callback del consumidor; nunca deben tumbar el proceso. */
+  onError?: (err: unknown) => void;
   backoff?: { initialMs: number; maxMs: number };
 }
 
@@ -120,6 +122,12 @@ export class EventStream implements HerdrSubscription {
   }
 
   private emit(event: HerdrEvent) {
-    if (!this.closed || event.type === "subscription_failed") this.opts.onEvent(event);
+    if (this.closed && event.type !== "subscription_failed") return;
+    try {
+      this.opts.onEvent(event);
+    } catch (err) {
+      // Se llama desde los handlers del socket: una excepción aquí sería uncaught.
+      (this.opts.onError ?? console.error)(err);
+    }
   }
 }
