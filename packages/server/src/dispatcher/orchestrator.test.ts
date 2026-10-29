@@ -2,10 +2,10 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeHerdr, FakeProcessRunner } from "@lunasq/adapters";
-import { claimRun, ProjectRepository, RunRepository } from "@lunasq/db";
+import { claimRun, closeRun, ProjectRepository, RunRepository, transitionTask } from "@lunasq/db";
 import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { SchedulerConfig } from "@lunasq/schemas";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { OutboxPublisher } from "../outbox/publisher.ts";
 import { Orchestrator } from "./orchestrator.ts";
 
@@ -81,5 +81,39 @@ describe("Orchestrator", () => {
 
     const [run] = new RunRepository(db).forTask(task.id);
     expect((await herdr.snapshot()).agents.map((a) => a.name)).toEqual([run?.herdrName]);
+  });
+
+  it("cuando una tool del MCP cierra el Run y la tarea sale de running, limpia el pane", async () => {
+    const { db, herdr, orchestrator, publisher, project } = setup();
+    const task = insertTask(db, project.id);
+    await orchestrator.start();
+    await orchestrator.dispatcher.idle();
+    const [run] = new RunRepository(db).forTask(task.id);
+    if (!run?.herdrName) throw new Error("sin Run");
+    expect(await herdr.getAgent(run.herdrName)).toBeDefined();
+
+    // Como la tool de salida: cierra el Run y transiciona en la misma transacción.
+    db.transaction((tx) => {
+      closeRun(tx, run.id, { result: "failure", failureReason: "x" });
+    });
+    transitionTask(db, {
+      taskId: task.id,
+      actor: "system",
+      command: { type: "escalate", reason: "phase_timeout" },
+    });
+    await publisher.start();
+    cleanups.push(() => publisher.stop());
+
+    await vi.waitFor(async () => expect(await herdr.getAgent(run.herdrName ?? "")).toBeUndefined());
+  });
+
+  it("un Run abierto no se limpia aunque llegue la transición", async () => {
+    const { db, herdr, orchestrator, project } = setup();
+    const task = insertTask(db, project.id);
+    await orchestrator.start();
+    await orchestrator.dispatcher.idle();
+    const [run] = new RunRepository(db).forTask(task.id);
+    await orchestrator.dispatcher.releaseRun(run?.id ?? "");
+    expect(await herdr.getAgent(run?.herdrName ?? "")).toBeDefined();
   });
 });

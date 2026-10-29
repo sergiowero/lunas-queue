@@ -103,7 +103,7 @@ Monorepo con pnpm workspaces; la regla es que el dominio no depende de nada exte
 | `packages/schemas` | Esquemas Zod compartidos: entidades, handoffs por fase, eventos; generación de JSON Schema | — |
 | `packages/domain` | Máquina de estados, guards, reglas del scheduler (ready set, score, límites), reglas de dependencias | `schemas` |
 | `packages/db` | Esquema Drizzle, migraciones, repositorios, outbox | `schemas`, `domain` |
-| `packages/adapters` | Adapter de herdr (real y fake), adapter de `gh`, runner de procesos, ejecutor de hooks y gate de tests | `schemas` |
+| `packages/adapters` | Adapter de herdr (real y fake), adapter de `gh`, adapter de git (lectura de la rama base y commits), runner de procesos (también en un pane de herdr), ejecutor de hooks y gate de tests | `schemas` |
 | `packages/server` | Hono: API, SSE, LunasQ MCP, endpoints OTLP; scheduler, dispatcher y reconciliación; generador de evidencia | `domain`, `db`, `adapters`, `schemas` |
 | `packages/web` | Front end React + Vite; se compila a estáticos que sirve `server` | `schemas` |
 | `packages/cli` | Binario `lunasq`: `start`, `install`, `doctor` | `server` |

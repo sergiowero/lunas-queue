@@ -1,6 +1,10 @@
 // Suite de contrato del adapter de herdr: la misma corre contra el fake (pnpm test) y contra
 // herdr real (pnpm --filter @lunasq/adapters test:herdr). Criterio de terminado de UW-02.
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { HerdrPaneRunner } from "../process/pane.ts";
 import { isHerdrError } from "./errors.ts";
 import type { AgentStatus, HerdrAdapter, HerdrEvent, HerdrSubscription } from "./types.ts";
 
@@ -20,6 +24,14 @@ export interface HerdrContractHarness {
 
 const SETTLED: AgentStatus[] = ["idle", "done"];
 
+async function until(check: () => boolean, what: string, timeoutMs = 4_000) {
+  const started = Date.now();
+  while (!check()) {
+    if (Date.now() - started > timeoutMs) throw new Error(`timeout esperando ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 export function herdrContract(
   name: string,
   setup: () => Promise<HerdrContractHarness>,
@@ -38,7 +50,16 @@ export function herdrContract(
       herdr = h.adapter;
     }, 30_000);
 
+    const tempDirs: string[] = [];
+    /** Directorio real para comandos de `runInPane` (los repos del fake no existen en disco). */
+    const tempDir = () => {
+      const dir = realpathSync(mkdtempSync(join(tmpdir(), "lunasq-pane-")));
+      tempDirs.push(dir);
+      return dir;
+    };
+
     afterAll(async () => {
+      for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
       await h?.cleanup();
     }, 30_000);
 
@@ -267,6 +288,59 @@ export function herdrContract(
         await herdr.closePane(pane.paneId);
         snap = await herdr.snapshot();
         expect(snap.panes.map((p) => p.paneId)).not.toContain(pane.paneId);
+      });
+
+      it("runInPane corre el comando con el cwd y el env del pane, sin esperarlo", async () => {
+        const { rootPaneId } = await projectWorkspace();
+        const cwd = tempDir();
+        const pane = await herdr.splitPane({
+          paneId: rootPaneId,
+          cwd,
+          env: { LUNASQ_PROBE: "x1" },
+        });
+        await herdr.runInPane({
+          paneId: pane.paneId,
+          command: 'printf %s "$LUNASQ_PROBE" > probe',
+        });
+        const out = join(cwd, "probe");
+        await until(() => existsSync(out) && readFileSync(out, "utf8") === "x1", "el comando");
+        await herdr.closePane(pane.paneId);
+      });
+
+      it("cerrar el pane mata el comando y runInPane sobre un pane inexistente falla", async () => {
+        const { rootPaneId } = await projectWorkspace();
+        const cwd = tempDir();
+        const pane = await herdr.splitPane({ paneId: rootPaneId, cwd });
+        await herdr.runInPane({ paneId: pane.paneId, command: "sleep 1 && touch late" });
+        await herdr.closePane(pane.paneId);
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+        expect(existsSync(join(cwd, "late"))).toBe(false);
+
+        await expect(herdr.runInPane({ paneId: pane.paneId, command: "true" })).rejects.toSatisfy(
+          (err) => isHerdrError(err, "pane_not_found"),
+        );
+      });
+    });
+
+    describe("HerdrPaneRunner sobre el adapter", () => {
+      it("da el exit code y la salida de un comando corrido en un pane nuevo", async () => {
+        const { rootPaneId } = await projectWorkspace();
+        const cwd = tempDir();
+        const runner = new HerdrPaneRunner({
+          herdr,
+          parentPaneId: rootPaneId,
+          stateDir: tempDir(),
+        });
+        const res = await runner.run({
+          command: `printf '%s\\n' "$LUNASQ_HOOK_POINT"; pwd; exit 4`,
+          cwd,
+          env: { LUNASQ_HOOK_POINT: "before_delivery" },
+          timeoutMs: 3_000,
+        });
+        expect(res).toMatchObject({ exitCode: 4, timedOut: false });
+        expect(res.stdout.replaceAll("\r", "")).toBe(`before_delivery\n${cwd}\n`);
+        const snap = await herdr.snapshot();
+        expect(snap.panes.filter((p) => p.paneId !== rootPaneId && p.cwd === cwd)).toEqual([]);
       });
     });
 

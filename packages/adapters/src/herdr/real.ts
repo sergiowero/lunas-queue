@@ -158,6 +158,10 @@ export class RealHerdr implements HerdrAdapter {
     await ignoring("pane_not_found", this.cli.json(["pane", "close", paneId]));
   }
 
+  async runInPane(input: { paneId: string; command: string }) {
+    await this.cli.text(["pane", "run", input.paneId, input.command]);
+  }
+
   async startAgent(input: {
     name: string;
     kind: string;

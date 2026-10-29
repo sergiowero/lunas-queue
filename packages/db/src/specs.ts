@@ -134,17 +134,22 @@ export class SpecRepository {
    */
   submit(taskId: string, content: SpecContent): SpecResult {
     const parsed = SpecContent.parse(content);
-    return this.#write((tx) => {
-      if (!taskExists(tx, taskId)) return fail("task_not_found", `no existe la tarea ${taskId}`);
-      const spec = this.#insertVersion(tx, taskId, parsed, "agent", null);
-      return this.#transition(
-        tx,
-        taskId,
-        "agent",
-        { type: "submit_spec", specComplete: true },
-        spec,
-      );
-    });
+    return this.#write((tx) => this.#submit(tx, taskId, parsed));
+  }
+
+  /**
+   * Como submit, dentro de una transacción IMMEDIATE que ya abrió quien llama: el LunasQ MCP
+   * cierra el Run del refinador en la misma transacción. Un rechazo no escribe la transición,
+   * pero la versión sí: quien llama debe revertir la transacción.
+   */
+  applySubmit(tx: Tx, taskId: string, content: SpecContent): SpecResult {
+    return this.#submit(tx, taskId, SpecContent.parse(content));
+  }
+
+  #submit(tx: Tx, taskId: string, content: SpecContent): SpecResult {
+    if (!taskExists(tx, taskId)) return fail("task_not_found", `no existe la tarea ${taskId}`);
+    const spec = this.#insertVersion(tx, taskId, content, "agent", null);
+    return this.#transition(tx, taskId, "agent", { type: "submit_spec", specComplete: true }, spec);
   }
 
   /** El humano aprueba la última versión: refined → in_progress. */

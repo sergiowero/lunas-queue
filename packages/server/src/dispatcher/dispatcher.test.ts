@@ -1,6 +1,7 @@
 import { FakeHerdr, FakeProcessRunner, TRUST_ACCEPT_KEYS } from "@lunasq/adapters";
 import {
   claimRun,
+  closeRun,
   ProjectRepository,
   ProjectWorkspaceRepository,
   RunRepository,
@@ -12,7 +13,12 @@ import { SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Scheduler } from "../scheduler/scheduler.ts";
 import { WorktreeService } from "../worktrees/service.ts";
-import { isDispatchError, PhaseDispatcher, type PhaseDispatcherOptions } from "./dispatcher.ts";
+import {
+  DEFAULT_MCP_TOOL_TIMEOUT_MS,
+  isDispatchError,
+  PhaseDispatcher,
+  type PhaseDispatcherOptions,
+} from "./dispatcher.ts";
 
 const MCP_CONFIG = "/cfg/lunasq-mcp.json";
 
@@ -152,6 +158,7 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
     ]);
     expect(herdr.paneEnv(run.herdrPane ?? "")).toMatchObject({
       EXTRA: "1",
+      MCP_TOOL_TIMEOUT: String(DEFAULT_MCP_TOOL_TIMEOUT_MS),
       LUNASQ_RUN_TOKEN: run.runToken,
       LUNASQ_TASK_ID: task.id,
       LUNASQ_RUN_ID: run.id,
@@ -391,6 +398,17 @@ describe("PhaseDispatcher: cierre de fase", () => {
     });
     expect(await herdr.getAgent(run.herdrName ?? "")).toBeUndefined();
     expect((await herdr.snapshot()).panes.some((p) => p.paneId === run.herdrPane)).toBe(false);
+  });
+
+  it("closeRun sobre un Run que ya cerró el MCP solo limpia el pane", async () => {
+    const { db, dispatcher, herdr, run, runs } = await launched();
+    closeRun(db, run.id, { result: "success", handoff: { spec: 1 } });
+
+    const res = await dispatcher.closeRun(run.id, { result: "failure" });
+
+    expect(res.closed).toBe(false);
+    expect(runs.get(run.id)).toMatchObject({ result: "success", handoff: { spec: 1 } });
+    expect(await herdr.getAgent(run.herdrName ?? "")).toBeUndefined();
   });
 
   it("closeRun es idempotente", async () => {

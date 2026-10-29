@@ -278,7 +278,7 @@ describe("runs", () => {
     const r = insertRun(db, insertTask(db, insertProject(db).id).id);
     expect(r.agentSessionSource).toBeNull();
     expect(r.launchedAt).toBeNull();
-    const migration = readFileSync(join(migrationsFolder, "0003_dispatcher.sql"), "utf8");
+    const migration = readFileSync(join(migrationsFolder, "0004_dispatcher.sql"), "utf8");
     expect(migration).not.toMatch(/DROP TABLE/);
   });
 

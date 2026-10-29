@@ -39,12 +39,18 @@ import {
   SchedulerConfig,
   type SchedulerConfigInput,
 } from "@lunasq/schemas";
+import { DEFAULT_GATE_TIMEOUT_MS } from "../mcp/ports.ts";
 import type { Dispatcher } from "../scheduler/scheduler.ts";
 import { KeyedLock } from "../worktrees/keyed-lock.ts";
 import { isWorktreeError, type WorktreeService } from "../worktrees/service.ts";
 
 /** Cuánto esperar a que Claude Code quede listo tras aceptar la confianza de carpeta. */
 export const DEFAULT_TRUST_TIMEOUT_MS = 15_000;
+/**
+ * `MCP_TOOL_TIMEOUT` de Claude Code en el pane: `submit_for_verification` corre el gate de tests
+ * dentro de la llamada (ADR uw-15-mcp-tools), así que debe cubrir su timeout con margen.
+ */
+export const DEFAULT_MCP_TOOL_TIMEOUT_MS = DEFAULT_GATE_TIMEOUT_MS + 5 * 60_000;
 /** `--timeout` de `agent start`: lo que tarda el agente en quedar listo para prompts. */
 export const DEFAULT_START_TIMEOUT_MS = 30_000;
 /** Líneas de la pantalla del agente que se leen para reconocer el diálogo de confianza. */
@@ -129,7 +135,7 @@ export class PhaseDispatcher implements Dispatcher {
     this.mcpConfigPath = opts.mcpConfigPath;
     this.projects = opts.projects ?? new ProjectRepository(opts.db);
     this.config = SchedulerConfig.parse(opts.config ?? {});
-    this.paneEnv = opts.paneEnv ?? {};
+    this.paneEnv = { MCP_TOOL_TIMEOUT: String(DEFAULT_MCP_TOOL_TIMEOUT_MS), ...opts.paneEnv };
     this.observer = opts.observer;
     this.newSessionId = opts.newSessionId ?? randomUUID;
     this.startTimeoutMs = opts.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS;
@@ -203,11 +209,27 @@ export class PhaseDispatcher implements Dispatcher {
     return this.closeLocks.run(runId, async () => {
       const run = this.runs.get(runId);
       if (!run) throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
-      if (run.endedAt !== null) return { closed: false, run };
+      if (run.endedAt !== null) {
+        // Lo cerró otro (la tool de salida del MCP): queda limpiar el pane.
+        await this.release(runId);
+        return { closed: false, run };
+      }
       const session = await this.resolveSession(run);
       const res = this.runs.close(runId, { ...input, ...(session && { session }) });
       await this.release(runId);
       return res;
+    });
+  }
+
+  /**
+   * Limpia el pane de un Run que ya cerró otro: las tools de salida del LunasQ MCP cierran el Run
+   * en su transacción y el dispatcher solo detiene el agente (ADR uw-15-mcp-tools). Un Run abierto
+   * no se toca.
+   */
+  releaseRun(runId: string): Promise<void> {
+    return this.closeLocks.run(runId, async () => {
+      if (this.runs.get(runId)?.endedAt == null) return;
+      await this.release(runId);
     });
   }
 

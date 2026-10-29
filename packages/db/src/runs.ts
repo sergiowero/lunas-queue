@@ -1,5 +1,7 @@
-// Runs: el claim atómico del dispatcher y el ciclo de vida de cada intento de un agente
-// (docs/design.md §Secuencia de despacho, ADR 0007, ADR 0014, ADR uw-16-dispatcher).
+// Runs: el claim atómico del dispatcher, el ciclo de vida de cada intento de un agente y lo que
+// usa el LunasQ MCP (Questions, checklist). Las funciones sueltas aceptan la base o una
+// transacción abierta, para que la tool de salida cierre el Run en la misma transacción que la
+// transición de la tarea (ADR uw-15-mcp-tools, ADR uw-16-dispatcher, ADR 0007, ADR 0014).
 import { randomBytes } from "node:crypto";
 import {
   agentName,
@@ -10,19 +12,30 @@ import {
   type SessionIdentity,
 } from "@lunasq/domain";
 import {
+  CHECKLIST_UPDATED,
+  type ChecklistItem,
+  ChecklistUpdatedPayload,
+  type Phase,
+  QUESTION_CREATED,
+  QuestionCreatedPayload,
   type RunResult,
   type SchedulablePhase,
   type SchedulerConfig,
   type StatePosition,
   TASK_TRANSITIONED,
 } from "@lunasq/schemas";
-import { and, count, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
+import { appendEvent } from "./event-log.ts";
 import { SchedulerStateRepository } from "./scheduler-state.ts";
-import { events, runs, tasks } from "./schema.ts";
-import { applyTransition, type TaskRow, type Tx } from "./task-transitions.ts";
+import { events, questions, runs, tasks } from "./schema.ts";
+import { applyTransition, type TaskRow } from "./task-transitions.ts";
 
 export type RunRow = typeof runs.$inferSelect;
+export type QuestionRow = typeof questions.$inferSelect;
+
+type Reader = Pick<LunasqDatabase, "select">;
+type Writer = Pick<LunasqDatabase, "select" | "insert" | "update" | "transaction">;
 
 /** Lo que el claim necesita de la decisión del scheduler (DispatchDecision sin score). */
 export type ClaimDecision = {
@@ -159,16 +172,6 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
   }
 }
 
-export type CloseRunInput = {
-  result: RunResult;
-  handoff?: unknown;
-  failureReason?: string;
-  /** Identidad de sesión resuelta al cerrar; sin ella se conserva la del despacho. */
-  session?: SessionIdentity;
-};
-
-export type FailRunResult = { closed: boolean; transitioned: boolean; task?: TaskRow };
-
 export class RunRepository {
   private readonly db: LunasqDatabase;
 
@@ -176,8 +179,65 @@ export class RunRepository {
     this.db = db;
   }
 
-  get(runId: string): RunRow | undefined {
-    return this.db.select().from(runs).where(eq(runs.id, runId)).get();
+  get(runId: string): RunRow | null {
+    return this.db.select().from(runs).where(eq(runs.id, runId)).get() ?? null;
+  }
+
+  /** El Run activo (sin ended_at) con ese token; un token de un Run cerrado no cuenta. */
+  activeByToken(token: string): RunRow | null {
+    return (
+      this.db
+        .select()
+        .from(runs)
+        .where(and(eq(runs.runToken, token), isNull(runs.endedAt)))
+        .get() ?? null
+    );
+  }
+
+  /** Registra la primera lectura del contexto; repetir devuelve la misma fecha. */
+  markContextRead(runId: string, at = new Date()): Date | null {
+    this.db
+      .update(runs)
+      .set({ contextReadAt: at })
+      .where(and(eq(runs.id, runId), isNull(runs.contextReadAt)))
+      .run();
+    return this.get(runId)?.contextReadAt ?? null;
+  }
+
+  /** Guarda el handoff sin cerrar el Run: el verificador con pass sigue abierto (ADR 0007). */
+  recordHandoff(runId: string, handoff: unknown): void {
+    this.db.update(runs).set({ handoff }).where(eq(runs.id, runId)).run();
+  }
+
+  /** Handoffs guardados de la fase, del Run más viejo al más nuevo. */
+  handoffs(taskId: string, phase: Phase): unknown[] {
+    return this.db
+      .select({ handoff: runs.handoff })
+      .from(runs)
+      .where(and(eq(runs.taskId, taskId), eq(runs.phase, phase), isNotNull(runs.handoff)))
+      .orderBy(asc(runs.startedAt))
+      .all()
+      .map((r) => r.handoff);
+  }
+
+  /** El último Run cerrado de la fase, sin contar `exceptRunId`: el intento anterior. */
+  previousRun(taskId: string, phase: Phase, exceptRunId: string): RunRow | null {
+    return (
+      this.db
+        .select()
+        .from(runs)
+        .where(
+          and(
+            eq(runs.taskId, taskId),
+            eq(runs.phase, phase),
+            ne(runs.id, exceptRunId),
+            isNotNull(runs.endedAt),
+          ),
+        )
+        .orderBy(desc(runs.startedAt))
+        .limit(1)
+        .get() ?? null
+    );
   }
 
   /** Runs de la tarea en orden de creación. */
@@ -190,13 +250,17 @@ export class RunRepository {
     return this.db.select().from(runs).where(isNull(runs.endedAt)).orderBy(sql`rowid`).all();
   }
 
-  /** El Run activo con ese token; un token de un Run cerrado ya no mueve nada. */
-  activeByToken(runToken: string): RunRow | undefined {
-    return this.db
-      .select()
-      .from(runs)
-      .where(and(eq(runs.runToken, runToken), isNull(runs.endedAt)))
-      .get();
+  /** El Run más reciente de la tarea, abierto o no. */
+  latestForTask(taskId: string): RunRow | null {
+    return (
+      this.db
+        .select()
+        .from(runs)
+        .where(eq(runs.taskId, taskId))
+        .orderBy(sql`rowid desc`)
+        .limit(1)
+        .get() ?? null
+    );
   }
 
   recordPane(runId: string, pane: { workspaceId: string; paneId: string }): void {
@@ -208,7 +272,7 @@ export class RunRepository {
   }
 
   /** Marca que el prompt de fase salió; conserva la primera marca. */
-  markLaunched(runId: string): RunRow | undefined {
+  markLaunched(runId: string): RunRow | null {
     this.db
       .update(runs)
       .set({ launchedAt: new Date() })
@@ -218,22 +282,24 @@ export class RunRepository {
   }
 
   /** Cierra el Run una sola vez: si ya estaba cerrado no cambia nada y devuelve closed false. */
-  close(runId: string, input: CloseRunInput): { closed: boolean; run: RunRow | undefined } {
-    const closed = this.db.transaction((tx) => closeOpen(tx, runId, input));
+  close(runId: string, input: CloseRunInput): { closed: boolean; run: RunRow | null } {
+    const closed = closeRun(this.db, runId, input);
     return { closed, run: this.get(runId) };
   }
 
   /**
-   * Run fallido (crash, despacho que no llegó a lanzar, `report_failure`): lo cierra como failure
-   * y, si la tarea sigue en running en la fase del Run, aplica `run_failed` con los fallos
-   * consecutivos de la fase. Al agotar los reintentos la tarea pasa a needs_human (ADR 0007).
+   * Run fallido que no declaró el agente (crash, despacho que no llegó a lanzar): lo cierra como
+   * failure y, si la tarea sigue en running en la fase del Run, aplica `run_failed` con el mismo
+   * conteo que `report_failure`. Al agotar los reintentos la tarea pasa a needs_human (ADR 0007).
    */
   fail(runId: string, reason: string, opts: { maxRetries?: number } = {}): FailRunResult {
     return this.db.transaction(
       (tx) => {
         const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
         if (!run) throw new Error(`no existe el Run ${runId}`);
-        if (!closeOpen(tx, runId, { result: "failure", failureReason: reason })) {
+        // Antes de cerrar: los fallos previos, más este.
+        const attempt = consecutiveFailures(tx, run.taskId, run.phase) + 1;
+        if (!closeRun(tx, runId, { result: "failure", failureReason: reason })) {
           return { closed: false, transitioned: false };
         }
         const task = tx.select().from(tasks).where(eq(tasks.id, run.taskId)).get();
@@ -245,8 +311,7 @@ export class RunRepository {
           actor: "system",
           command: {
             type: "run_failed",
-            // El Run que falla cuenta siempre, aunque empiece en el mismo ms que un resume.
-            attempt: Math.max(1, failuresSince(tx, task.id, run.phase, run.id)),
+            attempt,
             ...(opts.maxRetries !== undefined && { maxRetries: opts.maxRetries }),
           },
           expected: { state: task.state, subState: "running" },
@@ -259,21 +324,35 @@ export class RunRepository {
   }
 
   /** Runs fallidos seguidos de la fase, desde el último exitoso o el último resume (ADR 0007). */
-  consecutiveFailures(taskId: string, phase: SchedulablePhase): number {
-    return failuresSince(this.db, taskId, phase);
+  consecutiveFailures(taskId: string, phase: Phase): number {
+    return consecutiveFailures(this.db, taskId, phase);
   }
 }
 
-type Reader = Pick<LunasqDatabase, "select">;
+export type CloseRunInput = {
+  result: RunResult;
+  failureReason?: string;
+  handoff?: unknown;
+  /** Identidad de sesión resuelta al cerrar; sin ella se conserva la del despacho. */
+  session?: SessionIdentity;
+};
 
-function closeOpen(tx: Tx, runId: string, input: CloseRunInput): boolean {
-  const updated = tx
+export type FailRunResult = { closed: boolean; transitioned: boolean; task?: TaskRow };
+
+/** Cierra el Run si sigue abierto; false si ya estaba cerrado. */
+export function closeRun(
+  db: Writer,
+  runId: string,
+  input: CloseRunInput,
+  at = new Date(),
+): boolean {
+  const closed = db
     .update(runs)
     .set({
-      endedAt: new Date(),
+      endedAt: at,
       result: input.result,
-      ...(input.handoff !== undefined && { handoff: input.handoff }),
-      ...(input.failureReason !== undefined && { failureReason: input.failureReason }),
+      failureReason: input.failureReason ?? null,
+      ...(input.handoff === undefined ? {} : { handoff: input.handoff }),
       ...(input.session && {
         agentSession: input.session.value,
         agentSessionSource: input.session.source,
@@ -282,16 +361,15 @@ function closeOpen(tx: Tx, runId: string, input: CloseRunInput): boolean {
     .where(and(eq(runs.id, runId), isNull(runs.endedAt)))
     .returning({ id: runs.id })
     .all();
-  return updated.length > 0;
+  return closed.length > 0;
 }
 
-function failuresSince(
-  db: Reader,
-  taskId: string,
-  phase: SchedulablePhase,
-  includeRunId?: string,
-): number {
-  const resumedAt = db
+/**
+ * Runs fallidos seguidos de la fase, del más nuevo hacia atrás, hasta uno que no falló o hasta
+ * el último resume de la tarea: es el `attempt` de run_failed sin contar el Run que falla ahora.
+ */
+export function consecutiveFailures(db: Reader, taskId: string, phase: Phase): number {
+  const lastResume = db
     .select({ at: events.createdAt })
     .from(events)
     .where(
@@ -303,29 +381,78 @@ function failuresSince(
     )
     .orderBy(desc(events.id))
     .limit(1)
-    .get()?.at;
-  const recent = db
+    .get();
+  const closed = db
     .select({ result: runs.result })
     .from(runs)
     .where(
       and(
         eq(runs.taskId, taskId),
         eq(runs.phase, phase),
-        // Un Run del mismo milisegundo que el resume cuenta como anterior, salvo el que falla ahora.
-        resumedAt
-          ? includeRunId
-            ? or(gt(runs.startedAt, resumedAt), eq(runs.id, includeRunId))
-            : gt(runs.startedAt, resumedAt)
-          : undefined,
+        isNotNull(runs.endedAt),
+        lastResume ? gt(runs.startedAt, lastResume.at) : undefined,
       ),
     )
-    .orderBy(sql`rowid desc`)
+    // rowid desempata Runs del mismo milisegundo: es el orden de creación.
+    .orderBy(desc(runs.startedAt), sql`rowid desc`)
     .all();
-  let failures = 0;
-  for (const run of recent) {
-    if (run.result === null) continue;
-    if (run.result !== "failure") break;
-    failures += 1;
-  }
-  return failures;
+  const firstOther = closed.findIndex((r) => r.result !== "failure");
+  return firstOther === -1 ? closed.length : firstOther;
+}
+
+export type CreateQuestionInput = {
+  taskId: string;
+  runId: string;
+  question: string;
+  context?: string;
+};
+
+export function createQuestion(db: Writer, input: CreateQuestionInput): QuestionRow {
+  return db.transaction((tx) => {
+    const [row] = tx
+      .insert(questions)
+      .values({
+        taskId: input.taskId,
+        runId: input.runId,
+        question: input.question,
+        context: input.context ?? null,
+      })
+      .returning()
+      .all();
+    if (!row) throw new Error("insert de question sin fila");
+    const payload = QuestionCreatedPayload.parse({ questionId: row.id, runId: input.runId });
+    appendEvent(tx, { taskId: input.taskId, type: QUESTION_CREATED, actor: "agent", payload });
+    return row;
+  });
+}
+
+export function listQuestions(db: Reader, taskId: string): QuestionRow[] {
+  return db
+    .select()
+    .from(questions)
+    .where(eq(questions.taskId, taskId))
+    .orderBy(asc(questions.createdAt), asc(questions.id))
+    .all();
+}
+
+/** Agrega el snapshot completo del checklist al Event log. */
+export function appendChecklist(
+  db: Writer,
+  taskId: string,
+  runId: string,
+  items: ChecklistItem[],
+): void {
+  const payload = ChecklistUpdatedPayload.parse({ runId, items });
+  appendEvent(db, { taskId, type: CHECKLIST_UPDATED, actor: "agent", payload });
+}
+
+export function latestChecklist(db: Reader, taskId: string): ChecklistItem[] | null {
+  const row = db
+    .select({ payload: events.payload })
+    .from(events)
+    .where(and(eq(events.taskId, taskId), eq(events.type, CHECKLIST_UPDATED)))
+    .orderBy(desc(events.id))
+    .limit(1)
+    .get();
+  return row ? ChecklistUpdatedPayload.parse(row.payload).items : null;
 }

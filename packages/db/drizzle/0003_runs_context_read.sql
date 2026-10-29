@@ -1,0 +1,1 @@
+ALTER TABLE `runs` ADD `context_read_at` integer;

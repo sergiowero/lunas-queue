@@ -272,7 +272,7 @@ Los hooks viven en el repo del proyecto, en `./lunasq/hooks/`, versionados con e
 
 - **Un directorio por punto de enganche:** `lunasq/hooks/before_delivery/`, `lunasq/hooks/after_merge/`, etc. Cada script ejecutable dentro es un hook.
 - **Orden:** los scripts de un mismo punto corren en orden alfabético del nombre de archivo, así un prefijo numérico (`10-bump-version`, `20-changelog`) define la secuencia.
-- **Ajustes por script:** timeout y política de fallo se declaran en `lunasq/hooks/config`; si un script no aparece ahí, usa los valores por defecto (política `block`).
+- **Ajustes por script:** timeout y política de fallo se declaran en `lunasq/hooks/config`, un JSON agrupado por punto y script (`{"before_delivery": {"10-bump-version": {"timeoutSeconds": 300, "policy": "warn"}}}`); si un script no aparece ahí, usa los valores por defecto (política `block`, 10 minutos). Detalle en [ADR uw-10-hooks](decisions/uw-10-hooks.md).
 - **Vista en el front end:** por proyecto, los hooks de cada punto con su contenido, tal como están en la rama base, y sus últimas ejecuciones por tarea con salida, duración y código de salida.
 
 La carpeta `lunasq/` del repo queda con dos partes: `hooks/` (configuración, versionada) y `tasks/` (archivos de evidencia por tarea).
@@ -312,7 +312,7 @@ El contrato entre el sistema y cualquier agente es un **MCP propio (LunasQ MCP)*
 | submit\_verdict | Verificación | Pass o reject, veredicto por criterio, reporte de cada revisor, must‑fix consolidados, hallazgos refutados con su motivo y etiqueta de riesgo; cada revisor omitido requiere justificación |
 | report\_failure | Todas | El agente declara que no puede continuar y por qué |
 
-Las tools validan el run token que el dispatcher inyecta al pane; una sesión vieja no puede mover la tarea.
+Las tools validan el run token que el dispatcher inyecta al pane; una sesión vieja no puede mover la tarea. La tool de salida cierra el Run en la misma transacción que la transición, salvo un veredicto pass, que deja el Run abierto para la entrega. Guardas, errores, checklist y gate de tests en [ADR uw-15-mcp-tools](decisions/uw-15-mcp-tools.md).
 
 **Skills (una por fase, versionadas con el sistema)**
 

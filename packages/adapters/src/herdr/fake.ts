@@ -1,6 +1,7 @@
 // Fake en memoria del adapter de herdr. Reproduce el comportamiento observado en herdr 0.9.5
 // (ADR 0004): ids opacos `wN`, `wN:tN`, `wN:pN`; worktrees que sobreviven como branch tras
 // `remove`; eventos por pane; notificaciones apagadas por defecto. Cumple la suite de contrato.
+import { type ChildProcess, spawn } from "node:child_process";
 import { TRUST_DIALOG_MARKER } from "./claude-tui.ts";
 import { HerdrError } from "./errors.ts";
 import type {
@@ -39,6 +40,8 @@ interface FakeWorkspace extends HerdrWorkspace {
 
 interface FakePane extends HerdrPane {
   env: Record<string, string>;
+  /** Comandos lanzados con `runInPane`; cerrar el pane los mata. */
+  processes: ChildProcess[];
   title?: string;
   tokens: Record<string, string>;
 }
@@ -231,6 +234,22 @@ export class FakeHerdr implements HerdrAdapter {
 
   async closePane(paneId: string) {
     if (this.panes.has(paneId)) this.removePane(paneId);
+  }
+
+  /** Como herdr: corre el comando de verdad, con `sh -c` en el cwd y el env del pane. */
+  async runInPane(input: { paneId: string; command: string }) {
+    const pane = this.requirePane(input.paneId);
+    const child = spawn("/bin/sh", ["-c", input.command], {
+      cwd: pane.cwd,
+      env: { ...process.env, ...pane.env, HERDR_PANE_ID: pane.paneId },
+      stdio: "ignore",
+      detached: true,
+    });
+    child.on("error", () => {
+      // El cwd ya no existe: en herdr el comando fallaría dentro del pane.
+    });
+    child.unref();
+    pane.processes.push(child);
   }
 
   async startAgent(input: {
@@ -477,6 +496,7 @@ export class FakeHerdr implements HerdrAdapter {
       cwd,
       env,
       tokens: {},
+      processes: [],
     };
     this.panes.set(pane.paneId, pane);
     return pane;
@@ -486,6 +506,7 @@ export class FakeHerdr implements HerdrAdapter {
     const pane = this.panes.get(paneId);
     if (!pane) return;
     this.panes.delete(paneId);
+    for (const child of pane.processes) killGroup(child);
     for (const [name, agent] of this.agents) if (agent.paneId === paneId) this.agents.delete(name);
     this.emit({ type: "pane_closed", paneId, workspaceId: pane.workspaceId });
     for (const check of [...this.statusWaiters]) check();
@@ -560,4 +581,13 @@ function toWorkspace(ws: FakeWorkspace): HerdrWorkspace {
 
 function toPane(pane: FakePane): HerdrPane {
   return { paneId: pane.paneId, workspaceId: pane.workspaceId, tabId: pane.tabId, cwd: pane.cwd };
+}
+
+function killGroup(child: ChildProcess) {
+  if (child.pid === undefined || child.exitCode !== null) return;
+  try {
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    // El grupo ya terminó.
+  }
 }

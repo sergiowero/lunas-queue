@@ -139,6 +139,12 @@ export interface HerdrAdapter {
   }): Promise<HerdrPane>;
   /** Idempotente: cerrar un pane que ya no existe no falla. Cerrar el último pane cierra su workspace. */
   closePane(paneId: string): Promise<void>;
+  /**
+   * Escribe `command` en el shell del pane y lo ejecuta (`pane run`); no espera a que termine ni
+   * informa su exit code. Corre con el cwd y el env del pane; cerrar el pane lo mata.
+   * `pane_not_found` si el pane no existe.
+   */
+  runInPane(input: { paneId: string; command: string }): Promise<void>;
 
   /**
    * Idempotente por nombre: si ya hay un agente con ese nombre lo devuelve con `started: false`.

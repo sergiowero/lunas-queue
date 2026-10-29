@@ -211,6 +211,8 @@ export const runs = sqliteTable(
     result: text("result", { enum: values(RunResult) }),
     failureReason: text("failure_reason"),
     handoff: text("handoff", { mode: "json" }),
+    // Primera llamada a get_task_context: sin ella el LunasQ MCP rechaza las tools de salida.
+    contextReadAt: integer("context_read_at", { mode: "timestamp_ms" }),
   },
   (t) => [
     inEnum("runs_phase_enum", t.phase, values(Phase)),
