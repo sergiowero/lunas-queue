@@ -18,7 +18,7 @@ export type ChannelErrorHandler = (
 export class NotificationService {
   private readonly channels: readonly NotificationChannel[];
   private readonly onChannelError: ChannelErrorHandler;
-  // En memoria (ADR 0007): tras un reinicio una notificación puede repetirse una vez.
+  // En memoria (ADR 0009): tras un reinicio una notificación puede repetirse una vez.
   private readonly sent = new Set<string>();
 
   constructor(opts: {

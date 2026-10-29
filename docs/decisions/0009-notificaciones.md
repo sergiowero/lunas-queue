@@ -1,4 +1,4 @@
-# 0007 — Notificaciones: id determinístico, deduplicación en memoria y dos canales
+# 0009 — Notificaciones: id determinístico, deduplicación en memoria y dos canales
 
 - Estado: aceptada
 - Fecha: 2026-10-29
@@ -6,7 +6,7 @@
 
 ## Contexto
 
-`docs/design.md` (Señales, Human‑in‑the‑loop y Decisiones) pide avisar al humano por herdr y por la UI en cuatro casos: Question abierta y agente `blocked` (si siguen así después de 1 minuto), y timeout de fase y loop de verificación agotado (de inmediato). El criterio de UW-06 es que una notificación llegue por ambos canales sin duplicarse. No hay tabla de notificaciones (UW-01) y el Event log (UW-04) aún no existe. ADR 0004 dejó pendiente qué hacer con `[ui.toast] delivery = "off"`, el default de herdr.
+`docs/design.md` (Señales, Human‑in‑the‑loop y Decisiones) pide avisar al humano por herdr y por la UI en cuatro casos: Question abierta y agente `blocked` (si siguen así después de 1 minuto), y timeout de fase y loop de verificación agotado (de inmediato). El criterio de UW-06 es que una notificación llegue por ambos canales sin duplicarse. No hay tabla de notificaciones (UW-01) y el Event log (UW-04, ADR 0007) solo registra transiciones de tarea. ADR 0004 dejó pendiente qué hacer con `[ui.toast] delivery = "off"`, el default de herdr.
 
 ## Decisión
 
