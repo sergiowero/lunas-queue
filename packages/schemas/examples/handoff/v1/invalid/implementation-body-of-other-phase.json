@@ -1,0 +1,97 @@
+{
+  "description": "Fase de implementación con cuerpo de verificación",
+  "expectedErrors": [
+    {
+      "path": "body.criterionTests"
+    },
+    {
+      "path": "body.commits"
+    },
+    {
+      "path": "body.changesByModule"
+    },
+    {
+      "path": "body.howToTest"
+    },
+    {
+      "path": "body.specDeviations"
+    },
+    {
+      "path": "body",
+      "message": "verdict"
+    }
+  ],
+  "handoff": {
+    "schemaVersion": 1,
+    "taskId": "42",
+    "runId": "42-implementation-1",
+    "phase": "implementation",
+    "result": "completed",
+    "summary": "Cancelación de pedidos pendientes con su comando, evento y botón.",
+    "relevantFiles": [
+      "src/orders/order.ts",
+      "src/orders/order.test.ts",
+      "web/orders/OrderView.tsx"
+    ],
+    "decisions": [
+      {
+        "decision": "El botón se oculta si el pedido no es cancelable"
+      }
+    ],
+    "knownRisks": [],
+    "body": {
+      "verdict": "pass",
+      "criteriaVerdicts": [
+        {
+          "criterionId": "AC-1",
+          "verdict": "pass",
+          "evidence": "order.test.ts cubre el caso y falla al revertir order.ts"
+        },
+        {
+          "criterionId": "AC-2",
+          "verdict": "pass",
+          "evidence": "order.test.ts rechaza la cancelación de un pedido enviado"
+        }
+      ],
+      "reviewers": {
+        "lunasq-security-reviewer": {
+          "status": "ran",
+          "findings": []
+        },
+        "lunasq-ux-reviewer": {
+          "status": "ran",
+          "findings": [
+            {
+              "severity": "minor",
+              "file": "web/orders/OrderView.tsx",
+              "evidence": "No hay confirmación antes de cancelar",
+              "criterionId": "AC-1"
+            }
+          ]
+        },
+        "lunasq-ui-reviewer": {
+          "status": "ran",
+          "findings": []
+        },
+        "lunasq-code-reviewer": {
+          "status": "ran",
+          "findings": []
+        }
+      },
+      "mustFix": [],
+      "refuted": [
+        {
+          "finding": {
+            "severity": "minor",
+            "file": "web/orders/OrderView.tsx",
+            "evidence": "No hay confirmación antes de cancelar",
+            "criterionId": "AC-1"
+          },
+          "reason": "La confirmación existe en ConfirmDialog, que el revisor no abrió",
+          "source": "lunasq-ux-reviewer"
+        }
+      ],
+      "riskLabel": "low"
+    }
+  }
+}

@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lunasq:handoff:v1:refinement",
+  "description": "Handoff v1 de LunasQ, generado desde @lunasq/schemas. Las reglas entre campos (ids únicos, veredicto coherente, tamaño máximo de 32768 bytes) las aplica el validador Zod.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "result": {
+      "type": "string",
+      "enum": ["completed", "partial"]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "relevantFiles": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      }
+    },
+    "decisions": {
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "discarded": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          }
+        },
+        "required": ["decision"],
+        "additionalProperties": false
+      }
+    },
+    "knownRisks": {
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    },
+    "phase": {
+      "type": "string",
+      "const": "refinement"
+    },
+    "body": {
+      "type": "object",
+      "properties": {
+        "domainModel": {
+          "type": "object",
+          "properties": {
+            "boundedContext": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "glossary": {
+              "minItems": 1,
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "term": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "definition": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["term", "definition"],
+                "additionalProperties": false
+              }
+            },
+            "aggregates": {
+              "minItems": 1,
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "entities": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    }
+                  }
+                },
+                "required": ["name", "entities"],
+                "additionalProperties": false
+              }
+            },
+            "invariants": {
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "events": {
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["name", "description"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["boundedContext", "glossary", "aggregates", "invariants", "events"],
+          "additionalProperties": false
+        },
+        "requirements": {
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "criteria": {
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^AC-[1-9]\\d*$"
+              },
+              "given": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "outcome": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["id", "given", "when", "outcome"],
+            "additionalProperties": false
+          }
+        },
+        "taskList": {
+          "minItems": 1,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^T-[1-9]\\d*$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "criterionIds": {
+                "maxItems": 50,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^AC-[1-9]\\d*$"
+                }
+              }
+            },
+            "required": ["id", "title", "criterionIds"],
+            "additionalProperties": false
+          }
+        },
+        "assumptions": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "required": ["domainModel", "requirements", "criteria", "taskList", "assumptions"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "runId",
+    "result",
+    "summary",
+    "relevantFiles",
+    "decisions",
+    "knownRisks",
+    "phase",
+    "body"
+  ],
+  "additionalProperties": false
+}

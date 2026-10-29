@@ -1,3 +1,9 @@
 packages:
   - packages/*
   - assets/*
+
+# Sin build scripts: better-sqlite3 usa su prebuild N-API (ADR 0003) y esbuild,
+# que trae drizzle-kit, resuelve su binario desde @esbuild/<plataforma>.
+allowBuilds:
+  better-sqlite3: false
+  esbuild: false

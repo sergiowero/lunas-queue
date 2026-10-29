@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lunasq:handoff:v1:implementation",
+  "description": "Handoff v1 de LunasQ, generado desde @lunasq/schemas. Las reglas entre campos (ids únicos, veredicto coherente, tamaño máximo de 32768 bytes) las aplica el validador Zod.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "result": {
+      "type": "string",
+      "enum": ["completed", "partial"]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "relevantFiles": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      }
+    },
+    "decisions": {
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "discarded": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          }
+        },
+        "required": ["decision"],
+        "additionalProperties": false
+      }
+    },
+    "knownRisks": {
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      }
+    },
+    "phase": {
+      "type": "string",
+      "const": "implementation"
+    },
+    "body": {
+      "type": "object",
+      "properties": {
+        "criterionTests": {
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "criterionId": {
+                "type": "string",
+                "pattern": "^AC-[1-9]\\d*$"
+              },
+              "tests": {
+                "minItems": 1,
+                "maxItems": 50,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    }
+                  },
+                  "required": ["file", "name"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["criterionId", "tests"],
+            "additionalProperties": false
+          }
+        },
+        "commits": {
+          "minItems": 1,
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{7,40}$"
+          }
+        },
+        "changesByModule": {
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "module": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["module", "summary"],
+            "additionalProperties": false
+          }
+        },
+        "howToTest": {
+          "type": "object",
+          "properties": {
+            "commands": {
+              "minItems": 1,
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            }
+          },
+          "required": ["commands"],
+          "additionalProperties": false
+        },
+        "specDeviations": {
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "deviation": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["deviation", "reason"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["criterionTests", "commits", "changesByModule", "howToTest", "specDeviations"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "runId",
+    "result",
+    "summary",
+    "relevantFiles",
+    "decisions",
+    "knownRisks",
+    "phase",
+    "body"
+  ],
+  "additionalProperties": false
+}

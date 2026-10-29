@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!spikes", "!**/dist", "!**/*.md"]
+    "includes": ["**", "!spikes", "!**/dist", "!**/*.md", "!pnpm-lock.yaml", "!packages/db/drizzle"]
   },
   "formatter": {
     "enabled": true,
@@ -59,6 +59,49 @@
                       "@modelcontextprotocol/*"
                     ],
                     "message": "Frontera: schemas es TypeScript puro; no conoce base de datos, HTTP, procesos ni herdr."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/schemas/src/**", "!packages/schemas/**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "process": "Frontera: schemas es TypeScript puro; no conoce el proceso ni el sistema.",
+                  "Buffer": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
+                  "require": "Frontera: schemas es TypeScript puro; usa import.",
+                  "global": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
+                  "__dirname": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
+                  "__filename": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
+                  "setImmediate": "Frontera: schemas es TypeScript puro; usa APIs estándar."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/schemas/**/*.test.ts", "packages/schemas/scripts/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@lunasq/*"],
+                    "message": "Frontera: schemas solo puede importar paquetes externos (docs/tech-stack.md)."
                   }
                 ]
               }
