@@ -1,4 +1,4 @@
-// Composición de la API HTTP y del LunasQ MCP. El servidor (listen, SSE) se monta en unidades
+// Composición de la API HTTP, del LunasQ MCP y del endpoint de hooks de subagentes. El servidor (listen, SSE) se monta en unidades
 // posteriores.
 import { ShellProcessRunner } from "@lunasq/adapters";
 import {
@@ -22,6 +22,7 @@ import {
 } from "./mcp/ports.ts";
 import { mcpRoutes } from "./mcp/routes.ts";
 import { LunasqMcpService } from "./mcp/service.ts";
+import { SUBAGENT_HOOK_PATH, subagentHookRoutes } from "./subagents/routes.ts";
 
 export interface AppDeps {
   db: LunasqDatabase;
@@ -39,6 +40,7 @@ export function createApp({ db, testGate, commitVerifier }: AppDeps): Hono {
   });
   return new Hono()
     .route("/mcp", mcpRoutes(mcp))
+    .route(SUBAGENT_HOOK_PATH, subagentHookRoutes(db))
     .route("/api/projects", projectRoutes(new ProjectRepository(db)))
     .route("/api/tasks/:id/specs", specRoutes(new SpecRepository(db)))
     .route("/api/tasks", taskRoutes(new TaskRepository(db)))

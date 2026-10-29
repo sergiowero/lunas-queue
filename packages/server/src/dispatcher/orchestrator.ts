@@ -19,6 +19,7 @@ import type { OutboxPublisher } from "../outbox/publisher.ts";
 import { Scheduler, type SchedulerErrorHandler } from "../scheduler/scheduler.ts";
 import { WorktreeService } from "../worktrees/service.ts";
 import { type DispatchErrorHandler, PhaseDispatcher, type RunObserver } from "./dispatcher.ts";
+import { ensureHookSettings } from "./hook-settings.ts";
 import { ensureMcpConfig } from "./mcp-config.ts";
 
 export interface OrchestratorOptions {
@@ -27,6 +28,8 @@ export interface OrchestratorOptions {
   processes: ProcessRunner;
   /** Archivo MCP estable y URL del LunasQ MCP que escribe al arrancar (ADR 0002). */
   mcp: { configPath: string; url: string };
+  /** Settings estable y URL del endpoint de hooks de subagentes (ADR uw-19-revisores). */
+  hooks: { settingsPath: string; url: string };
   config?: SchedulerConfigInput;
   publisher?: OutboxPublisher;
   paneEnv?: Record<string, string>;
@@ -40,6 +43,7 @@ export class Orchestrator {
   readonly dispatcher: PhaseDispatcher;
   readonly scheduler: Scheduler;
   private readonly mcp: { configPath: string; url: string };
+  private readonly hooks: { settingsPath: string; url: string };
   private readonly publisher: OutboxPublisher | undefined;
   private readonly runs: RunRepository;
   private unsubscribe: (() => void) | undefined;
@@ -47,6 +51,7 @@ export class Orchestrator {
   constructor(opts: OrchestratorOptions) {
     const projects = new ProjectRepository(opts.db);
     this.mcp = opts.mcp;
+    this.hooks = opts.hooks;
     this.publisher = opts.publisher;
     this.runs = new RunRepository(opts.db);
     this.worktrees = new WorktreeService({
@@ -62,6 +67,7 @@ export class Orchestrator {
       worktrees: this.worktrees,
       projects,
       mcpConfigPath: opts.mcp.configPath,
+      hookSettingsPath: opts.hooks.settingsPath,
       ...(opts.config && { config: opts.config }),
       ...(opts.paneEnv && { paneEnv: opts.paneEnv }),
       ...(opts.observer && { observer: opts.observer }),
@@ -77,9 +83,10 @@ export class Orchestrator {
     });
   }
 
-  /** Escribe el archivo MCP, retoma los despachos a medias y arranca el scheduler. */
+  /** Escribe los archivos MCP y de hooks, retoma los despachos a medias y arranca el scheduler. */
   async start(): Promise<void> {
     await ensureMcpConfig(this.mcp.configPath, this.mcp.url);
+    await ensureHookSettings(this.hooks.settingsPath, this.hooks.url);
     await this.dispatcher.recover();
     this.unsubscribe ??= this.publisher?.subscribe(TASK_TRANSITIONED, (m) => this.onTransition(m));
     await this.scheduler.start();

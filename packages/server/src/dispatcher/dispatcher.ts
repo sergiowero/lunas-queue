@@ -95,6 +95,8 @@ export interface PhaseDispatcherOptions {
   worktrees: WorktreeService;
   /** Archivo MCP estable con `${LUNASQ_RUN_TOKEN}` (ADR 0002); ver `ensureMcpConfig`. */
   mcpConfigPath: string;
+  /** Settings estable con los hooks de subagentes (ADR uw-19-revisores); ver `ensureHookSettings`. */
+  hookSettingsPath: string;
   projects?: ProjectConfigReader;
   /** Los mismos límites que el scheduler: el claim los revalida (ADR 0014). */
   config?: SchedulerConfigInput;
@@ -112,6 +114,7 @@ export class PhaseDispatcher implements Dispatcher {
   private readonly herdr: HerdrAdapter;
   private readonly worktrees: WorktreeService;
   private readonly mcpConfigPath: string;
+  private readonly hookSettingsPath: string;
   private readonly projects: ProjectConfigReader;
   private readonly config: SchedulerConfig;
   private readonly paneEnv: Record<string, string>;
@@ -133,9 +136,16 @@ export class PhaseDispatcher implements Dispatcher {
     this.herdr = opts.herdr;
     this.worktrees = opts.worktrees;
     this.mcpConfigPath = opts.mcpConfigPath;
+    this.hookSettingsPath = opts.hookSettingsPath;
     this.projects = opts.projects ?? new ProjectRepository(opts.db);
     this.config = SchedulerConfig.parse(opts.config ?? {});
-    this.paneEnv = { MCP_TOOL_TIMEOUT: String(DEFAULT_MCP_TOOL_TIMEOUT_MS), ...opts.paneEnv };
+    this.paneEnv = {
+      MCP_TOOL_TIMEOUT: String(DEFAULT_MCP_TOOL_TIMEOUT_MS),
+      // El approver espera a los revisores en vez de lanzarlos en segundo plano (docs/design.md
+      // §Verificación con subagentes).
+      CLAUDE_CODE_FORK_SUBAGENT: "0",
+      ...opts.paneEnv,
+    };
     this.observer = opts.observer;
     this.newSessionId = opts.newSessionId ?? randomUUID;
     this.startTimeoutMs = opts.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS;
@@ -346,6 +356,7 @@ export class PhaseDispatcher implements Dispatcher {
     try {
       return agentArgs(phaseProfile(project, phase), {
         mcpConfigPath: this.mcpConfigPath,
+        settingsPath: this.hookSettingsPath,
         sessionId: run.agentSession ?? run.id,
       });
     } catch (error) {

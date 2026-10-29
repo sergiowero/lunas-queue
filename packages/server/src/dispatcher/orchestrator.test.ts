@@ -25,6 +25,10 @@ function setup() {
     herdr,
     processes: new FakeProcessRunner(),
     mcp: { configPath: join(dir, "mcp.json"), url: "http://127.0.0.1:4518/mcp" },
+    hooks: {
+      settingsPath: join(dir, "settings.json"),
+      url: "http://127.0.0.1:4518/hooks/subagent",
+    },
     publisher,
     config: { tickIntervalMs: 60_000 },
   });
@@ -41,6 +45,7 @@ describe("Orchestrator", () => {
     await orchestrator.dispatcher.idle();
 
     expect(readFileSync(join(dir, "mcp.json"), "utf8")).toContain(`\${LUNASQ_RUN_TOKEN}`);
+    expect(readFileSync(join(dir, "settings.json"), "utf8")).toContain("/hooks/subagent");
     const [run] = new RunRepository(db).forTask(task.id);
     expect(run?.launchedAt).toBeInstanceOf(Date);
     expect((await herdr.snapshot()).agents.map((a) => a.name)).toEqual([run?.herdrName]);

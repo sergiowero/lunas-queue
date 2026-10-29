@@ -8,4 +8,5 @@ export * from "./mcp/index.ts";
 export * from "./notifications/index.ts";
 export * from "./outbox/index.ts";
 export * from "./scheduler/index.ts";
+export * from "./subagents/index.ts";
 export * from "./worktrees/index.ts";

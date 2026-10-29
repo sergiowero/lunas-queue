@@ -119,7 +119,7 @@ LunasQ no embebe ninguna de estas herramientas: las invoca como procesos o las c
 | Herramienta | Cómo se integra | Qué configura `lunasq install` |
 | --- | --- | --- |
 | herdr | CLI con salida JSON y socket Unix (NDJSON) para eventos; versión mínima 0.9.5, protocol 22 ([ADR 0004](decisions/0004-herdr-version-y-cli.md)) | Verifica versión; instala la integración oficial de herdr para Claude Code |
-| Claude Code | Lo arranca herdr con `agent start --kind claude`; modelo, modo Auto y demás flags van en los args del perfil de fase | Registra el LunasQ MCP a nivel usuario; copia skills y subagentes a `~/.claude/` |
+| Claude Code | Lo arranca herdr con `agent start --kind claude`; modelo, modo Auto y demás flags van en los args del perfil de fase; el dispatcher agrega el archivo MCP y un `--settings` estable con los hooks de subagentes ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) | Registra el LunasQ MCP a nivel usuario; copia skills y subagentes a `~/.claude/` |
 | GitHub | CLI `gh` con `--json` | Verifica que `gh` esté autenticado |
 | git | Worktrees vía herdr; trailers `LunasQ-Task` y `LunasQ-Run` en los mensajes de commit | — |
 | OpenTelemetry | Claude Code exporta métricas y eventos por OTLP/HTTP JSON a `localhost` | Variables de telemetría en el entorno de cada pane |

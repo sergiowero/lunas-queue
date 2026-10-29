@@ -21,6 +21,7 @@ import {
 } from "./dispatcher.ts";
 
 const MCP_CONFIG = "/cfg/lunasq-mcp.json";
+const HOOK_SETTINGS = "/cfg/lunasq-settings.json";
 
 const stoppables: { stop(): Promise<void> }[] = [];
 afterEach(async () => {
@@ -64,6 +65,7 @@ function setup(
       projects,
       ...(opts.config && { config: opts.config }),
       mcpConfigPath: MCP_CONFIG,
+      hookSettingsPath: HOOK_SETTINGS,
       paneEnv: { EXTRA: "1" },
       newSessionId: () => `sess-${++sessions}`,
       onError: (error, runId) => errors.push({ error, runId }),
@@ -153,12 +155,15 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
       "--mcp-config",
       MCP_CONFIG,
       "--strict-mcp-config",
+      "--settings",
+      HOOK_SETTINGS,
       "--session-id",
       "sess-1",
     ]);
     expect(herdr.paneEnv(run.herdrPane ?? "")).toMatchObject({
       EXTRA: "1",
       MCP_TOOL_TIMEOUT: String(DEFAULT_MCP_TOOL_TIMEOUT_MS),
+      CLAUDE_CODE_FORK_SUBAGENT: "0",
       LUNASQ_RUN_TOKEN: run.runToken,
       LUNASQ_TASK_ID: task.id,
       LUNASQ_RUN_ID: run.id,

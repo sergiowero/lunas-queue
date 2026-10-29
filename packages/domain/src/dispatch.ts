@@ -55,15 +55,16 @@ export function runEnv(run: RunIdentity): Record<string, string> {
 }
 
 /** Flags que pone siempre el dispatcher: el perfil no puede traerlos. */
-const RESERVED_FLAGS = ["--mcp-config", "--strict-mcp-config", "--session-id"];
+const RESERVED_FLAGS = ["--mcp-config", "--strict-mcp-config", "--settings", "--session-id"];
 
 /**
  * Args de Claude Code después de `--`: modelo del perfil, args del perfil (ahí va el modo Auto),
- * el archivo MCP estable en modo estricto (ADR 0002) y el session id nativo del Run.
+ * el archivo MCP estable en modo estricto (ADR 0002), el archivo de settings con los hooks de
+ * subagentes (ADR uw-19-revisores) y el session id nativo del Run.
  */
 export function agentArgs(
   profile: AgentProfile,
-  opts: { mcpConfigPath: string; sessionId: string },
+  opts: { mcpConfigPath: string; settingsPath: string; sessionId: string },
 ): string[] {
   const reserved = profile.model === undefined ? RESERVED_FLAGS : [...RESERVED_FLAGS, "--model"];
   const clash = profile.args.find((arg) =>
@@ -78,6 +79,8 @@ export function agentArgs(
     "--mcp-config",
     opts.mcpConfigPath,
     "--strict-mcp-config",
+    "--settings",
+    opts.settingsPath,
     "--session-id",
     opts.sessionId,
   ];

@@ -428,7 +428,7 @@ La fase de verificación es **una sola sesión de Claude Code** (un slot) que la
 | Guarda | Mecanismo | Qué garantiza |
 | --- | --- | --- |
 | Revisores de solo lectura | `tools` en el frontmatter de cada subagente, sin Edit ni Write | Un revisor no puede modificar código |
-| Evidencia de ejecución | Hooks `SubagentStart` y `SubagentStop` que reportan a LunasQ el nombre de cada subagente | LunasQ sabe qué revisores corrieron en ese Run |
+| Evidencia de ejecución | Hooks `SubagentStart` y `SubagentStop` (tipo `http`, con el run token en el header) que reportan a LunasQ cada subagente; el dispatcher los pasa en un settings estable con `--settings` ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) | LunasQ sabe qué revisores corrieron en ese Run |
 | Veredicto completo | `submit_verdict` exige, por cada uno de los 4 revisores, su reporte o la justificación de por qué no se lanzó, y se rechaza si un revisor reportado no aparece en los hooks | Cada revisor corre o queda omitido con justificación auditada |
 | Gate de tests | LunasQ ejecuta el comando de tests del proyecto en el worktree antes de aceptar un pass | No hay pass con la suite en rojo, aunque el agente diga lo contrario |
 
