@@ -6,14 +6,17 @@ import {
   TASK_TRANSITIONED,
 } from "@lunasq/schemas";
 import { specContentExample } from "@lunasq/schemas/testing";
+import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/better-sqlite3";
 import { describe, expect, it } from "vitest";
-import type { LunasqDatabase } from "./client.ts";
+import { type LunasqDatabase, migrateDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
+import * as schema from "./schema.ts";
 import { outbox, specs, tasks } from "./schema.ts";
 import { SpecRepository, type SpecResult } from "./specs.ts";
 import { transitionTask } from "./task-transitions.ts";
-import { insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
+import { freshDatabase, insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
 
 const missing = "00000000-0000-4000-8000-000000000999";
 
@@ -265,6 +268,32 @@ describe("SpecRepository.editAndApprove", () => {
     expect(() =>
       repo.editAndApprove(task.id, 1, { ...revised(), taskList: [] } as SpecContent),
     ).toThrow(expect.objectContaining({ name: "ZodError" }));
+  });
+});
+
+describe("SpecRepository: concurrencia", () => {
+  it("las escrituras toman el lock de escritura antes de leer", () => {
+    const { db: first, file } = freshDatabase();
+    migrateDatabase(first);
+    const project = insertProject(first);
+    const task = insertTask(first, project.id, { state: "draft", subState: "running" });
+    ok(new SpecRepository(first).submit(task.id, specContentExample()));
+    // Segunda conexión, como la de otro proceso, que registra cada consulta que ejecuta.
+    const queries: string[] = [];
+    const client = new Database(file);
+    client.pragma("busy_timeout = 0");
+    const second = drizzle({ client, schema, logger: { logQuery: (q) => queries.push(q) } });
+    try {
+      first.$client.prepare("BEGIN IMMEDIATE").run();
+      // Sin IMMEDIATE, dos aprobaciones leerían la misma versión pendiente a la vez.
+      expect(() => new SpecRepository(second).approve(task.id, 1)).toThrow(/locked|busy/i);
+      expect(() => new SpecRepository(second).submit(task.id, revised())).toThrow(/locked|busy/i);
+      expect(queries).toEqual([]);
+      first.$client.prepare("ROLLBACK").run();
+      expect(new SpecRepository(second).approve(task.id, 1).ok).toBe(true);
+    } finally {
+      client.close();
+    }
   });
 });
 

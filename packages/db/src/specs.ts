@@ -1,6 +1,7 @@
 // Specs versionadas y su aprobación (docs/design.md §Human-in-the-loop, ADR 0013). Cada
 // escritura corre en una transacción IMMEDIATE que guarda la versión, su evento y la transición
-// de la tarea juntos: si la máquina de estados la rechaza, no queda nada escrito.
+// de la tarea juntos: si la máquina de estados la rechaza, no queda nada escrito. Los payloads
+// se validan con su esquema antes de entrar al Event log.
 import { diffSpecContent, isEmptyDiff } from "@lunasq/domain";
 import {
   type Actor,
@@ -8,11 +9,11 @@ import {
   SPEC_CHANGES_REQUESTED,
   SPEC_VERSION_CREATED,
   Spec,
-  type SpecApprovedPayload,
-  type SpecChangesRequestedPayload,
+  SpecApprovedPayload,
+  SpecChangesRequestedPayload,
   SpecContent,
   type SpecDiff,
-  type SpecVersionCreatedPayload,
+  SpecVersionCreatedPayload,
   Task,
 } from "@lunasq/schemas";
 import { and, asc, desc, eq } from "drizzle-orm";
@@ -170,13 +171,14 @@ export class SpecRepository {
         .all();
       if (!row) throw new Error("update de spec sin fila");
       const command = { type: "request_changes", hasComments: trimmed.length > 0 } as const;
-      // Sin comentarios la máquina de estados rechaza: el evento no llega a validarse.
+      // Sin comentarios no hay evento que escribir: la máquina de estados rechaza con
+      // guard_failed y la transacción se revierte.
       if (command.hasComments) {
-        const payload: SpecChangesRequestedPayload = {
+        const payload = SpecChangesRequestedPayload.parse({
           specId: row.id,
           version: row.version,
           comments: trimmed,
-        };
+        });
         appendEvent(tx, { taskId, type: SPEC_CHANGES_REQUESTED, actor: "human", payload });
       }
       return this.#transition(tx, taskId, "human", command, toSpec(row));
@@ -275,7 +277,11 @@ export class SpecRepository {
       .returning()
       .all();
     if (!row) throw new Error("insert de spec sin fila");
-    const payload: SpecVersionCreatedPayload = { specId: row.id, version: row.version, basedOn };
+    const payload = SpecVersionCreatedPayload.parse({
+      specId: row.id,
+      version: row.version,
+      basedOn,
+    });
     appendEvent(tx, { taskId, type: SPEC_VERSION_CREATED, actor: author, payload });
     return row;
   }
@@ -288,7 +294,7 @@ export class SpecRepository {
       .returning()
       .all();
     if (!row) throw new Error("update de spec sin fila");
-    const payload: SpecApprovedPayload = { specId: row.id, version: row.version };
+    const payload = SpecApprovedPayload.parse({ specId: row.id, version: row.version });
     appendEvent(tx, { taskId: row.taskId, type: SPEC_APPROVED, actor: "human", payload });
     return toSpec(row);
   }

@@ -106,6 +106,15 @@ describe("POST /api/tasks/:id/specs/:version/request-changes", () => {
     });
   });
 
+  it("409 si la versión ya se decidió o fue superada", async () => {
+    const { send, base } = setup();
+    const comments = { comments: "otra ronda" };
+    expect((await send("POST", `${base}/1/request-changes`, comments)).status).toBe(200);
+    const again = await send("POST", `${base}/1/request-changes`, comments);
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ error: "spec_not_pending" });
+  });
+
   it("400 sin comentarios o con JSON inválido", async () => {
     const { send, base } = setup();
     expect((await send("POST", `${base}/1/request-changes`, { comments: " " })).status).toBe(400);
@@ -123,6 +132,17 @@ describe("POST /api/tasks/:id/specs/:version/edit-and-approve", () => {
       spec: { version: 2, createdBy: "human", approval: "approved", content: revised() },
       task: { state: "in_progress" },
     });
+  });
+
+  it("409 al reintentar: la versión base ya fue superada por la editada", async () => {
+    const { send, base } = setup();
+    const body = { content: revised() };
+    expect((await send("POST", `${base}/1/edit-and-approve`, body)).status).toBe(200);
+    const again = await send("POST", `${base}/1/edit-and-approve`, body);
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ error: "stale_version" });
+    const versions = (await (await send("GET", base)).json()) as Body[];
+    expect(versions).toHaveLength(2);
   });
 
   it("400 con contenido incompleto", async () => {

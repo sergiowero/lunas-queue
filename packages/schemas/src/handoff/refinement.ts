@@ -38,11 +38,40 @@ export const specContentShape = {
   taskList: list(SpecTask).min(1),
 };
 
-/** Ids únicos y tareas que solo apuntan a criterios de la misma spec. */
+/**
+ * Ids y nombres únicos (el diff entre versiones compara por esas claves) y tareas que solo
+ * apuntan a criterios de la misma spec.
+ */
 export function checkSpecReferences(
-  body: { criteria: { id: string }[]; taskList: { id: string; criterionIds: string[] }[] },
+  body: {
+    domainModel: z.infer<typeof DomainModel>;
+    criteria: { id: string }[];
+    taskList: { id: string; criterionIds: string[] }[];
+  },
   ctx: z.RefinementCtx,
 ): void {
+  const { glossary, aggregates, events } = body.domainModel;
+  checkUnique(
+    ctx,
+    glossary,
+    (g) => g.term,
+    (i) => ["domainModel", "glossary", i, "term"],
+    "término del glosario",
+  );
+  checkUnique(
+    ctx,
+    aggregates,
+    (a) => a.name,
+    (i) => ["domainModel", "aggregates", i, "name"],
+    "agregado",
+  );
+  checkUnique(
+    ctx,
+    events,
+    (e) => e.name,
+    (i) => ["domainModel", "events", i, "name"],
+    "evento de dominio",
+  );
   checkUnique(
     ctx,
     body.criteria,

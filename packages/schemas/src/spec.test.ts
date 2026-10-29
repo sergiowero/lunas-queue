@@ -35,6 +35,20 @@ describe("SpecContent", () => {
     }
   });
 
+  it("rechaza términos, agregados y eventos repetidos: el diff compara por esas claves", () => {
+    const content = specContentExample();
+    const { glossary, aggregates, events } = content.domainModel;
+    content.domainModel.glossary = [...glossary, ...glossary];
+    content.domainModel.aggregates = [...aggregates, ...aggregates];
+    content.domainModel.events = [...events, ...events];
+    const result = SpecContent.safeParse(content);
+    expect(result.error?.issues.map((i) => i.path.join("."))).toEqual([
+      "domainModel.glossary.1.term",
+      "domainModel.aggregates.1.name",
+      "domainModel.events.1.name",
+    ]);
+  });
+
   it("rechaza ids repetidos y tareas que apuntan a criterios inexistentes", () => {
     const content = specContentExample();
     content.criteria.push({ id: "AC-1", given: "otro", when: "otro", outcome: "otro resultado" });
