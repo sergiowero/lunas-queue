@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
 import { afterEach } from "vitest";
 import { type LunasqDatabase, migrateDatabase, openDatabase } from "./client.ts";
 import { projects, runs, tasks } from "./schema.ts";
@@ -85,4 +86,13 @@ export function insertRun(
     .all();
   if (!row) throw new Error("insert de run sin fila");
   return row;
+}
+
+/** Coloca la tarea en un estado sin recorrer la máquina de estados: solo para preparar tests. */
+export function setTaskPosition(
+  db: LunasqDatabase,
+  taskId: string,
+  position: Pick<typeof tasks.$inferInsert, "state" | "subState" | "verificationIteration">,
+) {
+  db.update(tasks).set(position).where(eq(tasks.id, taskId)).run();
 }
