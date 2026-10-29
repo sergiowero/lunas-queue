@@ -5,3 +5,4 @@ export * from "./event-log.ts";
 export * from "./projects.ts";
 export * from "./schema.ts";
 export * from "./task-transitions.ts";
+export * from "./tasks.ts";
