@@ -11,6 +11,7 @@ import type {
   HerdrSnapshot,
   HerdrWorkspace,
   HerdrWorktree,
+  HerdrWorktreeEntry,
 } from "./types.ts";
 
 const agentStatus = z.enum(["idle", "working", "blocked", "done", "unknown"]);
@@ -45,6 +46,7 @@ export const worktreeWire = z.looseObject({
   branch: z.string().nullish(),
   path: z.string(),
   open_workspace_id: z.string().nullish(),
+  is_linked_worktree: z.boolean().nullish(),
 });
 
 export const workspaceCreatedWire = z.looseObject({
@@ -144,6 +146,14 @@ export function toWorktree(r: z.infer<typeof worktreeOpenedWire>, branch: string
     branch: r.worktree.branch ?? branch,
     path: normalizePath(r.worktree.path),
     rootPaneId: r.root_pane.pane_id,
+  };
+}
+
+export function toWorktreeEntry(w: z.infer<typeof worktreeWire>): HerdrWorktreeEntry {
+  return {
+    ...(w.branch && { branch: w.branch }),
+    path: normalizePath(w.path),
+    ...(w.open_workspace_id && { workspaceId: w.open_workspace_id }),
   };
 }
 

@@ -75,6 +75,7 @@ Cada componente del diseño queda resuelto con piezas de la misma base, sin serv
 | Usage collector | Endpoints OTLP/HTTP con JSON (`/v1/metrics`, `/v1/logs`) dentro de Hono | Claude Code soporta `http/json`, así que no hace falta un OpenTelemetry Collector aparte |
 | Gate de tests y hooks | Ejecución en un pane de herdr con un wrapper que registra código de salida y salida | Lo ves en herdr como cualquier agente |
 | Adapter de herdr | `child_process` para el CLI (salida JSON) y socket Unix con NDJSON para `events.subscribe` | Fake en memoria con la misma interfaz para tests |
+| Ejecución de procesos | `ProcessRunner` sobre `child_process` (`sh -c`, grupo de procesos propio, timeout) para el bootstrap del worktree ([ADR 0010](decisions/0010-ciclo-de-vida-worktrees.md)) | Fake con la misma interfaz para tests |
 | Adapter de GitHub | CLI `gh` con salida `--json` vía `child_process` | Usa la sesión autenticada de `gh` de la máquina |
 | Archivo de evidencia | Generador de markdown propio; redacción de secretos con patrones al estilo gitleaks | Escribe en `lunasq/tasks/{id}.md` del worktree |
 | Logs del propio LunasQ | pino | JSON estructurado, rotación por archivo |
@@ -102,7 +103,7 @@ Monorepo con pnpm workspaces; la regla es que el dominio no depende de nada exte
 | `packages/schemas` | Esquemas Zod compartidos: entidades, handoffs por fase, eventos; generación de JSON Schema | — |
 | `packages/domain` | Máquina de estados, guards, reglas del scheduler (ready set, score, límites), reglas de dependencias | `schemas` |
 | `packages/db` | Esquema Drizzle, migraciones, repositorios, outbox | `schemas`, `domain` |
-| `packages/adapters` | Adapter de herdr (real y fake), adapter de `gh`, ejecutor de hooks y gate de tests | `schemas` |
+| `packages/adapters` | Adapter de herdr (real y fake), adapter de `gh`, runner de procesos, ejecutor de hooks y gate de tests | `schemas` |
 | `packages/server` | Hono: API, SSE, LunasQ MCP, endpoints OTLP; scheduler, dispatcher y reconciliación; generador de evidencia | `domain`, `db`, `adapters`, `schemas` |
 | `packages/web` | Front end React + Vite; se compila a estáticos que sirve `server` | `schemas` |
 | `packages/cli` | Binario `lunasq`: `start`, `install`, `doctor` | `server` |

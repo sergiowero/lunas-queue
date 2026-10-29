@@ -10,3 +10,12 @@ export {
   type RealHerdrOptions,
 } from "./herdr/real.ts";
 export type * from "./herdr/types.ts";
+export { type FakeProcessHandler, FakeProcessRunner } from "./process/fake.ts";
+export {
+  isProcessError,
+  OUTPUT_LIMIT_BYTES,
+  ProcessError,
+  type ProcessErrorCode,
+  ShellProcessRunner,
+} from "./process/real.ts";
+export type * from "./process/types.ts";

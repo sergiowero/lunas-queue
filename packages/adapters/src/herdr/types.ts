@@ -24,6 +24,15 @@ export interface HerdrWorktree {
   rootPaneId: string;
 }
 
+/** Un worktree enlazado del repo, según `worktree list`; puede no estar abierto en herdr. */
+export interface HerdrWorktreeEntry {
+  /** Ausente si el checkout está en HEAD detached. */
+  branch?: string;
+  path: string;
+  /** Workspace en el que está abierto, si lo está. */
+  workspaceId?: string;
+}
+
 export interface HerdrPane {
   paneId: string;
   workspaceId: string;
@@ -110,8 +119,14 @@ export interface HerdrAdapter {
     label?: string;
   }): Promise<{ worktree: HerdrWorktree; created: boolean }>;
   /**
+   * Worktrees enlazados del repo del workspace `workspaceId`; el checkout principal no se
+   * incluye. Un worktree removido ya no aparece aunque su branch siga.
+   */
+  listWorktrees(workspaceId: string): Promise<HerdrWorktreeEntry[]>;
+  /**
    * Borra el checkout y cierra su workspace; conserva el branch. Idempotente: si el workspace ya
-   * no existe no falla. Sobre un workspace que no es worktree lanza `not_linked_worktree`.
+   * no existe no falla. Sobre un workspace que no es worktree lanza `not_linked_worktree`; con
+   * cambios sin commit y sin `force`, `dirty_worktree_requires_force` (ADR 0010).
    */
   removeWorktree(input: { workspaceId: string; force?: boolean }): Promise<void>;
 

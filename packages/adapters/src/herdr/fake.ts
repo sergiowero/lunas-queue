@@ -44,6 +44,8 @@ interface FakeAgent {
 interface FakeWorktree {
   path: string;
   workspaceId?: string;
+  /** Cambios sin commit: `remove` exige `force`. */
+  dirty?: boolean;
 }
 
 interface FakeSubscription {
@@ -153,6 +155,17 @@ export class FakeHerdr implements HerdrAdapter {
     return { worktree: this.toWorktree(ws, input.branch, path), created: true };
   }
 
+  async listWorktrees(workspaceId: string) {
+    const project = this.workspaces.get(workspaceId);
+    if (!project) throw new HerdrError("workspace_not_found", `workspace ${workspaceId} not found`);
+    const repo = this.worktrees.get(project.repoPath) ?? new Map<string, FakeWorktree>();
+    return [...repo].map(([branch, wt]) => ({
+      branch,
+      path: wt.path,
+      ...(wt.workspaceId && { workspaceId: wt.workspaceId }),
+    }));
+  }
+
   async removeWorktree(input: { workspaceId: string; force?: boolean }) {
     const ws = this.workspaces.get(input.workspaceId);
     if (!ws) return;
@@ -161,6 +174,16 @@ export class FakeHerdr implements HerdrAdapter {
         "not_linked_worktree",
         `workspace ${input.workspaceId} is not a linked worktree`,
       );
+    }
+    for (const repo of this.worktrees.values()) {
+      for (const wt of repo.values()) {
+        if (wt.workspaceId === input.workspaceId && wt.dirty && !input.force) {
+          throw new HerdrError(
+            "dirty_worktree_requires_force",
+            `'${wt.path}' contains modified or untracked files, use --force to delete it`,
+          );
+        }
+      }
     }
     for (const repo of this.worktrees.values()) {
       for (const [branch, wt] of repo)
@@ -350,6 +373,13 @@ export class FakeHerdr implements HerdrAdapter {
   }
 
   /** Corta todos los streams como herdr bajo backpressure: cada uno pierde eventos y reconecta. */
+  /** Simula cambios sin commit en el checkout `path`. */
+  setWorktreeDirty(path: string, dirty = true) {
+    for (const repo of this.worktrees.values()) {
+      for (const wt of repo.values()) if (wt.path === path) wt.dirty = dirty;
+    }
+  }
+
   dropStreams() {
     for (const sub of this.subscriptions) {
       this.deliver(sub, { type: "events_lost", reason: "stream closed" });
