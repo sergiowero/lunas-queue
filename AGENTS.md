@@ -9,20 +9,28 @@ Este archivo dice cómo trabajar en el repo. El detalle vive en `docs/`; léelo 
 | Archivo | Qué contiene | Cuándo leerlo |
 | --- | --- | --- |
 | `docs/design.md` | Diseño completo: modelo de dominio, máquina de estados, dispatcher, MCP, verificación, hooks, auditoría | Antes de implementar cualquier unidad; lee las secciones que la unidad toca |
-| `docs/units-of-work.md` | Las 30 unidades de trabajo de v1 con alcance, paquete, dependencias, criterio de terminado y estado | Al empezar y al terminar cada unidad |
+| `docs/units-of-work.md` | Las 30 unidades de trabajo de v1 con alcance, paquete, dependencias y criterio de terminado | Al empezar cada unidad |
+| `docs/units/uw-XX.md` | Estado de cada unidad (`estado: Pendiente \| Hecho` en el frontmatter) | Al empezar (dependencias) y al terminar cada unidad |
 | `docs/tech-stack.md` | Stack, paquetes del monorepo y sus fronteras, integraciones externas, tooling | Antes de agregar dependencias o crear archivos en un paquete |
 | `docs/decisions/` | ADRs cortos con decisiones tomadas durante la implementación | Antes de contradecir algo de los docs anteriores |
 
 El repo es la fuente de verdad. Si una decisión cambia mientras implementas, actualiza el `.md` correspondiente en el mismo PR que el código.
 
+### Archivos compartidos entre unidades paralelas
+
+Varias unidades se trabajan a la vez, así que cada rama escribe solo en archivos propios de su unidad:
+
+- **ADRs nombrados por unidad.** Un ADR nuevo va en `docs/decisions/uw-XX-<tema>.md` (por ejemplo `uw-15-mcp-tools.md`); una unidad con varias decisiones usa varios temas. Se citan por nombre de archivo: `[ADR uw-15-mcp-tools](decisions/uw-15-mcp-tools.md)`. Los ADR 0001–0014 conservan su número. No hay índice: el directorio es el índice.
+- **Estado en un archivo por unidad.** El PR de la unidad cambia `estado: Hecho` solo en su `docs/units/uw-XX.md`; nunca edita el estado de otra unidad ni agrega una columna de estado a `docs/units-of-work.md`.
+
 ## Cómo se trabaja
 
 1. **Una unidad de trabajo por sesión, branch y worktree.** Branch con el id de la unidad, por ejemplo `uw-07-api-tareas`. No toques el alcance de otras unidades; si hace falta algo de otra, anótalo y sigue.
-2. **Verifica dependencias.** Antes de empezar, confirma en `docs/units-of-work.md` que todas las dependencias de la unidad están en Hecho. Si una falta, usa el fake o contrato previsto, o detente y avisa.
+2. **Verifica dependencias.** Antes de empezar, confirma en `docs/units/` que todas las dependencias de la unidad (listadas en `docs/units-of-work.md`) están en Hecho. Si una falta, usa el fake o contrato previsto, o detente y avisa.
 3. **Plan primero, sin código.** Propón el plan: secciones de los docs que aplican, tests que escribirás primero, archivos que vas a tocar y riesgos. Espera aprobación humana antes de implementar.
 4. **TDD.** Test que falla → implementación mínima → refactor. Cada punto del criterio "Terminado cuando" de la unidad debe tener al menos un test. No debilites ni borres tests existentes sin justificarlo en el PR.
 5. **Revisión antes del PR.** Pide un code review a un subagente con contexto limpio que reciba la unidad, el diff y los tests; resuelve los hallazgos válidos.
-6. **PR.** Título con el id de la unidad (`UW-07: API de tareas y dependencias`). La descripción incluye el criterio de terminado y cómo se cumple. Al mergear, la unidad pasa a Hecho en `docs/units-of-work.md`.
+6. **PR.** Título con el id de la unidad (`UW-07: API de tareas y dependencias`). La descripción incluye el criterio de terminado y cómo se cumple. El mismo PR pone `estado: Hecho` en `docs/units/uw-XX.md`, así la unidad queda en Hecho al mergear.
 
 ## Reglas de arquitectura
 
@@ -58,8 +66,8 @@ Antes de abrir un PR, `pnpm typecheck`, `pnpm lint` y `pnpm test` deben pasar. L
 
 - [ ] Todos los puntos de "Terminado cuando" cubiertos por tests en verde.
 - [ ] Typecheck, lint y tests pasan.
-- [ ] Docs actualizados si cambió alguna decisión; ADR en `docs/decisions/` si se tomó una nueva.
-- [ ] Estado de la unidad actualizado en `docs/units-of-work.md`.
+- [ ] Docs actualizados si cambió alguna decisión; ADR en `docs/decisions/uw-XX-<tema>.md` si se tomó una nueva.
+- [ ] `estado: Hecho` en `docs/units/uw-XX.md`.
 - [ ] PR con el id de la unidad y el criterio de terminado en la descripción.
 
 ## Orden de trabajo
