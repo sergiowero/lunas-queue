@@ -75,40 +75,40 @@ Para adelantar trabajo fuera de la ruta crítica, el adapter de herdr incluye un
 
 ## Backlog
 
-Las 30 unidades en orden de ola. Todas dependen de UW-00, que va primero; después, una unidad puede empezar cuando todas sus dependencias están en Hecho.
+Las 30 unidades en orden de ola. Todas dependen de UW-00, que va primero; después, una unidad puede empezar cuando todas sus dependencias están en Hecho. El estado de cada unidad vive en su propio archivo, `docs/units/uw-XX.md` (`estado: Pendiente | Hecho` en el frontmatter), para que unidades en paralelo no editen la misma tabla.
 
-| ID | Unit of work | Épica | Ola | Depende de | Estado |
-| --- | --- | --- | --- | --- | --- |
-| UW-00 | Monorepo y validaciones técnicas | Base del proyecto | Base | — | Hecho |
-| UW-01 | Modelo de datos y persistencia | Datos y dominio | 0 | — | Hecho |
-| UW-02 | Adapter de herdr | Orquestación y ejecución | 0 | — | Hecho |
-| UW-03 | Esquemas JSON de handoff | Contrato con agentes | 0 | — | Hecho |
-| UW-04 | Máquina de estados y Event log | Datos y dominio | 1 | UW-01 | Hecho |
-| UW-05 | API de proyectos | Datos y dominio | 1 | UW-01 | Hecho |
-| UW-06 | Notificaciones | Orquestación y ejecución | 1 | UW-02 | Hecho |
-| UW-07 | API de tareas y dependencias (DAG) | Datos y dominio | 2 | UW-01, UW-04 | Hecho |
-| UW-08 | Outbox de eventos | Datos y dominio | 2 | UW-01, UW-04 | Hecho |
-| UW-09 | Ciclo de vida de worktrees | Orquestación y ejecución | 2 | UW-02, UW-05 | Hecho |
-| UW-10 | Hooks por fase | Entrega e integración | 2 | UW-02, UW-04, UW-05 | Pendiente |
-| UW-11 | Gate de tests | Calidad y verificación | 2 | UW-02, UW-04, UW-05 | Pendiente |
-| UW-12 | Specs y aprobación | Datos y dominio | 3 | UW-04, UW-07 | Hecho |
-| UW-13 | Scheduler | Orquestación y ejecución | 3 | UW-07, UW-08 | Hecho |
-| UW-14 | Adapter de GitHub (gh) | Entrega e integración | 3 | UW-04, UW-07 | Pendiente |
-| UW-15 | LunasQ MCP | Contrato con agentes | 4 | UW-01, UW-03, UW-04, UW-12 | Pendiente |
-| UW-16 | Dispatcher | Orquestación y ejecución | 4 | UW-02, UW-04, UW-09, UW-13 | Pendiente |
-| UW-17 | Señales, timeouts y reconciliación | Orquestación y ejecución | 5 | UW-06, UW-16 | Pendiente |
-| UW-18 | Skills de fase | Contrato con agentes | 5 | UW-03, UW-15 | Pendiente |
-| UW-19 | Subagentes revisores | Calidad y verificación | 5 | UW-15 | Pendiente |
-| UW-20 | Usage collector | Observabilidad y auditoría | 5 | UW-01, UW-16 | Pendiente |
-| UW-21 | Front end base | Front end y puesta en marcha | 5 | UW-05, UW-07, UW-12 | Pendiente |
-| UW-22 | Preguntas y bloqueos | Humano en el loop | 6 | UW-06, UW-15, UW-16, UW-17 | Pendiente |
-| UW-23 | Fase de verificación | Calidad y verificación | 6 | UW-11, UW-15, UW-17, UW-19 | Pendiente |
-| UW-24 | Archivo de evidencia | Observabilidad y auditoría | 6 | UW-15, UW-17 | Pendiente |
-| UW-25 | Vistas de DAG y hooks | Front end y puesta en marcha | 6 | UW-07, UW-10, UW-21 | Pendiente |
-| UW-26 | Fase de entrega | Entrega e integración | 7 | UW-09, UW-10, UW-11, UW-14, UW-23 | Pendiente |
-| UW-27 | Bandeja de aprobaciones y preguntas | Humano en el loop | 7 | UW-12, UW-21, UW-22 | Pendiente |
-| UW-28 | Instalador de LunasQ | Front end y puesta en marcha | 7 | UW-18, UW-19 | Pendiente |
-| UW-29 | Piloto end-to-end | Front end y puesta en marcha | 8 | UW-20, UW-24, UW-25, UW-26, UW-27, UW-28 | Pendiente |
+| ID | Unit of work | Épica | Ola | Depende de |
+| --- | --- | --- | --- | --- |
+| UW-00 | Monorepo y validaciones técnicas | Base del proyecto | Base | — |
+| UW-01 | Modelo de datos y persistencia | Datos y dominio | 0 | — |
+| UW-02 | Adapter de herdr | Orquestación y ejecución | 0 | — |
+| UW-03 | Esquemas JSON de handoff | Contrato con agentes | 0 | — |
+| UW-04 | Máquina de estados y Event log | Datos y dominio | 1 | UW-01 |
+| UW-05 | API de proyectos | Datos y dominio | 1 | UW-01 |
+| UW-06 | Notificaciones | Orquestación y ejecución | 1 | UW-02 |
+| UW-07 | API de tareas y dependencias (DAG) | Datos y dominio | 2 | UW-01, UW-04 |
+| UW-08 | Outbox de eventos | Datos y dominio | 2 | UW-01, UW-04 |
+| UW-09 | Ciclo de vida de worktrees | Orquestación y ejecución | 2 | UW-02, UW-05 |
+| UW-10 | Hooks por fase | Entrega e integración | 2 | UW-02, UW-04, UW-05 |
+| UW-11 | Gate de tests | Calidad y verificación | 2 | UW-02, UW-04, UW-05 |
+| UW-12 | Specs y aprobación | Datos y dominio | 3 | UW-04, UW-07 |
+| UW-13 | Scheduler | Orquestación y ejecución | 3 | UW-07, UW-08 |
+| UW-14 | Adapter de GitHub (gh) | Entrega e integración | 3 | UW-04, UW-07 |
+| UW-15 | LunasQ MCP | Contrato con agentes | 4 | UW-01, UW-03, UW-04, UW-12 |
+| UW-16 | Dispatcher | Orquestación y ejecución | 4 | UW-02, UW-04, UW-09, UW-13 |
+| UW-17 | Señales, timeouts y reconciliación | Orquestación y ejecución | 5 | UW-06, UW-16 |
+| UW-18 | Skills de fase | Contrato con agentes | 5 | UW-03, UW-15 |
+| UW-19 | Subagentes revisores | Calidad y verificación | 5 | UW-15 |
+| UW-20 | Usage collector | Observabilidad y auditoría | 5 | UW-01, UW-16 |
+| UW-21 | Front end base | Front end y puesta en marcha | 5 | UW-05, UW-07, UW-12 |
+| UW-22 | Preguntas y bloqueos | Humano en el loop | 6 | UW-06, UW-15, UW-16, UW-17 |
+| UW-23 | Fase de verificación | Calidad y verificación | 6 | UW-11, UW-15, UW-17, UW-19 |
+| UW-24 | Archivo de evidencia | Observabilidad y auditoría | 6 | UW-15, UW-17 |
+| UW-25 | Vistas de DAG y hooks | Front end y puesta en marcha | 6 | UW-07, UW-10, UW-21 |
+| UW-26 | Fase de entrega | Entrega e integración | 7 | UW-09, UW-10, UW-11, UW-14, UW-23 |
+| UW-27 | Bandeja de aprobaciones y preguntas | Humano en el loop | 7 | UW-12, UW-21, UW-22 |
+| UW-28 | Instalador de LunasQ | Front end y puesta en marcha | 7 | UW-18, UW-19 |
+| UW-29 | Piloto end-to-end | Front end y puesta en marcha | 8 | UW-20, UW-24, UW-25, UW-26, UW-27, UW-28 |
 
 ## Detalle por épica
 
