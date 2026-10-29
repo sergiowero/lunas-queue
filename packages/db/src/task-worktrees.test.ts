@@ -40,14 +40,4 @@ describe("TaskWorktreeRepository", () => {
       /no-existe/,
     );
   });
-
-  it("listByProject solo da las tareas del proyecto", () => {
-    const { db, project, repo } = setup();
-    const other = insertProject(db);
-    const a = insertTask(db, project.id);
-    const b = insertTask(db, project.id, { state: "cancelled" });
-    insertTask(db, other.id);
-    const ids = repo.listByProject(project.id).map((t) => t.id);
-    expect(ids.sort()).toEqual([a.id, b.id].sort());
-  });
 });

@@ -21,10 +21,6 @@ export class TaskWorktreeRepository implements TaskWorktreeStore {
     return this.db.select(columns).from(tasks).where(eq(tasks.id, taskId)).get() ?? null;
   }
 
-  listByProject(projectId: string): TaskWorktreeRecord[] {
-    return this.db.select(columns).from(tasks).where(eq(tasks.projectId, projectId)).all();
-  }
-
   recordWorktree(taskId: string, worktree: { branch: string; worktreePath: string }): void {
     const updated = this.db
       .update(tasks)

@@ -66,7 +66,6 @@ export type TaskWorktreeRecord = WorktreeTaskView & {
 /** Puerto de lectura y escritura del branch y el worktree de las tareas; db lo implementa. */
 export interface TaskWorktreeStore {
   get(taskId: string): TaskWorktreeRecord | null;
-  listByProject(projectId: string): TaskWorktreeRecord[];
   /** Lanza si la tarea no existe. */
   recordWorktree(taskId: string, worktree: { branch: string; worktreePath: string }): void;
   /** Conserva el branch: `worktree remove` no lo borra. */

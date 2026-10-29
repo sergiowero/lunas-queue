@@ -88,7 +88,7 @@ Las 30 unidades en orden de ola. Todas dependen de UW-00, que va primero; despu�
 | UW-06 | Notificaciones | Orquestaci처n y ejecuci처n | 1 | UW-02 | Hecho |
 | UW-07 | API de tareas y dependencias (DAG) | Datos y dominio | 2 | UW-01, UW-04 | Pendiente |
 | UW-08 | Outbox de eventos | Datos y dominio | 2 | UW-01, UW-04 | Pendiente |
-| UW-09 | Ciclo de vida de worktrees | Orquestaci처n y ejecuci처n | 2 | UW-02, UW-05 | Pendiente |
+| UW-09 | Ciclo de vida de worktrees | Orquestaci처n y ejecuci처n | 2 | UW-02, UW-05 | Hecho |
 | UW-10 | Hooks por fase | Entrega e integraci처n | 2 | UW-02, UW-04, UW-05 | Pendiente |
 | UW-11 | Gate de tests | Calidad y verificaci처n | 2 | UW-02, UW-04, UW-05 | Pendiente |
 | UW-12 | Specs y aprobaci처n | Datos y dominio | 3 | UW-04, UW-07 | Pendiente |

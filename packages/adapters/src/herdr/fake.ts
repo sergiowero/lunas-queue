@@ -105,6 +105,8 @@ export class FakeHerdr implements HerdrAdapter {
         created: false,
       };
     }
+    // Como herdr real (snapshot y luego create): dos llamadas concurrentes crean dos workspaces.
+    await Promise.resolve();
     const ws = this.createWorkspace(input.label, input.cwd, false, input.env ?? {});
     return { workspace: toWorkspace(ws), rootPaneId: this.rootPane(ws), created: true };
   }
@@ -148,6 +150,11 @@ export class FakeHerdr implements HerdrAdapter {
       return { worktree: this.toWorktree(ws, input.branch, existing.path), created: false };
     }
 
+    // Como herdr real (list y luego create): un create concurrente del mismo branch falla.
+    await Promise.resolve();
+    if (repo.has(input.branch)) {
+      throw new HerdrError("worktree_create_failed", `branch ${input.branch} already exists`);
+    }
     const path = input.path ?? `~/.herdr/worktrees/${input.branch.replaceAll("/", "-")}`;
     const ws = this.createWorkspace(label, path, true, {});
     repo.set(input.branch, { path, workspaceId: ws.workspaceId });
@@ -372,7 +379,6 @@ export class FakeHerdr implements HerdrAdapter {
     for (const check of [...this.statusWaiters]) check();
   }
 
-  /** Corta todos los streams como herdr bajo backpressure: cada uno pierde eventos y reconecta. */
   /** Simula cambios sin commit en el checkout `path`. */
   setWorktreeDirty(path: string, dirty = true) {
     for (const repo of this.worktrees.values()) {
@@ -380,6 +386,7 @@ export class FakeHerdr implements HerdrAdapter {
     }
   }
 
+  /** Corta todos los streams como herdr bajo backpressure: cada uno pierde eventos y reconecta. */
   dropStreams() {
     for (const sub of this.subscriptions) {
       this.deliver(sub, { type: "events_lost", reason: "stream closed" });

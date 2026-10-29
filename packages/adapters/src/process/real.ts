@@ -3,6 +3,9 @@ import { spawn } from "node:child_process";
 import { constants } from "node:os";
 import type { ProcessInput, ProcessResult, ProcessRunner } from "./types.ts";
 
+/** Tras salir el shell, cuánto se espera a que los hijos suelten stdout/stderr antes de matarlos. */
+export const EXIT_GRACE_MS = 200;
+
 /** Tope por stream: de una salida más larga se conserva el final, que es donde está el error. */
 export const OUTPUT_LIMIT_BYTES = 256 * 1024;
 
@@ -66,20 +69,42 @@ export class ShellProcessRunner implements ProcessRunner {
               killGroup(child.pid);
             }, input.timeoutMs);
 
-      child.on("error", (err) => {
+      let grace: NodeJS.Timeout | undefined;
+      let done = false;
+      const finish = (code: number | null, signal: NodeJS.Signals | null) => {
+        if (done) return;
+        done = true;
         clearTimeout(timer);
-        reject(
-          new ProcessError("spawn_failed", `${input.command}: ${err.message}`, { cause: err }),
-        );
-      });
-      child.on("close", (code, signal) => {
-        clearTimeout(timer);
+        clearTimeout(grace);
         resolve({
           exitCode: code ?? (signal ? 128 + constants.signals[signal] : 1),
           stdout: stdout.toString(),
           stderr: stderr.toString(),
           timedOut,
         });
+      };
+
+      child.on("error", (err) => {
+        done = true;
+        clearTimeout(timer);
+        reject(
+          new ProcessError("spawn_failed", `${input.command}: ${err.message}`, { cause: err }),
+        );
+      });
+      // `close` espera a todo el que tenga los pipes abiertos: un hijo en background (daemon,
+      // watcher) lo colgaría. Al salir el shell se le da un margen y luego se mata lo que quede
+      // de su grupo; un hijo que se fue a otra sesión (setsid) pierde los pipes, no cuelga.
+      child.on("exit", (code, signal) => {
+        grace = setTimeout(() => {
+          killGroup(child.pid);
+          child.stdout.destroy();
+          child.stderr.destroy();
+          finish(code, signal);
+        }, EXIT_GRACE_MS);
+      });
+      child.on("close", (code, signal) => {
+        killGroup(child.pid);
+        finish(code, signal);
       });
     });
   }

@@ -58,6 +58,13 @@ describe("ShellProcessRunner", () => {
     expect(Date.now() - started).toBeLessThan(3_000);
   });
 
+  it("no se cuelga si el comando deja un proceso en background con los pipes abiertos", async () => {
+    const started = Date.now();
+    const res = await runner.run({ command: "echo listo; sleep 30 &", cwd: tempDir() });
+    expect(res).toMatchObject({ exitCode: 0, stdout: "listo\n", timedOut: false });
+    expect(Date.now() - started).toBeLessThan(3_000);
+  });
+
   it("conserva solo el final de una salida enorme", async () => {
     const res = await runner.run({
       command: `head -c ${OUTPUT_LIMIT_BYTES * 2} /dev/zero | tr '\\0' a; echo FIN`,

@@ -2,12 +2,7 @@
 // docs/decisions/0010-ciclo-de-vida-worktrees.md). Una tarea = un worktree = un branch, desde el
 // primer despacho hasta el merge. La BD es la verdad: `worktree_path` se guarda solo cuando el
 // worktree quedó listo, así un bootstrap que falló se reintenta en el siguiente `ensure`.
-import {
-  type HerdrAdapter,
-  type HerdrWorktreeEntry,
-  isHerdrError,
-  type ProcessRunner,
-} from "@lunasq/adapters";
+import { type HerdrAdapter, isHerdrError, type ProcessRunner } from "@lunasq/adapters";
 import {
   findOrphanWorktrees,
   type OrphanReason,
@@ -82,6 +77,12 @@ export class WorktreeService {
   private readonly bootstrapTimeoutMs: number;
   /** Serializa las operaciones de una misma tarea; tareas distintas corren en paralelo. */
   private readonly locks = new KeyedLock();
+  /**
+   * Serializa por proyecto lo que toca el repo y herdr (workspace, fetch, create, remove): herdr
+   * no crea el workspace de forma atómica y git bloquea refs y config. El bootstrap queda fuera.
+   * Siempre se toma dentro del lock de la tarea, nunca al revés.
+   */
+  private readonly projectLocks = new KeyedLock();
 
   constructor(deps: WorktreeServiceDeps) {
     this.herdr = deps.herdr;
@@ -103,22 +104,26 @@ export class WorktreeService {
         throw new WorktreeError("task_released", `la tarea ${taskId} ya liberó su worktree`);
       }
       const project = this.project(task.projectId);
-      const workspaceId = await this.projectWorkspace(project);
       const branch = taskBranch(taskId);
 
-      const existing = (await this.herdr.listWorktrees(workspaceId)).some(
-        (w) => w.branch === branch,
-      );
-      // Solo al crear: la rama base remota ya trae el merge de las dependencias.
-      const base = existing ? project.baseBranch : await this.fetchBase(project);
-      const { worktree, created } = await this.herdr.ensureWorktree({
-        workspaceId,
-        branch,
-        base,
-        label: `${project.name} ${taskId.slice(0, 8)}`,
+      const { worktree, created } = await this.projectLocks.run(project.id, async () => {
+        const workspaceId = await this.projectWorkspace(project);
+        const existing = (await this.herdr.listWorktrees(workspaceId)).some(
+          (w) => w.branch === branch,
+        );
+        // Solo al crear: la rama base remota ya trae el merge de las dependencias.
+        const base = existing ? project.baseBranch : await this.fetchBase(project);
+        return this.herdr.ensureWorktree({
+          workspaceId,
+          branch,
+          base,
+          label: `${project.name} ${taskId.slice(0, 8)}`,
+        });
       });
 
       if (created || task.worktreePath !== worktree.path) {
+        // Una ruta guardada que ya no corresponde no puede seguir constando como lista.
+        if (task.worktreePath !== null) this.tasks.clearWorktreePath(taskId);
         await this.bootstrap(project, taskId, branch, worktree.path);
       }
       this.tasks.recordWorktree(taskId, { branch, worktreePath: worktree.path });
@@ -141,22 +146,22 @@ export class WorktreeService {
       const task = this.tasks.get(taskId);
       if (!task) throw new WorktreeError("task_not_found", `tarea ${taskId} no existe`);
       const project = this.project(task.projectId);
-      const workspaceId = await this.projectWorkspace(project);
-      const branch = taskBranch(taskId);
-      const entry = (await this.herdr.listWorktrees(workspaceId)).find((w) => w.branch === branch);
-      if (entry) await this.removeEntry(project, workspaceId, entry, opts.force);
+      const removed = await this.removeBranch(project, taskBranch(taskId), opts.force);
       this.tasks.clearWorktreePath(taskId);
-      return { removed: entry !== undefined };
+      return { removed };
     });
   }
 
-  /** Worktrees de LunasQ del proyecto cuya tarea no existe o ya los liberó. */
+  /**
+   * Worktrees de LunasQ del repo del proyecto cuya tarea no existe o ya los liberó. La tarea se
+   * busca en todos los proyectos: dos proyectos pueden compartir repo.
+   */
   async findOrphans(projectId: string) {
     const project = this.project(projectId);
-    const workspaceId = await this.projectWorkspace(project);
-    const tasks = new Map(this.tasks.listByProject(projectId).map((t) => [t.id, t]));
-    const worktrees = await this.herdr.listWorktrees(workspaceId);
-    return findOrphanWorktrees(worktrees, (id) => tasks.get(id));
+    const worktrees = await this.projectLocks.run(project.id, async () =>
+      this.herdr.listWorktrees(await this.projectWorkspace(project)),
+    );
+    return findOrphanWorktrees(worktrees, (id) => this.tasks.get(id) ?? undefined);
   }
 
   /**
@@ -165,7 +170,6 @@ export class WorktreeService {
    */
   async cleanupOrphans(projectId: string): Promise<OrphanCleanup> {
     const project = this.project(projectId);
-    const workspaceId = await this.projectWorkspace(project);
     const result: OrphanCleanup = { removed: [], failed: [] };
     for (const orphan of await this.findOrphans(projectId)) {
       const { taskId, reason, worktree } = orphan;
@@ -174,7 +178,7 @@ export class WorktreeService {
           // Revalida bajo el lock: la tarea pudo cambiar desde que se listó.
           const task = this.tasks.get(taskId);
           if (task && !worktreeReleased(task)) return;
-          await this.removeEntry(project, workspaceId, worktree, false);
+          if (!(await this.removeBranch(project, taskBranch(taskId), false))) return;
           if (task) this.tasks.clearWorktreePath(taskId);
           result.removed.push({ taskId, path: worktree.path, reason });
         });
@@ -242,32 +246,40 @@ export class WorktreeService {
     }
   }
 
-  /** `worktree remove` necesita el workspace del worktree: si está cerrado, lo reabre antes. */
-  private async removeEntry(
-    project: Project,
-    projectWorkspaceId: string,
-    entry: HerdrWorktreeEntry,
-    force: boolean | undefined,
-  ) {
-    let workspaceId = entry.workspaceId;
-    if (workspaceId === undefined && entry.branch !== undefined) {
-      const { worktree } = await this.herdr.ensureWorktree({
-        workspaceId: projectWorkspaceId,
-        branch: entry.branch,
-        base: project.baseBranch,
-      });
-      workspaceId = worktree.workspaceId;
-    }
-    if (workspaceId === undefined) return;
-    try {
-      await this.herdr.removeWorktree({ workspaceId, ...(force && { force }) });
-    } catch (err) {
-      if (isHerdrError(err, "dirty_worktree_requires_force")) {
-        throw new WorktreeError("dirty_worktree", `${entry.path} tiene cambios sin commit`, {
-          cause: err,
+  /**
+   * Remueve el worktree de `branch` según un `worktree list` fresco; false si no había. `worktree
+   * remove` necesita el workspace del worktree: si está cerrado lo reabre, y si el remove falla
+   * lo vuelve a cerrar.
+   */
+  private removeBranch(project: Project, branch: string, force: boolean | undefined) {
+    return this.projectLocks.run(project.id, async () => {
+      const projectWorkspaceId = await this.projectWorkspace(project);
+      const entry = (await this.herdr.listWorktrees(projectWorkspaceId)).find(
+        (w) => w.branch === branch,
+      );
+      if (!entry) return false;
+      let workspaceId = entry.workspaceId;
+      const reopened = workspaceId === undefined;
+      if (workspaceId === undefined) {
+        const opened = await this.herdr.ensureWorktree({
+          workspaceId: projectWorkspaceId,
+          branch,
+          base: project.baseBranch,
         });
+        workspaceId = opened.worktree.workspaceId;
       }
-      throw err;
-    }
+      try {
+        await this.herdr.removeWorktree({ workspaceId, ...(force && { force }) });
+      } catch (err) {
+        if (reopened) await this.herdr.closeWorkspace(workspaceId);
+        if (isHerdrError(err, "dirty_worktree_requires_force")) {
+          throw new WorktreeError("dirty_worktree", `${entry.path} tiene cambios sin commit`, {
+            cause: err,
+          });
+        }
+        throw err;
+      }
+      return true;
+    });
   }
 }

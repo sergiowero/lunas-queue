@@ -156,6 +156,21 @@ describe("WorktreeService.ensure", () => {
     expect(tasks.get(task.id)?.worktreePath).toBe(res.path);
   });
 
+  it("si el checkout cambió de ruta y el bootstrap falla, la ruta vieja no queda como lista", async () => {
+    const { db, project, herdr, processes, tasks, service } = setup();
+    const task = insertTask(db, project.id);
+    const first = await service.ensure(task.id);
+    // El checkout desaparece por fuera de LunasQ; la BD aún tiene su ruta.
+    await herdr.removeWorktree({ workspaceId: first.workspaceId });
+    tasks.recordWorktree(task.id, { branch: first.branch, worktreePath: "/ruta/vieja" });
+    processes.respond((c) => (isFetch(c) ? {} : { exitCode: 1 }));
+
+    const err = await rejection(service.ensure(task.id));
+
+    expect(isWorktreeError(err, "bootstrap_failed")).toBe(true);
+    expect(tasks.get(task.id)?.worktreePath).toBeNull();
+  });
+
   it("un bootstrap que vence su timeout cuenta como fallo", async () => {
     const { db, project, processes, service } = setup();
     const task = insertTask(db, project.id);
@@ -331,6 +346,15 @@ describe("WorktreeService: huérfanos", () => {
     expect((await herdr.listWorktrees(workspaceId)).map((w) => w.branch)).toContain(
       taskBranch(cancelled.id),
     );
+  });
+
+  it("no toma por huérfano el worktree de una tarea activa de otro proyecto del mismo repo", async () => {
+    const { db, project, herdr, service, workspaceId } = await scenario();
+    const other = insertProject(db);
+    const foreign = insertTask(db, other.id);
+    await herdr.ensureWorktree({ workspaceId, branch: taskBranch(foreign.id), base: "main" });
+    const orphans = await service.findOrphans(project.id);
+    expect(orphans.map((o) => o.taskId)).not.toContain(foreign.id);
   });
 
   it("findOrphans de un proyecto inexistente falla con project_not_found", async () => {
