@@ -39,7 +39,7 @@ Siete entidades bastan (más UsageRecord, ver Consumo); la clave es separar la *
 
 Decisiones de modelado:
 
-- **Spec versionada.** Cada ronda de refinamiento crea una versión nueva; la aprobación humana se liga a una versión concreta. Implementación y verificación leen siempre la versión aprobada.
+- **Spec versionada.** Cada ronda de refinamiento crea una versión nueva; la aprobación humana se liga a una versión concreta. Implementación y verificación leen siempre la versión aprobada. Versiones, autor, diff y reglas del gate en [ADR 0013](decisions/0013-specs-y-aprobacion.md).
 - **Acceptance criteria como items direccionables.** Cada criterio tiene id, para que el verificador emita un veredicto por criterio (pass / fail / evidencia) y no un booleano global.
 - **Event log como auditoría.** Permite reconstruir por qué una tarea regresó a in progress y alimenta la UI de historial.
 - **Run token y timeouts.** Cada Run tiene un token único que se inyecta al pane; solo el Run activo puede mover la tarea. Las tareas atoradas se detectan con señales de herdr y un timeout por fase, sin heartbeat del agente.
