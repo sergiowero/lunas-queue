@@ -1,6 +1,6 @@
-// PR de las tareas (UW-14, ADR 0015). Solo toca `pr_url` y `pr_state`: el estado de la tarea
-// cambia únicamente por task-transitions (ADR 0007). Cada cambio deja su evento publicado en el
-// outbox, así el scheduler recalcula el ready set cuando un PR se mergea o se cierra.
+// PR de las tareas (ADR uw-14-adapter-github). Solo toca `pr_url` y `pr_state`: el estado de la
+// tarea cambia únicamente por task-transitions (ADR 0007). Cada cambio deja su evento publicado en
+// el outbox, así el scheduler recalcula el ready set cuando un PR se mergea o se cierra.
 import {
   type ObservedPrState,
   type PrTrackingStore,

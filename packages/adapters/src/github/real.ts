@@ -1,5 +1,5 @@
-// Adapter real de GitHub sobre el CLI `gh` (ADR 0015). Los valores van como `--flag=valor` para
-// que un título que empieza con `-` no se lea como otra opción.
+// Adapter real de GitHub sobre el CLI `gh` (ADR uw-14-adapter-github). Los valores van como
+// `--flag=valor` para que un título que empieza con `-` no se lea como otra opción.
 import { GhCli, type GhCliOptions } from "./cli.ts";
 import { GitHubError, isGitHubError } from "./errors.ts";
 import type { CreatePrInput, GitHubAdapter, PullRequest } from "./types.ts";

@@ -1,5 +1,6 @@
-// Puerto del adapter de GitHub (UW-14, ADR 0015). Solo por el CLI `gh` con la sesión autenticada
-// de la máquina (docs/tech-stack.md). RealGitHub y FakeGitHub lo cumplen y pasan la misma suite.
+// Puerto del adapter de GitHub (ADR uw-14-adapter-github). Solo por el CLI `gh` con la sesión
+// autenticada de la máquina (docs/tech-stack.md). RealGitHub y FakeGitHub lo cumplen y pasan la
+// misma suite.
 import type { PrState } from "@lunasq/schemas";
 
 /** Resumen de CI: none sin checks; failure si alguno falló; pending si alguno no terminó. */

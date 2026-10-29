@@ -1,4 +1,5 @@
-// Detección de merges por polling (docs/design.md §Decisiones: polling con `gh` en v1; ADR 0015).
+// Detección de merges por polling (docs/design.md §Decisiones: polling con `gh` en v1;
+// ADR uw-14-adapter-github).
 // Cada pasada consulta en GitHub los PR abiertos que la base conoce y registra los que se
 // mergearon o cerraron. El registro deja su evento en el outbox; el scheduler lo recibe y libera
 // a los dependientes o los escala (ADR 0014). Repetir una pasada no duplica efectos.

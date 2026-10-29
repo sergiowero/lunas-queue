@@ -1,6 +1,6 @@
-// Seguimiento del PR de una tarea (UW-14, ADR 0015). El poller de merges observa el PR en GitHub
-// y registra el cambio en la base; el scheduler reacciona al evento (ADR 0014): un merge libera a
-// los dependientes y un cierre sin merge los escala a needs_human.
+// Seguimiento del PR de una tarea (ADR uw-14-adapter-github). El poller de merges observa el PR
+// en GitHub y registra el cambio en la base; el scheduler reacciona al evento (ADR 0014): un merge
+// libera a los dependientes y un cierre sin merge los escala a needs_human.
 import type { ClosedPrState, PrState } from "@lunasq/schemas";
 
 /**

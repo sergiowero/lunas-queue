@@ -1,4 +1,4 @@
-# 0015 — Adapter de GitHub (gh) y detección de merges por polling
+# UW-14 — Adapter de GitHub (gh) y detección de merges por polling
 
 - Estado: aceptada
 - Fecha: 2026-10-29

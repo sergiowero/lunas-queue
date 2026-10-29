@@ -1,5 +1,5 @@
-// Eventos del PR de una tarea (UW-14, ADR 0015). El PR solo avanza de open a merged o closed;
-// un PR nuevo (otra entrega tras un cierre sin merge) vuelve a abrir con task.pr_opened.
+// Eventos del PR de una tarea (ADR uw-14-adapter-github). El PR solo avanza de open a merged o
+// closed; un PR nuevo (otra entrega tras un cierre sin merge) vuelve a abrir con task.pr_opened.
 import { z } from "zod";
 
 export const TASK_PR_OPENED = "task.pr_opened";
