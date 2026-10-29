@@ -11,6 +11,7 @@ import {
   RiskLabel,
   RunResult,
   SpecApproval,
+  type SpecContent,
   SubState,
   TaskState,
   UsageSource,
@@ -28,9 +29,6 @@ import {
   unique,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
-
-/** Criterio de aceptación direccionable: el verificador emite un veredicto por id. */
-export type AcceptanceCriterion = { id: string; text: string };
 
 const id = () =>
   text("id")
@@ -154,17 +152,22 @@ export const specs = sqliteTable(
       .notNull()
       .references(() => tasks.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
-    domainModel: text("domain_model", { mode: "json" }),
-    requirements: text("requirements", { mode: "json" }),
+    // Contenido validado con SpecContent al escribir; los criterios son direccionables por id.
+    domainModel: text("domain_model", { mode: "json" }).$type<SpecContent["domainModel"]>(),
+    requirements: text("requirements", { mode: "json" }).$type<SpecContent["requirements"]>(),
     acceptanceCriteria: text("acceptance_criteria", { mode: "json" })
-      .$type<AcceptanceCriterion[]>()
+      .$type<SpecContent["criteria"]>()
       .notNull()
       .default([]),
-    taskList: text("task_list", { mode: "json" }),
+    taskList: text("task_list", { mode: "json" }).$type<SpecContent["taskList"]>(),
     approval: text("approval", { enum: values(SpecApproval) })
       .notNull()
       .default("pending"),
-    approvedBy: text("approved_by"),
+    // Autor de la versión: el refinador o el humano que la editó (ADR 0013).
+    createdBy: text("created_by", { enum: values(Actor) })
+      .notNull()
+      .default("agent"),
+    approvedBy: text("approved_by", { enum: values(Actor) }),
     approvedAt: integer("approved_at", { mode: "timestamp_ms" }),
     reviewComments: text("review_comments"),
     createdAt: createdAt(),
@@ -173,6 +176,9 @@ export const specs = sqliteTable(
     unique("specs_task_version_unique").on(t.taskId, t.version),
     check("specs_version_positive", sql`${t.version} >= 1`),
     inEnum("specs_approval_enum", t.approval, values(SpecApproval)),
+    inEnum("specs_created_by_enum", t.createdBy, values(Actor)),
+    // La aprobación se liga a una sola versión por tarea.
+    uniqueIndex("specs_one_approved_per_task").on(t.taskId).where(sql`${t.approval} = 'approved'`),
   ],
 );
 

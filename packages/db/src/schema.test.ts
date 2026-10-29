@@ -156,6 +156,13 @@ describe("task_dependencies", () => {
 });
 
 describe("specs", () => {
+  const criterion = {
+    id: "AC-1",
+    given: "dos tareas que dependen entre sí",
+    when: "se agrega la arista que cierra el ciclo",
+    outcome: "la arista se rechaza",
+  };
+
   it("versión única por tarea, iniciando en pending", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
@@ -166,17 +173,41 @@ describe("specs", () => {
       .values({
         taskId: t.id,
         version: 1,
-        acceptanceCriteria: [{ id: "AC-1", text: "La arista que cierra un ciclo se rechaza" }],
+        acceptanceCriteria: [criterion],
       })
       .returning()
       .all();
     expect(v1?.approval).toBe("pending");
-    expect(v1?.acceptanceCriteria).toEqual([
-      { id: "AC-1", text: "La arista que cierra un ciclo se rechaza" },
-    ]);
+    expect(v1?.createdBy).toBe("agent");
+    expect(v1?.acceptanceCriteria).toEqual([criterion]);
     db.insert(specs).values({ taskId: t.id, version: 2 }).run();
     db.insert(specs).values({ taskId: other.id, version: 1 }).run();
     expect(() => db.insert(specs).values({ taskId: t.id, version: 1 }).run()).toThrow(UNIQUE);
+  });
+
+  it("una sola versión aprobada por tarea", () => {
+    const db = migratedDatabase();
+    const p = insertProject(db);
+    const t = insertTask(db, p.id);
+    const other = insertTask(db, p.id);
+    db.insert(specs).values({ taskId: t.id, version: 1, approval: "approved" }).run();
+    db.insert(specs).values({ taskId: t.id, version: 2, approval: "changes_requested" }).run();
+    db.insert(specs).values({ taskId: other.id, version: 1, approval: "approved" }).run();
+    expect(() =>
+      db.insert(specs).values({ taskId: t.id, version: 3, approval: "approved" }).run(),
+    ).toThrow(UNIQUE);
+  });
+
+  it("autor del enum de actores", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id);
+    expect(() =>
+      db.$client
+        .prepare(
+          "insert into specs (id, task_id, version, created_by, created_at) values ('s', ?, 1, 'robot', 0)",
+        )
+        .run(t.id),
+    ).toThrow(CHECK);
   });
 
   it("versión positiva y aprobación del enum", () => {

@@ -42,82 +42,83 @@ export type TransitionTaskResult =
   | { ok: true; task: TaskRow; event: EventRow }
   | { ok: false; error: { code: TransitionTaskErrorCode; message: string } };
 
+export type Tx = Parameters<Parameters<LunasqDatabase["transaction"]>[0]>[0];
+
 export function transitionTask(
   db: LunasqDatabase,
   input: TransitionTaskInput,
 ): TransitionTaskResult {
   // IMMEDIATE toma el lock de escritura antes de leer: otro proceso no puede mover la tarea
   // entre la lectura y el update.
-  return db.transaction(
-    (tx): TransitionTaskResult => {
-      const fail = (code: TransitionTaskErrorCode, message: string): TransitionTaskResult => ({
-        ok: false,
-        error: { code, message },
-      });
-      const current = tx.select().from(tasks).where(eq(tasks.id, input.taskId)).get();
-      if (!current) return fail("task_not_found", `no existe la tarea ${input.taskId}`);
+  return db.transaction((tx) => applyTransition(tx, input), { behavior: "immediate" });
+}
 
-      const { expected } = input;
-      if (
-        expected &&
-        (expected.state !== current.state || expected.subState !== current.subState)
-      ) {
-        return fail(
-          "stale_state",
-          `se esperaba ${expected.state}/${expected.subState ?? "-"} y la tarea está en ${current.state}/${current.subState ?? "-"}`,
-        );
-      }
+/**
+ * Como transitionTask, dentro de una transacción IMMEDIATE que ya abrió quien llama: así una
+ * escritura propia (por ejemplo la versión de spec, ADR 0013) y la transición se confirman
+ * juntas. Un rechazo no escribe nada; quien llama decide si revierte lo suyo.
+ */
+export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionTaskResult {
+  const fail = (code: TransitionTaskErrorCode, message: string): TransitionTaskResult => ({
+    ok: false,
+    error: { code, message },
+  });
+  const current = tx.select().from(tasks).where(eq(tasks.id, input.taskId)).get();
+  if (!current) return fail("task_not_found", `no existe la tarea ${input.taskId}`);
 
-      let command: CommandInput;
-      if (input.command.type === "resume") {
-        // Fuera de needs_human resume se rechaza en el dominio; el destino no importa.
-        const resumeTo =
-          current.state === "needs_human" ? lastEscalationOrigin(tx, current.id) : current.state;
-        if (!resumeTo) {
-          return fail("no_escalation_found", `la tarea ${current.id} no tiene escalamiento`);
-        }
-        command = { ...input.command, resumeTo };
-      } else {
-        command = input.command;
-      }
+  const { expected } = input;
+  if (expected && (expected.state !== current.state || expected.subState !== current.subState)) {
+    return fail(
+      "stale_state",
+      `se esperaba ${expected.state}/${expected.subState ?? "-"} y la tarea está en ${current.state}/${current.subState ?? "-"}`,
+    );
+  }
 
-      const snapshot: TaskSnapshot = {
-        state: current.state,
-        subState: current.subState,
-        verificationIteration: current.verificationIteration,
-      };
-      const result = transition(snapshot, command, input.actor);
-      if (!result.ok) return result;
+  let command: CommandInput;
+  if (input.command.type === "resume") {
+    // Fuera de needs_human resume se rechaza en el dominio; el destino no importa.
+    const resumeTo =
+      current.state === "needs_human" ? lastEscalationOrigin(tx, current.id) : current.state;
+    if (!resumeTo) {
+      return fail("no_escalation_found", `la tarea ${current.id} no tiene escalamiento`);
+    }
+    command = { ...input.command, resumeTo };
+  } else {
+    command = input.command;
+  }
 
-      const [task] = tx
-        .update(tasks)
-        .set(result.next)
-        .where(
-          and(
-            eq(tasks.id, current.id),
-            eq(tasks.state, current.state),
-            current.subState === null
-              ? isNull(tasks.subState)
-              : eq(tasks.subState, current.subState),
-          ),
-        )
-        .returning()
-        .all();
-      if (!task) throw new Error(`la tarea ${current.id} cambió durante la transición`);
-      const event = appendEvent(
-        tx,
-        {
-          taskId: task.id,
-          type: result.event.type,
-          actor: result.event.actor,
-          payload: result.event.payload,
-        },
-        { publish: true },
-      );
-      return { ok: true, task, event };
+  const snapshot: TaskSnapshot = {
+    state: current.state,
+    subState: current.subState,
+    verificationIteration: current.verificationIteration,
+  };
+  const result = transition(snapshot, command, input.actor);
+  if (!result.ok) return result;
+
+  const [task] = tx
+    .update(tasks)
+    .set(result.next)
+    .where(
+      and(
+        eq(tasks.id, current.id),
+        eq(tasks.state, current.state),
+        current.subState === null ? isNull(tasks.subState) : eq(tasks.subState, current.subState),
+      ),
+    )
+    .returning()
+    .all();
+  if (!task) throw new Error(`la tarea ${current.id} cambió durante la transición`);
+  const event = appendEvent(
+    tx,
+    {
+      taskId: task.id,
+      type: result.event.type,
+      actor: result.event.actor,
+      payload: result.event.payload,
     },
-    { behavior: "immediate" },
+    { publish: true },
   );
+  return { ok: true, task, event };
 }
 
 /** Estado desde el que la tarea pasó a needs_human por última vez. */

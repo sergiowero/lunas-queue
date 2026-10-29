@@ -5,7 +5,8 @@
   "description": "Esquemas Zod compartidos: entidades, handoffs y eventos",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "test": "vitest run",
