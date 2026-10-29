@@ -213,13 +213,16 @@ export class RunWatcher implements RunObserver {
       case "subscribed":
         void this.serial(runId, async (w) => {
           const agent = await this.herdr.getAgent(w.name);
+          if (!this.current(w)) return;
           if (!agent) return this.gone(w, true);
           this.applyStatus(w, agent.status);
         });
         return;
       case "subscription_failed":
-        // El pane ya no existía al suscribirse.
-        void this.serial(runId, (w) => this.gone(w, false));
+        // Solo `pane_not_found` dice que el pane ya no existe; otro error (protocolo, herdr
+        // reiniciando) lo decide la reconciliación con el snapshot.
+        if (event.code === "pane_not_found") void this.serial(runId, (w) => this.gone(w, false));
+        else this.onLost();
         return;
       default:
         return;
@@ -262,12 +265,27 @@ export class RunWatcher implements RunObserver {
     }
   }
 
+  /**
+   * Run que el watcher ya no debe fallar ni escalar: cerrado (una tool de salida lo cerró y el
+   * dispatcher libera el pane al ver la transición) o con handoff guardado (el verificador dio
+   * pass y la entrega corre con el Run abierto, ADR 0007).
+   */
+  private settled(w: Watch): boolean {
+    const run = this.runs.get(w.runId);
+    return !run || run.endedAt !== null || run.handoff !== null;
+  }
+
+  /** El Watch sigue siendo el vigente: tras un await el dispatcher pudo llamar `unwatch`. */
+  private current(w: Watch): boolean {
+    return this.watches.get(w.runId) === w;
+  }
+
   /** El agente sigue detenido sin señal MCP pasada la gracia: nudge o Run fallido. */
   private async stalled(w: Watch): Promise<void> {
     if (w.expired || (w.status !== "idle" && w.status !== "done")) return;
-    // Una tool de salida ya cerró el Run: el dispatcher libera el pane al ver la transición.
-    if (this.runs.get(w.runId)?.endedAt !== null || !this.inPhase(w, "running")) return;
+    if (this.settled(w) || !this.inPhase(w, "running")) return;
     const agent = await this.herdr.getAgent(w.name);
+    if (!this.current(w)) return;
     if (!agent) return this.gone(w, true);
     if (agent.status !== "idle" && agent.status !== "done")
       return this.applyStatus(w, agent.status);
@@ -277,7 +295,7 @@ export class RunWatcher implements RunObserver {
         name: w.name,
         text: nudgePrompt(w.phase, w.taskId),
       });
-      this.applyStatus(w, prompted.status);
+      if (this.current(w)) this.applyStatus(w, prompted.status);
       return;
     }
     this.unwatch(w.runId);
@@ -287,21 +305,32 @@ export class RunWatcher implements RunObserver {
     );
   }
 
-  /** El pane se cerró o el agente salió: Run fallido si sigue abierto. */
+  /**
+   * El pane se cerró o el agente salió: Run fallido si sigue abierto. En waiting_human el Run se
+   * deja abierto: ocupa su slot a propósito (ADR 0014) y la respuesta relanza (UW-22).
+   */
   private async gone(w: Watch, exited: boolean): Promise<void> {
     this.unwatch(w.runId);
-    if (this.runs.get(w.runId)?.endedAt !== null) return;
+    if (this.settled(w) || this.inPhase(w, "waiting_human")) return;
     const what = exited ? "el proceso del agente terminó" : "el pane se cerró";
     await this.failRunFn(w.runId, `agent_exited: ${what} (${w.name}, pane ${w.paneId})`);
   }
 
   /** Timeout de fase vencido: needs_human con notificación; el agente sigue vivo. */
   private async expire(w: Watch): Promise<void> {
+    if (this.inPhase(w, "waiting_human")) {
+      // Venció con la pregunta abierta antes de que el outbox pausara el reloj: queda en pausa
+      // sin presupuesto y vence en cuanto la respuesta lo reanude.
+      w.clock = new PhaseClock(0, () => this.serial(w.runId, (w) => this.expire(w)));
+      w.clock.pause("waiting_human");
+      w.clock.start();
+      return;
+    }
     w.expired = true;
     clearTimeout(w.grace);
     w.grace = undefined;
     const task = this.tasks.get(w.taskId);
-    if (!task || !this.inPhase(w, "running")) return;
+    if (!task || this.settled(w) || !this.inPhase(w, "running")) return;
     const project = this.projects.get(task.projectId);
     const minutes = project ? phaseTimeoutMs(project, w.phase) / 60_000 : undefined;
     const moved = transitionTask(this.db, {

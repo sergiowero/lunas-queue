@@ -1,4 +1,6 @@
-import { transitionTask } from "@lunasq/db";
+import { claimRun, transitionTask } from "@lunasq/db";
+import { insertTask } from "@lunasq/db/test-helpers";
+import { SchedulerConfig } from "@lunasq/schemas";
 import { afterEach, describe, expect, it } from "vitest";
 import { Reconciler, type ReconcilerOptions } from "./reconciler.ts";
 import { harness } from "./test-helpers.ts";
@@ -161,6 +163,40 @@ describe("Reconciler", () => {
 
     expect(await h.reconciler.run()).toMatchObject({ closed: [], failed: [] });
     expect(h.runs.get(run.id)?.endedAt).toBeNull();
+  });
+
+  it("un Run reclamado sin lanzar de una tarea cancelada se cierra y no se lanza", async () => {
+    const h = setup();
+    const task = insertTask(h.db, h.project.id);
+    const claim = claimRun(h.db, {
+      decision: {
+        taskId: task.id,
+        projectId: h.project.id,
+        phase: "refine",
+        expected: { state: "draft", subState: "queued" },
+      },
+      config: SchedulerConfig.parse({}),
+      projects: h.projects,
+      sessionId: "s-1",
+    });
+    if (!claim.ok) throw new Error(claim.error.message);
+    cancel(h.db, task.id);
+
+    expect((await h.reconciler.run()).closed).toEqual([claim.run.id]);
+    await h.dispatcher.idle();
+    expect(h.runs.get(claim.run.id)).toMatchObject({ result: "cancelled", launchedAt: null });
+    expect((await h.herdr.snapshot()).agents).toEqual([]);
+  });
+
+  it("avisa al cerrar o fallar Runs, para que el scheduler despache ya", async () => {
+    let woken = 0;
+    const h = setup({ onRunsClosed: () => woken++ });
+    const { taskId } = await h.launched();
+    await h.reconciler.run();
+    expect(woken).toBe(0);
+    cancel(h.db, taskId);
+    await h.reconciler.run();
+    expect(woken).toBe(1);
   });
 
   it("remueve los worktrees huérfanos de cada proyecto", async () => {

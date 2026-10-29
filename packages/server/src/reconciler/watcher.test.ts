@@ -1,3 +1,4 @@
+import { FakeHerdr, type HerdrEvent, type SubscribeInput } from "@lunasq/adapters";
 import { transitionTask } from "@lunasq/db";
 import { nudgePrompt } from "@lunasq/domain";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -254,6 +255,75 @@ describe("RunWatcher: eventos perdidos", () => {
     expect(h.lost()).toBeGreaterThan(0);
     expect(h.taskRow(taskId)).toMatchObject({ subState: "running" });
     expect(await h.herdr.getAgent(name)).toBeDefined();
+  });
+});
+
+describe("RunWatcher: Runs que no se fallan", () => {
+  it("con handoff guardado (pass del verificador): ni nudge, ni fallo, ni timeout", async () => {
+    const h = setup();
+    const { taskId, run, name } = await h.launched();
+    h.runs.recordHandoff(run.id, { verdict: "pass" });
+
+    h.herdr.setAgentStatus(name, "done");
+    await settle(vi);
+    await vi.advanceTimersByTimeAsync(10 * DEFAULT_NUDGE_GRACE_MS);
+    await settle(vi);
+    expect(await h.herdr.readAgent({ name })).not.toContain(nudgePrompt("refine", taskId));
+
+    await vi.advanceTimersByTimeAsync(60 * MIN);
+    await settle(vi);
+    expect(h.taskRow(taskId)).toMatchObject({ state: "draft", subState: "running" });
+    expect(h.notifications).toEqual([]);
+
+    h.herdr.exitAgent(name);
+    await settle(vi);
+    expect(h.runs.get(run.id)).toMatchObject({ endedAt: null, result: null });
+    expect(h.taskRow(taskId)).toMatchObject({ subState: "running" });
+  });
+
+  it("un crash con la pregunta abierta deja el Run abierto para la respuesta (UW-22)", async () => {
+    const h = setup();
+    const { taskId, run, name } = await h.launched();
+    transitionTask(h.db, { taskId, actor: "agent", command: { type: "ask_human" } });
+
+    h.herdr.exitAgent(name);
+    await settle(vi);
+
+    expect(h.runs.get(run.id)).toMatchObject({ endedAt: null, result: null });
+    expect(h.taskRow(taskId)).toMatchObject({ subState: "waiting_human" });
+    expect(h.watcher.watching()).toEqual([]);
+  });
+
+  it("un timeout que vence con la pregunta abierta antes del outbox escala al responder", async () => {
+    const h = setup();
+    const { taskId } = await h.launched();
+    // ask_human sin avisar al watcher: el outbox todavía no lo entregó.
+    transitionTask(h.db, { taskId, actor: "agent", command: { type: "ask_human" } });
+    await vi.advanceTimersByTimeAsync(30 * MIN);
+    await settle(vi);
+    expect(h.taskRow(taskId)).toMatchObject({ subState: "waiting_human" });
+
+    transitionTask(h.db, { taskId, actor: "human", command: { type: "answer", agentAlive: true } });
+    h.watcher.onTransition(transitionMessage(taskId));
+    await settle(vi);
+    expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human" });
+  });
+
+  it("una suscripción rechazada por otro motivo pide reconciliar en vez de fallar el Run", async () => {
+    class FlakyHerdr extends FakeHerdr {
+      override subscribe(input: SubscribeInput, onEvent: (event: HerdrEvent) => void) {
+        if (!input.paneIds) return super.subscribe(input, onEvent);
+        queueMicrotask(() =>
+          onEvent({ type: "subscription_failed", code: "protocol_error", message: "x" }),
+        );
+        return { close: async () => {} };
+      }
+    }
+    const h = setup({ herdr: new FlakyHerdr({ promptDurationMs: 20 * 24 * 60 * MIN }) });
+    const { run } = await h.launched();
+    await settle(vi);
+    expect(h.runs.get(run.id)?.endedAt).toBeNull();
+    expect(h.lost()).toBeGreaterThan(0);
   });
 });
 

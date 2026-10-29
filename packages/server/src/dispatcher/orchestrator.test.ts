@@ -200,6 +200,46 @@ describe("Orchestrator: escenarios de fallo", () => {
     expect(runs.forTask(task.id)).toHaveLength(1);
   });
 
+  it("vencido el backoff, la tarea se vuelve a despachar", async () => {
+    const ctx = setup({ config: { retryBackoffMs: 300 } });
+    const { db, herdr, orchestrator, project } = ctx;
+    const task = insertTask(db, project.id);
+    const runs = new RunRepository(db);
+    await startAll(ctx);
+    await orchestrator.dispatcher.idle();
+    herdr.exitAgent(runs.latestForTask(task.id)?.herdrName ?? "");
+    await vi.waitFor(() => expect(taskState(db, task.id).subState).toBe("queued"));
+    expect((await orchestrator.scheduler.run()).dispatched).toEqual([]);
+
+    await vi.waitFor(async () => {
+      await orchestrator.scheduler.run();
+      expect(runs.forTask(task.id)).toHaveLength(2);
+    });
+    expect(taskState(db, task.id).subState).toBe("running");
+  });
+
+  it("al reanudar tras un timeout, el Run viejo se cierra y la fase se redespacha sola", async () => {
+    const ctx = setup();
+    const { db, orchestrator, project } = ctx;
+    const task = insertTask(db, project.id);
+    const runs = new RunRepository(db);
+    await startAll(ctx);
+    await orchestrator.dispatcher.idle();
+    const first = runs.latestForTask(task.id);
+    transitionTask(db, {
+      taskId: task.id,
+      actor: "system",
+      command: { type: "escalate", reason: "phase_timeout" },
+    });
+    transitionTask(db, { taskId: task.id, actor: "human", command: { type: "resume" } });
+
+    // Sin llamar al scheduler: el tick es de 60 s, así que lo despierta la reconciliación.
+    await vi.waitFor(() => {
+      expect(runs.get(first?.id ?? "")?.result).toBe("cancelled");
+      expect(runs.forTask(task.id)).toHaveLength(2);
+    });
+  });
+
   it("si se pierden eventos de herdr, la reconciliación detecta el agente caído", async () => {
     const ctx = setup({ config: { retryBackoffMs: 60 * 60_000 } });
     const { db, herdr, orchestrator, project } = ctx;

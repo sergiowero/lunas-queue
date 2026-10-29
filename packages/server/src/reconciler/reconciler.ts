@@ -56,6 +56,8 @@ export interface ReconcilerOptions {
   watcher: Pick<RunWatcher, "watch" | "watching">;
   worktrees: Pick<WorktreeService, "remove" | "cleanupOrphans">;
   projects?: ProjectConfigReader;
+  /** Se cerraron Runs: el scheduler puede despachar ya lo reanudado (`resume` tras un timeout). */
+  onRunsClosed?: () => void;
   intervalMs?: number;
   orphanWorktreesEvery?: number;
   onError?: ReconcileErrorHandler;
@@ -67,6 +69,7 @@ export class Reconciler {
   private readonly watcher: ReconcilerOptions["watcher"];
   private readonly worktrees: ReconcilerOptions["worktrees"];
   private readonly projects: ProjectConfigReader;
+  private readonly onRunsClosed: () => void;
   private readonly intervalMs: number;
   private readonly orphanWorktreesEvery: number;
   private readonly onError: ReconcileErrorHandler;
@@ -87,6 +90,7 @@ export class Reconciler {
     this.watcher = opts.watcher;
     this.worktrees = opts.worktrees;
     this.projects = opts.projects ?? new ProjectRepository(opts.db);
+    this.onRunsClosed = opts.onRunsClosed ?? (() => {});
     this.intervalMs = opts.intervalMs ?? DEFAULT_RECONCILE_INTERVAL_MS;
     this.orphanWorktreesEvery = opts.orphanWorktreesEvery ?? DEFAULT_ORPHAN_WORKTREES_EVERY;
     this.onError = opts.onError ?? defaultError;
@@ -160,27 +164,31 @@ export class Reconciler {
     const snap = await this.herdr.snapshot();
     // Después del snapshot: todo agente del snapshot fue arrancado por un Run que ya existe aquí.
     const active = this.runs.active();
-    await this.dispatcher.recover();
     const watching = new Set(this.watcher.watching());
 
-    for (const run of active) {
-      if (run.launchedAt === null) continue;
-      await this.guard(run.id, async () => {
-        const task = this.tasks.get(run.taskId);
+    for (const listed of active) {
+      await this.guard(listed.id, async () => {
+        // Se relee: las correcciones anteriores de la pasada esperan a herdr y el Run pudo
+        // cerrarse o guardar su handoff entretanto.
+        const run = this.runs.get(listed.id);
+        const task = run && this.tasks.get(run.taskId);
         // Con handoff guardado el verificador dio pass y la entrega corre con su Run abierto:
         // no es un Run caído (ADR 0007).
-        if (!task || run.handoff !== null) return;
-        const agent = snap.agents.find((a) => a.name === run.herdrName);
-        const alive = agent !== undefined && agent.paneId === run.herdrPane;
-        // needs_human (p. ej. timeout): el agente sigue vivo a propósito para el humano.
-        if (task.state === "needs_human") {
-          if (alive && !watching.has(run.id)) this.rewatch(run, agent, result);
-          return;
-        }
+        if (!run || run.endedAt !== null || !task || run.handoff !== null) return;
         const inPhase =
           pendingPhase(task.state) === run.phase &&
           (task.subState === "running" || task.subState === "waiting_human");
+        // needs_human (p. ej. timeout): el agente sigue vivo a propósito para el humano.
+        if (task.state === "needs_human") {
+          if (run.launchedAt === null) return;
+          const agent = snap.agents.find((a) => a.name === run.herdrName);
+          if (agent?.paneId === run.herdrPane && !watching.has(run.id)) {
+            this.rewatch(run, agent, result);
+          }
+          return;
+        }
         if (!inPhase) {
+          // También un Run reclamado sin lanzar: su lanzamiento se detiene en el siguiente paso.
           await this.dispatcher.closeRun(run.id, {
             result: "cancelled",
             failureReason: `task_left_phase: la tarea está en ${task.state}/${task.subState ?? "-"}`,
@@ -188,7 +196,16 @@ export class Reconciler {
           result.closed.push(run.id);
           return;
         }
-        if (alive) {
+        if (run.launchedAt === null) return;
+        const listedAgent = snap.agents.find((a) => a.name === run.herdrName);
+        // El snapshot pudo tomarse antes de que el lanzamiento arrancara el agente: se confirma.
+        const agent =
+          listedAgent?.paneId === run.herdrPane
+            ? listedAgent
+            : run.herdrName
+              ? await this.herdr.getAgent(run.herdrName)
+              : undefined;
+        if (agent && agent.paneId === run.herdrPane) {
           if (!watching.has(run.id)) this.rewatch(run, agent, result);
           return;
         }
@@ -201,6 +218,8 @@ export class Reconciler {
         if (res.closed) result.failed.push(run.id);
       });
     }
+    // Después de cerrar los Runs de tareas que salieron de su fase: así no se relanzan.
+    await this.dispatcher.recover();
 
     const owned = new Set(active.map((r) => r.herdrName).filter((n) => n !== null));
     for (const agent of snap.agents) {
@@ -212,6 +231,8 @@ export class Reconciler {
     }
 
     for (const task of this.taskWorktrees.releasable()) {
+      // Con un Run todavía abierto (un lanzamiento que se está deteniendo) se espera otra pasada.
+      if (this.runs.latestForTask(task.id)?.endedAt === null) continue;
       await this.guard(task.id, async () => {
         try {
           const { removed } = await this.worktrees.remove(task.id);
@@ -235,6 +256,7 @@ export class Reconciler {
         });
       }
     }
+    if (result.closed.length > 0 || result.failed.length > 0) this.onRunsClosed();
     return result;
   }
 

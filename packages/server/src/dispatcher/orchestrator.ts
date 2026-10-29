@@ -121,6 +121,7 @@ export class Orchestrator {
       watcher: this.watcher,
       worktrees: this.worktrees,
       projects,
+      onRunsClosed: () => this.scheduler.wake(),
       ...(reconcile.intervalMs !== undefined && { intervalMs: reconcile.intervalMs }),
       ...(reconcile.orphanWorktreesEvery !== undefined && {
         orphanWorktreesEvery: reconcile.orphanWorktreesEvery,

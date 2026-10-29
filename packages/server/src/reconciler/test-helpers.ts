@@ -20,12 +20,16 @@ export const SEC = 1000;
 export const MIN = 60 * SEC;
 
 export function harness(
-  opts: { project?: Partial<ProjectCreate>; watcher?: Partial<RunWatcherOptions> } = {},
+  opts: {
+    project?: Partial<ProjectCreate>;
+    watcher?: Partial<RunWatcherOptions>;
+    herdr?: FakeHerdr;
+  } = {},
 ) {
   const db = migratedDatabase();
   const project = insertProject(db, opts.project);
   // Los prompts no terminan solos (20 días, bajo el tope de setTimeout): cada test decide.
-  const herdr = new FakeHerdr({ promptDurationMs: 20 * 24 * 60 * MIN });
+  const herdr = opts.herdr ?? new FakeHerdr({ promptDurationMs: 20 * 24 * 60 * MIN });
   const projects = new ProjectRepository(db);
   const worktrees = new WorktreeService({
     herdr,
