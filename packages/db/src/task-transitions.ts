@@ -104,12 +104,16 @@ export function transitionTask(
         .returning()
         .all();
       if (!task) throw new Error(`la tarea ${current.id} cambió durante la transición`);
-      const event = appendEvent(tx, {
-        taskId: task.id,
-        type: result.event.type,
-        actor: result.event.actor,
-        payload: result.event.payload,
-      });
+      const event = appendEvent(
+        tx,
+        {
+          taskId: task.id,
+          type: result.event.type,
+          actor: result.event.actor,
+          payload: result.event.payload,
+        },
+        { publish: true },
+      );
       return { ok: true, task, event };
     },
     { behavior: "immediate" },

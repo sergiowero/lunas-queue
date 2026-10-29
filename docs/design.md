@@ -154,7 +154,7 @@ El scheduler no ordena una lista: calcula un **ready set** (tareas cuyas depende
 
 **Dependencias como DAG**
 
-- Se valida ausencia de ciclos al crear o editar una arista; se rechaza la operación si cierra un ciclo.
+- Se valida ausencia de ciclos al crear o editar una arista; se rechaza la operación si cierra un ciclo. Las aristas se agregan mientras la tarea dependiente está en Draft y no pueden apuntar a una tarea cancelada ([ADR 0010](decisions/0010-api-tareas-dag.md)).
 - Una tarea está *ready* cuando todas sus dependencias tienen su PR mergeado a la rama base. Aplica desde el refinamiento: con dependencias pendientes la tarea se queda en Draft sin agente. Si el PR de una dependencia se cierra sin merge, sus dependientes pasan a Needs human.
 - Dependencias cross‑project permitidas, pero visibles en la UI como riesgo.
 
@@ -212,14 +212,14 @@ Una tarea = un worktree = un branch, desde el primer despacho hasta el merge; to
 
 | Momento | Acción | Notas |
 | --- | --- | --- |
-| Primer despacho (refinamiento) | Crear worktree y branch desde la rama base | Branch `lunasq/<task id>`, desde `origin/<rama base>` tras un `git fetch`; idempotente consultando `worktree list` y usando `open` si ya existe (ADR 0004, ADR 0010) |
-| Worktree creado | Correr el bootstrap del proyecto | Instalar dependencias, copiar config local; corre como proceso hijo y el worktree consta como listo en la BD solo si termina bien, así se reintenta (ADR 0010) |
+| Primer despacho (refinamiento) | Crear worktree y branch desde la rama base | Branch `lunasq/<task id>`, desde `origin/<rama base>` tras un `git fetch`; idempotente consultando `worktree list` y usando `open` si ya existe (ADR 0004, ADR 0012) |
+| Worktree creado | Correr el bootstrap del proyecto | Instalar dependencias, copiar config local; corre como proceso hijo y el worktree consta como listo en la BD solo si termina bien, así se reintenta (ADR 0012) |
 | Fases siguientes y rework | Reabrir el mismo worktree | El agente nuevo hereda el estado del código, no el contexto de la sesión |
 | Tarea dependiente | Crear su worktree desde la rama base, que ya incluye el merge de sus dependencias | Sin stacked branches |
 | Entrega | Rebase sobre la rama base dentro del worktree, push, PR | Conflictos regresan la tarea a in progress |
 | Después del merge o cancelación | `worktree remove` | No borra el branch; requiere forzar si hay cambios sin commit |
 
-Restricciones: dos tareas nunca comparten branch ni worktree, y el reconciliador detecta worktrees huérfanos (tarea inexistente, cancelada o con el PR mergeado; ADR 0010) para limpiarlos. Costo a vigilar: disco y tiempo de bootstrap por tarea, que pesa más con muchas tareas en paralelo.
+Restricciones: dos tareas nunca comparten branch ni worktree, y el reconciliador detecta worktrees huérfanos (tarea inexistente, cancelada o con el PR mergeado; ADR 0012) para limpiarlos. Costo a vigilar: disco y tiempo de bootstrap por tarea, que pesa más con muchas tareas en paralelo.
 
 **Señales y cómo se interpretan**
 

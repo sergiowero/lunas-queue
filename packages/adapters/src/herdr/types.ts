@@ -126,7 +126,7 @@ export interface HerdrAdapter {
   /**
    * Borra el checkout y cierra su workspace; conserva el branch. Idempotente: si el workspace ya
    * no existe no falla. Sobre un workspace que no es worktree lanza `not_linked_worktree`; con
-   * cambios sin commit y sin `force`, `dirty_worktree_requires_force` (ADR 0010).
+   * cambios sin commit y sin `force`, `dirty_worktree_requires_force` (ADR 0012).
    */
   removeWorktree(input: { workspaceId: string; force?: boolean }): Promise<void>;
 

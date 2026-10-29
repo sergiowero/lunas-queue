@@ -1,5 +1,5 @@
 // Ciclo de vida del worktree de una tarea (UW-09; docs/design.md §Ciclo de vida del worktree,
-// docs/decisions/0010-ciclo-de-vida-worktrees.md). Una tarea = un worktree = un branch, desde el
+// docs/decisions/0012-ciclo-de-vida-worktrees.md). Una tarea = un worktree = un branch, desde el
 // primer despacho hasta el merge. La BD es la verdad: `worktree_path` se guarda solo cuando el
 // worktree quedó listo, así un bootstrap que falló se reintenta en el siguiente `ensure`.
 import { type HerdrAdapter, isHerdrError, type ProcessRunner } from "@lunasq/adapters";

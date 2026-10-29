@@ -1,4 +1,4 @@
-# 0010 — Ciclo de vida de worktrees: branch determinístico, bootstrap antes de persistir y huérfanos
+# 0012 — Ciclo de vida de worktrees: branch determinístico, bootstrap antes de persistir y huérfanos
 
 - Estado: aceptada
 - Fecha: 2026-10-29

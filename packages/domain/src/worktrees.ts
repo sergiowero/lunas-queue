@@ -1,5 +1,5 @@
 // Reglas del ciclo de vida del worktree de una tarea (docs/design.md §Ciclo de vida del worktree,
-// docs/decisions/0010-ciclo-de-vida-worktrees.md): nombre del branch y cuándo sobra un worktree.
+// docs/decisions/0012-ciclo-de-vida-worktrees.md): nombre del branch y cuándo sobra un worktree.
 import type { PrState, TaskState } from "@lunasq/schemas";
 
 export const TASK_BRANCH_PREFIX = "lunasq/";

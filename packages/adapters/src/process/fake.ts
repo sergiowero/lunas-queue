@@ -8,7 +8,11 @@ export type FakeProcessHandler = (
 export class FakeProcessRunner implements ProcessRunner {
   readonly calls: ProcessInput[] = [];
 
-  constructor(private handler: FakeProcessHandler = () => ({})) {}
+  private handler: FakeProcessHandler;
+
+  constructor(handler: FakeProcessHandler = () => ({})) {
+    this.handler = handler;
+  }
 
   /** Cambia la respuesta de las llamadas siguientes. */
   respond(handler: FakeProcessHandler) {

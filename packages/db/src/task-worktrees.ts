@@ -1,4 +1,4 @@
-// Branch y worktree de las tareas (UW-09, ADR 0010). Solo toca esas dos columnas: estado,
+// Branch y worktree de las tareas (UW-09, ADR 0012). Solo toca esas dos columnas: estado,
 // sub-estado e iteración cambian únicamente por task-transitions (ADR 0007).
 import type { TaskWorktreeRecord, TaskWorktreeStore } from "@lunasq/domain";
 import { eq } from "drizzle-orm";
@@ -15,7 +15,11 @@ const columns = {
 };
 
 export class TaskWorktreeRepository implements TaskWorktreeStore {
-  constructor(private readonly db: LunasqDatabase) {}
+  private readonly db: LunasqDatabase;
+
+  constructor(db: LunasqDatabase) {
+    this.db = db;
+  }
 
   get(taskId: string): TaskWorktreeRecord | null {
     return this.db.select(columns).from(tasks).where(eq(tasks.id, taskId)).get() ?? null;

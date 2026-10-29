@@ -1,7 +1,8 @@
-// Suite de contrato de ProjectConfigReader: corre contra el reader en memoria y contra el
-// repositorio de @lunasq/db, para que ambos se comporten igual.
+// Suites de contrato de los puertos del dominio: corren contra la implementación en memoria y
+// contra la de @lunasq/db, para que ambas se comporten igual.
 import { Project, ProjectCreate } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
+import type { DependencyEdge, DependencyGraphReader } from "./dependency-graph.ts";
 import type { ProjectConfigReader } from "./project-config.ts";
 
 let seq = 0;
@@ -66,6 +67,37 @@ export function projectConfigReaderContract(
       read.createdAt.setFullYear(1990);
       expect(reader.get(config.id)?.agentProfiles.refine.args).toEqual([]);
       expect(reader.get(config.id)?.createdAt).toEqual(config.createdAt);
+    });
+  });
+}
+
+/**
+ * Suite de contrato de DependencyGraphReader: corre contra el reader en memoria y contra el
+ * repositorio de tareas de @lunasq/db. Las aristas usan nombres; `setup` crea una tarea por
+ * nombre y devuelve el reader y cómo traducir un nombre a su id.
+ */
+export function dependencyGraphReaderContract(
+  name: string,
+  setup: (edges: DependencyEdge[]) => {
+    reader: DependencyGraphReader;
+    idOf: (name: string) => string;
+  },
+): void {
+  describe(`contrato de DependencyGraphReader: ${name}`, () => {
+    it("el snapshot refleja todas las aristas", () => {
+      const { reader, idOf } = setup([
+        { taskId: "b", dependsOnId: "a" },
+        { taskId: "c", dependsOnId: "b" },
+      ]);
+      const graph = reader.snapshot();
+      expect(graph.edges()).toHaveLength(2);
+      expect(graph.ancestors(idOf("c"))).toEqual([idOf("b"), idOf("a")]);
+      expect(graph.descendants(idOf("a"))).toEqual([idOf("b"), idOf("c")]);
+    });
+
+    it("sin aristas devuelve un grafo vacío", () => {
+      const graph = setup([]).reader.snapshot();
+      expect(graph.edges()).toEqual([]);
     });
   });
 }

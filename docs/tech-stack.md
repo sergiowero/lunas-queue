@@ -75,7 +75,7 @@ Cada componente del diseño queda resuelto con piezas de la misma base, sin serv
 | Usage collector | Endpoints OTLP/HTTP con JSON (`/v1/metrics`, `/v1/logs`) dentro de Hono | Claude Code soporta `http/json`, así que no hace falta un OpenTelemetry Collector aparte |
 | Gate de tests y hooks | Ejecución en un pane de herdr con un wrapper que registra código de salida y salida | Lo ves en herdr como cualquier agente |
 | Adapter de herdr | `child_process` para el CLI (salida JSON) y socket Unix con NDJSON para `events.subscribe` | Fake en memoria con la misma interfaz para tests |
-| Ejecución de procesos | `ProcessRunner` sobre `child_process` (`sh -c`, grupo de procesos propio, timeout) para el bootstrap del worktree ([ADR 0010](decisions/0010-ciclo-de-vida-worktrees.md)) | Fake con la misma interfaz para tests |
+| Ejecución de procesos | `ProcessRunner` sobre `child_process` (`sh -c`, grupo de procesos propio, timeout) para el bootstrap del worktree ([ADR 0012](decisions/0012-ciclo-de-vida-worktrees.md)) | Fake con la misma interfaz para tests |
 | Adapter de GitHub | CLI `gh` con salida `--json` vía `child_process` | Usa la sesión autenticada de `gh` de la máquina |
 | Archivo de evidencia | Generador de markdown propio; redacción de secretos con patrones al estilo gitleaks | Escribe en `lunasq/tasks/{id}.md` del worktree |
 | Logs del propio LunasQ | pino | JSON estructurado, rotación por archivo |

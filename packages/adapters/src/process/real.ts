@@ -30,7 +30,11 @@ class Tail {
   private chunks: Buffer[] = [];
   private size = 0;
 
-  constructor(private readonly limit: number) {}
+  private readonly limit: number;
+
+  constructor(limit: number) {
+    this.limit = limit;
+  }
 
   push(chunk: Buffer) {
     this.chunks.push(chunk);
