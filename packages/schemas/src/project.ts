@@ -1,5 +1,5 @@
 // Configuración de un Project (docs/design.md §Modelo de dominio, §Concurrencia, §Timeout de fase).
-// Forma y defaults en docs/decisions/0007-config-proyecto.md.
+// Forma y defaults en docs/decisions/0008-config-proyecto.md.
 import { z } from "zod";
 import { AgentKind, Phase } from "./enums.ts";
 

@@ -1,5 +1,5 @@
 // Repositorio de proyectos: valida con los esquemas de @lunasq/schemas lo que entra y lo que sale
-// de las columnas JSON, e implementa el puerto de lectura del dominio (ADR 0007).
+// de las columnas JSON, e implementa el puerto de lectura del dominio (ADR 0008).
 import type { ProjectConfigReader } from "@lunasq/domain";
 import { Project, ProjectCreate, ProjectUpdate } from "@lunasq/schemas";
 import { asc, eq } from "drizzle-orm";

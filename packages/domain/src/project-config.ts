@@ -1,4 +1,4 @@
-// Puerto de lectura de la configuración de un Project (docs/decisions/0007-config-proyecto.md).
+// Puerto de lectura de la configuración de un Project (docs/decisions/0008-config-proyecto.md).
 // Dispatcher, gate de tests y hooks dependen de esta interfaz, no de la base.
 import { type AgentProfile, type Phase, Project } from "@lunasq/schemas";
 

@@ -1,4 +1,4 @@
-# 0007 — Configuración de proyecto
+# 0008 — Configuración de proyecto
 
 - Estado: aceptada
 - Fecha: 2026-10-29
