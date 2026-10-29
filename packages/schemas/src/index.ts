@@ -4,3 +4,4 @@ export const packageName = "@lunasq/schemas";
 
 export * from "./enums.ts";
 export * from "./events.ts";
+export * from "./project.ts";

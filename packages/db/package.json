@@ -5,7 +5,8 @@
   "description": "Esquema Drizzle, migraciones, repositorios y outbox",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./test-helpers": "./src/test-helpers.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
-    "drizzle-kit": "^0.31.11"
+    "drizzle-kit": "^0.31.11",
+    "vitest": "^5.0.5"
   }
 }
