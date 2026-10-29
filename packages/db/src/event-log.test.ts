@@ -29,9 +29,9 @@ describe("Event log", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const e = appendEvent(db, { taskId: t.id, type: "task.created", actor: "human" });
-    expect(() =>
-      db.update(events).set({ type: "otro" }).where(eq(events.id, e.id)).run(),
-    ).toThrow(APPEND_ONLY);
+    expect(() => db.update(events).set({ type: "otro" }).where(eq(events.id, e.id)).run()).toThrow(
+      APPEND_ONLY,
+    );
     expect(() =>
       db.$client.prepare("update events set payload = '{}' where id = ?").run(e.id),
     ).toThrow(APPEND_ONLY);

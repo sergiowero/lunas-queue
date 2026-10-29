@@ -5,9 +5,9 @@ import {
   type CommandInput,
   DEFAULT_MAX_ITERATIONS,
   DEFAULT_MAX_RETRIES,
-  type TaskSnapshot,
   isTerminal,
   subStateFor,
+  type TaskSnapshot,
   transition,
 } from "./index.ts";
 
@@ -242,7 +242,11 @@ describe("transition: guards", () => {
       "allCriteriaPassed",
       "prCreated",
     ] as const) {
-      rejects(snap("verification", "running"), { ...passing.verdict_pass, [field]: false }, "agent");
+      rejects(
+        snap("verification", "running"),
+        { ...passing.verdict_pass, [field]: false },
+        "agent",
+      );
     }
   });
 
@@ -260,11 +264,7 @@ describe("transition: guards", () => {
 
   it("verdict_rework y run_failed exigen límites enteros positivos", () => {
     rejects(snap("verification", "running"), { type: "verdict_rework", maxIterations: 0 }, "agent");
-    rejects(
-      snap("draft", "running"),
-      { type: "run_failed", attempt: 1, maxRetries: -1 },
-      "system",
-    );
+    rejects(snap("draft", "running"), { type: "run_failed", attempt: 1, maxRetries: -1 }, "system");
   });
 });
 
@@ -304,7 +304,11 @@ describe("transition: loop de verificación", () => {
   });
 
   it("delivery_conflict regresa a in progress sin subir la iteración", () => {
-    const result = transition(snap("verification", "queued", 2), passing.delivery_conflict, "system");
+    const result = transition(
+      snap("verification", "queued", 2),
+      passing.delivery_conflict,
+      "system",
+    );
     expect(result).toMatchObject({ ok: true, next: snap("in_progress", "queued", 2) });
   });
 

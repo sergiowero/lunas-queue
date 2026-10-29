@@ -83,8 +83,12 @@ Cada estado con agente tiene un sub‑estado: `queued` (esperando slot o depende
 | In progress → Verification | submit\_for\_verification | Gate de tests en verde ejecutado por LunasQ; cada criterio con al menos un test; commits en el branch de la tarea | Agente implementador |
 | Verification → In progress | submit\_verdict = rework | Iteración menor al máximo | Agente verificador |
 | Verification → Completed | submit\_verdict = pass | Gate de tests en verde, tests coherentes y todos los criterios en pass; push y PR exitosos | Verificador, luego entrega |
-| Cualquiera → Needs human | Bloqueo con timeout, reintentos o iteraciones agotadas | — | Sistema |
-| Cualquiera → Cancelled | Cancelación | Agente vivo se detiene y se limpia | Humano |
+| Cualquiera no terminal → Needs human | Bloqueo con timeout, reintentos o iteraciones agotadas | — | Sistema |
+| Verification → In progress | Conflictos al integrar la rama base en la entrega | Sin subir la iteración | Sistema |
+| Cualquiera no terminal → Cancelled | Cancelación | Agente vivo se detiene y se limpia | Humano |
+| Needs human → estado previo | Reanudar | Vuelve al estado previo al último escalamiento, con sub‑estado `queued` si lleva agente | Humano |
+
+Completed y Cancelled son terminales. El catálogo de comandos, los guards, los sub‑estados y el Event log están en [ADR 0007](decisions/0007-maquina-de-estados.md).
 
 ## Arquitectura
 
