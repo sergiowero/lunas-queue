@@ -57,6 +57,12 @@ export class FakeCommitVerifier implements CommitVerifier {
     this.calls.push(input);
     return input.commits.filter((sha) => this.absent.has(sha));
   }
+
+  dirty: string[] = [];
+
+  async uncommitted(_worktreePath: string): Promise<string[]> {
+    return this.dirty;
+  }
 }
 
 export type CallResult = { isError: boolean; body: Record<string, unknown> };

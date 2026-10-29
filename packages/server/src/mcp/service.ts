@@ -70,6 +70,9 @@ export type McpErrorCode =
   // Criterios o tareas del handoff que no coinciden con la spec aprobada.
   | "spec_mismatch"
   | "commits_missing"
+  | "dirty_worktree"
+  // Ya corre un gate de tests para este Run.
+  | "gate_in_progress"
   | "test_gate_failed"
   | "verdict_already_recorded"
   | "no_worktree"
@@ -87,6 +90,8 @@ export type Outcome<T> = { ok: true; data: T } | { ok: false; error: McpError };
 
 const fail = (code: McpErrorCode, message: string, extra: Partial<McpError> = {}) =>
   ({ ok: false, error: { code, message, ...extra } }) as const;
+
+const AFTER_VERDICT: readonly ToolName[] = ["get_task_context", "submit_verdict"];
 
 const HANDOFF_PHASE: Readonly<Record<Phase, HandoffPhase | null>> = {
   refine: "refinement",
@@ -119,6 +124,8 @@ export class LunasqMcpService {
   readonly #tasks: TaskRepository;
   readonly #testGate: TestGate;
   readonly #commits: CommitVerifier;
+  // Runs con un gate de tests en curso: un reintento no lanza una segunda suite en paralelo.
+  readonly #gating = new Set<string>();
 
   constructor(deps: McpServiceDeps) {
     this.#db = deps.db;
@@ -144,6 +151,10 @@ export class LunasqMcpService {
     }
     if (tool !== "get_task_context" && !run.contextReadAt) {
       return fail("context_required", `llama get_task_context antes de ${tool}`);
+    }
+    // Tras un pass el Run sigue abierto solo para la entrega: el verificador ya no mueve la tarea.
+    if (run.phase === "verify" && run.handoff !== null && !AFTER_VERDICT.includes(tool)) {
+      return fail("tool_not_allowed", `el Run ya registró su veredicto; ${tool} no se acepta`);
     }
     return { ok: true, data: run };
   }
@@ -282,28 +293,18 @@ export class LunasqMcpService {
     const { task, project } = this.#taskAndProject(run);
     if (!task.worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
 
-    const missing = await this.#commits.missing({
-      worktreePath: task.worktreePath,
-      baseBranch: project.baseBranch,
-      commits: handoff.body.commits,
-    });
-    if (missing.length > 0) {
-      return fail("commits_missing", "commits que no están en el branch de la tarea", {
-        issues: missing.map((sha) => ({
-          path: `body.commits[${handoff.body.commits.indexOf(sha)}]`,
-          message: `${sha} no está en el branch de la tarea o ya está en ${project.baseBranch}`,
-        })),
-      });
+    if (this.#gating.has(run.id)) {
+      return fail(
+        "gate_in_progress",
+        "ya corre un gate de tests para este Run; espera su resultado",
+      );
     }
-    // El gate lo corre LunasQ: lo que el agente diga de sus tests no cuenta.
-    const gate = await this.#testGate.run({
-      taskId: task.id,
-      runId: run.id,
-      worktreePath: task.worktreePath,
-      command: project.testCommand ?? null,
-    });
-    if (!gate.passed) {
-      return fail("test_gate_failed", "el gate de tests está en rojo", { output: gate.output });
+    this.#gating.add(run.id);
+    try {
+      const rejected = await this.#checkWorktree(run, handoff, task.worktreePath, project);
+      if (rejected) return rejected;
+    } finally {
+      this.#gating.delete(run.id);
     }
     return this.#write((tx) => {
       this.#close(tx, run, { result: "success", handoff });
@@ -407,6 +408,45 @@ export class LunasqMcpService {
       return fail("handoff_mismatch", "el handoff no corresponde a este Run", { issues });
     }
     return { ok: true, data: handoff as Extract<Handoff, { phase: P }> };
+  }
+
+  /** Commits del branch, worktree limpio y gate de tests en verde; null si todo pasa. */
+  async #checkWorktree(
+    run: RunRow,
+    handoff: ImplementationHandoff,
+    worktreePath: string,
+    project: { baseBranch: string; testCommand?: string | null },
+  ): Promise<Extract<Outcome<never>, { ok: false }> | null> {
+    const dirty = await this.#commits.uncommitted(worktreePath);
+    if (dirty.length > 0) {
+      return fail("dirty_worktree", "el worktree tiene cambios sin commitear", {
+        issues: dirty.map((file) => ({ path: file, message: "cambio sin commitear" })),
+      });
+    }
+    const missing = await this.#commits.missing({
+      worktreePath,
+      baseBranch: project.baseBranch,
+      commits: handoff.body.commits,
+    });
+    if (missing.length > 0) {
+      return fail("commits_missing", "commits que no están en el branch de la tarea", {
+        issues: missing.map((sha) => ({
+          path: `body.commits[${handoff.body.commits.indexOf(sha)}]`,
+          message: `${sha} no está en el branch de la tarea o ya está en ${project.baseBranch}`,
+        })),
+      });
+    }
+    // El gate lo corre LunasQ sobre lo commiteado: lo que el agente diga de sus tests no cuenta.
+    const gate = await this.#testGate.run({
+      taskId: run.taskId,
+      runId: run.id,
+      worktreePath,
+      command: project.testCommand ?? null,
+    });
+    if (!gate.passed) {
+      return fail("test_gate_failed", "el gate de tests está en rojo", { output: gate.output });
+    }
+    return null;
   }
 
   #taskAndProject(run: RunRow) {

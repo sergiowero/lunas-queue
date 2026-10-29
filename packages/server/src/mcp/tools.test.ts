@@ -2,7 +2,7 @@
 import { closeRun, createQuestion, listEvents, RunRepository, SpecRepository } from "@lunasq/db";
 import { insertRun, setTaskPosition } from "@lunasq/db/test-helpers";
 import { specContentExample } from "@lunasq/schemas/testing";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { handoffFor, mcpHarness } from "./test-helpers.ts";
 
 const refining = { state: "draft", subState: "running" } as const;
@@ -282,6 +282,61 @@ describe("submit_for_verification", () => {
     });
   });
 
+  it("si el dispatcher cerró el Run y abrió otro mientras corría el gate, no transiciona", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    let next: { id: string } | undefined;
+    h.testGate.run = async () => {
+      closeRun(h.db, run.id, { result: "failure", failureReason: "timeout" });
+      next = insertRun(h.db, task.id);
+      return { passed: true, output: "" };
+    };
+    const result = await call("submit_for_verification", {
+      handoff: handoffFor("implementation", run),
+    });
+    expect(result.body).toMatchObject({ error: "invalid_run_token" });
+    expect(h.taskOf(task.id)).toMatchObject(implementing);
+    expect(runOf(h, run.id)).toMatchObject({ result: "failure", handoff: null });
+    expect(next && runOf(h, next.id)).toMatchObject({ endedAt: null, handoff: null });
+  });
+
+  it("un worktree con cambios sin commitear se rechaza antes del gate", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    h.commitVerifier.dirty = ["src/order.ts"];
+    const result = await call("submit_for_verification", {
+      handoff: handoffFor("implementation", run),
+    });
+    expect(result.body).toMatchObject({
+      error: "dirty_worktree",
+      issues: [{ path: "src/order.ts" }],
+    });
+    expect(h.testGate.calls).toHaveLength(0);
+    expect(h.taskOf(task.id)).toMatchObject(implementing);
+  });
+
+  it("un segundo submit mientras corre el gate se rechaza sin lanzar otra suite", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    let release: (value: { passed: boolean; output: string }) => void = () => {};
+    let started = 0;
+    h.testGate.run = () => {
+      started += 1;
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    };
+    const handoff = handoffFor("implementation", run);
+    const first = call("submit_for_verification", { handoff });
+    await vi.waitFor(() => expect(started).toBe(1));
+    const second = await call("submit_for_verification", { handoff });
+    expect(second.body).toMatchObject({ error: "gate_in_progress" });
+    release({ passed: true, output: "" });
+    expect((await first).isError).toBe(false);
+    expect(started).toBe(1);
+    expect(h.taskOf(task.id)).toMatchObject({ state: "verification" });
+  });
+
   it("si la tarea cambió mientras corría el gate, no transiciona", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
@@ -330,6 +385,21 @@ describe("submit_verdict", () => {
     });
     expect(reject.body).toMatchObject({ error: "verdict_already_recorded" });
     expect(h.taskOf(task.id)).toMatchObject(verifying);
+  });
+
+  it("tras un pass, el token ya no puede preguntar ni reportar fallo", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    for (const [tool, args] of [
+      ["ask_human", { question: "¿Algo más?" }],
+      ["report_failure", { reason: "me arrepentí" }],
+    ] as const) {
+      expect((await call(tool, args)).body).toMatchObject({ error: "tool_not_allowed" });
+    }
+    expect(h.taskOf(task.id)).toMatchObject(verifying);
+    expect(runOf(h, run.id)).toMatchObject({ endedAt: null, result: null });
+    expect((await call("get_task_context")).isError).toBe(false);
   });
 
   it("un veredicto que no cubre todos los criterios de la spec se rechaza", async () => {

@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeProcessRunner, ShellProcessRunner } from "@lunasq/adapters";
 import { afterEach, describe, expect, it } from "vitest";
-import { GATE_OUTPUT_LIMIT, GitCommitVerifier, ShellTestGate } from "./ports.ts";
+import {
+  DEFAULT_GATE_TIMEOUT_MS,
+  GATE_OUTPUT_LIMIT,
+  GitCommitVerifier,
+  ShellTestGate,
+} from "./ports.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -18,7 +23,11 @@ describe("ShellTestGate", () => {
     const runner = new FakeProcessRunner(() => ({ exitCode: 0, stdout: "ok" }));
     const result = await new ShellTestGate(runner).run({ ...gate, command: "pnpm test" });
     expect(result).toEqual({ passed: true, output: "ok" });
-    expect(runner.calls[0]).toMatchObject({ command: "pnpm test", cwd: "/wt" });
+    expect(runner.calls[0]).toMatchObject({
+      command: "pnpm test",
+      cwd: "/wt",
+      timeoutMs: DEFAULT_GATE_TIMEOUT_MS,
+    });
 
     runner.respond(() => ({ exitCode: 1, stderr: "1 failed" }));
     expect(await new ShellTestGate(runner).run({ ...gate, command: "pnpm test" })).toEqual({
@@ -83,6 +92,23 @@ describe("GitCommitVerifier contra un repo real", () => {
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     expect(
       await verifier.missing({ worktreePath: dir, baseBranch: "no-existe", commits: [work] }),
+    ).toEqual([work]);
+  });
+
+  it("uncommitted lista cambios y archivos sin seguimiento; vacío con el worktree limpio", async () => {
+    const { dir } = repo();
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    expect(await verifier.uncommitted(dir)).toEqual([]);
+    writeFileSync(join(dir, "work.txt"), "cambio");
+    writeFileSync(join(dir, "nuevo.txt"), "x");
+    expect((await verifier.uncommitted(dir)).sort()).toEqual(["nuevo.txt", "work.txt"]);
+  });
+
+  it("una rama base con forma de opción no se interpreta como opción de git", async () => {
+    const { dir, work } = repo();
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    expect(
+      await verifier.missing({ worktreePath: dir, baseBranch: "--all", commits: [work] }),
     ).toEqual([work]);
   });
 });

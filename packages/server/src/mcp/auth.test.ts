@@ -1,8 +1,8 @@
 // Guardas comunes del LunasQ MCP: run token, fase del Run y gate de get_task_context.
-import { closeRun, RunRepository } from "@lunasq/db";
+import { closeRun, listEvents, RunRepository } from "@lunasq/db";
 import { insertRun } from "@lunasq/db/test-helpers";
 import { describe, expect, it } from "vitest";
-import { TOOL_NAMES } from "./service.ts";
+import { TOOL_NAMES, TOOL_PHASES } from "./service.ts";
 import { handoffFor, mcpHarness } from "./test-helpers.ts";
 
 const running = { state: "in_progress", subState: "running" } as const;
@@ -32,11 +32,39 @@ describe("LunasQ MCP: transporte", () => {
 });
 
 describe("LunasQ MCP: run token", () => {
-  it.each(TOOL_NAMES)("%s sin run token se rechaza", async (tool) => {
+  // Argumentos válidos por tool: así la llamada llega a la guarda y no la frena el inputSchema.
+  const validArgs = (run: {
+    id: string;
+    taskId: string;
+  }): Record<string, Record<string, unknown>> => ({
+    get_task_context: {},
+    submit_spec: { handoff: handoffFor("refinement", run) },
+    ask_human: { question: "¿Sigo?" },
+    update_checklist: { items: [{ taskId: "T-1", done: true }] },
+    submit_for_verification: { handoff: handoffFor("implementation", run) },
+    submit_verdict: { handoff: handoffFor("verification-reject", run) },
+    report_failure: { reason: "no puedo" },
+  });
+
+  it.each(TOOL_NAMES)("%s con el token de un Run cerrado se rechaza sin efectos", async (tool) => {
     const h = mcpHarness();
-    const { call } = await h.connect();
-    const result = await call(tool, {});
-    expect(result.isError).toBe(true);
+    const task = h.task(running);
+    const old = insertRun(h.db, task.id, {
+      phase: TOOL_PHASES[tool][0] ?? "implement",
+      contextReadAt: new Date(),
+      endedAt: new Date(),
+      result: "failure",
+    });
+    const before = listEvents(h.db, task.id).length;
+    for (const token of [old.runToken, undefined]) {
+      const { call } = await h.connect(token);
+      const result = await call(tool, validArgs(old)[tool]);
+      expect(result).toMatchObject({ isError: true, body: { error: "invalid_run_token" } });
+    }
+    expect(listEvents(h.db, task.id)).toHaveLength(before);
+    expect(h.taskOf(task.id)).toMatchObject(running);
+    expect(new RunRepository(h.db).get(old.id)).toMatchObject({ result: "failure", handoff: null });
+    expect(h.testGate.calls).toHaveLength(0);
   });
 
   it("sin header, con token desconocido o de un Run cerrado: invalid_run_token", async () => {

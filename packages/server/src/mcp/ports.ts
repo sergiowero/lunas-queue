@@ -30,9 +30,14 @@ export type CommitCheckInput = {
 export interface CommitVerifier {
   /** Commits del handoff que no están en el branch de la tarea (o que ya están en la base). */
   missing(input: CommitCheckInput): Promise<string[]>;
+  /** Archivos con cambios sin commitear: el gate debe correr sobre lo commiteado. */
+  uncommitted(worktreePath: string): Promise<string[]>;
 }
 
 export const GATE_OUTPUT_LIMIT = 4000;
+
+/** Tiempo límite por defecto del gate: una suite colgada no debe correr para siempre. */
+export const DEFAULT_GATE_TIMEOUT_MS = 20 * 60_000;
 
 const tail = (text: string) =>
   text.length > GATE_OUTPUT_LIMIT ? text.slice(text.length - GATE_OUTPUT_LIMIT) : text;
@@ -42,11 +47,11 @@ const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
 export class ShellTestGate implements TestGate {
   readonly #runner: ProcessRunner;
-  readonly #timeoutMs: number | undefined;
+  readonly #timeoutMs: number;
 
   constructor(runner: ProcessRunner, opts: { timeoutMs?: number } = {}) {
     this.#runner = runner;
-    this.#timeoutMs = opts.timeoutMs;
+    this.#timeoutMs = opts.timeoutMs ?? DEFAULT_GATE_TIMEOUT_MS;
   }
 
   async run(input: TestGateInput): Promise<TestGateResult> {
@@ -56,7 +61,7 @@ export class ShellTestGate implements TestGate {
     const result = await this.#runner.run({
       command: input.command,
       cwd: input.worktreePath,
-      ...(this.#timeoutMs === undefined ? {} : { timeoutMs: this.#timeoutMs }),
+      timeoutMs: this.#timeoutMs,
     });
     const output = tail(`${result.stdout}${result.stderr}`);
     if (result.timedOut) {
@@ -76,17 +81,30 @@ export class GitCommitVerifier implements CommitVerifier {
   async missing(input: CommitCheckInput): Promise<string[]> {
     const missing: string[] = [];
     for (const sha of input.commits) {
-      // El SHA ya viene validado como hexadecimal por el esquema del handoff.
+      // El SHA ya viene validado como hexadecimal por el esquema del handoff; --end-of-options
+      // evita que una rama base como `--foo` se lea como opción de git.
       const result = await this.#runner.run({
         command: [
-          `git rev-parse --verify --quiet ${quote(`${input.baseBranch}^{commit}`)} >/dev/null`,
-          `git merge-base --is-ancestor ${quote(sha)} HEAD`,
-          `! git merge-base --is-ancestor ${quote(sha)} ${quote(input.baseBranch)}`,
+          `git rev-parse --verify --quiet --end-of-options ${quote(`${input.baseBranch}^{commit}`)} >/dev/null`,
+          `git merge-base --is-ancestor --end-of-options ${quote(sha)} HEAD`,
+          `! git merge-base --is-ancestor --end-of-options ${quote(sha)} ${quote(input.baseBranch)}`,
         ].join(" && "),
         cwd: input.worktreePath,
       });
       if (result.exitCode !== 0) missing.push(sha);
     }
     return missing;
+  }
+
+  async uncommitted(worktreePath: string): Promise<string[]> {
+    const result = await this.#runner.run({
+      command: "git status --porcelain --untracked-files=all",
+      cwd: worktreePath,
+    });
+    if (result.exitCode !== 0) return ["(git status falló)"];
+    return result.stdout
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .map((line) => line.slice(3));
   }
 }
