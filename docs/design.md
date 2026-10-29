@@ -154,7 +154,7 @@ El scheduler no ordena una lista: calcula un **ready set** (tareas cuyas depende
 
 **Dependencias como DAG**
 
-- Se valida ausencia de ciclos al crear o editar una arista; se rechaza la operación si cierra un ciclo.
+- Se valida ausencia de ciclos al crear o editar una arista; se rechaza la operación si cierra un ciclo. Las aristas se agregan mientras la tarea dependiente está en Draft y no pueden apuntar a una tarea cancelada ([ADR 0010](decisions/0010-api-tareas-dag.md)).
 - Una tarea está *ready* cuando todas sus dependencias tienen su PR mergeado a la rama base. Aplica desde el refinamiento: con dependencias pendientes la tarea se queda en Draft sin agente. Si el PR de una dependencia se cierra sin merge, sus dependientes pasan a Needs human.
 - Dependencias cross‑project permitidas, pero visibles en la UI como riesgo.
 

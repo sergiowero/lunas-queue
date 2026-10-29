@@ -86,7 +86,7 @@ Las 30 unidades en orden de ola. Todas dependen de UW-00, que va primero; despu�
 | UW-04 | Máquina de estados y Event log | Datos y dominio | 1 | UW-01 | Hecho |
 | UW-05 | API de proyectos | Datos y dominio | 1 | UW-01 | Hecho |
 | UW-06 | Notificaciones | Orquestación y ejecución | 1 | UW-02 | Hecho |
-| UW-07 | API de tareas y dependencias (DAG) | Datos y dominio | 2 | UW-01, UW-04 | Pendiente |
+| UW-07 | API de tareas y dependencias (DAG) | Datos y dominio | 2 | UW-01, UW-04 | Hecho |
 | UW-08 | Outbox de eventos | Datos y dominio | 2 | UW-01, UW-04 | Pendiente |
 | UW-09 | Ciclo de vida de worktrees | Orquestación y ejecución | 2 | UW-02, UW-05 | Pendiente |
 | UW-10 | Hooks por fase | Entrega e integración | 2 | UW-02, UW-04, UW-05 | Pendiente |
