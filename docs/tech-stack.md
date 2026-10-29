@@ -71,7 +71,7 @@ Cada componente del diseño queda resuelto con piezas de la misma base, sin serv
 | Scheduler | Módulo en proceso que reacciona a eventos del outbox y a un tick periódico | Cálculo de ready set y score en memoria a partir de la base |
 | Dispatcher y reconciliación | Módulo en proceso con loop de reconciliación | Usa el adapter de herdr; un solo dispatcher en v1 |
 | LunasQ MCP | SDK oficial de MCP v2 (`@modelcontextprotocol/server` + `@modelcontextprotocol/hono`), transporte Streamable HTTP stateless en `localhost`, montado en Hono ([ADR 0001](decisions/0001-mcp-sdk.md)) | Las tools usan los mismos esquemas Zod que el resto del backend |
-| Esquemas de handoff | Zod v4 como fuente (`packages/schemas/src/handoff`); JSON Schema generado y versionado en `packages/schemas/json-schema/v{n}` ([ADR 0005](decisions/0005-handoff-v1.md)) | El validador del MCP y la UI usan la misma definición |
+| Esquemas de handoff | Zod v4 como fuente (`packages/schemas/src/handoff`); JSON Schema generado y versionado en `packages/schemas/json-schema/v{n}` ([ADR 0006](decisions/0006-handoff-v1.md)) | El validador del MCP y la UI usan la misma definición |
 | Usage collector | Endpoints OTLP/HTTP con JSON (`/v1/metrics`, `/v1/logs`) dentro de Hono | Claude Code soporta `http/json`, así que no hace falta un OpenTelemetry Collector aparte |
 | Gate de tests y hooks | Ejecución en un pane de herdr con un wrapper que registra código de salida y salida | Lo ves en herdr como cualquier agente |
 | Adapter de herdr | `child_process` para el CLI (salida JSON) y socket Unix con NDJSON para `events.subscribe` | Fake en memoria con la misma interfaz para tests |

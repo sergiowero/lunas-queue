@@ -1,4 +1,4 @@
-# 0005 — Handoff v1: Zod como validador, JSON Schema como contrato estructural
+# 0006 — Handoff v1: Zod como validador, JSON Schema como contrato estructural
 
 - Estado: aceptada
 - Fecha: 2026-10-28

@@ -352,7 +352,7 @@ Todos los handoffs comparten un sobre común y agregan un cuerpo según la fase:
 | Cuerpo de implementación | mapa criterio → tests, commits, cambios por módulo, cómo correr las pruebas, desviaciones de la spec | Implementación |
 | Cuerpo de verificación | veredicto pass o reject, veredicto por criterio, reporte por revisor, revisores omitidos con justificación, must‑fix, hallazgos refutados con motivo, etiqueta de riesgo | Verificación |
 
-Como el formato es fijo, LunasQ puede usar los campos sin interpretar texto: armar el siguiente `get_task_context`, poblar la UI y renderizar el handoff en el archivo de evidencia `lunasq/tasks/{id}.md` como bloque JSON. Un cambio de esquema sube su versión, y LunasQ conserva la capacidad de leer handoffs de versiones anteriores. Esquemas, ejemplos válidos e inválidos y reglas entre campos: `packages/schemas` ([ADR 0005](decisions/0005-handoff-v1.md)).
+Como el formato es fijo, LunasQ puede usar los campos sin interpretar texto: armar el siguiente `get_task_context`, poblar la UI y renderizar el handoff en el archivo de evidencia `lunasq/tasks/{id}.md` como bloque JSON. Un cambio de esquema sube su versión, y LunasQ conserva la capacidad de leer handoffs de versiones anteriores. Esquemas, ejemplos válidos e inválidos y reglas entre campos: `packages/schemas` ([ADR 0006](decisions/0006-handoff-v1.md)).
 
 ## Prácticas de ingeniería por fase
 
