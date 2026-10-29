@@ -16,7 +16,7 @@ import {
   type StatePosition,
   TASK_TRANSITIONED,
 } from "@lunasq/schemas";
-import { and, count, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { SchedulerStateRepository } from "./scheduler-state.ts";
 import { events, runs, tasks } from "./schema.ts";
@@ -245,7 +245,8 @@ export class RunRepository {
           actor: "system",
           command: {
             type: "run_failed",
-            attempt: failuresSince(tx, task.id, run.phase),
+            // El Run que falla cuenta siempre, aunque empiece en el mismo ms que un resume.
+            attempt: Math.max(1, failuresSince(tx, task.id, run.phase, run.id)),
             ...(opts.maxRetries !== undefined && { maxRetries: opts.maxRetries }),
           },
           expected: { state: task.state, subState: "running" },
@@ -284,7 +285,12 @@ function closeOpen(tx: Tx, runId: string, input: CloseRunInput): boolean {
   return updated.length > 0;
 }
 
-function failuresSince(db: Reader, taskId: string, phase: SchedulablePhase): number {
+function failuresSince(
+  db: Reader,
+  taskId: string,
+  phase: SchedulablePhase,
+  includeRunId?: string,
+): number {
   const resumedAt = db
     .select({ at: events.createdAt })
     .from(events)
@@ -305,8 +311,12 @@ function failuresSince(db: Reader, taskId: string, phase: SchedulablePhase): num
       and(
         eq(runs.taskId, taskId),
         eq(runs.phase, phase),
-        // Un Run del mismo milisegundo que el resume cuenta como anterior: a lo sumo subcuenta uno.
-        resumedAt ? gt(runs.startedAt, resumedAt) : undefined,
+        // Un Run del mismo milisegundo que el resume cuenta como anterior, salvo el que falla ahora.
+        resumedAt
+          ? includeRunId
+            ? or(gt(runs.startedAt, resumedAt), eq(runs.id, includeRunId))
+            : gt(runs.startedAt, resumedAt)
+          : undefined,
       ),
     )
     .orderBy(sql`rowid desc`)

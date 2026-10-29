@@ -279,6 +279,26 @@ describe("RunRepository.fail", () => {
     expect(runs.consecutiveFailures(task.id, "implement")).toBe(0);
   });
 
+  it("el Run que falla cuenta aunque empiece en el mismo ms que el último resume", () => {
+    const { db, runs, task, claimOnce } = claimedInProgress();
+    runs.fail(claimOnce().id, "a");
+    transitionTask(db, {
+      taskId: task.id,
+      actor: "system",
+      command: { type: "escalate", reason: "phase_timeout" },
+    });
+    transitionTask(db, { taskId: task.id, actor: "human", command: { type: "resume" } });
+    const run = claimOnce();
+    db.$client
+      .prepare(
+        "update runs set started_at = (select max(created_at) from events where task_id = ?) where id = ?",
+      )
+      .run(task.id, run.id);
+
+    expect(runs.fail(run.id, "b")).toMatchObject({ closed: true, transitioned: true });
+    expect(db.select().from(tasks).where(eq(tasks.id, task.id)).get()?.subState).toBe("queued");
+  });
+
   it("es idempotente y no mueve una tarea que ya salió de running", () => {
     const { db, runs, task, claimOnce } = claimedInProgress();
     const run = claimOnce();

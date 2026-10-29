@@ -249,6 +249,27 @@ describe("WorktreeService: workspace del proyecto", () => {
     expect(workspaces.get(project.id)).toBe(stored);
   });
 
+  it("no adopta un id guardado que ahora es de otro proyecto (herdr reutiliza ids)", async () => {
+    const db = migratedDatabase();
+    const project = insertProject(db);
+    const herdr = new FakeHerdr();
+    const other = await herdr.ensureWorkspace({ cwd: "/otro/repo", label: "otro" });
+    const workspaces = new ProjectWorkspaceRepository(db);
+    workspaces.record(project.id, other.workspace.workspaceId);
+    const service = new WorktreeService({
+      herdr,
+      processes: new FakeProcessRunner(),
+      projects: new ProjectRepository(db),
+      tasks: new TaskWorktreeRepository(db),
+      workspaces,
+    });
+
+    await service.ensure(insertTask(db, project.id).id);
+
+    expect(workspaces.get(project.id)).not.toBe(other.workspace.workspaceId);
+    expect(await herdr.listWorktrees(other.workspace.workspaceId)).toEqual([]);
+  });
+
   it("si el workspace guardado ya no existe, guarda el nuevo", async () => {
     const db = migratedDatabase();
     const project = insertProject(db);

@@ -446,6 +446,122 @@ describe("PhaseDispatcher: cierre de fase", () => {
   });
 });
 
+describe("PhaseDispatcher: hallazgos de la revisión", () => {
+  it("cerrar el Run durante el bootstrap detiene el lanzamiento sin dejar agente ni pane", async () => {
+    const watched: string[] = [];
+    const ctx = setup({
+      dispatcher: { observer: { watch: (r) => watched.push(r.id), unwatch: () => {} } },
+    });
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    ctx.processes.respond(async (c) => {
+      if (c.command === "pnpm install") await gate;
+      return {};
+    });
+    const task = insertTask(ctx.db, ctx.project.id);
+    await ctx.dispatcher.dispatch(refine(task));
+    await vi.waitFor(() =>
+      expect(ctx.processes.calls.some((c) => c.command === "pnpm install")).toBe(true),
+    );
+    const [run] = ctx.runs.forTask(task.id);
+    const panesBefore = (await ctx.herdr.snapshot()).panes.length;
+
+    await ctx.dispatcher.closeRun(run?.id ?? "", { result: "cancelled" });
+    release();
+    await ctx.dispatcher.idle();
+
+    const snap = await ctx.herdr.snapshot();
+    expect(snap.agents).toEqual([]);
+    expect(snap.panes).toHaveLength(panesBefore);
+    expect(ctx.runs.get(run?.id ?? "")).toMatchObject({ result: "cancelled", launchedAt: null });
+    expect(watched).toEqual([]);
+    expect(ctx.errors).toEqual([]);
+  });
+
+  it("un agente recién arrancado que aún carga se espera y recibe el prompt", async () => {
+    const ctx = setup();
+    const original = ctx.herdr.startAgent.bind(ctx.herdr);
+    vi.spyOn(ctx.herdr, "startAgent").mockImplementationOnce(async (input) => {
+      const res = await original(input);
+      return { ...res, agent: { ...res.agent, status: "unknown" as const } };
+    });
+    const task = insertTask(ctx.db, ctx.project.id);
+
+    await ctx.dispatcher.dispatch(refine(task));
+    await ctx.dispatcher.idle();
+
+    const [run] = ctx.runs.forTask(task.id);
+    expect(await ctx.herdr.readAgent({ name: run?.herdrName ?? "" })).toBe(
+      phasePrompt("refine", task.id),
+    );
+  });
+
+  it("un agente reutilizado bloqueado por un permiso no se mata al retomar", async () => {
+    const herdr = new FakeHerdr({ promptDurationMs: 60_000 });
+    const ctx = setup({ herdr });
+    const task = insertTask(ctx.db, ctx.project.id);
+    const original = herdr.promptAgent.bind(herdr);
+    vi.spyOn(herdr, "promptAgent").mockImplementationOnce(async (input) => {
+      await original(input);
+      return new Promise(() => {});
+    });
+    await ctx.dispatcher.dispatch(refine(task));
+    await vi.waitFor(async () =>
+      expect((await herdr.snapshot()).agents[0]?.status).toBe("working"),
+    );
+    const name = ctx.runs.forTask(task.id)[0]?.herdrName ?? "";
+    herdr.setAgentStatus(name, "blocked");
+
+    const restarted = ctx.make();
+    await restarted.recover();
+    await restarted.idle();
+
+    expect(ctx.runs.forTask(task.id)[0]).toMatchObject({ result: null });
+    expect(ctx.runs.forTask(task.id)[0]?.launchedAt).toBeInstanceOf(Date);
+    expect(await herdr.getAgent(name)).toBeDefined();
+  });
+
+  it("un pane guardado que ya no es del worktree no se reutiliza ni se cierra", async () => {
+    const ctx = setup();
+    const task = insertTask(ctx.db, ctx.project.id);
+    const res = claimRun(ctx.db, {
+      decision: refine(task),
+      config: SchedulerConfig.parse({}),
+      projects: new ProjectRepository(ctx.db),
+      sessionId: "s",
+    });
+    if (!res.ok) throw new Error(res.error.message);
+    // Tras un reinicio de herdr el id guardado nombra un pane ajeno.
+    const { rootPaneId } = await ctx.herdr.ensureWorkspace({ cwd: "/ajeno", label: "ajeno" });
+    const foreign = await ctx.herdr.splitPane({ paneId: rootPaneId });
+    ctx.runs.recordPane(res.run.id, { workspaceId: foreign.workspaceId, paneId: foreign.paneId });
+
+    await ctx.dispatcher.recover();
+    await ctx.dispatcher.idle();
+    const run = ctx.runs.get(res.run.id);
+    expect(run?.herdrPane).not.toBe(foreign.paneId);
+    await ctx.dispatcher.closeRun(res.run.id, { result: "success" });
+    expect((await ctx.herdr.snapshot()).panes.map((p) => p.paneId)).toContain(foreign.paneId);
+  });
+
+  it("si failRun falla al lanzar, se reportan los dos errores", async () => {
+    const ctx = setup();
+    ctx.processes.respond((c) => (c.command === "pnpm install" ? { exitCode: 1 } : {}));
+    const fail = vi.spyOn(RunRepository.prototype, "fail").mockImplementationOnce(() => {
+      throw new Error("base caída");
+    });
+    await ctx.dispatcher.dispatch(refine(insertTask(ctx.db, ctx.project.id)));
+    await ctx.dispatcher.idle();
+    fail.mockRestore();
+    expect(ctx.errors.map((e) => e.error.message)).toEqual([
+      "base caída",
+      expect.stringContaining("bootstrap"),
+    ]);
+  });
+});
+
 describe("PhaseDispatcher con el Scheduler", () => {
   it("una pasada despacha hasta el límite global y la siguiente no duplica", async () => {
     const { db, project, herdr, dispatcher } = setup({ config: { globalConcurrency: 1 } });

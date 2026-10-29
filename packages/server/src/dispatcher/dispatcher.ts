@@ -118,6 +118,8 @@ export class PhaseDispatcher implements Dispatcher {
   private readonly tasks: TaskWorktreeRepository;
   /** Un lanzamiento por Run a la vez: `recover` y `dispatch` pueden coincidir. */
   private readonly locks = new KeyedLock();
+  /** Cierres de un mismo Run en orden; no esperan al lanzamiento (puede tardar minutos). */
+  private readonly closeLocks = new KeyedLock();
   private readonly inFlight = new Set<Promise<unknown>>();
 
   constructor(opts: PhaseDispatcherOptions) {
@@ -166,7 +168,8 @@ export class PhaseDispatcher implements Dispatcher {
 
   /**
    * Lanza el Run: idempotente. Cada paso se salta si ya está hecho según el Run y herdr. Un fallo
-   * cierra el Run como failure (`run_failed`) y cierra su pane.
+   * cierra el Run como failure (`run_failed`) y cierra su pane. Si el Run se cierra mientras se
+   * lanza (cancelación durante el bootstrap), el lanzamiento se detiene y cierra lo que abrió.
    */
   launch(runId: string): Promise<RunRow> {
     return this.locks.run(runId, async () => {
@@ -176,7 +179,17 @@ export class PhaseDispatcher implements Dispatcher {
       try {
         return await this.launchSteps(run);
       } catch (error) {
-        await this.failRun(run.id, failureReason(error));
+        if (error instanceof RunClosed) {
+          await this.release(run.id);
+          return this.runs.get(run.id) ?? run;
+        }
+        try {
+          await this.failRun(run.id, failureReason(error));
+        } catch (failError) {
+          // No tapar el error original: se reportan los dos y el pane se cierra igual.
+          this.onError(asError(failError), run.id);
+          await this.release(run.id).catch((e: unknown) => this.onError(asError(e), run.id));
+        }
         throw error;
       }
     });
@@ -186,23 +199,28 @@ export class PhaseDispatcher implements Dispatcher {
    * Cierre de fase: guarda resultado, handoff e identidad de sesión y cierra el pane. Lo llama
    * quien aplica la transición de fin de fase (UW-15) o de cancelación. Idempotente.
    */
-  async closeRun(runId: string, input: Omit<CloseRunInput, "session">) {
-    const run = this.runs.get(runId);
-    if (!run) throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
-    if (run.endedAt !== null) return { closed: false, run };
-    const session = await this.resolveSession(run);
-    const res = this.runs.close(runId, { ...input, ...(session && { session }) });
-    await this.release(run);
-    return res;
+  closeRun(runId: string, input: Omit<CloseRunInput, "session">) {
+    return this.closeLocks.run(runId, async () => {
+      const run = this.runs.get(runId);
+      if (!run) throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
+      if (run.endedAt !== null) return { closed: false, run };
+      const session = await this.resolveSession(run);
+      const res = this.runs.close(runId, { ...input, ...(session && { session }) });
+      await this.release(runId);
+      return res;
+    });
   }
 
   /** Run fallido: lo cierra, aplica `run_failed` si la tarea sigue en su fase y cierra el pane. */
-  async failRun(runId: string, reason: string): Promise<FailRunResult> {
-    const run = this.runs.get(runId);
-    if (!run) throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
-    const res = this.runs.fail(runId, reason);
-    if (res.closed) await this.release(run);
-    return res;
+  failRun(runId: string, reason: string): Promise<FailRunResult> {
+    return this.closeLocks.run(runId, async () => {
+      if (!this.runs.get(runId))
+        throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
+      const res = this.runs.fail(runId, reason);
+      // También con closed false: un lanzamiento que falla tras un cierre deja su pane abierto.
+      await this.release(runId);
+      return res;
+    });
   }
 
   private background(runId: string): void {
@@ -211,12 +229,19 @@ export class PhaseDispatcher implements Dispatcher {
     void job.finally(() => this.inFlight.delete(job));
   }
 
+  /** Lanza RunClosed si el Run se cerró mientras se lanzaba. */
+  private checkOpen(runId: string): RunRow {
+    const run = this.runs.get(runId);
+    if (!run || run.endedAt !== null) throw new RunClosed();
+    return run;
+  }
+
   private async launchSteps(initial: RunRow): Promise<RunRow> {
-    let run = initial;
-    const phase = SchedulablePhaseSchema.parse(run.phase);
-    const name = requireName(run);
-    const project = this.projectOf(run.taskId);
-    const worktree = await this.worktrees.ensure(run.taskId);
+    const phase = SchedulablePhaseSchema.parse(initial.phase);
+    const name = requireName(initial);
+    const project = this.projectOf(initial.taskId);
+    const worktree = await this.worktrees.ensure(initial.taskId);
+    let run = this.checkOpen(initial.id);
 
     let agent = await this.herdr.getAgent(name);
     if (agent && !this.owns(run, agent)) {
@@ -225,10 +250,11 @@ export class PhaseDispatcher implements Dispatcher {
         `el agente ${name} de herdr pertenece a otro Run (pane ${agent.paneId})`,
       );
     }
+    const fresh = !agent;
     if (!agent) {
       const args = this.args(project, phase, run);
-      const paneId = await this.ensurePane(run, worktree.rootPaneId, worktree.path, phase);
-      run = { ...run, herdrPane: paneId };
+      const paneId = await this.ensurePane(run, worktree, phase);
+      run = this.checkOpen(run.id);
       agent = (
         await this.herdr.startAgent({
           name,
@@ -238,8 +264,25 @@ export class PhaseDispatcher implements Dispatcher {
           timeoutMs: this.startTimeoutMs,
         })
       ).agent;
+      run = this.checkOpen(run.id);
     }
-    if (agent.status === "blocked") agent = await this.acceptTrust(name);
+    // Recién arrancado y aún cargando (herdr devuelve `agent_not_ready` con el estado del
+    // momento): esperar a que quede listo o bloqueado antes de decidir.
+    if (fresh && agent.status !== "idle" && agent.status !== "blocked") {
+      agent = await this.herdr.waitAgent({
+        name,
+        until: ["idle", "blocked"],
+        timeoutMs: this.startTimeoutMs,
+      });
+    } else if (!fresh && agent.status === "unknown") {
+      agent = await this.herdr.waitAgent({
+        name,
+        until: ["idle", "blocked", "working", "done"],
+        timeoutMs: this.startTimeoutMs,
+      });
+    }
+    if (agent.status === "blocked") agent = await this.unblockStart(name, agent, fresh);
+    run = this.checkOpen(run.id);
 
     const paneId = agent.paneId;
     if (run.herdrPane !== paneId || run.herdrWorkspace !== agent.workspaceId) {
@@ -250,12 +293,15 @@ export class PhaseDispatcher implements Dispatcher {
       title: `LunasQ ${phase} ${run.taskId.slice(0, 8)}`,
       tokens: { task: run.taskId, phase, iter: String(run.iteration), run: run.id },
     });
+    run = this.checkOpen(run.id);
     // Solo un agente idle no recibió aún el prompt; working, blocked o done ya lo tienen.
     if (agent.status === "idle") {
       agent = await this.herdr.promptAgent({ name, text: phasePrompt(phase, run.taskId) });
     }
     const launched = this.runs.markLaunched(run.id);
     if (!launched) throw new DispatchError("run_not_found", `el Run ${run.id} desapareció`);
+    // Un cierre que llegó durante el prompt ya no encontrará al lanzamiento: se cierra aquí.
+    this.checkOpen(run.id);
     this.observer?.watch(launched, agent);
     return launched;
   }
@@ -288,22 +334,31 @@ export class PhaseDispatcher implements Dispatcher {
     }
   }
 
-  /** El pane guardado si sigue abierto y sin agente; si no, uno nuevo con el entorno del Run. */
+  /**
+   * El pane guardado si sigue abierto, sin agente y en el worktree de la tarea (los ids de herdr
+   * se reutilizan tras un reinicio); si no, uno nuevo con el entorno del Run.
+   */
   private async ensurePane(
     run: RunRow,
-    rootPaneId: string,
-    cwd: string,
+    worktree: { workspaceId: string; rootPaneId: string; path: string },
     phase: SchedulablePhase,
   ): Promise<string> {
     if (run.herdrPane !== null) {
       const snap = await this.herdr.snapshot();
-      const open = snap.panes.some((p) => p.paneId === run.herdrPane);
+      const pane = snap.panes.find((p) => p.paneId === run.herdrPane);
       const busy = snap.agents.some((a) => a.paneId === run.herdrPane);
-      if (open && !busy) return run.herdrPane;
+      if (
+        pane &&
+        !busy &&
+        pane.workspaceId === worktree.workspaceId &&
+        pane.cwd === worktree.path
+      ) {
+        return pane.paneId;
+      }
     }
     const pane = await this.herdr.splitPane({
-      paneId: rootPaneId,
-      cwd,
+      paneId: worktree.rootPaneId,
+      cwd: worktree.path,
       env: {
         ...this.paneEnv,
         ...runEnv({ runToken: run.runToken, taskId: run.taskId, runId: run.id, phase }),
@@ -315,11 +370,13 @@ export class PhaseDispatcher implements Dispatcher {
 
   /**
    * Un worktree nuevo abre Claude Code en el diálogo de confianza de carpeta (ADR 0004). Se acepta
-   * solo si la pantalla muestra ese diálogo: otro `blocked` (un permiso) no se toca.
+   * solo si la pantalla muestra ese diálogo. Otro `blocked` en un agente recién arrancado falla el
+   * Run; en uno reutilizado (caída después del prompt) es un permiso de la fase y se respeta.
    */
-  private async acceptTrust(name: string): Promise<HerdrAgent> {
+  private async unblockStart(name: string, agent: HerdrAgent, fresh: boolean): Promise<HerdrAgent> {
     const screen = await this.herdr.readAgent({ name, lines: SCREEN_LINES });
     if (!showsTrustDialog(screen)) {
+      if (!fresh) return agent;
       throw new DispatchError(
         "agent_blocked",
         `el agente ${name} arrancó bloqueado: ${screen.slice(-300)}`,
@@ -337,13 +394,28 @@ export class PhaseDispatcher implements Dispatcher {
     return resolveSession({ herdr: agent?.session, agentName: run.herdrName ?? run.id });
   }
 
-  /** Cierra el pane del Run (con él, su agente) y avisa al observador. */
-  private async release(run: RunRow): Promise<void> {
-    this.observer?.unwatch(run.id);
-    const current = this.runs.get(run.id) ?? run;
-    if (current.herdrPane !== null) await this.herdr.closePane(current.herdrPane);
+  /**
+   * Cierra el pane del Run (con él, su agente) y avisa al observador. Solo si el pane sigue siendo
+   * del Run: tiene su agente, o está vacío en su workspace y en el worktree de la tarea.
+   */
+  private async release(runId: string): Promise<void> {
+    this.observer?.unwatch(runId);
+    const run = this.runs.get(runId);
+    if (!run?.herdrPane) return;
+    const snap = await this.herdr.snapshot();
+    const pane = snap.panes.find((p) => p.paneId === run.herdrPane);
+    if (!pane) return;
+    const agent = snap.agents.find((a) => a.paneId === pane.paneId);
+    const ours = agent
+      ? agent.name === run.herdrName
+      : pane.workspaceId === run.herdrWorkspace &&
+        pane.cwd === (this.tasks.get(run.taskId)?.worktreePath ?? null);
+    if (ours) await this.herdr.closePane(pane.paneId);
   }
 }
+
+/** El Run se cerró mientras se lanzaba: el lanzamiento se detiene sin fallarlo. */
+class RunClosed extends Error {}
 
 function requireName(run: RunRow): string {
   if (!run.herdrName) throw new DispatchError("run_not_found", `el Run ${run.id} no tiene nombre`);
