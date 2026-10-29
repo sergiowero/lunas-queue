@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { EntityId, FilePath, list, Text } from "./common.ts";
 
-export const PHASES = ["refinement", "implementation", "verification"] as const;
-export const Phase = z.enum(PHASES);
-export type Phase = z.infer<typeof Phase>;
+// Fases que entregan handoff. Distinto de `Phase` (enums.ts), la fase del Run en el dominio.
+export const HANDOFF_PHASES = ["refinement", "implementation", "verification"] as const;
+export const HandoffPhase = z.enum(HANDOFF_PHASES);
+export type HandoffPhase = z.infer<typeof HandoffPhase>;
 
 // Un fallo no deja handoff: se declara con report_failure.
 export const HandoffResult = z.enum(["completed", "partial"]);

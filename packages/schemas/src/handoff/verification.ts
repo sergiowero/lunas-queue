@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RiskLabel } from "../enums.ts";
 import { CriterionId, checkUnique, FilePath, list, Text } from "./common.ts";
 import { envelopeShape } from "./envelope.ts";
 
@@ -39,9 +40,6 @@ export const REVIEWER_NAMES = Reviewers.keyof().options;
 
 // Quién originó un hallazgo consolidado: un revisor o el propio approver.
 export const FindingSource = z.enum([...REVIEWER_NAMES, "approver"]);
-
-// Se muestra como bajo / medio / alto en la UI y en el PR.
-export const RiskLabel = z.enum(["low", "medium", "high"]);
 
 export const VerificationBody = z
   .strictObject({
