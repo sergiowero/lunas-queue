@@ -34,15 +34,22 @@ export class NotificationService {
     if (this.sent.has(notification.id)) return { delivered: false };
     // Se marca antes de esperar a los canales para que una llamada concurrente no duplique.
     this.sent.add(notification.id);
-    await Promise.all(
+    const results = await Promise.all(
       this.channels.map(async (channel) => {
         try {
           await channel.deliver(notification);
+          return true;
         } catch (error) {
           this.onChannelError(channel.name, toError(error), notification);
+          return false;
         }
       }),
     );
+    // Si ningún canal entregó, se libera el id para que un aviso posterior reintente.
+    if (!results.includes(true)) {
+      this.sent.delete(notification.id);
+      return { delivered: false };
+    }
     return { delivered: true };
   }
 }

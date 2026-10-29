@@ -64,6 +64,25 @@ describe("Escalator", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("rechaza un since inválido", () => {
+    expect(() => escalator.watch(pending, { since: new Date("no es fecha") })).toThrow(/since/);
+    expect(escalator.pending()).toEqual([]);
+  });
+
+  it("tras escalar, vigilar el mismo id no arma otro timer hasta que se resuelva", () => {
+    escalator.watch(pending);
+    vi.advanceTimersByTime(60_000);
+    escalator.watch(pending);
+    expect(escalator.pending()).toEqual([]);
+    expect(escalator.escalated()).toEqual([pending.id]);
+    vi.advanceTimersByTime(120_000);
+    expect(sent).toHaveLength(1);
+    escalator.resolve(pending.id);
+    expect(escalator.escalated()).toEqual([]);
+    escalator.watch(pending);
+    expect(escalator.pending()).toEqual([pending.id]);
+  });
+
   it("vigila ids distintos de forma independiente", () => {
     escalator.watch(pending);
     escalator.watch({ ...pending, id: "blocked:r-1:1", kind: "agent_blocked" });

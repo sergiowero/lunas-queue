@@ -28,8 +28,8 @@ export class NotificationHub {
    * todo lo que queda es posterior y se reenvía completo.
    */
   subscribe(listener: NotificationListener, opts: { lastEventId?: string } = {}): () => void {
-    if (opts.lastEventId !== undefined) {
-      const seen = this.buffer.findIndex((n) => n.id === opts.lastEventId);
+    if (opts.lastEventId) {
+      const seen = this.buffer.findLastIndex((n) => n.id === opts.lastEventId);
       for (const n of this.buffer.slice(seen + 1)) safeCall(listener, n);
     }
     this.listeners.add(listener);

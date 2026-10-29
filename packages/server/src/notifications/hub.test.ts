@@ -41,6 +41,22 @@ describe("NotificationHub", () => {
     expect(got).toEqual(["n:3", "n:4"]);
   });
 
+  it("con un id repetido en el buffer reanuda desde la última copia", () => {
+    const hub = new NotificationHub();
+    for (const id of ["n:1", "n:2", "n:1", "n:3"]) hub.publish(notification({ id }));
+    const got: string[] = [];
+    hub.subscribe((n) => got.push(n.id), { lastEventId: "n:1" });
+    expect(got).toEqual(["n:3"]);
+  });
+
+  it("un lastEventId vacío equivale a no traerlo", () => {
+    const hub = new NotificationHub();
+    hub.publish(notification());
+    const got: Notification[] = [];
+    hub.subscribe((n) => got.push(n), { lastEventId: "" });
+    expect(got).toEqual([]);
+  });
+
   it("al desuscribirse deja de recibir", () => {
     const hub = new NotificationHub();
     const got: Notification[] = [];

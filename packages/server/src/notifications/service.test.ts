@@ -87,6 +87,19 @@ describe("NotificationService", () => {
     );
   });
 
+  it("si ningún canal entrega, el mismo id puede reintentarse", async () => {
+    let fail = true;
+    const flaky: NotificationChannel = {
+      name: "inestable",
+      deliver: () => (fail ? Promise.reject(new Error("caído")) : Promise.resolve()),
+    };
+    const service = new NotificationService({ channels: [flaky], onChannelError: vi.fn() });
+    expect(await service.notify(notification())).toEqual({ delivered: false });
+    fail = false;
+    expect(await service.notify(notification())).toEqual({ delivered: true });
+    expect(await service.notify(notification())).toEqual({ delivered: false });
+  });
+
   it("rechaza una notificación inválida sin entregar nada", async () => {
     const { herdr, ui, service } = setup();
     await expect(service.notify(notification({ id: "" }))).rejects.toThrow();

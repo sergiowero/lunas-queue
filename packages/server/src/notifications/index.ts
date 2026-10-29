@@ -1,4 +1,5 @@
 import type { HerdrAdapter } from "@lunasq/adapters";
+import type { Notification } from "@lunasq/schemas";
 import { Escalator } from "./escalator.ts";
 import { NotificationHub } from "./hub.ts";
 import {
@@ -24,12 +25,16 @@ export { notificationRoutes } from "./sse.ts";
 export function createNotifications(opts: {
   herdr: Pick<HerdrAdapter, "notify">;
   onChannelError?: ChannelErrorHandler;
+  onEscalationError?: (error: Error, notification: Notification) => void;
 }) {
   const hub = new NotificationHub();
   const service = new NotificationService({
     channels: [herdrChannel(opts.herdr), hubChannel(hub)],
     ...(opts.onChannelError ? { onChannelError: opts.onChannelError } : {}),
   });
-  const escalator = new Escalator({ notify: (n) => service.notify(n) });
+  const escalator = new Escalator({
+    notify: (n) => service.notify(n),
+    ...(opts.onEscalationError ? { onError: opts.onEscalationError } : {}),
+  });
   return { hub, service, escalator, routes: notificationRoutes(hub) };
 }
