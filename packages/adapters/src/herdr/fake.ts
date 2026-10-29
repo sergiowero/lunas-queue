@@ -44,6 +44,8 @@ interface FakeAgent {
 interface FakeWorktree {
   path: string;
   workspaceId?: string;
+  /** Cambios sin commit: `remove` exige `force`. */
+  dirty?: boolean;
 }
 
 interface FakeSubscription {
@@ -103,6 +105,8 @@ export class FakeHerdr implements HerdrAdapter {
         created: false,
       };
     }
+    // Como herdr real (snapshot y luego create): dos llamadas concurrentes crean dos workspaces.
+    await Promise.resolve();
     const ws = this.createWorkspace(input.label, input.cwd, false, input.env ?? {});
     return { workspace: toWorkspace(ws), rootPaneId: this.rootPane(ws), created: true };
   }
@@ -146,11 +150,27 @@ export class FakeHerdr implements HerdrAdapter {
       return { worktree: this.toWorktree(ws, input.branch, existing.path), created: false };
     }
 
+    // Como herdr real (list y luego create): un create concurrente del mismo branch falla.
+    await Promise.resolve();
+    if (repo.has(input.branch)) {
+      throw new HerdrError("worktree_create_failed", `branch ${input.branch} already exists`);
+    }
     const path = input.path ?? `~/.herdr/worktrees/${input.branch.replaceAll("/", "-")}`;
     const ws = this.createWorkspace(label, path, true, {});
     repo.set(input.branch, { path, workspaceId: ws.workspaceId });
     this.emit({ type: "worktree_created", workspaceId: ws.workspaceId });
     return { worktree: this.toWorktree(ws, input.branch, path), created: true };
+  }
+
+  async listWorktrees(workspaceId: string) {
+    const project = this.workspaces.get(workspaceId);
+    if (!project) throw new HerdrError("workspace_not_found", `workspace ${workspaceId} not found`);
+    const repo = this.worktrees.get(project.repoPath) ?? new Map<string, FakeWorktree>();
+    return [...repo].map(([branch, wt]) => ({
+      branch,
+      path: wt.path,
+      ...(wt.workspaceId && { workspaceId: wt.workspaceId }),
+    }));
   }
 
   async removeWorktree(input: { workspaceId: string; force?: boolean }) {
@@ -161,6 +181,16 @@ export class FakeHerdr implements HerdrAdapter {
         "not_linked_worktree",
         `workspace ${input.workspaceId} is not a linked worktree`,
       );
+    }
+    for (const repo of this.worktrees.values()) {
+      for (const wt of repo.values()) {
+        if (wt.workspaceId === input.workspaceId && wt.dirty && !input.force) {
+          throw new HerdrError(
+            "dirty_worktree_requires_force",
+            `'${wt.path}' contains modified or untracked files, use --force to delete it`,
+          );
+        }
+      }
     }
     for (const repo of this.worktrees.values()) {
       for (const [branch, wt] of repo)
@@ -347,6 +377,13 @@ export class FakeHerdr implements HerdrAdapter {
     if (pane)
       this.emit({ type: "pane_exited", paneId: pane.paneId, workspaceId: pane.workspaceId });
     for (const check of [...this.statusWaiters]) check();
+  }
+
+  /** Simula cambios sin commit en el checkout `path`. */
+  setWorktreeDirty(path: string, dirty = true) {
+    for (const repo of this.worktrees.values()) {
+      for (const wt of repo.values()) if (wt.path === path) wt.dirty = dirty;
+    }
   }
 
   /** Corta todos los streams como herdr bajo backpressure: cada uno pierde eventos y reconecta. */

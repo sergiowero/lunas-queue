@@ -98,4 +98,22 @@ describe("FakeHerdr: controles de test", () => {
       .catch((e) => e);
     expect(isHerdrError(err, "workspace_not_found")).toBe(true);
   });
+
+  it("setWorktreeDirty exige force para removerlo, como herdr real", async () => {
+    const fake = new FakeHerdr();
+    const { workspace } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
+    const input = { workspaceId: workspace.workspaceId, branch: "lunasq/t1", base: "main" };
+    const { worktree } = await fake.ensureWorktree(input);
+
+    fake.setWorktreeDirty(worktree.path);
+    const err = await fake.removeWorktree({ workspaceId: worktree.workspaceId }).catch((e) => e);
+    expect(isHerdrError(err, "dirty_worktree_requires_force")).toBe(true);
+    expect(await fake.listWorktrees(workspace.workspaceId)).toHaveLength(1);
+
+    await fake.removeWorktree({ workspaceId: worktree.workspaceId, force: true });
+    expect(await fake.listWorktrees(workspace.workspaceId)).toEqual([]);
+    // El checkout nuevo del mismo branch nace limpio.
+    const again = await fake.ensureWorktree(input);
+    await fake.removeWorktree({ workspaceId: again.worktree.workspaceId });
+  });
 });

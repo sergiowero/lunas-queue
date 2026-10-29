@@ -198,6 +198,52 @@ export function herdrContract(
           herdr.removeWorktree({ workspaceId: workspace.workspaceId }),
         ).rejects.toSatisfy((err) => isHerdrError(err, "not_linked_worktree"));
       });
+
+      it("listWorktrees da los worktrees enlazados, abiertos o no, y olvida los removidos", async () => {
+        const { workspace } = await projectWorkspace();
+        const projectId = workspace.workspaceId;
+        expect(await herdr.listWorktrees(projectId)).toEqual([]);
+
+        const worktree = async (name: string) => {
+          const branch = `lunasq/${unique(name)}`;
+          const path = h.worktreePath(branch.replace("/", "-"));
+          const res = await herdr.ensureWorktree({
+            workspaceId: projectId,
+            branch,
+            base: "main",
+            path,
+          });
+          return res.worktree;
+        };
+        const a = await worktree("a");
+        const b = await worktree("b");
+        const byBranch = async () => {
+          const list = await herdr.listWorktrees(projectId);
+          return new Map(list.map((w) => [w.branch, w]));
+        };
+
+        const both = await byBranch();
+        expect(both.size).toBe(2);
+        expect(both.get(a.branch)).toEqual({
+          branch: a.branch,
+          path: a.path,
+          workspaceId: a.workspaceId,
+        });
+        expect(both.get(b.branch)?.workspaceId).toBe(b.workspaceId);
+
+        // Cerrar el workspace no borra el checkout: sigue listado, sin workspace abierto.
+        await herdr.closeWorkspace(a.workspaceId);
+        expect((await byBranch()).get(a.branch)).toEqual({ branch: a.branch, path: a.path });
+
+        await herdr.removeWorktree({ workspaceId: b.workspaceId });
+        expect([...(await byBranch()).keys()]).toEqual([a.branch]);
+      });
+
+      it("listWorktrees falla con un workspace inexistente", async () => {
+        await expect(herdr.listWorktrees("w999999")).rejects.toSatisfy((err) =>
+          isHerdrError(err, "workspace_not_found"),
+        );
+      });
     });
 
     describe("panes", () => {

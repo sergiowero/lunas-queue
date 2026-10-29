@@ -212,14 +212,14 @@ Una tarea = un worktree = un branch, desde el primer despacho hasta el merge; to
 
 | Momento | Acción | Notas |
 | --- | --- | --- |
-| Primer despacho (refinamiento) | Crear worktree y branch desde la rama base | Branch con nombre determinístico derivado del task id; idempotente consultando `worktree list` y usando `open` si ya existe (ADR 0004) |
-| Worktree creado | Correr el bootstrap del proyecto | Instalar dependencias, copiar config local; se puede disparar con el evento `worktree.created` de herdr |
+| Primer despacho (refinamiento) | Crear worktree y branch desde la rama base | Branch `lunasq/<task id>`, desde `origin/<rama base>` tras un `git fetch`; idempotente consultando `worktree list` y usando `open` si ya existe (ADR 0004, ADR 0012) |
+| Worktree creado | Correr el bootstrap del proyecto | Instalar dependencias, copiar config local; corre como proceso hijo y el worktree consta como listo en la BD solo si termina bien, así se reintenta (ADR 0012) |
 | Fases siguientes y rework | Reabrir el mismo worktree | El agente nuevo hereda el estado del código, no el contexto de la sesión |
 | Tarea dependiente | Crear su worktree desde la rama base, que ya incluye el merge de sus dependencias | Sin stacked branches |
 | Entrega | Rebase sobre la rama base dentro del worktree, push, PR | Conflictos regresan la tarea a in progress |
 | Después del merge o cancelación | `worktree remove` | No borra el branch; requiere forzar si hay cambios sin commit |
 
-Restricciones: dos tareas nunca comparten branch ni worktree, y el reconciliador detecta worktrees huérfanos (sin tarea activa) para limpiarlos. Costo a vigilar: disco y tiempo de bootstrap por tarea, que pesa más con muchas tareas en paralelo.
+Restricciones: dos tareas nunca comparten branch ni worktree, y el reconciliador detecta worktrees huérfanos (tarea inexistente, cancelada o con el PR mergeado; ADR 0012) para limpiarlos. Costo a vigilar: disco y tiempo de bootstrap por tarea, que pesa más con muchas tareas en paralelo.
 
 **Señales y cómo se interpretan**
 

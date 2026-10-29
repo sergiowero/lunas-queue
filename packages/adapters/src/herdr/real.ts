@@ -26,6 +26,7 @@ import {
   toSnapshot,
   toWorkspace,
   toWorktree,
+  toWorktreeEntry,
   workspaceCreatedWire,
   worktreeListWire,
   worktreeOpenedWire,
@@ -124,6 +125,12 @@ export class RealHerdr implements HerdrAdapter {
     ];
     const res = worktreeOpenedWire.parse(await this.cli.json(args));
     return { worktree: toWorktree(res, input.branch), created: true };
+  }
+
+  async listWorktrees(workspaceId: string) {
+    const args = ["worktree", "list", "--workspace", workspaceId];
+    const list = worktreeListWire.parse(await this.cli.json(args));
+    return list.worktrees.filter((w) => w.is_linked_worktree).map(toWorktreeEntry);
   }
 
   async removeWorktree(input: { workspaceId: string; force?: boolean }) {
