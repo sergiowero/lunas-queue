@@ -312,7 +312,7 @@ El contrato entre el sistema y cualquier agente es un **MCP propio (LunasQ MCP)*
 | submit\_verdict | Verificación | Pass o reject, veredicto por criterio, reporte de cada revisor, must‑fix consolidados, hallazgos refutados con su motivo y etiqueta de riesgo; cada revisor omitido requiere justificación |
 | report\_failure | Todas | El agente declara que no puede continuar y por qué |
 
-Las tools validan el run token que el dispatcher inyecta al pane; una sesión vieja no puede mover la tarea.
+Las tools validan el run token que el dispatcher inyecta al pane; una sesión vieja no puede mover la tarea. La tool de salida cierra el Run en la misma transacción que la transición, salvo un veredicto pass, que deja el Run abierto para la entrega. Guardas, errores, checklist y gate de tests en [ADR uw-15-mcp-tools](decisions/uw-15-mcp-tools.md).
 
 **Skills (una por fase, versionadas con el sistema)**
 

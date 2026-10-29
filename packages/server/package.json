@@ -16,6 +16,11 @@
     "@lunasq/db": "workspace:*",
     "@lunasq/domain": "workspace:*",
     "@lunasq/schemas": "workspace:*",
+    "@modelcontextprotocol/hono": "^2.0.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "hono": "^4.13.14"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.4.0"
   }
 }
