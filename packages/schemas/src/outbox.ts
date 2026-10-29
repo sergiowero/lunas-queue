@@ -1,5 +1,5 @@
 // Mensaje que el publicador del outbox entrega al scheduler y al dispatcher (docs/design.md
-// §Componentes, ADR 0010). Se arma desde el evento del Event log; el payload es el del evento
+// §Componentes, ADR 0011). Se arma desde el evento del Event log; el payload es el del evento
 // y cada suscriptor lo valida con el esquema de su topic (p. ej. TaskTransitionedPayload).
 import { z } from "zod";
 import { Actor } from "./enums.ts";

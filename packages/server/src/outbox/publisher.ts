@@ -1,4 +1,4 @@
-// Publicador en proceso del outbox (docs/design.md §Componentes, ADR 0010). Lee los pendientes
+// Publicador en proceso del outbox (docs/design.md §Componentes, ADR 0011). Lee los pendientes
 // en orden de escritura, los entrega a los suscriptores (scheduler, dispatcher) y los marca.
 // Entrega al menos una vez: si el proceso cae entre entregar y marcar, el mensaje se repite al
 // arrancar, así que los suscriptores deben ser idempotentes.

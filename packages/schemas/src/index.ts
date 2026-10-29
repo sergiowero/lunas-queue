@@ -7,3 +7,4 @@ export * from "./events.ts";
 export * from "./notification.ts";
 export * from "./outbox.ts";
 export * from "./project.ts";
+export * from "./task.ts";

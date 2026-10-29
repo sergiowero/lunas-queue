@@ -18,8 +18,6 @@ import { type OutboxMessage, TASK_TRANSITIONED, TaskTransitionedPayload } from "
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { OutboxPublisher } from "./publisher.ts";
 
-// @lunasq/db usa parameter properties, que el modo strip-only de Node no acepta.
-const TS_FLAGS = ["--experimental-transform-types", "--no-warnings"];
 const fixture = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 
 const publishers: OutboxPublisher[] = [];
@@ -60,11 +58,9 @@ describe("OutboxPublisher: ninguna pérdida ante caídas", () => {
     migrateDatabase(db);
     const t = insertTask(db, insertProject(db).id);
 
-    const child = spawnSync(
-      process.execPath,
-      [...TS_FLAGS, fixture("transition-then-crash.ts"), file, t.id],
-      { encoding: "utf8" },
-    );
+    const child = spawnSync(process.execPath, [fixture("transition-then-crash.ts"), file, t.id], {
+      encoding: "utf8",
+    });
     expect(child.stderr).toBe("");
     expect(child.signal).toBe("SIGKILL");
 
@@ -110,13 +106,9 @@ describe("OutboxPublisher: ninguna pérdida ante caídas", () => {
     migrateDatabase(db);
     const [e] = seed(db, 1);
 
-    const child = spawnSync(
-      process.execPath,
-      [...TS_FLAGS, fixture("deliver-then-crash.ts"), file],
-      {
-        encoding: "utf8",
-      },
-    );
+    const child = spawnSync(process.execPath, [fixture("deliver-then-crash.ts"), file], {
+      encoding: "utf8",
+    });
     expect(child.stderr).toBe("");
     expect(child.signal).toBe("SIGKILL");
     expect(listPendingOutbox(db)).toMatchObject([{ attempts: 0, message: { eventId: e?.id } }]);

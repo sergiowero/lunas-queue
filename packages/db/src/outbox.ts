@@ -1,4 +1,4 @@
-// Outbox de eventos (docs/design.md §Componentes, ADR 0010): la fila se escribe en la misma
+// Outbox de eventos (docs/design.md §Componentes, ADR 0011): la fila se escribe en la misma
 // transacción que su evento, así una caída después del commit no pierde nada. El publicador
 // de @lunasq/server lee los pendientes en orden y los marca al entregarlos.
 import type { OutboxMessage } from "@lunasq/schemas";

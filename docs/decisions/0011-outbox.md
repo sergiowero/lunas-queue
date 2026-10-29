@@ -1,4 +1,4 @@
-# 0010 — Outbox de eventos: encolado transaccional y publicador at-least-once
+# 0011 — Outbox de eventos: encolado transaccional y publicador at-least-once
 
 - Estado: aceptada
 - Fecha: 2026-10-29
@@ -16,7 +16,7 @@
 - **Publicador en proceso** (`OutboxPublisher`): suscriptores por topic o `*`. `drain()` lee pendientes en orden de `id`, entrega a cada suscriptor en orden de registro y esperando a los asíncronos, y marca `published_at`. Una sola pasada a la vez: un `drain` o `wake` durante otra pide una pasada más, y si llega cuando la pasada ya está saliendo, se relanza al terminar; así no se queda atrás lo confirmado después de la lectura. Tras un fallo de entrega no hay pasada extra: el reintento espera al siguiente `wake` o poll. `start()` hace un drain inicial (recupera lo que dejó una caída) y arranca un poll periódico (1 s por defecto); `wake()` lo adelanta después de un commit; `stop()` detiene el poll y espera al mensaje en curso.
 - **At-least-once y en orden.** Si el proceso cae después de entregar y antes de marcar, el mensaje se entrega otra vez al arrancar. Si un suscriptor falla, se suma `attempts`, se avisa con `onError` y el drain se detiene para no entregar fuera de orden; el siguiente drain reintenta desde ese mensaje y lo reentrega también a los suscriptores que ya lo habían recibido.
 - **Sin suscriptores.** Con al menos un suscriptor registrado, un mensaje cuyo topic no tiene destinatarios se marca publicado. Sin ningún suscriptor el drain no marca nada, así un `start` antes de registrarlos no pierde lo que dejó una caída.
-- **Prueba del criterio.** Un proceso hijo confirma una transición y muere con `SIGKILL` antes de publicar; un publicador nuevo sobre el mismo archivo la entrega al arrancar. Otro hijo recibe el mensaje y muere dentro del handler, antes de marcarlo; el publicador siguiente lo reentrega. Los hijos corren con `--experimental-transform-types` porque `@lunasq/db` usa parameter properties, que el modo strip-only de Node no acepta.
+- **Prueba del criterio.** Un proceso hijo confirma una transición y muere con `SIGKILL` antes de publicar; un publicador nuevo sobre el mismo archivo la entrega al arrancar. Otro hijo recibe el mensaje y muere dentro del handler, antes de marcarlo; el publicador siguiente lo reentrega. Los hijos ejecutan el TypeScript del workspace directo con Node (type stripping, sin flags), así que el código de los paquetes debe ser solo sintaxis borrable: `tsconfig.base.json` activa `erasableSyntaxOnly` y las parameter properties de `ProjectRepository`, `TaskRepository` y sus errores pasaron a campos declarados. Node 26 ya no acepta `--experimental-transform-types`.
 
 ## Consecuencias
 

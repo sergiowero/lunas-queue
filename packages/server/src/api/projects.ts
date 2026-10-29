@@ -3,23 +3,7 @@
 import { type ProjectRepository, ProjectRepositoryError } from "@lunasq/db";
 import { ProjectCreate, ProjectUpdate } from "@lunasq/schemas";
 import { type Context, Hono } from "hono";
-
-interface ValidationError {
-  issues: readonly { path: readonly PropertyKey[]; message: string }[];
-}
-
-function invalidInput(c: Context, error: ValidationError) {
-  const issues = error.issues.map(({ path, message }) => ({ path: path.map(String), message }));
-  return c.json({ error: "invalid_input", issues }, 400);
-}
-
-async function readJson(c: Context): Promise<{ ok: true; body: unknown } | { ok: false }> {
-  try {
-    return { ok: true, body: await c.req.json() };
-  } catch {
-    return { ok: false };
-  }
-}
+import { invalidInput, notFound, readJson } from "./http.ts";
 
 function repositoryError(c: Context, error: unknown) {
   if (error instanceof ProjectRepositoryError && error.code !== "invalid_row") {
@@ -27,8 +11,6 @@ function repositoryError(c: Context, error: unknown) {
   }
   throw error;
 }
-
-const notFound = (c: Context) => c.json({ error: "not_found" }, 404);
 
 export function projectRoutes(projects: ProjectRepository): Hono {
   return new Hono()

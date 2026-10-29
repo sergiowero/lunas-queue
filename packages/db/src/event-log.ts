@@ -20,7 +20,7 @@ export type AppendEventInput = {
 };
 
 /**
- * Con `publish` el evento también entra al outbox (ADR 0010), en la misma transacción: dentro
+ * Con `publish` el evento también entra al outbox (ADR 0011), en la misma transacción: dentro
  * de otra transacción es un savepoint, así que falla o se confirma junto con quien llama.
  */
 export function appendEvent(
