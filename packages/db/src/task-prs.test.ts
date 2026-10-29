@@ -73,6 +73,15 @@ describe("TaskPrRepository.recordPrOpened", () => {
     );
   });
 
+  it("rechaza otro PR mientras el actual sigue abierto", () => {
+    const { repo, task, row } = setup();
+    repo.recordPrOpened(task.id, url);
+    expect(() => repo.recordPrOpened(task.id, otherUrl)).toThrow(
+      expect.objectContaining({ code: "pr_already_open" }),
+    );
+    expect(row()?.prUrl).toBe(url);
+  });
+
   it("rechaza una URL inválida sin escribir nada", () => {
     const { repo, task, row } = setup();
     expect(() => repo.recordPrOpened(task.id, "no-es-url")).toThrow();
@@ -115,11 +124,12 @@ describe("TaskPrRepository.recordPrState", () => {
   });
 
   it("el merge actualiza updatedAt, que el scheduler usa como readySince", () => {
-    const { repo, task, row } = setup();
+    const { db, repo, task, row } = setup();
     repo.recordPrOpened(task.id, url);
-    const before = row()?.updatedAt.getTime() ?? 0;
+    const old = new Date("2020-01-01T00:00:00.000Z");
+    db.$client.prepare("update tasks set updated_at = ? where id = ?").run(old.getTime(), task.id);
     repo.recordPrState(task.id, { url, state: "merged", at: mergedAt });
-    expect(row()?.updatedAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(row()?.updatedAt.getTime()).toBeGreaterThan(old.getTime());
   });
 });
 

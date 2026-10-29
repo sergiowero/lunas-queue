@@ -18,7 +18,7 @@ import type { LunasqDatabase } from "./client.ts";
 import { appendEvent } from "./event-log.ts";
 import { tasks } from "./schema.ts";
 
-export type TaskPrErrorCode = "task_not_found" | "pr_already_merged";
+export type TaskPrErrorCode = "task_not_found" | "pr_already_merged" | "pr_already_open";
 
 export class TaskPrError extends Error {
   readonly code: TaskPrErrorCode;
@@ -59,6 +59,13 @@ export class TaskPrRepository implements PrTrackingStore {
       if (row.prUrl === url && row.prState === "open") return false;
       if (row.prState === "merged") {
         throw new TaskPrError("pr_already_merged", `el PR de ${taskId} ya se mergeó: ${row.prUrl}`);
+      }
+      // Reemplazar un PR abierto lo sacaría del poller: si un humano lo mergea, nadie lo vería.
+      if (row.prState === "open") {
+        throw new TaskPrError(
+          "pr_already_open",
+          `la tarea ${taskId} ya tiene abierto ${row.prUrl}`,
+        );
       }
       tx.update(tasks).set({ prUrl: url, prState: "open" }).where(eq(tasks.id, taskId)).run();
       appendEvent(

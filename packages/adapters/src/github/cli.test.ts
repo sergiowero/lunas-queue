@@ -37,6 +37,7 @@ describe("GhCli", () => {
     [4, "To get started with GitHub CLI, please run:  gh auth login", "not_authenticated"],
     [1, "GraphQL: Could not resolve to a PullRequest with the number of 999.", "not_found"],
     [1, 'no pull requests found for branch "x"', "not_found"],
+    [1, "HTTP 401: Bad credentials (https://api.github.com/graphql)", "not_authenticated"],
     [1, "HTTP 502: Bad Gateway", "gh_failed"],
   ])("exit %i con «%s» es %s", async (exitCode, stderr, code) => {
     const { exec } = fakeExec("", stderr, exitCode);
@@ -59,5 +60,17 @@ describe("GhCli", () => {
     await expect(execGh("/no/existe/gh", [], { timeoutMs: 1_000 })).rejects.toMatchObject({
       code: "gh_unavailable",
     });
+  });
+
+  it("execGh distingue un cwd borrado, una salida enorme y una señal externa", async () => {
+    await expect(
+      execGh("/bin/sh", ["-c", "true"], { cwd: "/no/existe/worktree", timeoutMs: 1_000 }),
+    ).rejects.toMatchObject({ code: "gh_failed", message: expect.stringContaining("no existe") });
+    await expect(
+      execGh("/bin/sh", ["-c", "head -c 70000000 /dev/zero"], { timeoutMs: 10_000 }),
+    ).rejects.toMatchObject({ code: "gh_failed", message: expect.stringContaining("grande") });
+    await expect(
+      execGh("/bin/sh", ["-c", "kill -TERM $$"], { timeoutMs: 5_000 }),
+    ).rejects.toMatchObject({ code: "gh_failed" });
   });
 });

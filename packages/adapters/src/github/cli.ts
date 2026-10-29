@@ -1,6 +1,7 @@
 // Cliente del CLI `gh`. Corre con execFile y los argumentos sueltos, sin shell: el título y el
 // cuerpo del PR vienen de agentes y no deben poder inyectar comandos. El cuerpo entra por stdin.
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { GitHubError } from "./errors.ts";
 
 export interface GhExecResult {
@@ -35,14 +36,29 @@ export const execGh: GhExecFn = (file, args, opts) =>
         killSignal: "SIGKILL",
       },
       (err, stdout, stderr) => {
+        const where = args.slice(0, 2).join(" ");
+        // Node también mata al hijo (killed) cuando la salida pasa de maxBuffer.
+        if (err?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+          reject(new GitHubError("gh_failed", `${where}: salida demasiado grande`, { cause: err }));
+          return;
+        }
         if (err?.killed) {
+          reject(new GitHubError("timeout", `${where}: sin respuesta en ${opts.timeoutMs} ms`));
+          return;
+        }
+        // ENOENT del spawn: falta el binario o el cwd (un worktree borrado).
+        if (err?.code === "ENOENT") {
+          const cwdMissing = opts.cwd !== undefined && !existsSync(opts.cwd);
           reject(
-            new GitHubError("timeout", `${args.join(" ")}: sin respuesta en ${opts.timeoutMs} ms`),
+            cwdMissing
+              ? new GitHubError("gh_failed", `${where}: no existe ${opts.cwd}`, { cause: err })
+              : new GitHubError("gh_unavailable", `${file}: ${err.message}`, { cause: err }),
           );
           return;
         }
         if (err && typeof err.code !== "number") {
-          reject(new GitHubError("gh_unavailable", `${file}: ${err.message}`, { cause: err }));
+          // Muerto por una señal externa u otro fallo del proceso.
+          reject(new GitHubError("gh_failed", `${where}: ${err.message}`, { cause: err }));
           return;
         }
         resolve({ stdout, stderr, exitCode: typeof err?.code === "number" ? err.code : 0 });
@@ -63,6 +79,8 @@ export interface GhCliOptions {
 
 // Mensajes de gh cuando el PR o el repo no existen (gh 2.100).
 const NOT_FOUND = [/Could not resolve to a/i, /no pull requests found/i, /HTTP 404/i];
+// Sin sesión gh sale con 4; un token vencido o revocado sale con 1 y un 401.
+const NOT_AUTHENTICATED = [/HTTP 401/i, /Bad credentials/i, /gh auth login/i];
 
 export class GhCli {
   private readonly bin: string;
@@ -99,7 +117,9 @@ export class GhCli {
 function toError(args: string[], stderr: string, exitCode: number): GitHubError {
   const line = stderr.trim();
   const where = `${args.slice(0, 2).join(" ")} (exit ${exitCode}): ${line}`;
-  if (exitCode === 4) return new GitHubError("not_authenticated", where);
+  if (exitCode === 4 || NOT_AUTHENTICATED.some((re) => re.test(line))) {
+    return new GitHubError("not_authenticated", where);
+  }
   if (NOT_FOUND.some((re) => re.test(line))) return new GitHubError("not_found", where);
   return new GitHubError("gh_failed", where);
 }

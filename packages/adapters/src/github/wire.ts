@@ -61,19 +61,19 @@ const GhPr = z.object({
   baseRefName: z.string(),
   mergedAt: optionalDate,
   closedAt: optionalDate,
-  statusCheckRollup: z
-    .array(z.discriminatedUnion("__typename", [CheckRun, StatusContext]))
-    .nullish(),
+  // Checks y reviews se leen entrada por entrada (parseCheck, parseReview): una forma que no se
+  // conoce no debe impedir leer el estado del PR, o el poller nunca vería el merge.
+  statusCheckRollup: z.array(z.unknown()).nullish(),
   reviewDecision: z.string().nullish(),
-  reviews: z
-    .array(
-      z.object({
-        author: z.object({ login: z.string() }).nullish(),
-        state: z.string(),
-        submittedAt: optionalDate,
-      }),
-    )
-    .nullish(),
+  reviews: z.array(z.unknown()).nullish(),
+});
+
+const Check = z.discriminatedUnion("__typename", [CheckRun, StatusContext]);
+
+const Review = z.object({
+  author: z.object({ login: z.string() }).nullish(),
+  state: z.string(),
+  submittedAt: optionalDate,
 });
 
 const SUCCESS = new Set(["SUCCESS", "NEUTRAL"]);
@@ -115,6 +115,36 @@ const REVIEW_DECISIONS: Record<string, ReviewDecision> = {
   REVIEW_REQUIRED: "review_required",
 };
 
+/** Un check de forma desconocida cuenta como pendiente: no se puede afirmar que pasó. */
+function parseCheck(raw: unknown): PrCheck {
+  const c = Check.safeParse(raw);
+  if (!c.success) return { name: "desconocido", status: "pending", url: null };
+  return c.data.__typename === "CheckRun"
+    ? {
+        name: c.data.name,
+        status: checkRunStatus(c.data.status, c.data.conclusion),
+        url: c.data.detailsUrl ?? null,
+      }
+    : {
+        name: c.data.context,
+        status: statusContextStatus(c.data.state),
+        url: c.data.targetUrl ?? null,
+      };
+}
+
+/** Una review de forma desconocida se descarta. */
+function parseReview(raw: unknown): PrReview[] {
+  const r = Review.safeParse(raw);
+  if (!r.success) return [];
+  return [
+    {
+      author: r.data.author?.login ?? "",
+      state: REVIEW_STATES[r.data.state] ?? "commented",
+      submittedAt: r.data.submittedAt,
+    },
+  ];
+}
+
 export function parsePr(raw: unknown): PullRequest {
   const result = GhPr.safeParse(raw);
   if (!result.success) {
@@ -123,16 +153,8 @@ export function parsePr(raw: unknown): PullRequest {
     });
   }
   const pr = result.data;
-  const items: PrCheck[] = (pr.statusCheckRollup ?? []).map((c) =>
-    c.__typename === "CheckRun"
-      ? { name: c.name, status: checkRunStatus(c.status, c.conclusion), url: c.detailsUrl ?? null }
-      : { name: c.context, status: statusContextStatus(c.state), url: c.targetUrl ?? null },
-  );
-  const reviews: PrReview[] = (pr.reviews ?? []).map((r) => ({
-    author: r.author?.login ?? "",
-    state: REVIEW_STATES[r.state] ?? "commented",
-    submittedAt: r.submittedAt,
-  }));
+  const items = (pr.statusCheckRollup ?? []).map(parseCheck);
+  const reviews = (pr.reviews ?? []).flatMap(parseReview);
   return {
     number: pr.number,
     url: pr.url,

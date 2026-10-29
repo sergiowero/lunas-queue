@@ -126,6 +126,26 @@ describe("RealGitHub", () => {
     });
   });
 
+  it("createPr sin URL en la salida falla sin llamar a pr view", async () => {
+    const { exec, calls } = scripted({
+      "pr list": [{ stdout: "[]" }],
+      "pr create": [{ stdout: "\n" }],
+    });
+    await expect(new RealGitHub({ exec }).createPr(input)).rejects.toMatchObject({
+      code: "invalid_output",
+    });
+    expect(calls.map((c) => c.args.slice(0, 2).join(" "))).toEqual(["pr list", "pr create"]);
+  });
+
+  it("getPr rechaza lo que no es la URL de un PR sin llamar a gh", async () => {
+    const { exec, calls } = scripted({});
+    const gh = new RealGitHub({ exec });
+    for (const ref of ["", "12", "lunasq/t1"]) {
+      await expect(gh.getPr(ref)).rejects.toMatchObject({ code: "not_found" });
+    }
+    expect(calls).toEqual([]);
+  });
+
   it("findOpenPr devuelve null sin PR abierto", async () => {
     const { exec } = scripted({ "pr list": [{ stdout: "[]" }] });
     expect(await new RealGitHub({ exec }).findOpenPr(input)).toBeNull();

@@ -115,6 +115,26 @@ describe("parsePr", () => {
     expect(pr.closedAt).toEqual(new Date("2026-10-30T00:00:00Z"));
   });
 
+  it("un check o una review de forma desconocida no impide leer el estado", () => {
+    const pr = parsePr({
+      ...merged,
+      statusCheckRollup: [
+        { __typename: "CheckSuite", id: 1 },
+        { __typename: "CheckRun", name: null },
+      ],
+      reviews: [{ state: 3 }, { author: { login: "ana" }, state: "APPROVED", submittedAt: null }],
+    });
+    expect(pr.state).toBe("merged");
+    expect(pr.checks).toEqual({
+      status: "pending",
+      items: [
+        { name: "desconocido", status: "pending", url: null },
+        { name: "desconocido", status: "pending", url: null },
+      ],
+    });
+    expect(pr.reviews).toEqual([{ author: "ana", state: "approved", submittedAt: null }]);
+  });
+
   it("rechaza una salida con forma inesperada", () => {
     expect(() => parsePr({ ...merged, state: "DRAFT" })).toThrow(
       expect.objectContaining({ code: "invalid_output" }),

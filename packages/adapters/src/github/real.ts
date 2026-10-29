@@ -1,9 +1,11 @@
 // Adapter real de GitHub sobre el CLI `gh` (ADR 0015). Los valores van como `--flag=valor` para
 // que un título que empieza con `-` no se lea como otra opción.
 import { GhCli, type GhCliOptions } from "./cli.ts";
-import { isGitHubError } from "./errors.ts";
+import { GitHubError, isGitHubError } from "./errors.ts";
 import type { CreatePrInput, GitHubAdapter, PullRequest } from "./types.ts";
 import { PR_FIELDS, parsePr, parsePrList } from "./wire.ts";
+
+const PR_URL = /^https:\/\/\S+\/pull\/\d+$/;
 
 export type RealGitHubOptions = GhCliOptions;
 
@@ -38,8 +40,12 @@ export class RealGitHub implements GitHubAdapter {
       }
       throw err;
     }
-    // gh imprime la URL del PR en la última línea.
+    // gh imprime la URL del PR en la última línea. Sin ella no se llama a getPr: `gh pr view`
+    // con un argumento vacío leería el PR del branch del directorio del servidor.
     const url = stdout.trim().split("\n").at(-1)?.trim() ?? "";
+    if (!PR_URL.test(url)) {
+      throw new GitHubError("invalid_output", `pr create sin URL del PR: ${stdout}`);
+    }
     return { pr: await this.getPr(url), created: true };
   }
 
@@ -64,6 +70,8 @@ export class RealGitHub implements GitHubAdapter {
   }
 
   async getPr(url: string): Promise<PullRequest> {
+    // Solo URLs: un número o un branch se resolverían contra el repo del directorio actual.
+    if (!PR_URL.test(url)) throw new GitHubError("not_found", `no es la URL de un PR: ${url}`);
     return parsePr(await this.cli.json(["pr", "view", url, `--json=${PR_FIELDS}`]));
   }
 }
