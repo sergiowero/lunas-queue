@@ -377,7 +377,7 @@ Cada fase sigue una práctica obligatoria y las tres se encadenan: DDD produce c
 - Ningún test existente se debilitó: un test borrado o con aserciones relajadas en el diff requiere justificación.
 - **Prueba de reversión:** el approver revierte temporalmente el código de producción conservando los tests y confirma que fallan; si siguen en verde, no prueban el cambio.
 
-**Gate de tests:** el Project define su comando de tests. LunasQ lo ejecuta en el worktree al recibir `submit_for_verification` y otra vez antes de aceptar un pass, sin confiar en lo que reporte el agente. Una suite en rojo bloquea la transición.
+**Gate de tests:** el Project define su comando de tests. LunasQ lo ejecuta en el worktree al recibir `submit_for_verification` y otra vez antes de aceptar un pass, sin confiar en lo que reporte el agente. Una suite en rojo bloquea la transición. Pane, entorno mínimo y registro en [ADR uw-11-gate-tests](decisions/uw-11-gate-tests.md).
 
 ## Brain: engram como dependencia débil
 

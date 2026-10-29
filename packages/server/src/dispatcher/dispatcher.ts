@@ -47,8 +47,9 @@ import { isWorktreeError, type WorktreeService } from "../worktrees/service.ts";
 /** Cuánto esperar a que Claude Code quede listo tras aceptar la confianza de carpeta. */
 export const DEFAULT_TRUST_TIMEOUT_MS = 15_000;
 /**
- * `MCP_TOOL_TIMEOUT` de Claude Code en el pane: `submit_for_verification` corre el gate de tests
- * dentro de la llamada (ADR uw-15-mcp-tools), así que debe cubrir su timeout con margen.
+ * `MCP_TOOL_TIMEOUT` de Claude Code en el pane: `submit_for_verification` y un `submit_verdict`
+ * con pass corren el gate de tests dentro de la llamada (ADR uw-11-gate-tests), así que debe
+ * cubrir su timeout con margen.
  */
 export const DEFAULT_MCP_TOOL_TIMEOUT_MS = DEFAULT_GATE_TIMEOUT_MS + 5 * 60_000;
 /** `--timeout` de `agent start`: lo que tarda el agente en quedar listo para prompts. */

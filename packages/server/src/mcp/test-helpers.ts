@@ -1,7 +1,7 @@
 // Arnés de los tests de contrato del LunasQ MCP: el cliente oficial de MCP habla con la app de
 // Hono en memoria, con el gate de tests y la comprobación de commits falsos.
 import { readFileSync } from "node:fs";
-import { SpecRepository, TaskRepository } from "@lunasq/db";
+import { type LunasqDatabase, SpecRepository, TaskRepository } from "@lunasq/db";
 import {
   insertProject,
   insertRun,
@@ -72,12 +72,22 @@ afterEach(async () => {
   for (const client of clients.splice(0)) await client.close();
 });
 
-export function mcpHarness() {
+export interface McpHarnessOptions {
+  /** Gate real en vez del fake; recibe la base del arnés. */
+  testGate?: (db: LunasqDatabase) => TestGate;
+  testCommand?: string;
+  worktreePath?: string;
+}
+
+export function mcpHarness(options: McpHarnessOptions = {}) {
   const db = migratedDatabase();
-  const project = insertProject(db, { testCommand: "pnpm test", baseBranch: "main" });
+  const project = insertProject(db, {
+    testCommand: options.testCommand ?? "pnpm test",
+    baseBranch: "main",
+  });
   const testGate = new FakeTestGate();
   const commitVerifier = new FakeCommitVerifier();
-  const app = createApp({ db, testGate, commitVerifier });
+  const app = createApp({ db, testGate: options.testGate?.(db) ?? testGate, commitVerifier });
 
   async function connect(token?: string) {
     const client = new Client({ name: "lunasq-test", version: "0.0.0" });
@@ -111,7 +121,7 @@ export function mcpHarness() {
     const row = insertTask(db, project.id, {
       state: "draft",
       subState: "running",
-      worktreePath: "/wt/tarea",
+      worktreePath: options.worktreePath ?? "/wt/tarea",
       branch: "lunasq/tarea",
     });
     if (opts.approved ?? true) {

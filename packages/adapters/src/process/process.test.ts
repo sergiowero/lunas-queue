@@ -40,6 +40,27 @@ describe("ShellProcessRunner", () => {
     expect(res.stdout.trim()).toBe(process.env.HOME);
   });
 
+  it("con envAllowlist solo pasan esas variables y las de env", async () => {
+    process.env.LUNASQ_TEST_SECRET = "no-debe-verse";
+    try {
+      const res = await runner.run({
+        command: 'printenv LUNASQ_TEST_SECRET; printf "%s|%s" "$HOME" "$LUNASQ_X"',
+        cwd: tempDir(),
+        env: { LUNASQ_X: "x" },
+        envAllowlist: ["HOME", "LUNASQ_NO_EXISTE"],
+      });
+      expect(res.stdout).toBe(`${process.env.HOME}|x`);
+      const unset = await runner.run({
+        command: "printenv LUNASQ_NO_EXISTE || printf no-definida",
+        cwd: tempDir(),
+        envAllowlist: ["LUNASQ_NO_EXISTE"],
+      });
+      expect(unset.stdout).toBe("no-definida");
+    } finally {
+      delete process.env.LUNASQ_TEST_SECRET;
+    }
+  });
+
   it("devuelve el exit code sin lanzar", async () => {
     const res = await runner.run({ command: "echo uno; exit 3", cwd: tempDir() });
     expect(res.exitCode).toBe(3);

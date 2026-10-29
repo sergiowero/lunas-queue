@@ -215,7 +215,13 @@ describe("submit_for_verification", () => {
     expect(h.taskOf(task.id)).toMatchObject({ state: "verification", subState: "queued" });
     expect(runOf(h, run.id)).toMatchObject({ result: "success", handoff });
     expect(h.testGate.calls).toEqual([
-      { taskId: task.id, runId: run.id, worktreePath: "/wt/tarea", command: "pnpm test" },
+      {
+        taskId: task.id,
+        runId: run.id,
+        worktreePath: "/wt/tarea",
+        command: "pnpm test",
+        trigger: "submit_for_verification",
+      },
     ]);
     expect(h.commitVerifier.calls[0]).toMatchObject({
       baseBranch: "main",
@@ -378,13 +384,103 @@ describe("submit_verdict", () => {
     expect(h.taskOf(task.id)).toMatchObject(verifying);
     expect(runOf(h, run.id)).toMatchObject({ handoff, endedAt: null });
 
-    // Repetir el mismo veredicto es idempotente; uno distinto se rechaza.
+    // Repetir el mismo veredicto es idempotente y no vuelve a correr el gate; uno distinto se rechaza.
     expect((await call("submit_verdict", { handoff })).isError).toBe(false);
+    expect(h.testGate.calls).toHaveLength(1);
     const reject = await call("submit_verdict", {
       handoff: handoffFor("verification-reject", run),
     });
     expect(reject.body).toMatchObject({ error: "verdict_already_recorded" });
     expect(h.taskOf(task.id)).toMatchObject(verifying);
+  });
+
+  it("antes de aceptar un pass, LunasQ corre el gate de tests en el worktree", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    expect(h.testGate.calls).toEqual([
+      {
+        taskId: task.id,
+        runId: run.id,
+        worktreePath: "/wt/tarea",
+        command: "pnpm test",
+        trigger: "verdict_pass",
+      },
+    ]);
+  });
+
+  it("un pass con la suite en rojo se rechaza aunque el verificador diga lo contrario", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    h.testGate.result = { passed: false, output: "FAIL order.test.ts" };
+    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    expect(result).toMatchObject({
+      isError: true,
+      body: { error: "test_gate_failed", output: "FAIL order.test.ts" },
+    });
+    expect(h.taskOf(task.id)).toMatchObject(verifying);
+    expect(runOf(h, run.id)).toMatchObject({ handoff: null, endedAt: null });
+
+    // El Run sigue abierto: el verificador puede corregir su veredicto a reject.
+    const reject = await call("submit_verdict", {
+      handoff: handoffFor("verification-reject", run),
+    });
+    expect(reject.body).toEqual({ verdict: "reject" });
+  });
+
+  it("un pass con el worktree sucio se rechaza antes del gate", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("verify", verifying);
+    h.commitVerifier.dirty = ["src/order.ts"];
+    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    expect(result.body).toMatchObject({
+      error: "dirty_worktree",
+      issues: [{ path: "src/order.ts" }],
+    });
+    expect(h.testGate.calls).toHaveLength(0);
+    expect(runOf(h, run.id)?.handoff).toBeNull();
+  });
+
+  it("un reject no corre el gate", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("verify", verifying);
+    h.commitVerifier.dirty = ["src/order.ts"];
+    await call("submit_verdict", { handoff: handoffFor("verification-reject", run) });
+    expect(h.testGate.calls).toHaveLength(0);
+  });
+
+  it("un segundo pass mientras corre el gate se rechaza sin lanzar otra suite", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("verify", verifying);
+    let release: (value: { passed: boolean; output: string }) => void = () => {};
+    let started = 0;
+    h.testGate.run = () => {
+      started += 1;
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    };
+    const handoff = handoffFor("verification-pass", run);
+    const first = call("submit_verdict", { handoff });
+    await vi.waitFor(() => expect(started).toBe(1));
+    expect((await call("submit_verdict", { handoff })).body).toMatchObject({
+      error: "gate_in_progress",
+    });
+    release({ passed: true, output: "" });
+    expect((await first).body).toEqual({ verdict: "pass" });
+    expect(started).toBe(1);
+  });
+
+  it("si el Run se cerró mientras corría el gate del pass, no guarda el veredicto", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("verify", verifying);
+    h.testGate.run = async () => {
+      closeRun(h.db, run.id, { result: "failure", failureReason: "timeout" });
+      return { passed: true, output: "" };
+    };
+    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    expect(result.body).toMatchObject({ error: "invalid_run_token" });
+    expect(runOf(h, run.id)).toMatchObject({ handoff: null, result: "failure" });
   });
 
   it("tras un pass, el token ya no puede preguntar ni reportar fallo", async () => {
