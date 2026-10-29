@@ -127,6 +127,8 @@ export class PhaseDispatcher implements Dispatcher {
   /** Cierres de un mismo Run en orden; no esperan al lanzamiento (puede tardar minutos). */
   private readonly closeLocks = new KeyedLock();
   private readonly inFlight = new Set<Promise<unknown>>();
+  /** Runs con un lanzamiento en segundo plano en curso. */
+  private readonly launching = new Set<string>();
 
   constructor(opts: PhaseDispatcherOptions) {
     this.db = opts.db;
@@ -160,10 +162,13 @@ export class PhaseDispatcher implements Dispatcher {
     this.background(claim.run.id);
   }
 
-  /** Retoma los Runs reclamados que no llegaron a mandar su prompt (tras una caída). */
+  /**
+   * Retoma los Runs reclamados que no llegaron a mandar su prompt (tras una caída). Salta los que
+   * ya se están lanzando: la reconciliación (UW-17) lo llama en cada pasada.
+   */
   async recover(): Promise<void> {
     for (const run of this.runs.active()) {
-      if (run.launchedAt === null) this.background(run.id);
+      if (run.launchedAt === null && !this.launching.has(run.id)) this.background(run.id);
     }
   }
 
@@ -246,9 +251,13 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   private background(runId: string): void {
+    this.launching.add(runId);
     const job = this.launch(runId).catch((error: unknown) => this.onError(asError(error), runId));
     this.inFlight.add(job);
-    void job.finally(() => this.inFlight.delete(job));
+    void job.finally(() => {
+      this.inFlight.delete(job);
+      this.launching.delete(runId);
+    });
   }
 
   /** Lanza RunClosed si el Run se cerró mientras se lanzaba. */

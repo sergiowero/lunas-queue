@@ -8,6 +8,7 @@ import {
   Occupancy,
   pendingPhase,
   rankReady,
+  retryAt,
   type SchedulerSnapshot,
   type SchedulerTask,
   schedule,
@@ -140,6 +141,47 @@ describe("ready set", () => {
     expect(dispatched(plan(tasks, edges))).toEqual(["der"]);
     const listo = tasks.map((t) => (t.id === "der" ? merged("der") : t));
     expect(dispatched(plan(listo, edges))).toEqual(["abajo"]);
+  });
+});
+
+describe("backoff de reintentos", () => {
+  const SEC = 1000;
+  const failedAt = (msAgo: number) => new Date(NOW.getTime() - msAgo);
+
+  it("duplica la espera con cada fallo seguido, desde el último fallo, con tope", () => {
+    const cfg = config({ retryBackoffMs: 30 * SEC, maxRetryBackoffMs: 100 * SEC });
+    const at = (failures: number) => retryAt({ failures, lastFailedAt: NOW }, cfg)?.getTime();
+    expect(at(1)).toBe(NOW.getTime() + 30 * SEC);
+    expect(at(2)).toBe(NOW.getTime() + 60 * SEC);
+    expect(at(3)).toBe(NOW.getTime() + 100 * SEC);
+    expect(at(40)).toBe(NOW.getTime() + 100 * SEC);
+  });
+
+  it("sin fallos no hay espera", () => {
+    expect(retryAt(undefined, config())).toBeNull();
+    expect(retryAt({ failures: 0, lastFailedAt: NOW }, config())).toBeNull();
+  });
+
+  it("una tarea que falló hace poco no entra al ready set hasta cumplir la espera", () => {
+    const input = { retryBackoffMs: 30 * SEC };
+    const recent = task("reciente", { retry: { failures: 1, lastFailedAt: failedAt(10 * SEC) } });
+    const old = task("vieja", { retry: { failures: 1, lastFailedAt: failedAt(31 * SEC) } });
+    expect(dispatched(plan([recent, old], [], input))).toEqual(["vieja"]);
+  });
+
+  it("el segundo fallo seguido espera el doble", () => {
+    const input = { retryBackoffMs: 30 * SEC };
+    const second = task("segundo", { retry: { failures: 2, lastFailedAt: failedAt(45 * SEC) } });
+    expect(dispatched(plan([second], [], input))).toEqual([]);
+    const later = task("después", { retry: { failures: 2, lastFailedAt: failedAt(61 * SEC) } });
+    expect(dispatched(plan([later], [], input))).toEqual(["después"]);
+  });
+
+  it("una tarea en espera no ocupa slot", () => {
+    const waiting = task("espera", { retry: { failures: 1, lastFailedAt: NOW } });
+    expect(dispatched(plan([waiting, task("otra")], [], { globalConcurrency: 1 }))).toEqual([
+      "otra",
+    ]);
   });
 });
 

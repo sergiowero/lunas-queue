@@ -24,6 +24,13 @@ export const SchedulerConfig = z.strictObject({
   // Tick periódico: recoge el aging y los cambios que no pasan por el outbox. Mínimo 1 s para
   // que no se vuelva un bucle ocupado.
   tickIntervalMs: z.int().min(1000).default(30_000),
+  // Backoff de reintentos tras un Run fallido: base·2^(fallos-1), con tope (docs/design.md
+  // §Señales). Cuenta desde el último fallo; el tick del scheduler la recoge al vencer.
+  retryBackoffMs: z.int().min(0).default(30_000),
+  maxRetryBackoffMs: z
+    .int()
+    .min(0)
+    .default(10 * 60_000),
 });
 export type SchedulerConfig = z.infer<typeof SchedulerConfig>;
 export type SchedulerConfigInput = z.input<typeof SchedulerConfig>;

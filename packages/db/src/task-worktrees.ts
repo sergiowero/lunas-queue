@@ -1,7 +1,7 @@
 // Branch y worktree de las tareas (UW-09, ADR 0012). Solo toca esas dos columnas: estado,
 // sub-estado e iteración cambian únicamente por task-transitions (ADR 0007).
 import type { TaskWorktreeRecord, TaskWorktreeStore } from "@lunasq/domain";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, or } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { tasks } from "./schema.ts";
 
@@ -33,6 +33,27 @@ export class TaskWorktreeRepository implements TaskWorktreeStore {
       .returning({ id: tasks.id })
       .all();
     if (updated.length === 0) throw new Error(`tarea ${taskId} no existe`);
+  }
+
+  /**
+   * Tareas que ya no usan su worktree y lo conservan: canceladas, o completadas con el PR mergeado
+   * (docs/design.md §Ciclo de vida del worktree). La reconciliación las remueve.
+   */
+  releasable(): TaskWorktreeRecord[] {
+    return this.db
+      .select(columns)
+      .from(tasks)
+      .where(
+        and(
+          isNotNull(tasks.worktreePath),
+          // La misma regla que worktreeReleased (domain): cancelada, o completada y mergeada.
+          or(
+            eq(tasks.state, "cancelled"),
+            and(eq(tasks.state, "completed"), eq(tasks.prState, "merged")),
+          ),
+        ),
+      )
+      .all();
   }
 
   clearWorktreePath(taskId: string): void {
