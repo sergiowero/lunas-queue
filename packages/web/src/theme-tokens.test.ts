@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 const css = readFileSync(join(import.meta.dirname, "index.css"), "utf8");
 
 function tokens(block: string): Map<string, string> {
-  return new Map([...block.matchAll(/(--color-[\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2]]));
+  return new Map(
+    [...block.matchAll(/(--color-[\w-]+):\s*([^;]+);/g)].map((m) => [m[1] ?? "", m[2] ?? ""]),
+  );
 }
 
 function block(selector: string): string {
