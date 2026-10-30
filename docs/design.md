@@ -227,11 +227,11 @@ Restricciones: dos tareas nunca comparten branch ni worktree, y el reconciliador
 | --- | --- | --- |
 | MCP: fase completada | Salida válida | Transición de estado, cierre del agente |
 | herdr: `blocked` | Prompt de permiso en la TUI del agente | Item en la bandeja; si sigue así 1 minuto, notificación por herdr y UI; se responde en herdr |
-| herdr: `idle`/`done` sin señal MCP | Se detuvo sin reportar | Nudge (re‑prompt) N veces, luego marcar Run fallido |
-| Pane cerrado o proceso salió | Crash | Run fallido; hasta 3 reintentos con backoff, luego Needs human |
+| herdr: `idle`/`done` sin señal MCP | Se detuvo sin reportar | Tras 15 s de gracia, nudge (re‑prompt) 2 veces, luego marcar Run fallido |
+| Pane cerrado o proceso salió | Crash | Run fallido; hasta 3 reintentos con backoff (30 s·2^(n‑1), tope 10 min), luego Needs human con notificación |
 | Timeout de fase vencido | Agente atorado o fase más larga de lo esperado | Marcar Needs human y notificar; el agente no se detiene |
 
-**Timeout de fase.** Configurable por proyecto y por fase, default 30 minutos. Corre mientras el Run está en running y se pausa en `blocked` o `waiting_human`, porque ese tiempo depende del humano. Al vencer, la tarea pasa a Needs human con notificación; el agente sigue vivo para que decidas si esperar, intervenir o cancelar.
+**Timeout de fase.** Configurable por proyecto y por fase, default 30 minutos. Corre mientras el Run está en running y se pausa en `blocked` o `waiting_human`, porque ese tiempo depende del humano. Al vencer, la tarea pasa a Needs human con notificación; el agente sigue vivo para que decidas si esperar, intervenir o cancelar. Las tools de salida exigen `running`, así que reanudar cierra el Run viejo y redespacha la fase sobre el mismo worktree. El reloj vive en memoria: tras un reinicio arranca con el presupuesto completo ([ADR uw-17-reconciliacion](decisions/uw-17-reconciliacion.md)).
 
 **Sin heartbeat ni lease en v1.** La liveness sale de herdr sin costo de tokens: estado del agente, pane cerrado o proceso terminado. Supuesto: una sola instancia de dispatcher. Si después se escala a varias, se agrega un lease del lado del servidor que renueva el dispatcher, nunca el agente.
 
@@ -245,7 +245,7 @@ El Run registra también qué fuente se usó, para saber si la sesión se puede 
 
 **Loop de reconciliación**
 
-Cada N segundos y al reconectar con herdr: tomar `session.snapshot`, compararlo con los Runs activos en la BD y corregir. Runs sin pane → reintentar. Panes con prefijo del sistema sin Run → cerrar (huérfanos). Esto cubre el caso documentado de `events_lost` (en protocol 22 herdr cierra el stream sin mensaje explícito: todo cierre cuenta como pérdida; ADR 0004), donde herdr corta la suscripción si el consumidor se atrasa.
+Cada N segundos (default 60), al arrancar y al reconectar con herdr: tomar `session.snapshot`, compararlo con los Runs activos en la BD y corregir. Runs sin pane → reintentar. Runs abiertos de una tarea que salió de su fase (cancelada, reanudada) → cerrar como cancelled. Runs vivos sin observar (tras un reinicio) → volver a observar. Panes con prefijo del sistema sin Run → cerrar (huérfanos). Worktrees de tareas canceladas o mergeadas, y los huérfanos de cada proyecto → remover ([ADR uw-17-reconciliacion](decisions/uw-17-reconciliacion.md)). Esto cubre el caso documentado de `events_lost` (en protocol 22 herdr cierra el stream sin mensaje explícito: todo cierre cuenta como pérdida; ADR 0004), donde herdr corta la suscripción si el consumidor se atrasa.
 
 **Dónde vive el dispatcher: servicio externo (decidido)**
 

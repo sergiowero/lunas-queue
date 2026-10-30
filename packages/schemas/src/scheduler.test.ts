@@ -10,6 +10,8 @@ describe("SchedulerConfig", () => {
       agingPointsPerHour: 10,
       boostPerDescendant: 25,
       tickIntervalMs: 30_000,
+      retryBackoffMs: 30_000,
+      maxRetryBackoffMs: 600_000,
     });
     expect(DEFAULT_GLOBAL_CONCURRENCY).toBe(5);
   });
@@ -34,6 +36,8 @@ describe("SchedulerConfig", () => {
     { agingPointsPerHour: -1 },
     { boostPerDescendant: -1 },
     { tickIntervalMs: 999 },
+    { retryBackoffMs: -1 },
+    { maxRetryBackoffMs: 1.5 },
     { otro: 1 },
   ])("rechaza %j", (input) => {
     expect(SchedulerConfig.safeParse(input).success).toBe(false);

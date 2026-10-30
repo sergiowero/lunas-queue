@@ -37,6 +37,15 @@ export function agentName(taskId: string, phase: SchedulablePhase, ordinal: numb
   return name;
 }
 
+const AGENT_NAME_RE = new RegExp(
+  `^t[A-Za-z0-9]{${TASK_ID_DIGITS}}-(refine|implement|verify)-([1-9][0-9]*)$`,
+);
+
+/** Si `name` tiene la forma de los agentes de LunasQ (`agentName`): sirve para hallar huérfanos. */
+export function isAgentName(name: string): boolean {
+  return AGENT_NAME_RE.test(name);
+}
+
 export type RunIdentity = {
   runToken: string;
   taskId: string;
@@ -92,6 +101,14 @@ const PHASE_SKILL: Record<SchedulablePhase, string> = {
 /** Prompt corto de fase: el contexto completo llega por MCP, no por el prompt. */
 export function phasePrompt(phase: SchedulablePhase, taskId: string): string {
   return `Usa la skill ${PHASE_SKILL[phase]} para la tarea ${taskId} de LunasQ. Empieza llamando get_task_context del MCP lunasq y termina con su tool de salida.`;
+}
+
+/**
+ * Nudge (docs/design.md §Señales): el agente se detuvo sin la señal MCP de fin de fase. Le
+ * recuerda que la fase sigue abierta y cómo cerrarla.
+ */
+export function nudgePrompt(phase: SchedulablePhase, taskId: string): string {
+  return `LunasQ: la fase ${phase} de la tarea ${taskId} sigue abierta. Si ya terminaste, llama la tool de salida de la skill ${PHASE_SKILL[phase]}; si no puedes seguir, usa report_failure o ask_human del MCP lunasq. Si no, continúa con la fase.`;
 }
 
 export type SessionIdentity = { value: string; source: SessionSource };

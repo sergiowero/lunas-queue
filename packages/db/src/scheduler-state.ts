@@ -1,10 +1,17 @@
 // Lectura del estado que necesita el scheduler (ADR 0014): tareas vivas, las terminales de las que
 // dependen y las aristas de las vivas, en una sola transacción para que el snapshot sea coherente.
-import type { SchedulerSnapshot, SchedulerStateReader, SchedulerTask } from "@lunasq/domain";
+import {
+  pendingPhase,
+  type RetryState,
+  type SchedulerSnapshot,
+  type SchedulerStateReader,
+  type SchedulerTask,
+} from "@lunasq/domain";
 import { TASK_TRANSITIONED, type TaskState } from "@lunasq/schemas";
-import { and, eq, inArray, max, notInArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, max, notInArray, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
-import { events, taskDependencies, tasks } from "./schema.ts";
+import { consecutiveFailures } from "./runs.ts";
+import { events, runs, taskDependencies, tasks } from "./schema.ts";
 import type { Tx } from "./task-transitions.ts";
 
 const TERMINAL: TaskState[] = ["completed", "cancelled"];
@@ -32,6 +39,9 @@ export class SchedulerStateRepository implements SchedulerStateReader {
    * readySince = lo más reciente entre la creación, la última transición de la tarea (también un
    * reintento: vuelve a esperar desde ahí) y el último cambio de sus dependencias mergeadas (el
    * merge de su PR). Editar la prioridad no reinicia el aging.
+   *
+   * retry = Runs fallidos seguidos de la fase pendiente de una tarea en queued y el fin del
+   * último: el scheduler espera el backoff antes de volver a despacharla.
    */
   snapshot(): SchedulerSnapshot {
     return this.db.transaction((tx) => {
@@ -77,6 +87,7 @@ export class SchedulerStateRepository implements SchedulerStateReader {
       for (const e of edges) depsOf.set(e.taskId, [...(depsOf.get(e.taskId) ?? []), e.dependsOnId]);
 
       const toTask = (row: (typeof rows)[number]): SchedulerTask => {
+        const retry = row.subState === "queued" ? retryState(tx, row.id, row.state) : undefined;
         const since = Math.max(
           row.createdAt.getTime(),
           lastTransition.get(row.id)?.getTime() ?? 0,
@@ -91,9 +102,26 @@ export class SchedulerStateRepository implements SchedulerStateReader {
           prState: row.prState,
           createdAt: row.createdAt,
           readySince: new Date(since),
+          ...(retry && { retry }),
         };
       };
       return { tasks: rows.map(toTask), edges };
     });
   }
+}
+
+/** Fallos seguidos de la fase pendiente y cuándo terminó el último; undefined sin fallos. */
+function retryState(tx: Tx, taskId: string, state: TaskState): RetryState | undefined {
+  const phase = pendingPhase(state);
+  if (!phase) return undefined;
+  const failures = consecutiveFailures(tx, taskId, phase);
+  if (failures === 0) return undefined;
+  const last = tx
+    .select({ endedAt: runs.endedAt })
+    .from(runs)
+    .where(and(eq(runs.taskId, taskId), eq(runs.phase, phase), isNotNull(runs.endedAt)))
+    .orderBy(desc(runs.startedAt), sql`rowid desc`)
+    .limit(1)
+    .get();
+  return last?.endedAt ? { failures, lastFailedAt: last.endedAt } : undefined;
 }
