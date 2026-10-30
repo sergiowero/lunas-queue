@@ -16,6 +16,7 @@ const ghPr = (state = "OPEN") => ({
   statusCheckRollup: [],
   reviewDecision: "",
   reviews: [],
+  labels: [],
 });
 
 /** exec falso que responde por subcomando (`pr list`, `pr create`, `pr view`). */
@@ -124,6 +125,47 @@ describe("RealGitHub", () => {
     await expect(gh.getPr("https://github.com/o/r/pull/9")).rejects.toMatchObject({
       code: "not_found",
     });
+  });
+
+  it("addLabels crea cada etiqueta, se la pone al PR y devuelve el PR leído", async () => {
+    const { exec, calls } = scripted({
+      "label create": [{}, {}],
+      "pr edit": [{}],
+      "pr view": [
+        { stdout: JSON.stringify({ ...ghPr(), labels: [{ name: "lunasq:risk-high" }] }) },
+      ],
+    });
+    const pr = await new RealGitHub({ exec }).addLabels({
+      cwd: "/wt/t1",
+      url,
+      labels: [
+        { name: "lunasq:risk-high", color: "b60205", description: "Riesgo alto" },
+        { name: "-rara" },
+      ],
+    });
+    expect(pr.labels).toEqual(["lunasq:risk-high"]);
+    expect(calls.map((c) => c.args)).toEqual([
+      [
+        "label",
+        "create",
+        "lunasq:risk-high",
+        "--force",
+        "--color=b60205",
+        "--description=Riesgo alto",
+      ],
+      ["label", "create", "-rara", "--force"],
+      ["pr", "edit", url, "--add-label=lunasq:risk-high", "--add-label=-rara"],
+      ["pr", "view", url, `--json=${PR_FIELDS}`],
+    ]);
+    expect(calls.slice(0, 3).every((c) => c.opts.cwd === "/wt/t1")).toBe(true);
+  });
+
+  it("addLabels rechaza lo que no es la URL de un PR sin llamar a gh", async () => {
+    const { exec, calls } = scripted({});
+    await expect(
+      new RealGitHub({ exec }).addLabels({ cwd: "/wt/t1", url: "12", labels: [{ name: "x" }] }),
+    ).rejects.toMatchObject({ code: "not_found" });
+    expect(calls).toEqual([]);
   });
 
   it("createPr sin URL en la salida falla sin llamar a pr view", async () => {

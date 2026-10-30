@@ -4,7 +4,8 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { EVIDENCE_DIR } from "@lunasq/schemas";
 import { GitError } from "./errors.ts";
-import type { GitAdapter, GitFile } from "./types.ts";
+import { withTrailers } from "./trailers.ts";
+import type { GitAdapter, GitCommitInfo, GitFile, RebaseResult } from "./types.ts";
 
 /** Límite de un comando local; el fetch, que va a la red, tiene el suyo. */
 export const DEFAULT_GIT_TIMEOUT_MS = 60_000;
@@ -146,6 +147,88 @@ export class RealGit implements GitAdapter {
     return this.resolveCommit({ cwd: input.cwd, ref: "HEAD" });
   }
 
+  async rebase(input: { cwd: string; onto: string }): Promise<RebaseResult> {
+    const before = await this.resolveCommit({ cwd: input.cwd, ref: "HEAD" });
+    const res = await this.run(input.cwd, ["rebase", "--quiet", "--end-of-options", input.onto]);
+    if (res.exitCode === 0) {
+      const head = await this.resolveCommit({ cwd: input.cwd, ref: "HEAD" });
+      return { status: head === before ? "up_to_date" : "rebased", head };
+    }
+    // Un conflicto deja archivos sin fusionar; cualquier otro fallo (worktree sucio, ref
+    // inexistente) no, y ahí no hay nada que abortar.
+    const unmerged = await this.run(input.cwd, ["diff", "--name-only", "--diff-filter=U", "-z"]);
+    const files = unmerged.stdout.toString("utf8").split("\0").filter(Boolean);
+    if (files.length === 0) {
+      throw new GitError(
+        "git_failed",
+        `rebase en ${input.cwd} (exit ${res.exitCode}): ${res.stderr.trim()}`,
+      );
+    }
+    await this.ok(input.cwd, ["rebase", "--abort"]);
+    return { status: "conflict", files: files.sort() };
+  }
+
+  async listCommits(input: { cwd: string; base: string }): Promise<GitCommitInfo[]> {
+    return (await this.logCommits(input)).map(({ sha, message, authoredAt }) => ({
+      sha,
+      message,
+      subject: message.split("\n")[0] ?? "",
+      authoredAt,
+    }));
+  }
+
+  async addTrailers(input: {
+    cwd: string;
+    base: string;
+    trailers: Record<string, Record<string, string>>;
+  }) {
+    const head = await this.resolveCommit({ cwd: input.cwd, ref: "HEAD" });
+    let parent = await this.resolveCommit({ cwd: input.cwd, ref: input.base });
+    for (const commit of await this.logCommits(input)) {
+      const message = withTrailers(commit.message, input.trailers[commit.sha] ?? {});
+      // Sin cambios propios ni de un ancestro, el commit se conserva con su sha.
+      if (message === commit.message && commit.parent === parent) {
+        parent = commit.sha;
+        continue;
+      }
+      const created = await this.ok(
+        input.cwd,
+        ["commit-tree", commit.tree, "-p", parent, "-m", message.replace(/\n+$/, "")],
+        {
+          env: {
+            GIT_AUTHOR_NAME: commit.authorName,
+            GIT_AUTHOR_EMAIL: commit.authorEmail,
+            GIT_AUTHOR_DATE: commit.authorDate,
+          },
+        },
+      );
+      parent = created.stdout.toString("utf8").trim();
+    }
+    if (parent === head) return head;
+    // Los árboles son los mismos: el índice y el working tree siguen limpios. `head` como valor
+    // anterior evita pisar un commit que otro hiciera mientras tanto.
+    await this.ok(input.cwd, ["update-ref", "-m", "lunasq: trailers", "HEAD", parent, head]);
+    return parent;
+  }
+
+  async push(input: { cwd: string; remote: string; branch: string }) {
+    // Tras un rebase la historia cambia: se fuerza, pero solo si el remoto sigue donde este
+    // checkout lo vio por última vez.
+    await this.ok(
+      input.cwd,
+      [
+        "push",
+        "--quiet",
+        "--force-with-lease",
+        "--set-upstream",
+        "--end-of-options",
+        input.remote,
+        `HEAD:refs/heads/${input.branch}`,
+      ],
+      { timeoutMs: this.fetchTimeoutMs },
+    );
+  }
+
   async addDetachedWorktree(input: { cwd: string; path: string; commit: string }) {
     await this.ok(input.cwd, ["worktree", "add", "--quiet", "--detach", input.path, input.commit]);
   }
@@ -153,6 +236,42 @@ export class RealGit implements GitAdapter {
   async removeWorktree(input: { cwd: string; path: string }) {
     await this.run(input.cwd, ["worktree", "remove", "--force", input.path]);
     await this.ok(input.cwd, ["worktree", "prune"]);
+  }
+
+  private async logCommits(input: { cwd: string; base: string }) {
+    const fields = ["%H", "%T", "%P", "%an", "%ae", "%aI", "%B"].join("%x1f");
+    const res = await this.ok(input.cwd, [
+      "log",
+      "--reverse",
+      `--format=${fields}%x1e`,
+      "--end-of-options",
+      `${input.base}..HEAD`,
+    ]);
+    return res.stdout
+      .toString("utf8")
+      .split("\x1e")
+      .filter((record) => record.trim() !== "")
+      .map((record) => {
+        const [
+          sha = "",
+          tree = "",
+          parents = "",
+          authorName = "",
+          authorEmail = "",
+          date = "",
+          ...rest
+        ] = record.replace(/^\n/, "").split("\x1f");
+        return {
+          sha,
+          tree,
+          parent: parents.split(" ")[0] ?? "",
+          authorName,
+          authorEmail,
+          authorDate: date,
+          authoredAt: new Date(date),
+          message: `${rest.join("\x1f").replace(/\n+$/, "")}\n`,
+        };
+      });
   }
 
   private async lsTree(cwd: string, commit: string, path: string) {
@@ -169,7 +288,11 @@ export class RealGit implements GitAdapter {
       });
   }
 
-  private async ok(cwd: string, args: string[], opts: { timeoutMs?: number } = {}) {
+  private async ok(
+    cwd: string,
+    args: string[],
+    opts: { timeoutMs?: number; env?: Record<string, string> } = {},
+  ) {
     const res = await this.run(cwd, args, opts);
     if (res.exitCode !== 0) {
       throw new GitError(
@@ -180,7 +303,11 @@ export class RealGit implements GitAdapter {
     return res;
   }
 
-  private run(cwd: string, args: string[], opts: { timeoutMs?: number } = {}): Promise<GitRun> {
+  private run(
+    cwd: string,
+    args: string[],
+    opts: { timeoutMs?: number; env?: Record<string, string> } = {},
+  ): Promise<GitRun> {
     const timeoutMs = opts.timeoutMs ?? this.timeoutMs;
     return new Promise((resolve, reject) => {
       execFile(
@@ -198,6 +325,7 @@ export class RealGit implements GitAdapter {
             // `git replace` desde un worktree cambiaría el contenido de cualquier objeto de la
             // base para todos los checkouts del repo (refs/replace vive en el gitdir común).
             GIT_NO_REPLACE_OBJECTS: "1",
+            ...opts.env,
           },
           encoding: "buffer",
           maxBuffer: 64 * 1024 * 1024,

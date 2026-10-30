@@ -67,6 +67,11 @@ gitContract("git real", async () => ({
   pushToRemote: async (cwd, files) => commitTree(join(dirname(cwd), "pusher"), files),
   writeWorkingFile: async (cwd, path, content) => writeTree(cwd, { [path]: { content } }),
   freePath: async () => join(root, `free${++repos}`),
+  checkoutBranch: async (cwd, branch) => void git(cwd, "checkout", "--quiet", "-b", branch),
+  remoteBranch: async (cwd, branch) => {
+    const out = git(cwd, "ls-remote", "origin", `refs/heads/${branch}`).trim();
+    return out === "" ? null : (out.split("\t")[0] ?? null);
+  },
   headMessage: async (cwd) => git(cwd, "log", "-1", "--format=%B"),
   trackedFiles: async (cwd) => git(cwd, "ls-tree", "-r", "--name-only", "HEAD").split("\n"),
   cleanup: async () => {},

@@ -2,6 +2,7 @@ export * from "./handoff/index.ts";
 
 export const packageName = "@lunasq/schemas";
 
+export * from "./delivery.ts";
 export * from "./enums.ts";
 export * from "./events.ts";
 export * from "./evidence.ts";

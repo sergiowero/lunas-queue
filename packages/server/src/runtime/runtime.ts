@@ -21,7 +21,11 @@ import {
   TaskWorktreeRepository,
 } from "@lunasq/db";
 import { createApp } from "../app.ts";
+import { DeliveryService } from "../delivery/service.ts";
+import { subscribeDelivery } from "../delivery/subscribe.ts";
 import { Orchestrator } from "../dispatcher/orchestrator.ts";
+import { EvidenceService } from "../evidence/service.ts";
+import { ClaudeTranscriptSource } from "../evidence/sources.ts";
 import { PrPoller } from "../github/poller.ts";
 import { subscribeAfterMergeHooks } from "../hooks/after-merge.ts";
 import { HookService } from "../hooks/service.ts";
@@ -126,10 +130,12 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     db,
     onError: (error) => log(`outbox: ${error.message}`),
   });
+  const evidence = new EvidenceService({ db, git, transcripts: new ClaudeTranscriptSource() });
   const orchestrator = new Orchestrator({
     db,
     herdr,
     processes,
+    evidence,
     mcp: { configPath: opts.mcpConfigPath, url: urls.mcp },
     hooks: { settingsPath: opts.hookSettingsPath, url: urls.hooks },
     publisher,
@@ -147,9 +153,10 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     tasks: new TaskWorktreeRepository(db),
     worktrees: orchestrator.worktrees,
   });
+  const testGate = new PaneTestGate({ db, git, herdr, worktrees: orchestrator.worktrees });
   const app = createApp({
     db,
-    testGate: new PaneTestGate({ db, git, herdr, worktrees: orchestrator.worktrees }),
+    testGate,
     phaseHooks: hooks,
     // Bandeja (ADR uw-27-bandeja): responder preguntas, listar bloqueos y enfocar su pane.
     questions: orchestrator.questions,
@@ -171,7 +178,33 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     onError: (error, taskId) => log(`after_merge: ${taskId}: ${error.message}`),
   });
 
-  return { app, paneEnv, publisher, orchestrator, poller, unsubscribeAfterMerge };
+  // La entrega corre dentro del Run del verificador cuando éste registra un pass (ADR uw-26-entrega).
+  const delivery = new DeliveryService({
+    db,
+    git,
+    github,
+    hooks,
+    testGate,
+    worktrees: orchestrator.worktrees,
+    runs: orchestrator.dispatcher,
+    evidence,
+  });
+  const unsubscribeDelivery = subscribeDelivery({
+    publisher,
+    delivery,
+    onError: (error, taskId) => log(`entrega: ${taskId}: ${error.message}`),
+  });
+
+  return {
+    app,
+    paneEnv,
+    publisher,
+    orchestrator,
+    poller,
+    delivery,
+    unsubscribeAfterMerge,
+    unsubscribeDelivery,
+  };
 }
 
 export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
@@ -202,13 +235,23 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
     db.$client.close();
     throw err;
   }
-  const { app, paneEnv, publisher, orchestrator, poller, unsubscribeAfterMerge } = parts;
+  const {
+    app,
+    paneEnv,
+    publisher,
+    orchestrator,
+    poller,
+    delivery,
+    unsubscribeAfterMerge,
+    unsubscribeDelivery,
+  } = parts;
   handler = (req) => app.fetch(req);
 
   let stopping: Promise<void> | undefined;
   const stop = () => {
     stopping ??= (async () => {
       unsubscribeAfterMerge();
+      unsubscribeDelivery();
       await poller.stop();
       await orchestrator.stop();
       await publisher.stop();
@@ -222,6 +265,12 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
     await orchestrator.start();
     await publisher.start();
     await poller.start();
+    // Una entrega que un reinicio dejó a medias se retoma sin frenar el arranque.
+    void delivery
+      .recover()
+      .catch((error: unknown) =>
+        log(`entrega: ${error instanceof Error ? error.message : String(error)}`),
+      );
   } catch (err) {
     await stop();
     throw err;

@@ -25,6 +25,7 @@ export const PR_FIELDS = [
   "statusCheckRollup",
   "reviewDecision",
   "reviews",
+  "labels",
 ].join(",");
 
 // gh da "" o una fecha cero en lugar de null en algunos campos.
@@ -66,7 +67,10 @@ const GhPr = z.object({
   statusCheckRollup: z.array(z.unknown()).nullish(),
   reviewDecision: z.string().nullish(),
   reviews: z.array(z.unknown()).nullish(),
+  labels: z.array(z.unknown()).nullish(),
 });
+
+const Label = z.object({ name: z.string() });
 
 const Check = z.discriminatedUnion("__typename", [CheckRun, StatusContext]);
 
@@ -167,6 +171,10 @@ export function parsePr(raw: unknown): PullRequest {
     checks: { status: summarizeChecks(items), items },
     reviewDecision: REVIEW_DECISIONS[pr.reviewDecision ?? ""] ?? null,
     reviews,
+    labels: (pr.labels ?? []).flatMap((raw) => {
+      const label = Label.safeParse(raw);
+      return label.success ? [label.data.name] : [];
+    }),
   };
 }
 

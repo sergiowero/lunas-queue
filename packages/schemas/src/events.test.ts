@@ -42,6 +42,7 @@ describe("evento task.transitioned", () => {
       "iterations_exhausted",
       "hook_failed",
       "dependency_pr_closed",
+      "delivery_failed",
     ]);
   });
 

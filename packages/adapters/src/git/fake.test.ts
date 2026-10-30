@@ -16,6 +16,8 @@ gitContract("fake en memoria", async () => {
     },
     writeWorkingFile: async (cwd, path) => adapter.writeWorkingFile(cwd, path),
     freePath: async () => `/tmp-worktrees/w${++repos}`,
+    checkoutBranch: async (cwd) => adapter.checkoutBranch(cwd),
+    remoteBranch: async (cwd, branch) => adapter.remoteBranch(cwd, branch),
     headMessage: async (cwd) => adapter.headMessage(cwd),
     trackedFiles: async (cwd) => adapter.trackedFiles(cwd),
     cleanup: async () => {},
