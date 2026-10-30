@@ -5,6 +5,7 @@ import {
   type LunasqDatabase,
   ProjectRepository,
   ProjectRepositoryError,
+  QuestionRepository,
   SpecRepository,
   SpecRepositoryError,
   TaskRepository,
@@ -12,6 +13,12 @@ import {
 } from "@lunasq/db";
 import { Hono } from "hono";
 import { projectRoutes } from "./api/projects.ts";
+import {
+  type BlockedSource,
+  blockedRoutes,
+  type QuestionAnswerer,
+  questionRoutes,
+} from "./api/questions.ts";
 import { specRoutes } from "./api/specs.ts";
 import { taskRoutes } from "./api/tasks.ts";
 import {
@@ -40,9 +47,26 @@ export interface AppDeps {
    * servidor pasa el HookService. Sin él, los puntos pasan sin correr nada.
    */
   phaseHooks?: PhaseHooks;
+  /**
+   * Responde las Questions: quien compone el servidor pasa el QuestionService del orquestador.
+   * Sin él, `POST /api/questions/:id/answer` responde 503.
+   */
+  questions?: QuestionAnswerer;
+  /**
+   * Agentes bloqueados por un permiso: quien compone el servidor pasa `watcher.blocked`. Sin él,
+   * `GET /api/blocked` responde una lista vacía.
+   */
+  blocked?: BlockedSource;
 }
 
-export function createApp({ db, testGate, commitVerifier, phaseHooks }: AppDeps): Hono {
+export function createApp({
+  db,
+  testGate,
+  commitVerifier,
+  phaseHooks,
+  questions,
+  blocked,
+}: AppDeps): Hono {
   const runner = new ShellProcessRunner();
   const mcp = new LunasqMcpService({
     db,
@@ -55,6 +79,8 @@ export function createApp({ db, testGate, commitVerifier, phaseHooks }: AppDeps)
     .route(SUBAGENT_HOOK_PATH, subagentHookRoutes(db))
     .route("/api/projects", projectRoutes(new ProjectRepository(db)))
     .route("/api/tasks/:id/specs", specRoutes(new SpecRepository(db)))
+    .route("/api/blocked", blockedRoutes(blocked ?? (() => [])))
+    .route("/api/questions", questionRoutes(new QuestionRepository(db), questions))
     .route("/api/tasks", taskRoutes(new TaskRepository(db)))
     .onError((error, c) => {
       if (

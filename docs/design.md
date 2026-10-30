@@ -508,7 +508,7 @@ Flujo de `ask_human`:
 1. El backend guarda la Question ligada a la tarea y al Run; la tarea pasa a `waiting_human` y el timeout de fase se pausa.
 2. La Question aparece de inmediato en la bandeja; si sigue abierta después de 1 minuto, se notifica por herdr y por la UI.
 3. El humano responde en la bandeja.
-4. Si el agente sigue vivo, el dispatcher le envía la respuesta al mismo pane con `agent prompt`. Si ya se cerró, se crea un Run nuevo y la Question con su respuesta llega en `get_task_context`.
+4. Si el agente sigue vivo, el dispatcher le envía la respuesta al mismo pane con `agent prompt`. Si ya se cerró, se crea un Run nuevo y la Question con su respuesta llega en `get_task_context`. Detalle, API y casos límite: [ADR uw-22-preguntas](decisions/uw-22-preguntas.md).
 
 La tool no espera la respuesta dentro de la llamada MCP: los clientes MCP tienen timeouts y una llamada colgada por horas es frágil. Registra la pregunta, le indica al agente que termine su turno y la respuesta entra después como prompt nuevo. Escribir directo en el pane de herdr también funciona, pero esa respuesta no queda en el historial de la tarea.
 

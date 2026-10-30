@@ -136,6 +136,29 @@ describe("RunWatcher: agente detenido sin señal MCP", () => {
 });
 
 describe("RunWatcher: blocked", () => {
+  it("blocked() lista los agentes que esperan un permiso hasta que salen de blocked", async () => {
+    const h = setup();
+    const { taskId, run, name } = await h.launched();
+    expect(h.watcher.blocked()).toEqual([]);
+
+    h.herdr.setAgentStatus(name, "blocked");
+    await settle(vi);
+    expect(h.watcher.blocked()).toEqual([
+      {
+        runId: run.id,
+        taskId,
+        phase: "refine",
+        agentName: name,
+        paneId: run.herdrPane,
+        since: new Date().toISOString(),
+      },
+    ]);
+
+    h.herdr.setAgentStatus(name, "working");
+    await settle(vi);
+    expect(h.watcher.blocked()).toEqual([]);
+  });
+
   it("notifica una vez si sigue bloqueado 1 minuto y no antes", async () => {
     const h = setup();
     const { run, name } = await h.launched();

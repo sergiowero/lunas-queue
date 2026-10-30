@@ -10,6 +10,7 @@ export * from "./notification.ts";
 export * from "./outbox.ts";
 export * from "./project.ts";
 export * from "./pull-request.ts";
+export * from "./question.ts";
 export * from "./run.ts";
 export * from "./scheduler.ts";
 export * from "./spec.ts";

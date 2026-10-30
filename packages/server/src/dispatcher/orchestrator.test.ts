@@ -2,7 +2,16 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeHerdr, FakeProcessRunner } from "@lunasq/adapters";
-import { claimRun, closeRun, ProjectRepository, RunRepository, transitionTask } from "@lunasq/db";
+import {
+  applyTransition,
+  claimRun,
+  closeRun,
+  createQuestion,
+  ProjectRepository,
+  QuestionRepository,
+  RunRepository,
+  transitionTask,
+} from "@lunasq/db";
 import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { type Notification, SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +29,7 @@ function setup(
     config?: SchedulerConfigInput;
     db?: ReturnType<typeof migratedDatabase>;
     herdr?: FakeHerdr;
+    escalationDelayMs?: number;
   } = {},
 ) {
   const db = opts.db ?? migratedDatabase();
@@ -32,7 +42,10 @@ function setup(
   const notify = (n: Notification) => {
     notifications.push(n);
   };
-  const escalator = new Escalator({ notify });
+  const escalator = new Escalator({
+    notify,
+    ...(opts.escalationDelayMs !== undefined && { delayMs: opts.escalationDelayMs }),
+  });
   cleanups.push(() => escalator.stop());
   const orchestrator = new Orchestrator({
     db,
@@ -51,7 +64,7 @@ function setup(
   const project = opts.db
     ? (new ProjectRepository(db).list()[0] ?? insertProject(db))
     : insertProject(db);
-  return { db, dir, herdr, publisher, orchestrator, notifications, project };
+  return { db, dir, herdr, publisher, orchestrator, notifications, project, escalator };
 }
 
 describe("Orchestrator", () => {
@@ -295,5 +308,117 @@ describe("Orchestrator: escenarios de fallo", () => {
       expect(row.p).toBeNull();
     });
     expect(new RunRepository(db).get(run?.id ?? "")?.result).toBe("cancelled");
+  });
+});
+
+describe("Orchestrator: preguntas", () => {
+  const taskState = (db: ReturnType<typeof migratedDatabase>, id: string) =>
+    db.$client.prepare("select state, sub_state as subState from tasks where id = ?").get(id) as {
+      state: string;
+      subState: string | null;
+    };
+
+  async function startAll(ctx: ReturnType<typeof setup>) {
+    await ctx.orchestrator.start();
+    await ctx.publisher.start();
+    cleanups.push(() => ctx.publisher.stop());
+  }
+
+  /** Despacha la tarea y hace lo que ask_human: waiting_human y la Question, en una transacción. */
+  async function asked(ctx: ReturnType<typeof setup>) {
+    const task = insertTask(ctx.db, ctx.project.id);
+    await startAll(ctx);
+    await ctx.orchestrator.dispatcher.idle();
+    const run = new RunRepository(ctx.db).latestForTask(task.id);
+    if (!run?.herdrName) throw new Error("sin Run");
+    const question = ctx.db.transaction((tx) => {
+      const moved = applyTransition(tx, {
+        taskId: task.id,
+        actor: "agent",
+        command: { type: "ask_human" },
+      });
+      if (!moved.ok) throw new Error(moved.error.message);
+      return createQuestion(tx, { taskId: task.id, runId: run.id, question: "¿Borro la tabla?" });
+    });
+    return { task, run, name: run.herdrName, question };
+  }
+
+  it("una pregunta que sigue abierta pasado el plazo se notifica una sola vez", async () => {
+    const ctx = setup({ escalationDelayMs: 100 });
+    const { question } = await asked(ctx);
+
+    await vi.waitFor(() =>
+      expect(ctx.notifications.map((n) => n.id)).toContain(`question:${question.id}`),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(ctx.notifications.filter((n) => n.kind === "question_open")).toHaveLength(1);
+  });
+
+  it("responderla a tiempo no notifica y la respuesta llega al pane vivo", async () => {
+    const ctx = setup({ escalationDelayMs: 400 });
+    const { task, name, question } = await asked(ctx);
+    // El outbox arma el aviso al ver la transición.
+    await vi.waitFor(() => expect(ctx.escalator.pending()).toEqual([`question:${question.id}`]));
+
+    const result = await ctx.orchestrator.questions.answer(question.id, { answer: "Sí, bórrala" });
+
+    expect(result).toMatchObject({ ok: true, delivery: "pane" });
+    expect(await ctx.herdr.readAgent({ name })).toContain("Sí, bórrala");
+    expect(taskState(ctx.db, task.id)).toEqual({ state: "draft", subState: "running" });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(ctx.notifications).toEqual([]);
+  });
+
+  it("con el agente muerto, la respuesta redespacha la fase en un Run nuevo", async () => {
+    const ctx = setup();
+    const { db, orchestrator, herdr } = ctx;
+    const { task, run, name, question } = await asked(ctx);
+    herdr.exitAgent(name);
+
+    const result = await orchestrator.questions.answer(question.id, { answer: "Sí" });
+    expect(result).toMatchObject({ ok: true, delivery: "new_run" });
+
+    // Sin llamar al scheduler: la respuesta lo despierta, no el tick de 60 s.
+    const runs = new RunRepository(db);
+    await vi.waitFor(() => expect(runs.forTask(task.id)).toHaveLength(2));
+    await orchestrator.dispatcher.idle();
+    expect(runs.get(run.id)?.result).toBe("cancelled");
+    const next = runs.latestForTask(task.id);
+    expect(next?.id).not.toBe(run.id);
+    expect(taskState(db, task.id)).toEqual({ state: "draft", subState: "running" });
+    expect(new QuestionRepository(db).get(question.id)).toMatchObject({
+      status: "answered",
+      answer: "Sí",
+    });
+  });
+
+  it("cancelar la tarea con la pregunta abierta cancela la pregunta y su aviso", async () => {
+    const ctx = setup({ escalationDelayMs: 400 });
+    const { db } = ctx;
+    const { task, question } = await asked(ctx);
+    await vi.waitFor(() => expect(ctx.escalator.pending()).toEqual([`question:${question.id}`]));
+
+    transitionTask(db, { taskId: task.id, actor: "human", command: { type: "cancel" } });
+
+    await vi.waitFor(() =>
+      expect(new QuestionRepository(db).get(question.id)?.status).toBe("cancelled"),
+    );
+    expect(ctx.escalator.pending()).toEqual([]);
+    expect((await ctx.orchestrator.questions.answer(question.id, { answer: "tarde" })).ok).toBe(
+      false,
+    );
+  });
+
+  it("al reiniciar re-arma el aviso de las preguntas abiertas", async () => {
+    const first = setup();
+    const { question } = await asked(first);
+    await first.orchestrator.stop();
+
+    const second = setup({ db: first.db, herdr: first.herdr, escalationDelayMs: 50 });
+    await second.orchestrator.start();
+
+    await vi.waitFor(() =>
+      expect(second.notifications.map((n) => n.id)).toContain(`question:${question.id}`),
+    );
   });
 });
