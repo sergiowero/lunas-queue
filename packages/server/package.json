@@ -15,6 +15,7 @@
     "test:skills": "LUNASQ_SKILLS_INTEGRATION=1 vitest run src/skills/real.integration.test.ts"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.5",
     "@lunasq/adapters": "workspace:*",
     "@lunasq/db": "workspace:*",
     "@lunasq/domain": "workspace:*",

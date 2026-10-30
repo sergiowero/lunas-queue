@@ -14,9 +14,10 @@ gitContract("fake en memoria", async () => {
     pushToRemote: async (cwd, files) => {
       adapter.pushToRemote(cwd, "main", files);
     },
-    writeWorkingFile: async (cwd) => adapter.setDirty(cwd),
+    writeWorkingFile: async (cwd, path) => adapter.writeWorkingFile(cwd, path),
     freePath: async () => `/tmp-worktrees/w${++repos}`,
     headMessage: async (cwd) => adapter.headMessage(cwd),
+    trackedFiles: async (cwd) => adapter.trackedFiles(cwd),
     cleanup: async () => {},
   };
 });

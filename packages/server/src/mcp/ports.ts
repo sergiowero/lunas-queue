@@ -3,7 +3,12 @@
 // (test-gate/, UW-11); la comprobación de commits corre comandos de git con el ProcessRunner de
 // adapters; los hooks los corre HookService (hooks/, UW-10).
 import type { ProcessRunner } from "@lunasq/adapters";
-import type { HookPoint, HookPointOutcome, TestGateTrigger } from "@lunasq/schemas";
+import {
+  EVIDENCE_DIR,
+  type HookPoint,
+  type HookPointOutcome,
+  type TestGateTrigger,
+} from "@lunasq/schemas";
 
 export type TestGateInput = {
   taskId: string;
@@ -119,7 +124,8 @@ export class GitCommitVerifier implements CommitVerifier {
 
   async uncommitted(worktreePath: string): Promise<string[]> {
     const result = await this.#runner.run({
-      command: "git status --porcelain --untracked-files=all",
+      // lunasq/tasks/ es el archivo de evidencia de LunasQ, que se commitea en la entrega.
+      command: `git status --porcelain --untracked-files=all -- . ${quote(`:(exclude)${EVIDENCE_DIR}`)}`,
       cwd: worktreePath,
     });
     if (result.exitCode !== 0) return ["(git status falló)"];

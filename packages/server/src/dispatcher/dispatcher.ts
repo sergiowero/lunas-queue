@@ -87,6 +87,14 @@ export interface RunObserver {
   unwatch(runId: string): void;
 }
 
+/**
+ * Quien deja constancia de un Run cerrado (el archivo de evidencia, UW-24). El dispatcher lo llama
+ * por cada Run que cierra o que ya encuentra cerrado; debe ser idempotente.
+ */
+export interface RunEvidenceSink {
+  recordRun(runId: string): Promise<unknown>;
+}
+
 /** `runId` es null si el fallo no es de un Run (p. ej. la lectura de `recover`). */
 export type DispatchErrorHandler = (error: Error, runId: string | null) => void;
 
@@ -104,6 +112,8 @@ export interface PhaseDispatcherOptions {
   /** Variables extra del pane de cada agente (telemetría, PATH de pruebas). */
   paneEnv?: Record<string, string>;
   observer?: RunObserver;
+  /** Sin él no se escribe evidencia. Un fallo al escribirla se reporta en `onError`. */
+  evidence?: RunEvidenceSink;
   newSessionId?: () => string;
   startTimeoutMs?: number;
   trustTimeoutMs?: number;
@@ -120,6 +130,7 @@ export class PhaseDispatcher implements Dispatcher {
   private readonly config: SchedulerConfig;
   private readonly paneEnv: Record<string, string>;
   private readonly observer: RunObserver | undefined;
+  private readonly evidence: RunEvidenceSink | undefined;
   private readonly newSessionId: () => string;
   private readonly startTimeoutMs: number;
   private readonly trustTimeoutMs: number;
@@ -150,6 +161,7 @@ export class PhaseDispatcher implements Dispatcher {
       ...opts.paneEnv,
     };
     this.observer = opts.observer;
+    this.evidence = opts.evidence;
     this.newSessionId = opts.newSessionId ?? randomUUID;
     this.startTimeoutMs = opts.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS;
     this.trustTimeoutMs = opts.trustTimeoutMs ?? DEFAULT_TRUST_TIMEOUT_MS;
@@ -226,13 +238,13 @@ export class PhaseDispatcher implements Dispatcher {
       const run = this.runs.get(runId);
       if (!run) throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
       if (run.endedAt !== null) {
-        // Lo cerró otro (la tool de salida del MCP): queda limpiar el pane.
-        await this.release(runId);
+        // Lo cerró otro (la tool de salida del MCP): queda dejar su evidencia y limpiar el pane.
+        await this.releaseAndRecord(runId);
         return { closed: false, run };
       }
       const session = await this.resolveSession(run);
       const res = this.runs.close(runId, { ...input, ...(session && { session }) });
-      await this.release(runId);
+      await this.releaseAndRecord(runId);
       return res;
     });
   }
@@ -245,7 +257,7 @@ export class PhaseDispatcher implements Dispatcher {
   releaseRun(runId: string): Promise<void> {
     return this.closeLocks.run(runId, async () => {
       if (this.runs.get(runId)?.endedAt == null) return;
-      await this.release(runId);
+      await this.releaseAndRecord(runId);
     });
   }
 
@@ -256,9 +268,31 @@ export class PhaseDispatcher implements Dispatcher {
         throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
       const res = this.runs.fail(runId, reason);
       // También con closed false: un lanzamiento que falla tras un cierre deja su pane abierto.
-      await this.release(runId);
+      await this.releaseAndRecord(runId);
       return res;
     });
+  }
+
+  /**
+   * Cierra el pane y después deja la evidencia: con el agente ya detenido, su transcript está
+   * completo (una tool de salida del MCP cierra el Run mientras el agente termina su turno). Si
+   * cerrar el pane falla, la evidencia se escribe igual.
+   */
+  private async releaseAndRecord(runId: string): Promise<void> {
+    try {
+      await this.release(runId);
+    } finally {
+      await this.recordEvidence(runId);
+    }
+  }
+
+  /** La evidencia no es parte del cierre: si falla se reporta y el Run se cierra igual. */
+  private async recordEvidence(runId: string): Promise<void> {
+    try {
+      await this.evidence?.recordRun(runId);
+    } catch (error) {
+      this.onError(asError(error), runId);
+    }
   }
 
   private background(runId: string): void {

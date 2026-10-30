@@ -29,7 +29,12 @@ import { type ReconcileErrorHandler, Reconciler } from "../reconciler/reconciler
 import { RunWatcher } from "../reconciler/watcher.ts";
 import { Scheduler, type SchedulerErrorHandler } from "../scheduler/scheduler.ts";
 import { WorktreeService } from "../worktrees/service.ts";
-import { type DispatchErrorHandler, PhaseDispatcher, type RunObserver } from "./dispatcher.ts";
+import {
+  type DispatchErrorHandler,
+  PhaseDispatcher,
+  type RunEvidenceSink,
+  type RunObserver,
+} from "./dispatcher.ts";
 import { ensureHookSettings } from "./hook-settings.ts";
 import { ensureMcpConfig } from "./mcp-config.ts";
 
@@ -46,6 +51,8 @@ export interface OrchestratorOptions {
   paneEnv?: Record<string, string>;
   /** Reemplaza al `RunWatcher` (tests). */
   observer?: RunObserver;
+  /** Archivo de evidencia (UW-24): se actualiza al cerrar cada Run, también los que cierra el MCP. */
+  evidence?: RunEvidenceSink;
   /**
    * Avisos al humano: blocked, timeout, reintentos y loop agotados. Sin esto se arma el módulo de
    * notificaciones con herdr como canal (`notifications` lo expone para montar el SSE).
@@ -121,6 +128,7 @@ export class Orchestrator {
       mcpConfigPath: opts.mcp.configPath,
       hookSettingsPath: opts.hooks.settingsPath,
       observer: opts.observer ?? this.watcher,
+      ...(opts.evidence && { evidence: opts.evidence }),
       ...(opts.config && { config: opts.config }),
       ...(opts.paneEnv && { paneEnv: opts.paneEnv }),
       ...(opts.onDispatchError && { onError: opts.onDispatchError }),

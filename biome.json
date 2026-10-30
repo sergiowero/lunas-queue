@@ -8,6 +8,11 @@
   "files": {
     "includes": ["**", "!spikes", "!**/dist", "!**/*.md", "!pnpm-lock.yaml", "!packages/db/drizzle"]
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "formatter": {
     "enabled": true,
     "indentStyle": "space",

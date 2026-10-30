@@ -79,7 +79,7 @@ Cada componente del diseño queda resuelto con piezas de la misma base, sin serv
 | Adapter de GitHub | CLI `gh` con salida `--json` vía `child_process` | Usa la sesión autenticada de `gh` de la máquina |
 | Archivo de evidencia | Generador de markdown propio; redacción de secretos con patrones al estilo gitleaks | Escribe en `lunasq/tasks/{id}.md` del worktree |
 | Logs del propio LunasQ | pino | JSON estructurado, rotación por archivo |
-| CLI e instalador | Binario `lunasq` publicado como paquete npm (`lunasq start`, `lunasq install`, `lunasq doctor`) | `install` verifica herdr, Claude Code y `gh`, e instala skills, subagentes y configuración |
+| CLI e instalador | Binario `lunasq` publicado como paquete npm `lunasq` (`lunasq start`, `lunasq install`, `lunasq doctor`), armado con esbuild en un solo bundle ([ADR uw-28-instalador](decisions/uw-28-instalador.md)) | `install` verifica herdr, Claude Code y `gh`, e instala skills, subagentes y configuración en `~/.lunasq/` |
 
 **Front end**
 
@@ -87,12 +87,12 @@ Cada componente del diseño queda resuelto con piezas de la misma base, sin serv
 | --- | --- |
 | Base | React + Vite + TypeScript |
 | Routing | TanStack Router |
-| Datos del servidor | TanStack Query, con invalidación desde SSE |
-| Componentes y estilos | shadcn/ui sobre Tailwind CSS |
-| Tablas (cola, backlog, Runs) | TanStack Table |
+| Datos del servidor | TanStack Query, con invalidación desde SSE (`GET /api/stream` sigue el Event log, [ADR uw-21-front-end](decisions/uw-21-front-end.md)) |
+| Componentes y estilos | shadcn/ui sobre Tailwind CSS 4 (`class-variance-authority`, `clsx`, `tailwind-merge`) |
+| Tablas (cola, backlog, Runs) | TanStack Table 8.x |
 | DAG de dependencias | React Flow (`@xyflow/react`) con layout automático (dagre) |
 | Diff de versiones de spec | Visor de diff de texto |
-| Render de handoffs y evidencia | Visor de JSON y render de markdown |
+| Render de handoffs y evidencia | Visor de JSON y render de markdown (`react-markdown`, sin HTML crudo) |
 
 ## Estructura del repositorio `lunas-queue`
 
@@ -105,8 +105,8 @@ Monorepo con pnpm workspaces; la regla es que el dominio no depende de nada exte
 | `packages/db` | Esquema Drizzle, migraciones, repositorios, outbox | `schemas`, `domain` |
 | `packages/adapters` | Adapter de herdr (real y fake), adapter de `gh`, adapter de git (lectura de la rama base y commits), runner de procesos (también en un pane de herdr), ejecutor de hooks y gate de tests | `schemas` |
 | `packages/server` | Hono: API, SSE, LunasQ MCP, endpoints OTLP; scheduler, dispatcher y reconciliación; generador de evidencia | `domain`, `db`, `adapters`, `schemas` |
-| `packages/web` | Front end React + Vite; se compila a estáticos que sirve `server` | `schemas` |
-| `packages/cli` | Binario `lunasq`: `start`, `install`, `doctor` | `server` |
+| `packages/web` | Front end React + Vite; se compila a estáticos (`dist/app`) que sirve `server` con `@hono/node-server` | `schemas` (solo tipos) |
+| `packages/cli` | Binario `lunasq`: `start`, `install`, `doctor`; el proceso que arranca `start` lo compone `server` (`startRuntime`) | `server` |
 | `assets/skills` | Skills de fase: `refine-task`, `implement-task`, `verify-task` ([ADR uw-18-skills-fase](decisions/uw-18-skills-fase.md)) | — |
 | `assets/agents` | Definiciones de los 4 subagentes revisores | — |
 
@@ -119,7 +119,7 @@ LunasQ no embebe ninguna de estas herramientas: las invoca como procesos o las c
 | Herramienta | Cómo se integra | Qué configura `lunasq install` |
 | --- | --- | --- |
 | herdr | CLI con salida JSON y socket Unix (NDJSON) para eventos; versión mínima 0.9.5, protocol 22 ([ADR 0004](decisions/0004-herdr-version-y-cli.md)) | Verifica versión; instala la integración oficial de herdr para Claude Code |
-| Claude Code | Lo arranca herdr con `agent start --kind claude`; modelo, modo Auto y demás flags van en los args del perfil de fase; el dispatcher agrega el archivo MCP y un `--settings` estable con los hooks de subagentes ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) | Registra el LunasQ MCP a nivel usuario; copia skills y subagentes a `~/.claude/` |
+| Claude Code | Lo arranca herdr con `agent start --kind claude`; modelo, modo Auto y demás flags van en los args del perfil de fase; el dispatcher agrega el archivo MCP y un `--settings` estable con los hooks de subagentes ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) | Escribe el archivo MCP estable y el settings de hooks en `~/.lunasq/` (no registra el MCP a nivel usuario, [ADR uw-28-instalador](decisions/uw-28-instalador.md)); copia skills y subagentes a `~/.claude/` |
 | GitHub | CLI `gh` con `--json` | Verifica que `gh` esté autenticado |
 | git | Worktrees vía herdr; trailers `LunasQ-Task` y `LunasQ-Run` en los mensajes de commit | — |
 | OpenTelemetry | Claude Code exporta métricas y eventos por OTLP/HTTP JSON a `localhost` | Variables de telemetría en el entorno de cada pane |

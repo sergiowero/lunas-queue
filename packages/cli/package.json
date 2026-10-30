@@ -8,10 +8,18 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "node scripts/build.ts",
     "test": "vitest run",
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@lunasq/server": "workspace:*"
+    "@lunasq/server": "workspace:*",
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "bin": {
+    "lunasq": "./src/bin.ts"
   }
 }

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ShellProcessRunner } from "@lunasq/adapters";
@@ -100,6 +100,16 @@ describe("GitCommitVerifier contra un repo real", () => {
     writeFileSync(join(dir, "work.txt"), "cambio");
     writeFileSync(join(dir, "nuevo.txt"), "x");
     expect((await verifier.uncommitted(dir)).sort()).toEqual(["nuevo.txt", "work.txt"]);
+  });
+
+  it("uncommitted ignora el archivo de evidencia de lunasq/tasks/", async () => {
+    const { dir } = repo();
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    mkdirSync(join(dir, "lunasq/tasks"), { recursive: true });
+    writeFileSync(join(dir, "lunasq/tasks/t1.md"), "# evidencia");
+    expect(await verifier.uncommitted(dir)).toEqual([]);
+    writeFileSync(join(dir, "work.txt"), "cambio");
+    expect(await verifier.uncommitted(dir)).toEqual(["work.txt"]);
   });
 
   it("una rama base con forma de opción no se interpreta como opción de git", async () => {

@@ -4,6 +4,7 @@ export const packageName = "@lunasq/schemas";
 
 export * from "./enums.ts";
 export * from "./events.ts";
+export * from "./evidence.ts";
 export * from "./hooks.ts";
 export * from "./mcp.ts";
 export * from "./notification.ts";
@@ -17,3 +18,4 @@ export * from "./spec.ts";
 export * from "./subagents.ts";
 export * from "./task.ts";
 export * from "./test-gate.ts";
+export * from "./views.ts";
