@@ -9,6 +9,23 @@ export interface GitFile {
   executable: boolean;
 }
 
+export interface GitCommitInfo {
+  sha: string;
+  /** Mensaje completo, con trailers. */
+  message: string;
+  /** Primera línea del mensaje. */
+  subject: string;
+  /** Fecha del autor: el rebase no la cambia, así que ubica el commit en el tiempo. */
+  authoredAt: Date;
+}
+
+export type RebaseResult =
+  /** La rama ya contenía `onto`: no se tocó nada. */
+  | { status: "up_to_date"; head: string }
+  | { status: "rebased"; head: string }
+  /** Un commit chocó con la base. El rebase se aborta: el worktree queda en el HEAD de antes. */
+  | { status: "conflict"; files: string[] };
+
 export interface GitAdapter {
   /**
    * Trae `<branch>` de `<remote>` (actualiza `<remote>/<branch>`) y devuelve el sha que tiene en
@@ -52,6 +69,29 @@ export interface GitAdapter {
     message: string;
     trailers: Record<string, string>;
   }): Promise<string | null>;
+  /**
+   * Rebase de la rama del worktree sobre `onto` (p. ej. `origin/main`). Con conflictos lo aborta y
+   * devuelve los archivos en conflicto; un fallo que no sea de conflicto (worktree sucio, ref
+   * inexistente) lanza `git_failed`.
+   */
+  rebase(input: { cwd: string; onto: string }): Promise<RebaseResult>;
+  /** Commits de `base..HEAD`, del más viejo al más nuevo. */
+  listCommits(input: { cwd: string; base: string }): Promise<GitCommitInfo[]>;
+  /**
+   * Agrega trailers a commits de `base..HEAD` (clave: sha actual) reescribiéndolos con su autor y
+   * fecha; los descendientes cambian de sha. Un trailer cuya clave el commit ya trae no se repite,
+   * así que repetirlo no cambia nada. Devuelve el sha del HEAD nuevo.
+   */
+  addTrailers(input: {
+    cwd: string;
+    base: string;
+    trailers: Record<string, Record<string, string>>;
+  }): Promise<string>;
+  /**
+   * Publica HEAD como `<remote>/<branch>` con `--force-with-lease`: tras un rebase la historia
+   * cambia, pero no pisa un push ajeno. Lanza `git_failed` si el remoto lo rechaza.
+   */
+  push(input: { cwd: string; remote: string; branch: string }): Promise<void>;
   /** Checkout temporal en HEAD detached en `commit`, enlazado al repo de `cwd`. */
   addDetachedWorktree(input: { cwd: string; path: string; commit: string }): Promise<void>;
   /** Borra el checkout enlazado `path`, con cambios o sin ellos. Idempotente. */

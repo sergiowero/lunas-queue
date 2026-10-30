@@ -198,6 +198,7 @@ describe("@lunasq/assets-skills", () => {
       "no_approved_spec",
       "learning",
       "merge-base origin/",
+      "deliveryConflict",
     ]) {
       expect(body, piece).toContain(piece);
     }

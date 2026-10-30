@@ -19,6 +19,7 @@ import { Hono } from "hono";
 import { type HookLister, hookRoutes } from "./api/hooks.ts";
 import { projectRoutes } from "./api/projects.ts";
 import {
+  type AgentFocuser,
   type BlockedSource,
   blockedRoutes,
   type QuestionAnswerer,
@@ -70,6 +71,11 @@ export interface AppDeps {
    * `GET /api/blocked` responde una lista vacía.
    */
   blocked?: BlockedSource;
+  /**
+   * Enfoca en herdr el pane de un agente bloqueado (`herdr.focusAgent`). Sin él,
+   * `POST /api/blocked/:runId/focus` responde 503.
+   */
+  focus?: AgentFocuser;
   /** Configuración del scheduler: la cola muestra el mismo score con el que despacha. */
   scheduler?: SchedulerConfigInput;
   /** Lectura de la evidencia en el repo cuando el worktree ya no existe; por defecto git real. */
@@ -89,6 +95,7 @@ export function createApp({
   hooks,
   questions,
   blocked,
+  focus,
   scheduler,
   webRoot,
   git = new RealGit(),
@@ -121,7 +128,7 @@ export function createApp({
     .route("/api/projects/:id/hooks", hookRoutes({ projects, views: taskViews, hooks }))
     .route("/api/projects", projectRoutes(projects))
     .route("/api/tasks/:id/specs", specRoutes(new SpecRepository(db)))
-    .route("/api/blocked", blockedRoutes(blocked ?? (() => [])))
+    .route("/api/blocked", blockedRoutes(blocked ?? (() => []), focus))
     .route("/api/questions", questionRoutes(new QuestionRepository(db), questions))
     .route("/api/queue", queueRoutes(views))
     .route("/api/graph", graphRoutes(views))

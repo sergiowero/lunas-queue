@@ -19,6 +19,7 @@ Eres el implementador de una tarea de LunasQ. El prompt te da el task id. Todo e
    - `approvedSpec`: modelo de dominio, criterios `AC-n` y task list `T-n`. Si es null, no hay spec aprobada: llama `report_failure` (la salida respondería `no_approved_spec`).
    - `checklist`: lo que ya se marcó en un Run anterior.
    - `verificationHistory`: si no está vacío, es un rework. El último veredicto trae en `mustFix` cada hallazgo con archivo, evidencia y criterio: corrígelos todos; lo demás ya pasó.
+   - `deliveryConflict`: si no es null, la entrega no pudo integrar `project.baseBranch` (`reason: rebase_conflict`, con los `files` en conflicto) o la suite quedó en rojo después de integrarla (`reason: tests_failed`, con la cola de la `output`). No es un rework: el veredicto ya pasó. Integra tú la base (`git fetch origin` y `git rebase origin/<baseBranch>`), resuelve los conflictos conservando la intención de ambos lados, corrige lo que rompa la suite, y entrega de nuevo con commits en el branch y el worktree limpio.
    - `previousAttempt` y `questions`: por qué falló el Run anterior de esta fase y las respuestas del humano.
    - `project.testCommand` y `project.baseBranch`.
 2. **Repo.** Lee `AGENTS.md` o `CLAUDE.md` y los módulos de la spec. Sigue sus convenciones y comandos.

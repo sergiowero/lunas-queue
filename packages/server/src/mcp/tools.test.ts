@@ -1,5 +1,6 @@
 // Tests de contrato de cada tool del LunasQ MCP, por el cliente oficial de MCP.
 import {
+  appendEvent,
   closeRun,
   createQuestion,
   listEvents,
@@ -107,6 +108,52 @@ describe("get_task_context", () => {
     const run = insertRun(h.db, task.id, { phase: "implement" });
     const { call } = await h.connect(run.runToken);
     expect((await call("get_task_context")).body).toMatchObject({ rework: null });
+  });
+
+  it("tras un conflicto de entrega, implementación recibe qué lo causó hasta el siguiente veredicto", async () => {
+    const h = mcpHarness();
+    const task = h.task(implementing);
+    const verify1 = insertRun(h.db, task.id, { phase: "verify", startedAt: new Date(1000) });
+    closeRun(h.db, verify1.id, {
+      result: "success",
+      handoff: handoffFor("verification-pass", verify1),
+    });
+    const conflict = {
+      runId: verify1.id,
+      reason: "rebase_conflict",
+      baseBranch: "main",
+      files: ["src/a.ts"],
+      output: null,
+    };
+    appendEvent(h.db, {
+      taskId: task.id,
+      type: "delivery.conflict",
+      actor: "system",
+      payload: conflict,
+    });
+    const run = insertRun(h.db, task.id, { phase: "implement" });
+    const { call } = await h.connect(run.runToken);
+    expect((await call("get_task_context")).body).toMatchObject({
+      rework: null,
+      deliveryConflict: conflict,
+    });
+
+    // El implementador entregó y el verificador registró un veredicto nuevo: el conflicto quedó atrás.
+    appendEvent(h.db, {
+      taskId: task.id,
+      type: "verification.verdict_recorded",
+      actor: "agent",
+      payload: {
+        runId: verify1.id,
+        verdict: "pass",
+        iteration: 0,
+        riskLabel: "low",
+        mustFix: 0,
+        refuted: 0,
+        skippedReviewers: [],
+      },
+    });
+    expect((await call("get_task_context")).body).toMatchObject({ deliveryConflict: null });
   });
 
   it("verificación no recibe rework", async () => {

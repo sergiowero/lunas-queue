@@ -51,6 +51,8 @@ export type PhaseHookInput = {
   runId: string;
   /** Resultado de la fase para los hooks `after_*` (p. ej. el veredicto). */
   phaseResult?: string | null;
+  /** URL del PR, en los hooks que corren cuando ya existe (`after_delivery`). */
+  prUrl?: string | null;
 };
 
 export type PhaseHookResult = {

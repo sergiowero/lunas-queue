@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeGit, FakeGitHub, FakeHerdr, FakeProcessRunner } from "@lunasq/adapters";
-import { openDatabase, RunRepository } from "@lunasq/db";
-import { insertProject, insertTask } from "@lunasq/db/test-helpers";
+import { createQuestion, openDatabase, RunRepository } from "@lunasq/db";
+import { insertProject, insertRun, insertTask } from "@lunasq/db/test-helpers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SUBAGENT_HOOK_PATH } from "../subagents/routes.ts";
 import { prepareDatabase, type RuntimeOptions, startRuntime, telemetryEnv } from "./runtime.ts";
@@ -111,6 +111,51 @@ describe("startRuntime", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/event-stream");
     controller.abort();
+  });
+
+  it("conecta la bandeja: agentes bloqueados, su acceso en herdr y la respuesta a preguntas", async () => {
+    const opts = options();
+    const seed = prepareDatabase(opts.dbPath);
+    const project = insertProject(seed);
+    const task = insertTask(seed, project.id);
+    const waiting = insertTask(seed, project.id, {
+      state: "in_progress",
+      subState: "waiting_human",
+    });
+    const question = createQuestion(seed, {
+      taskId: waiting.id,
+      runId: insertRun(seed, waiting.id).id,
+      question: "¿Borro la tabla?",
+      context: "hay dos",
+    });
+    seed.$client.close();
+    const herdr = opts.adapters?.herdr as FakeHerdr;
+    const runtime = await start(opts);
+    const db = openDatabase(opts.dbPath);
+    cleanups.push(() => {
+      db.$client.close();
+    });
+    const runs = new RunRepository(db);
+    await vi.waitFor(() => expect(runs.forTask(task.id)[0]?.herdrName).toBeTruthy());
+    const run = runs.forTask(task.id)[0];
+    const name = run?.herdrName as string;
+
+    herdr.setAgentStatus(name, "blocked");
+    await vi.waitFor(async () => {
+      const blocked = await (await fetch(`${runtime.url}/api/blocked`)).json();
+      expect(blocked).toEqual([expect.objectContaining({ runId: run?.id, agentName: name })]);
+    });
+    const focus = await fetch(`${runtime.url}/api/blocked/${run?.id}/focus`, { method: "POST" });
+    expect(focus.status).toBe(204);
+    expect(herdr.focused).toBe(name);
+
+    const answer = await fetch(`${runtime.url}/api/questions/${question.id}/answer`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ answer: "sí" }),
+    });
+    expect(answer.status).toBe(200);
+    expect(await answer.json()).toMatchObject({ delivery: "new_run" });
   });
 
   it("stop cierra el servidor y es idempotente", async () => {

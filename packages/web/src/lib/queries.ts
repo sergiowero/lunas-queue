@@ -3,6 +3,12 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "./api.ts";
 
+/**
+ * Los bloqueos por permiso viven en memoria del RunWatcher y no dejan eventos: el stream de cambios
+ * no los avisa, así que la consulta se refresca sola (ADR uw-27-bandeja).
+ */
+export const BLOCKED_REFRESH_MS = 5000;
+
 export const queries = {
   projects: () => queryOptions({ queryKey: ["projects"], queryFn: api.projects }),
   queue: (projectId?: string) =>
@@ -37,6 +43,14 @@ export const queries = {
     queryOptions({ queryKey: ["task", id, "evidence"], queryFn: () => api.evidence(id) }),
   specs: (id: string) =>
     queryOptions({ queryKey: ["task", id, "specs"], queryFn: () => api.specs(id) }),
+  openQuestions: () =>
+    queryOptions({ queryKey: ["questions", "open"], queryFn: api.openQuestions }),
+  blocked: () =>
+    queryOptions({
+      queryKey: ["blocked"],
+      queryFn: api.blocked,
+      refetchInterval: BLOCKED_REFRESH_MS,
+    }),
   specDiff: (id: string, version: number) =>
     queryOptions({
       queryKey: ["task", id, "specs", version, "diff"],

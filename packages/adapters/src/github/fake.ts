@@ -5,6 +5,7 @@ import type {
   CreatePrInput,
   GitHubAdapter,
   PrCheck,
+  PrLabel,
   PrReview,
   PullRequest,
   ReviewDecision,
@@ -48,6 +49,7 @@ export class FakeGitHub implements GitHubAdapter {
       checks: { status: "none", items: [] },
       reviewDecision: null,
       reviews: [],
+      labels: [],
     };
     this.prs.set(pr.url, pr);
     this.created.push(structuredClone(input));
@@ -57,6 +59,12 @@ export class FakeGitHub implements GitHubAdapter {
   async findOpenPr(input: { head: string; base: string }): Promise<PullRequest | null> {
     const pr = this.#findOpen(input.head, input.base);
     return pr ? structuredClone(pr) : null;
+  }
+
+  async addLabels(input: { url: string; labels: PrLabel[] }): Promise<PullRequest> {
+    const pr = this.#get(input.url);
+    for (const { name } of input.labels) if (!pr.labels.includes(name)) pr.labels.push(name);
+    return structuredClone(pr);
   }
 
   async getPr(url: string): Promise<PullRequest> {

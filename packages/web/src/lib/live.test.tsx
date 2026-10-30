@@ -88,4 +88,18 @@ describe("actualización en vivo por SSE", () => {
     unmount();
     expect(source?.closed).toBe(true);
   });
+
+  it("un change trae a la bandeja la pregunta nueva", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const fake = new FakeApi();
+    const task = fake.addTask(fake.addProject().id, { intent: "Pregunta en vivo" });
+    fake.transition(task.id, "in_progress", "running");
+    renderApp("/inbox", fake);
+    await screen.findByText("Ningún agente espera una respuesta.");
+
+    fake.ask(task.id, "¿Uso UUID v7?");
+    const source = FakeEventSource.instances.find((s) => s.url === CHANGE_STREAM_URL);
+    source?.emit("change", JSON.stringify({ taskIds: [task.id] }));
+    expect(await screen.findByText("¿Uso UUID v7?")).toBeTruthy();
+  });
 });

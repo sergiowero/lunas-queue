@@ -28,6 +28,8 @@ import { checkReviewerEvidence, maxVerificationIterations } from "@lunasq/domain
 import {
   type AskHumanInput,
   type ChecklistItem,
+  DELIVERY_CONFLICT,
+  DeliveryConflictPayload,
   type Handoff,
   type HandoffError,
   type HandoffPhase,
@@ -42,6 +44,7 @@ import {
   TestGateExecutedPayload,
   type TestGateTrigger,
   type UpdateChecklistInput,
+  VERDICT_RECORDED,
 } from "@lunasq/schemas";
 import type { CommitVerifier, PhaseHooks, TestGate } from "./ports.ts";
 
@@ -223,6 +226,7 @@ export class LunasqMcpService {
           ? this.#storedHandoffs(task.id, "verify").filter(isVerification)
           : [],
       rework: run.phase === "implement" ? this.#rework(task.id) : null,
+      deliveryConflict: run.phase === "implement" ? this.#deliveryConflict(task.id) : null,
       previousAttempt: previous
         ? {
             runId: previous.id,
@@ -629,6 +633,19 @@ export class LunasqMcpService {
       return null;
     }
     return { runId: latest.runId, iteration: latest.iteration, mustFix: handoff.body.mustFix };
+  }
+
+  /** El conflicto de entrega más reciente, mientras no haya un veredicto posterior (ADR uw-26-entrega). */
+  #deliveryConflict(taskId: string): TaskContext["deliveryConflict"] {
+    let conflict: TaskContext["deliveryConflict"] = null;
+    for (const event of listEvents(this.#db, taskId)) {
+      if (event.type === VERDICT_RECORDED) conflict = null;
+      else if (event.type === DELIVERY_CONFLICT) {
+        const parsed = DeliveryConflictPayload.safeParse(event.payload);
+        if (parsed.success) conflict = parsed.data;
+      }
+    }
+    return conflict;
   }
 
   #taskAndProject(run: RunRow) {

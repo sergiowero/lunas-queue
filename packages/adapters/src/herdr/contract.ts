@@ -400,6 +400,16 @@ export function herdrContract(
         );
       });
 
+      it("focusAgent enfoca el pane del agente y falla con agent_not_found si no existe", async () => {
+        const { pane, name } = await agentInNewPane();
+        const focused = await herdr.focusAgent(name);
+        expect(focused.name).toBe(name);
+        expect(focused.paneId).toBe(pane.paneId);
+        await expect(herdr.focusAgent(unique("nadie-"))).rejects.toSatisfy((err) =>
+          isHerdrError(err, "agent_not_found"),
+        );
+      });
+
       it("waitAgent lanza timeout si el agente no llega al estado", async () => {
         const { name } = await agentInNewPane();
         await expect(

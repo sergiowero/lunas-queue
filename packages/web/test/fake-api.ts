@@ -1,15 +1,18 @@
 // API de LunasQ en memoria para los tests del front end. Responde las mismas rutas y formas que
 // packages/server (tipadas con Json<T> de @lunasq/schemas) y deja simular lo que hacen el
-// scheduler y los agentes: transiciones, Runs, specs, usage y evidencia. Valida y rechaza como el
-// servidor (TaskCreate, 422 de referencias, 409 del gate y de la máquina de estados).
+// scheduler y los agentes: transiciones, Runs, specs, usage, evidencia, preguntas y bloqueos. Valida
+// y rechaza como el servidor (TaskCreate, 422 de referencias, 409 del gate y de la máquina de
+// estados, 409 de preguntas ya respondidas).
 
 import type {
   Actor,
+  BlockedAgent,
   EventView,
   EvidenceSource,
   Phase,
   Project,
   ProjectHooksView,
+  Question,
   QueueEntry,
   RunView,
   Spec,
@@ -21,7 +24,13 @@ import type {
   TaskUsage,
   UsageTotals,
 } from "@lunasq/schemas";
-import { type HookExecutionView, TaskCreate } from "@lunasq/schemas";
+import {
+  type HookExecutionView,
+  QuestionAnswer,
+  SpecEditAndApprove,
+  SpecRequestChanges,
+  TaskCreate,
+} from "@lunasq/schemas";
 import type { Json } from "../src/lib/api.ts";
 
 const EMPTY: UsageTotals = {
@@ -49,6 +58,23 @@ type Request = { method: string; path: string; body: unknown };
 
 const conflict = (error: string, message: string): [number, unknown] => [409, { error, message }];
 
+/** Valida como el servidor (`invalidInput`): 400 con los issues del esquema, o los datos. */
+function validate<T>(
+  schema: {
+    safeParse: (
+      body: unknown,
+    ) =>
+      | { success: true; data: T }
+      | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } };
+  },
+  body: unknown,
+): { ok: true; data: T } | { ok: false; response: [number, unknown] } {
+  const parsed = schema.safeParse(body);
+  if (parsed.success) return { ok: true, data: parsed.data };
+  const issues = parsed.error.issues.map((i) => ({ path: i.path.map(String), message: i.message }));
+  return { ok: false, response: [400, { error: "invalid_input", issues }] };
+}
+
 let seq = 0;
 const uuid = () => {
   seq += 1;
@@ -72,6 +98,15 @@ export class FakeApi {
   /** Si es true, GET .../hooks/executions responde 500. */
   hookExecutionsFail = false;
   readonly requests: Request[] = [];
+  readonly questions: Json<Question>[] = [];
+  /** Lo que respondería el RunWatcher: los agentes bloqueados ahora. */
+  blocked: Json<BlockedAgent>[] = [];
+  /** Nombres de agente que la UI pidió enfocar en herdr. */
+  readonly focused: string[] = [];
+  /** Si se fija, `POST /api/blocked/:runId/focus` responde este error de herdr. */
+  focusError: { status: number; error: string; message: string } | null = null;
+  /** Si el agente que preguntó sigue vivo: la respuesta va al pane; si no, a un Run nuevo. */
+  agentAlive = false;
   /** Si se fija, GET /api/queue responde esto tal cual. */
   queue: Json<QueueEntry>[] | null = null;
   private clock = Date.parse("2026-10-29T10:00:00Z");
@@ -203,6 +238,42 @@ export class FakeApi {
     return spec;
   }
 
+  /** Como `ask_human`: guarda la Question y pasa la tarea a waiting_human. */
+  ask(taskId: string, question: string, context: string | null = null): Json<Question> {
+    const task = this.task(taskId);
+    const run = this.runs.findLast((r) => r.taskId === taskId);
+    const created: Json<Question> = {
+      id: uuid(),
+      taskId,
+      runId: run?.id ?? null,
+      question,
+      context,
+      status: "open",
+      answer: null,
+      answeredBy: null,
+      answeredAt: null,
+      createdAt: this.now(),
+    };
+    this.questions.push(created);
+    this.event(taskId, "question.created", "agent", { questionId: created.id });
+    this.transition(taskId, task.state, "waiting_human");
+    return created;
+  }
+
+  /** Como el RunWatcher cuando herdr reporta `blocked`. */
+  block(run: Json<RunView>): Json<BlockedAgent> {
+    const agent: Json<BlockedAgent> = {
+      runId: run.id,
+      taskId: run.taskId,
+      phase: run.phase as BlockedAgent["phase"],
+      agentName: run.herdrName ?? "agente",
+      paneId: run.herdrPane ?? "p-?",
+      since: this.now(),
+    };
+    this.blocked.push(agent);
+    return agent;
+  }
+
   task(id: string): Json<Task> {
     const task = this.tasks.find((t) => t.id === id);
     if (!task) throw new Error(`tarea ${id} no existe`);
@@ -229,6 +300,20 @@ export class FakeApi {
     if (resource === "graph") return [200, this.graph(url.searchParams.get("projectId"))];
     if (resource === "projects" && method === "GET") {
       return sub === "hooks" ? this.projectHooks(id, version, url) : [200, this.projects];
+    }
+    if (resource === "questions") return this.question(method, url, id, sub, body);
+    if (resource === "blocked") {
+      if (method === "GET") return [200, this.blocked];
+      const agent = this.blocked.find((b) => b.runId === id);
+      if (sub !== "focus" || !agent) {
+        return [404, { error: "not_blocked", message: "el Run no tiene un agente bloqueado" }];
+      }
+      if (this.focusError) {
+        const { status, ...error } = this.focusError;
+        return [status, error];
+      }
+      this.focused.push(agent.agentName);
+      return [204, null];
     }
     if (resource === "queue") return [200, this.queue ?? this.defaultQueue(url)];
     if (resource !== "tasks") return notFound;
@@ -330,6 +415,44 @@ export class FakeApi {
       : [502, { error: "hooks_unavailable", message: "no se pudo leer la rama base" }];
   }
 
+  private question(
+    method: string,
+    url: URL,
+    id: string | undefined,
+    sub: string | undefined,
+    body: unknown,
+  ): [number, unknown] {
+    if (!id) {
+      const status = url.searchParams.get("status");
+      return [200, this.questions.filter((q) => !status || q.status === status)];
+    }
+    const question = this.questions.find((q) => q.id === id);
+    if (method === "GET") return question ? [200, question] : [404, { error: "not_found" }];
+    if (sub !== "answer") return [404, { error: "not_found" }];
+    // Como el servidor: primero el cuerpo, después la pregunta.
+    const input = validate(QuestionAnswer, body);
+    if (!input.ok) return input.response;
+    if (!question) return [404, { error: "not_found" }];
+    const answer = input.data.answer;
+    if (question.status !== "open") {
+      return conflict("not_open", `la pregunta ya está en ${question.status}`);
+    }
+    const task = this.task(question.taskId);
+    if (task.subState !== "waiting_human") {
+      return conflict("task_not_waiting", "la tarea ya no espera una respuesta");
+    }
+    const delivery = this.agentAlive ? "pane" : "new_run";
+    Object.assign(question, {
+      status: "answered",
+      answer: answer.trim(),
+      answeredBy: "human",
+      answeredAt: this.now(),
+    });
+    this.event(task.id, "question.answered", "human", { questionId: id, delivery });
+    this.transition(task.id, task.state, delivery === "pane" ? "running" : "queued");
+    return [200, { question, delivery }];
+  }
+
   private create(body: unknown): [number, unknown] {
     const parsed = TaskCreate.safeParse(body);
     if (!parsed.success) {
@@ -364,6 +487,16 @@ export class FakeApi {
   ): [number, unknown] {
     const versions = this.specs.filter((s) => s.taskId === task.id);
     if (Number.isNaN(version)) return [200, versions];
+    // Como el servidor: en un POST se valida el cuerpo antes de buscar la versión.
+    const input =
+      method !== "POST"
+        ? null
+        : action === "edit-and-approve"
+          ? validate(SpecEditAndApprove, body)
+          : action === "request-changes"
+            ? validate(SpecRequestChanges, body)
+            : null;
+    if (input && !input.ok) return input.response;
     const spec = versions.find((s) => s.version === version);
     if (!spec) return [404, { error: "not_found" }];
     if (method === "GET" && action === "diff") {
@@ -410,14 +543,21 @@ export class FakeApi {
       this.transition(task.id, "in_progress", "queued");
       return [200, { spec, task }];
     }
+    if (action === "edit-and-approve") {
+      const { content } = (input?.ok ? input.data : body) as { content: SpecContent };
+      const edited = this.addSpec(task.id, content);
+      Object.assign(edited, {
+        createdBy: "human",
+        approval: "approved",
+        approvedBy: "human",
+        approvedAt: this.now(),
+      });
+      this.event(task.id, "spec.approved", "human", { specId: edited.id, version: edited.version });
+      this.transition(task.id, "in_progress", "queued");
+      return [200, { spec: edited, task }];
+    }
     if (action === "request-changes") {
-      const comments = (body as { comments?: unknown }).comments;
-      if (typeof comments !== "string" || comments.trim() === "") {
-        return [
-          400,
-          { error: "invalid_input", issues: [{ path: ["comments"], message: "Too small" }] },
-        ];
-      }
+      const { comments } = (input?.ok ? input.data : body) as { comments: string };
       Object.assign(spec, { approval: "changes_requested", reviewComments: comments });
       this.event(task.id, "spec.changes_requested", "human", { version, comments });
       this.transition(task.id, "draft", "queued");
