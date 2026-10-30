@@ -220,7 +220,11 @@ describe("Orchestrator: escenarios de fallo", () => {
     await vi.waitFor(() => expect(taskState(db, task.id).state).toBe("needs_human"));
     await vi.waitFor(() =>
       expect(notifications).toEqual([
-        expect.objectContaining({ kind: "retries_exhausted", taskId: task.id }),
+        expect.objectContaining({
+          kind: "retries_exhausted",
+          taskId: task.id,
+          title: `Reintentos agotados en #${task.number}`,
+        }),
       ]),
     );
     expect(runs.forTask(task.id).map((r) => r.failureReason?.split(":")[0])).toEqual([
@@ -229,6 +233,35 @@ describe("Orchestrator: escenarios de fallo", () => {
       "agent_exited",
       "agent_exited",
     ]);
+  });
+
+  it("agotado el loop de verificación, needs_human con aviso que identifica la tarea con su #N", async () => {
+    const ctx = setup();
+    const { db, project, notifications } = ctx;
+    insertTask(db, project.id);
+    const task = insertTask(db, project.id, {
+      state: "verification",
+      subState: "running",
+      verificationIteration: 1,
+    });
+    await startAll(ctx);
+
+    transitionTask(db, {
+      taskId: task.id,
+      actor: "agent",
+      command: { type: "verdict_rework", maxIterations: 1 },
+    });
+
+    await vi.waitFor(() =>
+      expect(notifications).toEqual([
+        expect.objectContaining({
+          kind: "verification_exhausted",
+          taskId: task.id,
+          title: `Loop de verificación agotado en #${task.number}`,
+        }),
+      ]),
+    );
+    expect(task.number).toBe(2);
   });
 
   it("durante el backoff la tarea no se vuelve a despachar", async () => {
