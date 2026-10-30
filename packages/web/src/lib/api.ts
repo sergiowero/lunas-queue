@@ -5,7 +5,9 @@ import type {
   EventView,
   HookExecutionView,
   Project,
+  ProjectCreate,
   ProjectHooksView,
+  ProjectUpdate,
   Question,
   QuestionDelivery,
   QueueEntry,
@@ -101,6 +103,14 @@ export const api = {
   },
   specs: (id: string) => request<Spec[]>(`${task(id)}/specs`),
   specDiff: (id: string, version: number) => request<SpecDiff>(`${task(id)}/specs/${version}/diff`),
+  createProject: (input: ProjectCreate) => post<Project>("/api/projects", input),
+  updateProject: (id: string, input: ProjectUpdate) =>
+    request<Project>(`/api/projects/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  deleteProject: (id: string) =>
+    request<void>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
   createTask: (input: TaskCreate) => post<Task>("/api/tasks", input),
   cancelTask: (id: string) => post<Task>(`${task(id)}/cancel`),
   approveSpec: (id: string, version: number) =>

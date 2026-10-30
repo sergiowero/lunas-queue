@@ -26,6 +26,8 @@ import type {
 } from "@lunasq/schemas";
 import {
   type HookExecutionView,
+  ProjectCreate,
+  ProjectUpdate,
   QuestionAnswer,
   SpecEditAndApprove,
   SpecRequestChanges,
@@ -56,7 +58,11 @@ export const SPEC_CONTENT: SpecContent = {
 
 type Request = { method: string; path: string; body: unknown };
 
-const conflict = (error: string, message: string): [number, unknown] => [409, { error, message }];
+const conflict = (
+  error: string,
+  message: string,
+  extra: Record<string, unknown> = {},
+): [number, unknown] => [409, { error, message, ...extra }];
 
 /** Valida como el servidor (`invalidInput`): 400 con los issues del esquema, o los datos. */
 function validate<T>(
@@ -298,6 +304,9 @@ export class FakeApi {
     const notFound: [number, unknown] = [404, { error: "not_found" }];
 
     if (resource === "graph") return [200, this.graph(url.searchParams.get("projectId"))];
+    if (resource === "projects" && method === "POST" && !id) return this.createProject(body);
+    if (resource === "projects" && id && method === "PATCH") return this.updateProject(id, body);
+    if (resource === "projects" && id && method === "DELETE") return this.deleteProject(id);
     if (resource === "projects" && method === "GET") {
       return sub === "hooks" ? this.projectHooks(id, version, url) : [200, this.projects];
     }
@@ -451,6 +460,60 @@ export class FakeApi {
     this.event(task.id, "question.answered", "human", { questionId: id, delivery });
     this.transition(task.id, task.state, delivery === "pane" ? "running" : "queued");
     return [200, { question, delivery }];
+  }
+
+  private createProject(body: unknown): [number, unknown] {
+    const parsed = ProjectCreate.safeParse(body);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((i) => ({
+        path: i.path.map(String),
+        message: i.message,
+      }));
+      return [400, { error: "invalid_input", issues }];
+    }
+    const input = parsed.data;
+    for (const field of ["name", "localPath"] as const) {
+      if (this.projects.some((p) => p[field] === input[field])) {
+        return conflict("conflict", `ya existe un proyecto con ese ${field}`, { field });
+      }
+    }
+    const { testCommand = null, bootstrap = null, ...rest } = input;
+    return [201, this.addProject({ ...rest, testCommand, bootstrap } as Partial<Json<Project>>)];
+  }
+
+  private updateProject(id: string, body: unknown): [number, unknown] {
+    const project = this.projects.find((p) => p.id === id);
+    if (!project) return [404, { error: "not_found" }];
+    const parsed = ProjectUpdate.safeParse(body);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((i) => ({
+        path: i.path.map(String),
+        message: i.message,
+      }));
+      return [400, { error: "invalid_input", issues }];
+    }
+    const { agentProfiles, ...rest } = parsed.data;
+    for (const field of ["name", "localPath"] as const) {
+      const value = rest[field];
+      if (value !== undefined && this.projects.some((p) => p.id !== id && p[field] === value)) {
+        return conflict("conflict", `ya existe un proyecto con ese ${field}`, { field });
+      }
+    }
+    Object.assign(project, rest, {
+      agentProfiles: { ...project.agentProfiles, ...agentProfiles },
+      updatedAt: this.now(),
+    });
+    return [200, project];
+  }
+
+  private deleteProject(id: string): [number, unknown] {
+    const index = this.projects.findIndex((p) => p.id === id);
+    if (index < 0) return [404, { error: "not_found" }];
+    if (this.tasks.some((t) => t.projectId === id)) {
+      return conflict("has_tasks", "el proyecto tiene tareas");
+    }
+    this.projects.splice(index, 1);
+    return [204, null];
   }
 
   private create(body: unknown): [number, unknown] {
