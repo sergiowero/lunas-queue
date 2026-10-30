@@ -2,7 +2,9 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeGit, FakeGitHub, FakeHerdr, FakeProcessRunner } from "@lunasq/adapters";
-import { afterEach, describe, expect, it } from "vitest";
+import { openDatabase, RunRepository } from "@lunasq/db";
+import { insertProject, insertTask } from "@lunasq/db/test-helpers";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SUBAGENT_HOOK_PATH } from "../subagents/routes.ts";
 import { prepareDatabase, type RuntimeOptions, startRuntime, telemetryEnv } from "./runtime.ts";
 
@@ -79,8 +81,22 @@ describe("startRuntime", () => {
   });
 
   it("pasa la telemetría al entorno de cada pane salvo que se desactive", async () => {
-    const on = await start(options());
-    expect(on.paneEnv).toMatchObject(telemetryEnv(on.url));
+    const opts = options();
+    const seed = prepareDatabase(opts.dbPath);
+    const task = insertTask(seed, insertProject(seed).id);
+    seed.$client.close();
+    const herdr = opts.adapters?.herdr as FakeHerdr;
+
+    const on = await start(opts);
+
+    const db = openDatabase(opts.dbPath);
+    cleanups.push(() => {
+      db.$client.close();
+    });
+    const runs = new RunRepository(db);
+    await vi.waitFor(() => expect(runs.forTask(task.id)[0]?.herdrPane).toBeTruthy());
+    const pane = runs.forTask(task.id)[0]?.herdrPane as string;
+    expect(herdr.paneEnv(pane)).toMatchObject(telemetryEnv(on.url));
 
     const off = await start(options({ telemetry: false }));
     expect(off.paneEnv).not.toHaveProperty("CLAUDE_CODE_ENABLE_TELEMETRY");
@@ -102,6 +118,21 @@ describe("startRuntime", () => {
     await runtime.stop();
     await runtime.stop();
     await expect(fetch(`${runtime.url}/api/projects`)).rejects.toThrow();
+  });
+
+  it("si la composición falla, libera el puerto y la base", async () => {
+    const opts = options();
+    const first = await start(options());
+    const port = Number(new URL(first.url).port);
+    await first.stop();
+    const broken = {
+      get herdr(): FakeHerdr {
+        throw new Error("herdr roto");
+      },
+    };
+    await expect(startRuntime({ ...opts, port, adapters: broken })).rejects.toThrow("herdr roto");
+    const again = await start({ ...opts, port });
+    expect(again.url).toBe(first.url);
   });
 
   it("falla si el puerto está ocupado", async () => {

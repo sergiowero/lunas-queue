@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import { hookSettings, mcpConfig, runtimeUrls } from "@lunasq/server";
-import { assetTargets, drift } from "./assets.ts";
+import { assetTargets, drift, isForeign, readManifest, retired } from "./assets.ts";
 import { baseUrl, ConfigError, type LunasqConfig, readConfig } from "./config.ts";
 import { type MachineContext, NOT_FOUND_EXIT_CODE, run } from "./context.ts";
 import { tomlString } from "./toml.ts";
@@ -199,18 +199,32 @@ export async function checkPrerequisites(ctx: MachineContext): Promise<CheckResu
   return [...herdr, claude, gh];
 }
 
+/** Fix para un destino ajeno: LunasQ no lo sobrescribe (ADR uw-28-instalador). */
+export const foreignFix = (dest: string) =>
+  `${dest} no lo instaló LunasQ: muévelo o bórralo y corre \`lunasq install\``;
+
 export async function checkAssets(ctx: MachineContext): Promise<CheckResult[]> {
   const targets = await assetTargets(ctx.assetsRoot, ctx.paths);
-  return Promise.all(
+  const manifest = await readManifest(ctx.paths.manifest);
+  const current = await Promise.all(
     targets.map(async (t) => {
       const id = t.kind === "skill" ? `skill:${t.name}` : "agents";
       const label = t.kind === "skill" ? `skill ${t.name}` : "subagentes revisores";
+      if (await isForeign(t, manifest)) {
+        return fail(id, `${label}: ${t.dest} ya existe y no es de LunasQ`, foreignFix(t.dest));
+      }
       const changes = await drift(t.src, t.dest);
       if (changes.length === 0) return ok(id, `${label} en ${t.dest}`);
       const state = existsSync(t.dest) ? `desactualizado (${changes.join(", ")})` : "sin instalar";
       return fail(id, `${label}: ${state}`, INSTALL_FIX);
     }),
   );
+  const leftovers = retired(targets, manifest)
+    .filter((dest) => existsSync(dest))
+    .map((dest) =>
+      fail(`retired:${dest}`, `asset retirado sigue instalado en ${dest}`, INSTALL_FIX),
+    );
+  return [...current, ...leftovers];
 }
 
 async function sameJson(path: string, expected: unknown): Promise<boolean> {

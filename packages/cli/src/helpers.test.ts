@@ -26,8 +26,12 @@ describe("resolvePaths", () => {
     });
   });
 
-  it("respeta LUNASQ_HOME y CLAUDE_CONFIG_DIR", () => {
-    const p = resolvePaths({ LUNASQ_HOME: "/l", CLAUDE_CONFIG_DIR: "/c" }, "/h");
+  it("respeta LUNASQ_HOME, CLAUDE_CONFIG_DIR y HERDR_CONFIG_PATH", () => {
+    const p = resolvePaths(
+      { LUNASQ_HOME: "/l", CLAUDE_CONFIG_DIR: "/c", HERDR_CONFIG_PATH: "/x/herdr.toml" },
+      "/h",
+    );
+    expect(p.herdrConfig).toBe("/x/herdr.toml");
     expect(p.config).toBe("/l/config.json");
     expect(p.agents).toBe("/c/agents/lunasq");
   });

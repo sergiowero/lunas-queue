@@ -2,10 +2,17 @@
 // herdr, Claude Code y gh (no los instala), instala la integración de herdr para Claude Code,
 // copia skills y subagentes, escribe la configuración y los archivos estables para Claude Code,
 // crea la base y termina con `doctor`. Repetirlo no cambia nada que ya esté al día.
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { ensureHookSettings, ensureMcpConfig, prepareDatabase, runtimeUrls } from "@lunasq/server";
-import { assetTargets, mirror } from "./assets.ts";
-import { baseUrl, DEFAULT_PORT, readConfig, writeConfig } from "./config.ts";
+import { assetTargets, isForeign, mirror, readManifest, retired, writeManifest } from "./assets.ts";
+import {
+  baseUrl,
+  ConfigError,
+  DEFAULT_PORT,
+  type LunasqConfig,
+  readConfig,
+  writeConfig,
+} from "./config.ts";
 import { type MachineContext, run } from "./context.ts";
 import {
   type CheckResult,
@@ -35,6 +42,14 @@ export async function install(
 ): Promise<InstallResult> {
   const prereqs = await checkPrerequisites(ctx);
   if (!isGreen(prereqs)) return { stage: "prerequisites", changes: [], checks: prereqs, ok: false };
+  // Antes de escribir nada: una configuración rota no deja la instalación a medias.
+  let current: LunasqConfig | undefined;
+  try {
+    current = await readConfig(ctx.paths.config);
+  } catch (err) {
+    if (!(err instanceof ConfigError)) throw err;
+    throw new Error(`configuración inválida en ${ctx.paths.config}: ${err.message}`);
+  }
 
   const changes: string[] = [];
 
@@ -50,15 +65,29 @@ export async function install(
     changes.push("integración de herdr para Claude Code");
   }
 
-  for (const target of await assetTargets(ctx.assetsRoot, ctx.paths)) {
+  const targets = await assetTargets(ctx.assetsRoot, ctx.paths);
+  const manifest = await readManifest(ctx.paths.manifest);
+  const installed = new Set(manifest);
+  for (const target of targets) {
+    // Una carpeta ajena con el mismo nombre no se toca: doctor la reporta.
+    if (await isForeign(target, manifest)) continue;
     const changed = await mirror(target.src, target.dest);
+    installed.add(target.dest);
     if (changed.length > 0) {
       const label = target.kind === "skill" ? `skill ${target.name}` : "subagentes revisores";
       changes.push(`${label} → ${target.dest}`);
     }
   }
+  for (const dest of retired(targets, manifest)) {
+    await rm(dest, { recursive: true, force: true });
+    installed.delete(dest);
+    changes.push(`asset retirado borrado: ${dest}`);
+  }
+  const sorted = [...installed].sort();
+  if (sorted.join("\n") !== [...manifest].sort().join("\n")) {
+    await writeManifest(ctx.paths.manifest, sorted);
+  }
 
-  const current = await readConfig(ctx.paths.config);
   const config = {
     telemetry: current?.telemetry ?? true,
     port: opts.port ?? current?.port ?? DEFAULT_PORT,

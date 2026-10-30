@@ -27,10 +27,17 @@ export interface MainDeps {
   untilSignal?: () => Promise<void>;
 }
 
-function untilSignal(): Promise<void> {
+export function untilSignal(): Promise<void> {
   return new Promise((resolve) => {
-    process.once("SIGINT", () => resolve());
-    process.once("SIGTERM", () => resolve());
+    // Al llegar la primera señal se quitan los dos listeners: si `stop()` se cuelga, la segunda
+    // señal (SIGINT o SIGTERM) termina el proceso como siempre.
+    const done = () => {
+      process.off("SIGINT", done);
+      process.off("SIGTERM", done);
+      resolve();
+    };
+    process.on("SIGINT", done);
+    process.on("SIGTERM", done);
   });
 }
 

@@ -113,25 +113,8 @@ function close(server: ServerType) {
   });
 }
 
-export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
-  const log = opts.log ?? ((m: string) => console.error(m));
-  const hostname = opts.hostname ?? DEFAULT_HOSTNAME;
-  const db = prepareDatabase(opts.dbPath);
-
-  // Se escucha antes de componer: la URL (con el puerto real) va en los archivos de Claude Code.
-  let handler: ((req: Request) => Response | Promise<Response>) | undefined;
-  let listening: Awaited<ReturnType<typeof listen>>;
-  try {
-    listening = await listen(opts.port, hostname, (req) =>
-      handler ? handler(req) : new Response("arrancando", { status: 503 }),
-    );
-  } catch (err) {
-    db.$client.close();
-    throw err;
-  }
-  const { server } = listening;
-  const url = `http://${hostname}:${listening.port}`;
-
+/** Arma los módulos en proceso sobre la base y la URL ya conocidas; no arranca nada. */
+function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m: string) => void) {
   const herdr = opts.adapters?.herdr ?? new RealHerdr();
   const github = opts.adapters?.github ?? new RealGitHub();
   const git = opts.adapters?.git ?? new RealGit();
@@ -172,8 +155,6 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
   if (orchestrator.notifications) {
     app.route("/api/notifications", orchestrator.notifications.routes);
   }
-  handler = (req) => app.fetch(req);
-
   const poller = new PrPoller({
     github,
     db,
@@ -185,6 +166,40 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
     hooks,
     onError: (error, taskId) => log(`after_merge: ${taskId}: ${error.message}`),
   });
+
+  return { app, paneEnv, publisher, orchestrator, poller, unsubscribeAfterMerge };
+}
+
+export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
+  const log = opts.log ?? ((m: string) => console.error(m));
+  const hostname = opts.hostname ?? DEFAULT_HOSTNAME;
+  const db = prepareDatabase(opts.dbPath);
+
+  // Se escucha antes de componer: la URL (con el puerto real) va en los archivos de Claude Code.
+  let handler: ((req: Request) => Response | Promise<Response>) | undefined;
+  let listening: Awaited<ReturnType<typeof listen>>;
+  try {
+    listening = await listen(opts.port, hostname, (req) =>
+      handler ? handler(req) : new Response("arrancando", { status: 503 }),
+    );
+  } catch (err) {
+    db.$client.close();
+    throw err;
+  }
+  const { server } = listening;
+  const url = `http://${hostname}:${listening.port}`;
+
+  let parts: ReturnType<typeof compose>;
+  try {
+    parts = compose(opts, db, url, log);
+  } catch (err) {
+    // Sin esto el servidor, ya escuchando, mantendría vivo el proceso.
+    await close(server);
+    db.$client.close();
+    throw err;
+  }
+  const { app, paneEnv, publisher, orchestrator, poller, unsubscribeAfterMerge } = parts;
+  handler = (req) => app.fetch(req);
 
   let stopping: Promise<void> | undefined;
   const stop = () => {

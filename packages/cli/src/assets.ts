@@ -1,8 +1,10 @@
 // Skills de fase y subagentes revisores que `install` copia a Claude Code (ADR uw-18-skills-fase,
 // ADR uw-19-revisores). Cada destino queda como espejo exacto de su origen: un archivo que ya no
-// está en los assets se borra, así una versión nueva no deja instrucciones viejas.
+// está en los assets se borra, así una versión nueva no deja instrucciones viejas. Un manifiesto
+// en `~/.lunasq/` registra qué destinos son de LunasQ: una carpeta ajena con el mismo nombre no se
+// toca, y la de un asset retirado se borra.
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Paths } from "./paths.ts";
@@ -88,4 +90,40 @@ export async function mirror(src: string, dest: string): Promise<string[]> {
     }
   }
   return changes;
+}
+
+/** Destinos que instaló LunasQ (rutas absolutas); vacío si nunca instaló. */
+export async function readManifest(path: string): Promise<string[]> {
+  const text = await readFile(path, "utf8").catch(() => undefined);
+  if (text === undefined) return [];
+  try {
+    const value = JSON.parse(text) as { installed?: unknown };
+    return Array.isArray(value.installed)
+      ? value.installed.filter((d): d is string => typeof d === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function writeManifest(path: string, installed: string[]): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  await writeFile(tmp, `${JSON.stringify({ installed: [...installed].sort() }, null, 2)}\n`);
+  await rename(tmp, path);
+}
+
+/**
+ * `foreign`: el destino existe, LunasQ no lo instaló y no es idéntico a los assets (p. ej. una
+ * skill propia del usuario con el mismo nombre). Uno idéntico se adopta.
+ */
+export async function isForeign(target: AssetTarget, manifest: string[]): Promise<boolean> {
+  if (manifest.includes(target.dest) || !existsSync(target.dest)) return false;
+  return (await drift(target.src, target.dest)).length > 0;
+}
+
+/** Destinos del manifiesto que ya no corresponden a ningún asset (una skill retirada). */
+export function retired(targets: AssetTarget[], manifest: string[]): string[] {
+  const current = new Set(targets.map((t) => t.dest));
+  return manifest.filter((dest) => !current.has(dest));
 }

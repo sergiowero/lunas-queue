@@ -1,8 +1,9 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { mcpConfig } from "@lunasq/server";
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_PORT, readConfig } from "./config.ts";
+import { runDoctor } from "./doctor.ts";
 import { install } from "./install.ts";
 import { fakeMachine, healthyResponses, integrationStatus } from "./test-helpers.ts";
 
@@ -105,6 +106,62 @@ describe("install", () => {
     await install(ctx);
     expect((await readConfig(ctx.paths.config))?.port).toBe(8123);
     expect(readFileSync(ctx.paths.mcpConfig, "utf8")).toContain("http://127.0.0.1:8123/mcp");
+  });
+
+  it("no toca una skill ajena con el mismo nombre y doctor la reporta", async () => {
+    const { ctx } = cleanMachine();
+    const mine = join(ctx.paths.skills, "implement-task");
+    mkdirSync(mine, { recursive: true });
+    writeFileSync(join(mine, "SKILL.md"), "mi skill");
+    writeFileSync(join(mine, "notes.md"), "mis notas");
+
+    const result = await install(ctx);
+
+    expect(readFileSync(join(mine, "SKILL.md"), "utf8")).toBe("mi skill");
+    expect(readFileSync(join(mine, "notes.md"), "utf8")).toBe("mis notas");
+    expect(result.ok).toBe(false);
+    expect(result.checks.find((c) => c.id === "skill:implement-task")).toMatchObject({
+      status: "fail",
+      fix: expect.stringContaining("no lo instaló LunasQ"),
+    });
+    // Las demás sí quedan instaladas.
+    expect(result.checks.find((c) => c.id === "skill:refine-task")?.status).toBe("ok");
+  });
+
+  it("adopta un destino idéntico a los assets", async () => {
+    const { ctx } = cleanMachine();
+    await install(ctx);
+    rmSync(ctx.paths.manifest);
+    const result = await install(ctx);
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(readFileSync(ctx.paths.manifest, "utf8")).installed).toContain(
+      join(ctx.paths.skills, "verify-task"),
+    );
+  });
+
+  it("borra la carpeta de un asset que LunasQ instaló y ya no publica", async () => {
+    const { ctx } = cleanMachine();
+    await install(ctx);
+    const old = join(ctx.paths.skills, "deliver-task");
+    mkdirSync(old, { recursive: true });
+    writeFileSync(join(old, "SKILL.md"), "vieja");
+    const manifest = JSON.parse(readFileSync(ctx.paths.manifest, "utf8"));
+    writeFileSync(ctx.paths.manifest, JSON.stringify({ installed: [...manifest.installed, old] }));
+    expect((await runDoctor(ctx)).find((c) => c.id === `retired:${old}`)?.status).toBe("fail");
+
+    const result = await install(ctx);
+
+    expect(existsSync(old)).toBe(false);
+    expect(result.changes).toEqual([`asset retirado borrado: ${old}`]);
+    expect(result.ok).toBe(true);
+  });
+
+  it("una configuración inválida se reporta con su ruta antes de escribir nada", async () => {
+    const { ctx } = cleanMachine();
+    mkdirSync(ctx.paths.home, { recursive: true });
+    writeFileSync(ctx.paths.config, "{");
+    await expect(install(ctx)).rejects.toThrow(ctx.paths.config);
+    expect(existsSync(ctx.paths.claudeHome)).toBe(false);
   });
 
   it.each([

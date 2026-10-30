@@ -2,7 +2,7 @@ import type { Runtime, RuntimeOptions } from "@lunasq/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { writeConfig } from "./config.ts";
 import { install } from "./install.ts";
-import { main, VERSION } from "./main.ts";
+import { main, untilSignal, VERSION } from "./main.ts";
 import { fakeMachine, healthyResponses } from "./test-helpers.ts";
 
 const cleanups: (() => void)[] = [];
@@ -102,5 +102,16 @@ describe("lunasq", () => {
     };
     expect(await main(["start"], { ...deps, startRuntime })).toBe(1);
     expect(err).toContain("lunasq start: listen EADDRINUSE");
+  });
+});
+
+describe("untilSignal", () => {
+  it("resuelve con la primera señal y quita sus dos listeners", async () => {
+    const before = { int: process.listenerCount("SIGINT"), term: process.listenerCount("SIGTERM") };
+    const waiting = untilSignal();
+    process.emit("SIGINT");
+    await waiting;
+    expect(process.listenerCount("SIGINT")).toBe(before.int);
+    expect(process.listenerCount("SIGTERM")).toBe(before.term);
   });
 });
