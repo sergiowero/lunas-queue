@@ -36,7 +36,8 @@ const hooks: RepoFiles = {
 };
 
 export function gitContract(name: string, setup: () => Promise<GitContractHarness>): void {
-  describe(`contrato del adapter de git: ${name}`, () => {
+  // Cada prueba arma repos y remotos reales; bajo la carga del gate superan los 5s por defecto.
+  describe(`contrato del adapter de git: ${name}`, { timeout: 30_000 }, () => {
     let h: GitContractHarness;
     let git: GitAdapter;
 
