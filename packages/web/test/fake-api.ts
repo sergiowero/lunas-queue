@@ -1,6 +1,8 @@
 // API de LunasQ en memoria para los tests del front end. Responde las mismas rutas y formas que
 // packages/server (tipadas con Json<T> de @lunasq/schemas) y deja simular lo que hacen el
-// scheduler y los agentes: transiciones, Runs, specs, usage y evidencia.
+// scheduler y los agentes: transiciones, Runs, specs, usage y evidencia. Valida y rechaza como el
+// servidor (TaskCreate, 422 de referencias, 409 del gate y de la máquina de estados).
+
 import type {
   Actor,
   EventView,
@@ -16,6 +18,7 @@ import type {
   TaskUsage,
   UsageTotals,
 } from "@lunasq/schemas";
+import { TaskCreate } from "@lunasq/schemas";
 import type { Json } from "../src/lib/api.ts";
 
 const EMPTY: UsageTotals = {
@@ -40,6 +43,8 @@ export const SPEC_CONTENT: SpecContent = {
 };
 
 type Request = { method: string; path: string; body: unknown };
+
+const conflict = (error: string, message: string): [number, unknown] => [409, { error, message }];
 
 let seq = 0;
 const uuid = () => {
@@ -216,7 +221,7 @@ export class FakeApi {
     if (resource !== "tasks") return notFound;
 
     if (!id) {
-      if (method === "POST") return this.create(body as Record<string, unknown>);
+      if (method === "POST") return this.create(body);
       const projectId = url.searchParams.get("projectId");
       return [200, this.tasks.filter((t) => !projectId || t.projectId === projectId)];
     }
@@ -226,6 +231,9 @@ export class FakeApi {
       case undefined:
         return [200, task];
       case "cancel":
+        if (task.state === "completed" || task.state === "cancelled") {
+          return conflict("invalid_transition", `la tarea ya está en ${task.state}`);
+        }
         this.transition(id, "cancelled", null);
         return [200, task];
       case "dependencies":
@@ -251,22 +259,28 @@ export class FakeApi {
     }
   }
 
-  private create(input: Record<string, unknown>): [number, unknown] {
-    const intent = typeof input.intent === "string" ? input.intent.trim() : "";
-    if (!intent) {
-      return [
-        400,
-        { error: "invalid_input", issues: [{ path: ["intent"], message: "Too small" }] },
-      ];
+  private create(body: unknown): [number, unknown] {
+    const parsed = TaskCreate.safeParse(body);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.map((i) => ({
+        path: i.path.map(String),
+        message: i.message,
+      }));
+      return [400, { error: "invalid_input", issues }];
     }
-    const task = this.addTask(String(input.projectId), {
-      intent,
-      tags: (input.tags as string[] | undefined) ?? [],
-      priority: Number(input.priority),
+    const input = parsed.data;
+    if (!this.projects.some((p) => p.id === input.projectId)) {
+      return [422, { error: "project_not_found", message: "no existe el proyecto" }];
+    }
+    if (input.dependsOn.some((id) => !this.tasks.some((t) => t.id === id))) {
+      return [422, { error: "dependency_not_found", message: "no existe la dependencia" }];
+    }
+    const task = this.addTask(input.projectId, {
+      intent: input.intent,
+      tags: input.tags,
+      priority: input.priority,
     });
-    for (const dependsOnId of (input.dependsOn as string[] | undefined) ?? []) {
-      this.edges.push({ taskId: task.id, dependsOnId });
-    }
+    for (const dependsOnId of input.dependsOn) this.edges.push({ taskId: task.id, dependsOnId });
     return [201, task];
   }
 
@@ -309,6 +323,16 @@ export class FakeApi {
       ];
     }
     if (method === "GET") return [200, spec];
+    const latest = versions.at(-1)?.version;
+    if (version !== latest) {
+      return conflict("stale_version", `la versión ${version} fue superada por la ${latest}`);
+    }
+    if (spec.approval !== "pending") {
+      return conflict("spec_not_pending", `la versión ${version} ya está en ${spec.approval}`);
+    }
+    if (task.state !== "refined") {
+      return conflict("invalid_transition", `la tarea está en ${task.state}, no en refined`);
+    }
     if (action === "approve") {
       Object.assign(spec, { approval: "approved", approvedBy: "human", approvedAt: this.now() });
       this.event(task.id, "spec.approved", "human", { specId: spec.id, version });
@@ -316,7 +340,13 @@ export class FakeApi {
       return [200, { spec, task }];
     }
     if (action === "request-changes") {
-      const comments = (body as { comments: string }).comments;
+      const comments = (body as { comments?: unknown }).comments;
+      if (typeof comments !== "string" || comments.trim() === "") {
+        return [
+          400,
+          { error: "invalid_input", issues: [{ path: ["comments"], message: "Too small" }] },
+        ];
+      }
       Object.assign(spec, { approval: "changes_requested", reviewComments: comments });
       this.event(task.id, "spec.changes_requested", "human", { version, comments });
       this.transition(task.id, "draft", "queued");

@@ -149,7 +149,7 @@ export function TaskDetailPage() {
       <SpecPanel task={task.data} />
       <RunsPanel taskId={taskId} />
       <EventLogPanel taskId={taskId} />
-      <EvidencePanel taskId={taskId} />
+      <EvidencePanel taskId={taskId} hasWorktree={task.data.worktreePath !== null} />
     </div>
   );
 }

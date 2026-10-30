@@ -2,7 +2,12 @@
 // scheduler y, por tarea, Runs, Event log, usage y archivo de evidencia.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SchedulerStateRepository, TaskRepository, TaskViewRepository } from "@lunasq/db";
+import type {
+  LunasqDatabase,
+  SchedulerStateRepository,
+  TaskRepository,
+  TaskViewRepository,
+} from "@lunasq/db";
 import { rankReady } from "@lunasq/domain";
 import {
   EMPTY_USAGE,
@@ -15,6 +20,7 @@ import { Hono } from "hono";
 import { invalidInput, notFound } from "./http.ts";
 
 export interface ViewDeps {
+  db: LunasqDatabase;
   tasks: TaskRepository;
   views: TaskViewRepository;
   state: SchedulerStateRepository;
@@ -32,12 +38,15 @@ export function evidencePath(worktreePath: string, taskId: string): string {
  * el orden del listado (prioridad, antigüedad). Las terminales no están en la cola.
  */
 function queue(deps: ViewDeps, projectId: string | undefined): QueueEntry[] {
-  const ranked = rankReady(deps.state.snapshot(), deps.config, deps.now());
+  // Una sola transacción: el ready set y el estado de cada tarea salen de la misma lectura.
+  const { snapshot, usage, listed } = deps.db.transaction(() => ({
+    snapshot: deps.state.snapshot(),
+    usage: deps.views.usageByTask(),
+    listed: deps.tasks.list(projectId ? { projectId } : {}),
+  }));
+  const ranked = rankReady(snapshot, deps.config, deps.now());
   const rank = new Map(ranked.map((r, i) => [r.task.id, { ...r, position: i }]));
-  const usage = deps.views.usageByTask();
-  const live = deps.tasks
-    .list(projectId ? { projectId } : {})
-    .filter((t) => t.state !== "completed" && t.state !== "cancelled");
+  const live = listed.filter((t) => t.state !== "completed" && t.state !== "cancelled");
   const entries = live.map((task): QueueEntry & { position: number } => {
     const totals = usage.get(task.id) ?? EMPTY_USAGE;
     const r = rank.get(task.id);

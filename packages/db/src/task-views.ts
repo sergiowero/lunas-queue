@@ -13,13 +13,16 @@ const {
   ...runColumns
 } = getTableColumns(runs);
 
-// SUM devuelve NULL sin filas; los tokens se leen como 0 y el costo se deja en null.
+// SUM devuelve NULL sin filas; los tokens se leen como 0. El costo solo se suma si todos los
+// registros lo traen: un total parcial se leería como completo.
 const totals = {
   inputTokens: sql<number>`coalesce(sum(${usageRecords.inputTokens}), 0)`,
   outputTokens: sql<number>`coalesce(sum(${usageRecords.outputTokens}), 0)`,
   cacheReadTokens: sql<number>`coalesce(sum(${usageRecords.cacheReadTokens}), 0)`,
   cacheWriteTokens: sql<number>`coalesce(sum(${usageRecords.cacheWriteTokens}), 0)`,
-  costUsd: sql<number | null>`sum(${usageRecords.costUsd})`,
+  costUsd: sql<
+    number | null
+  >`case when count(${usageRecords.costUsd}) = count(*) then sum(${usageRecords.costUsd}) end`,
 };
 
 function toTotals(row: UsageTotals): UsageTotals {

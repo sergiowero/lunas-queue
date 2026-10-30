@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatCost, formatTokens, PHASE_LABEL } from "../../lib/format.ts";
 import { queries } from "../../lib/queries.ts";
 import { Muted, Section } from "../section.tsx";
-import { QueryError } from "../status.tsx";
+import { Loading, QueryError } from "../status.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table.tsx";
 
 export function UsagePanel({ taskId }: { taskId: string }) {
@@ -18,7 +18,9 @@ export function UsagePanel({ taskId }: { taskId: string }) {
   const data = usage.data;
   return (
     <Section title="Usage">
-      {data && (
+      {!data ? (
+        <Loading />
+      ) : (
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">{`${formatTokens(data.total)} tokens · ${formatCost(data.total.costUsd)}`}</p>
           {data.byRun.length === 0 ? (

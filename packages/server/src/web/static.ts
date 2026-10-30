@@ -5,10 +5,14 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { SUBAGENT_HOOK_PATH } from "../subagents/routes.ts";
 
-const SERVER_PREFIXES = ["/api/", "/mcp", `${SUBAGENT_HOOK_PATH}`, "/assets/"];
+const SERVER_PREFIXES = ["/api", "/mcp", SUBAGENT_HOOK_PATH, "/assets"];
 
+/** Rutas del router del cliente: ni de la API ni archivos (`/favicon.ico` faltante da 404). */
 function isClientRoute(path: string): boolean {
-  return !SERVER_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix));
+  if (SERVER_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
+    return false;
+  }
+  return !/\.[^/]+$/.test(path);
 }
 
 export function webRoutes(root: string): Hono {

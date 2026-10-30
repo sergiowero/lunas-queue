@@ -6,7 +6,7 @@ import { useState } from "react";
 import { api, type Json } from "../../lib/api.ts";
 import { queries } from "../../lib/queries.ts";
 import { Muted, Section } from "../section.tsx";
-import { QueryError } from "../status.tsx";
+import { Loading, QueryError } from "../status.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { Label, Textarea } from "../ui/input.tsx";
@@ -27,8 +27,9 @@ function Content({ spec }: { spec: Json<Spec> }) {
       <div>
         <h3 className="font-medium">Requerimientos</h3>
         <ul className="list-disc pl-5">
-          {requirements.map((r) => (
-            <li key={r}>{r}</li>
+          {requirements.map((r, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: los textos pueden repetirse y la lista no se reordena.
+            <li key={i}>{r}</li>
           ))}
         </ul>
       </div>
@@ -97,8 +98,9 @@ function Diff({ taskId, version }: { taskId: string; version: number }) {
         <Muted>Sin cambios.</Muted>
       ) : (
         <ul className="font-mono text-xs">
-          {lines.map((line) => (
-            <li key={line}>{line}</li>
+          {lines.map((line, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: las líneas pueden repetirse y la lista no se reordena.
+            <li key={i}>{line}</li>
           ))}
         </ul>
       )}
@@ -156,7 +158,9 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
 
 export function SpecPanel({ task }: { task: Json<Task> }) {
   const specs = useQuery(queries.specs(task.id));
-  const [selected, setSelected] = useState<number | null>(null);
+  // La elección vale contra la última versión que había: si llega otra, se muestra la nueva para
+  // que el gate (que solo aplica a la última) no quede oculto.
+  const [choice, setChoice] = useState<{ version: number; latest: number } | null>(null);
 
   if (specs.error) {
     return (
@@ -167,10 +171,16 @@ export function SpecPanel({ task }: { task: Json<Task> }) {
   }
   const versions = specs.data ?? [];
   const latest = versions.at(-1);
-  const spec = versions.find((s) => s.version === selected) ?? latest;
+  const chosen =
+    choice && choice.latest === latest?.version
+      ? versions.find((s) => s.version === choice.version)
+      : undefined;
+  const spec = chosen ?? latest;
   return (
     <Section title="Spec">
-      {!spec || !latest ? (
+      {specs.isPending ? (
+        <Loading />
+      ) : !spec || !latest ? (
         <Muted>El refinamiento todavía no entrega una spec.</Muted>
       ) : (
         <div className="flex flex-col gap-4">
@@ -181,7 +191,7 @@ export function SpecPanel({ task }: { task: Json<Task> }) {
                 size="sm"
                 variant={s.version === spec.version ? "default" : "outline"}
                 aria-pressed={s.version === spec.version}
-                onClick={() => setSelected(s.version)}
+                onClick={() => setChoice({ version: s.version, latest: latest.version })}
               >
                 {`v${s.version}`}
               </Button>

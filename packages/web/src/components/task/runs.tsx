@@ -8,7 +8,7 @@ import { formatDate, PHASE_LABEL, RESULT_LABEL } from "../../lib/format.ts";
 import { queries } from "../../lib/queries.ts";
 import { DataTable } from "../data-table.tsx";
 import { Section } from "../section.tsx";
-import { QueryError } from "../status.tsx";
+import { Loading, QueryError } from "../status.tsx";
 import { Badge } from "../ui/badge.tsx";
 
 type Run = Json<RunView>;
@@ -61,6 +61,8 @@ export function RunsPanel({ taskId }: { taskId: string }) {
     <Section title="Runs">
       {runs.error ? (
         <QueryError error={runs.error} />
+      ) : runs.isPending ? (
+        <Loading />
       ) : (
         <DataTable
           columns={columns}

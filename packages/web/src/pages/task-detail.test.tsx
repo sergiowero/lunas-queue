@@ -99,6 +99,14 @@ describe("detalle de tarea", () => {
     expect(await screen.findByText("Todavía no hay archivo de evidencia.")).toBeTruthy();
   });
 
+  it("explica que sin worktree la evidencia está en el PR", async () => {
+    const { fake, dep } = seeded();
+    renderApp(`/tasks/${dep.id}`, fake);
+    expect(
+      await screen.findByText("La tarea no tiene worktree: la evidencia viaja en su PR."),
+    ).toBeTruthy();
+  });
+
   it("muestra las versiones de la spec, su contenido y el diff contra la anterior", async () => {
     const { fake, task } = seeded();
     fake.addSpec(task.id);
@@ -134,6 +142,33 @@ describe("detalle de tarea", () => {
       true,
     );
     expect((await section("Spec")).queryByRole("button", { name: "Aprobar v1" })).toBeNull();
+  });
+
+  it("muestra el 409 del servidor si la spec ya no está pendiente", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "refined", null);
+    const spec = fake.addSpec(task.id);
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const approve = await (await section("Spec")).findByRole("button", { name: "Aprobar v1" });
+    spec.approval = "approved";
+    await user.click(approve);
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "la versión 1 ya está en approved",
+    );
+  });
+
+  it("muestra la versión nueva cuando llega mientras se revisaba una anterior", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "refined", null);
+    fake.addSpec(task.id);
+    fake.addSpec(task.id);
+    const { user, refresh } = renderApp(`/tasks/${task.id}`, fake);
+    const spec = await section("Spec");
+    await user.click(await spec.findByRole("button", { name: "v1" }));
+    fake.addSpec(task.id);
+    await refresh();
+    expect(await spec.findByRole("button", { name: "Aprobar v3" })).toBeTruthy();
   });
 
   it("pide cambios con comentarios", async () => {

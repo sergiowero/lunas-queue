@@ -73,7 +73,7 @@ describe("TaskViewRepository.usage", () => {
     const refine = insertRun(db, task.id, { phase: "refine", endedAt: new Date() });
     const implement = insertRun(db, task.id, { phase: "implement" });
     usage(db, refine.id, { inputTokens: 10, outputTokens: 5, costUsd: 0.5, sourceRef: "1" });
-    usage(db, refine.id, { inputTokens: 1, cacheReadTokens: 7, sourceRef: "2" });
+    usage(db, refine.id, { inputTokens: 1, cacheReadTokens: 7, costUsd: 0.25, sourceRef: "2" });
     usage(db, implement.id, { outputTokens: 3, cacheWriteTokens: 2 });
 
     const result = views.usage(task.id);
@@ -82,7 +82,8 @@ describe("TaskViewRepository.usage", () => {
       outputTokens: 8,
       cacheReadTokens: 7,
       cacheWriteTokens: 2,
-      costUsd: 0.5,
+      // El Run de implementación no trae costo: el total no se puede afirmar.
+      costUsd: null,
     });
     expect(result?.byRun).toEqual([
       {
@@ -93,7 +94,7 @@ describe("TaskViewRepository.usage", () => {
           outputTokens: 5,
           cacheReadTokens: 7,
           cacheWriteTokens: 0,
-          costUsd: 0.5,
+          costUsd: 0.75,
         },
       },
       {
@@ -113,16 +114,24 @@ describe("TaskViewRepository.usage", () => {
     const { views } = setup();
     expect(views.usage("00000000-0000-4000-8000-000000000000")).toBeNull();
   });
+
+  it("deja el costo en null si algún registro no lo trae", () => {
+    const { db, task, views } = setup();
+    const run = insertRun(db, task.id, { endedAt: new Date() });
+    usage(db, run.id, { costUsd: 2, sourceRef: "1" });
+    usage(db, run.id, { inputTokens: 5, sourceRef: "2" });
+    expect(views.usage(task.id)?.total).toEqual({ ...EMPTY_USAGE, inputTokens: 5 });
+  });
 });
 
 describe("TaskViewRepository.usageByTask", () => {
   it("suma por tarea y omite las que no tienen consumo", () => {
     const { db, project, task, views } = setup();
     const other = insertTask(db, project.id);
-    usage(db, insertRun(db, task.id, { endedAt: new Date() }).id, { inputTokens: 4 });
+    usage(db, insertRun(db, task.id, { endedAt: new Date() }).id, { inputTokens: 4, costUsd: 0.5 });
     usage(db, insertRun(db, task.id).id, { inputTokens: 6, costUsd: 1 });
     const totals = views.usageByTask();
-    expect(totals.get(task.id)).toEqual({ ...EMPTY_USAGE, inputTokens: 10, costUsd: 1 });
+    expect(totals.get(task.id)).toEqual({ ...EMPTY_USAGE, inputTokens: 10, costUsd: 1.5 });
     expect(totals.has(other.id)).toBe(false);
   });
 });

@@ -57,6 +57,7 @@ export function createApp({
   });
   const tasks = new TaskRepository(db);
   const views = {
+    db,
     tasks,
     views: new TaskViewRepository(db),
     state: new SchedulerStateRepository(db),

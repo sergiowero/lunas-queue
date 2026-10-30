@@ -41,6 +41,13 @@ describe("estáticos del front end", () => {
     expect(api.status).toBe(404);
     expect(api.headers.get("content-type")).not.toMatch(/text\/html/);
     expect((await app.request("/assets/falta.js")).status).toBe(404);
+    expect((await app.request("/api")).status).toBe(404);
+    expect((await app.request("/favicon.ico")).status).toBe(404);
+  });
+
+  it("no responde index.html a métodos que no son GET", async () => {
+    const res = await setup().request("/tasks/abc", { method: "POST" });
+    expect(res.status).toBe(404);
   });
 
   it("sin webRoot no sirve nada", async () => {
