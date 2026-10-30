@@ -38,10 +38,15 @@ describe("cola global", () => {
 
     const rows = await screen.findAllByRole("row");
     const body = rows.slice(1).map((row) => within(row).getAllByRole("cell"));
-    expect(body.map((cells) => cells[1]?.textContent)).toEqual(["Segunda", "Primera", "Corriendo"]);
+    // La celda de la tarea lleva su #N antes del intent.
+    expect(body.map((cells) => cells[1]?.textContent)).toEqual([
+      `#${b.number}Segunda`,
+      `#${a.number}Primera`,
+      `#${running.number}Corriendo`,
+    ]);
     expect(body[0]?.map((c) => c.textContent)).toEqual([
       "1",
-      "Segunda",
+      `#${b.number}Segunda`,
       "lunas-queue",
       "Draft · en cola",
       "5 → 30",

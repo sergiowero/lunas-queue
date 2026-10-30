@@ -7,6 +7,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { Loading, QueryError, stateText } from "../components/status.tsx";
+import { TaskNumber } from "../components/task-number.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
 import { formatCost, formatTokens } from "../lib/format.ts";
@@ -42,13 +43,16 @@ export function QueuePage() {
         id: "intent",
         header: "Tarea",
         cell: (c) => (
-          <Link
-            to="/tasks/$taskId"
-            params={{ taskId: c.row.original.task.id }}
-            className="font-medium hover:underline"
-          >
-            {c.getValue()}
-          </Link>
+          <span className="flex items-baseline gap-2">
+            <TaskNumber number={c.row.original.task.number} />
+            <Link
+              to="/tasks/$taskId"
+              params={{ taskId: c.row.original.task.id }}
+              className="font-medium hover:underline"
+            >
+              {c.getValue()}
+            </Link>
+          </span>
         ),
       }),
       column.accessor((e) => names.get(e.task.projectId) ?? "…", {

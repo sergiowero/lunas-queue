@@ -6,6 +6,7 @@ import { STATE_LABEL } from "../../lib/format.ts";
 import { queries } from "../../lib/queries.ts";
 import { Muted, Section } from "../section.tsx";
 import { QueryError } from "../status.tsx";
+import { TaskNumber } from "../task-number.tsx";
 import { Badge } from "../ui/badge.tsx";
 
 function Links({ title, links }: { title: string; links: Json<DependencyLink>[] }) {
@@ -16,6 +17,7 @@ function Links({ title, links }: { title: string; links: Json<DependencyLink>[] 
       <ul className="flex flex-col gap-1 text-sm">
         {links.map((link) => (
           <li key={link.taskId} className="flex flex-wrap items-center gap-2">
+            <TaskNumber number={link.number} />
             <Link to="/tasks/$taskId" params={{ taskId: link.taskId }} className="hover:underline">
               {link.intent}
             </Link>

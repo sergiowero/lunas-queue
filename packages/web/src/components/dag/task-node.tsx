@@ -4,6 +4,7 @@ import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
 import type { Json } from "../../lib/api.ts";
 import { NODE_HEIGHT, NODE_WIDTH } from "../../lib/dag-layout.ts";
 import { StateBadges } from "../status.tsx";
+import { TaskNumber } from "../task-number.tsx";
 import { Badge } from "../ui/badge.tsx";
 
 export type TaskNodeData = {
@@ -20,14 +21,17 @@ export function TaskNode({ data: { task, projectName } }: NodeProps<TaskFlowNode
       className="flex flex-col justify-between rounded-md border border-border bg-background p-2 text-sm shadow-sm"
     >
       <Handle type="target" position={Position.Left} isConnectable={false} />
-      <Link
-        to="/tasks/$taskId"
-        params={{ taskId: task.id }}
-        title={task.intent}
-        className="line-clamp-2 font-medium hover:underline"
-      >
-        {task.intent}
-      </Link>
+      <p className="line-clamp-2">
+        <TaskNumber number={task.number} className="mr-1" />
+        <Link
+          to="/tasks/$taskId"
+          params={{ taskId: task.id }}
+          title={task.intent}
+          className="font-medium hover:underline"
+        >
+          {task.intent}
+        </Link>
+      </p>
       <div className="flex flex-wrap items-center gap-1">
         <StateBadges state={task.state} subState={task.subState} />
         {task.prState && <Badge variant="outline">PR {task.prState}</Badge>}
