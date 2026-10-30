@@ -148,7 +148,7 @@ Cada unidad tiene un alcance cerrado y un criterio de terminado verificable; las
 | --- | --- | --- | --- |
 | UW-03 | Esquemas versionados del handoff: sobre común y cuerpo por fase; ejemplos válidos e inválidos | `packages/schemas` · Zod v4 como fuente; JSON Schema generado y versionado en el repo | El validador acepta los ejemplos válidos y rechaza los inválidos con errores claros |
 | UW-15 | Tools del LunasQ MCP, validación de run token, gate de `get_task_context`, validación de handoffs, disparo del gate de tests y de transiciones | `packages/server` · SDK oficial de MCP para TypeScript con Streamable HTTP montado en Hono; esquemas Zod de `packages/schemas` | Cada tool tiene tests de contrato; un handoff inválido o un run token viejo se rechazan |
-| UW-18 | Skills `refine-task` (DDD), `implement-task` (TDD), `verify-task` (fan-out, checklist, prueba de reversión) y `deliver-task`, con instrucciones best effort para engram | `assets/skills` · markdown de skills de Claude Code | Cada skill produce un handoff válido en una tarea de prueba |
+| UW-18 | Skills `refine-task` (DDD), `implement-task` (TDD), `verify-task` (fan-out, checklist, prueba de reversión), con instrucciones best effort para engram | `assets/skills` · markdown de skills de Claude Code | Cada skill produce un handoff válido en una tarea de prueba. La entrega no tiene skill: la hace LunasQ en UW-26 ([ADR uw-18-skills-fase](decisions/uw-18-skills-fase.md)) |
 
 ### E4 · Calidad y verificación
 
