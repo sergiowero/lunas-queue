@@ -2,7 +2,7 @@
 
 Oct 28, 2026 · @Sergio Sanchez
 
-LunasQ v1 se construye en TypeScript sobre Node.js, con SQLite como base de datos y React + Vite en el front end, todo en un solo monorepo (`lunas-queue`) y un solo proceso local. Diseño: [design.md](design.md) · Units of work: [units-of-work.md](units-of-work.md).
+LunasQ v1 se construye en TypeScript sobre Node.js, con SQLite como base de datos y React + Vite en el front end, todo en un solo monorepo (`lunas-queue`) y un solo proceso local. Diseño: [design.md](design.md).
 
 ## Decisiones base
 
