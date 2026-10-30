@@ -18,6 +18,9 @@ import { type Inbox, type TasksById, useInbox } from "../lib/inbox.ts";
 import { invalidateInbox } from "../lib/live.ts";
 import { queries } from "../lib/queries.ts";
 
+/** Resultado de la última respuesta; se muestra en la sección porque la tarjeta puede desaparecer. */
+type Notice = { ok: true; delivery: QuestionDelivery } | { ok: false; error: Error };
+
 const DELIVERY_TEXT: Record<QuestionDelivery, string> = {
   pane: "Respuesta enviada al agente en su pane.",
   new_run: "Respuesta enviada: irá a un agente nuevo.",
@@ -75,11 +78,11 @@ function SpecsSection({ refined, pending }: { refined: Json<Task>[]; pending: bo
 function QuestionItem({
   question,
   task,
-  onAnswered,
+  onResult,
 }: {
   question: Json<Question>;
   task: Json<Task> | undefined;
-  onAnswered: (delivery: QuestionDelivery) => void;
+  onResult: (notice: Notice | null) => void;
 }) {
   const queryClient = useQueryClient();
   const runs = useQuery(queries.runs(question.taskId));
@@ -87,8 +90,11 @@ function QuestionItem({
   const [answer, setAnswer] = useState("");
   const send = useMutation({
     mutationFn: () => api.answerQuestion(question.id, answer.trim()),
-    onSuccess: async ({ delivery }) => {
-      onAnswered(delivery);
+    onMutate: () => onResult(null),
+    onSuccess: ({ delivery }) => onResult({ ok: true, delivery }),
+    // Un 409 (not_open, task_not_waiting) también cambia la bandeja: la pregunta ya no espera.
+    onError: (error) => onResult({ ok: false, error }),
+    onSettled: async () => {
       invalidateInbox(queryClient);
       await queryClient.invalidateQueries({ queryKey: ["task", question.taskId] });
       await queryClient.invalidateQueries({ queryKey: ["queue"] });
@@ -115,7 +121,6 @@ function QuestionItem({
       >
         Responder
       </Button>
-      {send.error && <MutationError error={send.error} />}
     </Item>
   );
 }
@@ -127,15 +132,16 @@ function QuestionsSection({
   questions: Inbox["questions"];
   tasks: TasksById;
 }) {
-  const [delivered, setDelivered] = useState<QuestionDelivery | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   return (
     <Section title="Preguntas abiertas">
       <div className="flex flex-col gap-4">
-        {delivered && (
+        {notice?.ok && (
           <p role="status" className="text-sm">
-            {DELIVERY_TEXT[delivered]}
+            {DELIVERY_TEXT[notice.delivery]}
           </p>
         )}
+        {notice && !notice.ok && <MutationError error={notice.error} />}
         {questions.error ? (
           <QueryError error={questions.error} />
         ) : questions.isPending ? (
@@ -144,12 +150,7 @@ function QuestionsSection({
           <Muted>Ningún agente espera una respuesta.</Muted>
         ) : (
           questions.data.map((q) => (
-            <QuestionItem
-              key={q.id}
-              question={q}
-              task={tasks.get(q.taskId)}
-              onAnswered={setDelivered}
-            />
+            <QuestionItem key={q.id} question={q} task={tasks.get(q.taskId)} onResult={setNotice} />
           ))
         )}
       </div>
@@ -158,7 +159,12 @@ function QuestionsSection({
 }
 
 function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Task> | undefined }) {
-  const focus = useMutation({ mutationFn: () => api.focusBlocked(agent.runId) });
+  const queryClient = useQueryClient();
+  const focus = useMutation({
+    mutationFn: () => api.focusBlocked(agent.runId),
+    // 404 not_blocked o 409 agent_gone: la lista quedó vieja, se vuelve a pedir sin esperar el refresco.
+    onError: () => queryClient.invalidateQueries({ queryKey: ["blocked"] }),
+  });
   return (
     <Item task={task} taskId={agent.taskId}>
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
@@ -209,7 +215,8 @@ function BlockedSection({ blocked, tasks }: { blocked: Inbox["blocked"]; tasks: 
 
 export function InboxPage() {
   const inbox = useInbox();
-  const loaded = !inbox.tasks.isPending && !inbox.questions.isPending && !inbox.blocked.isPending;
+  // Solo con las tres consultas en éxito: una que falló no puede leerse como «nada pendiente».
+  const loaded = inbox.tasks.isSuccess && inbox.questions.isSuccess && inbox.blocked.isSuccess;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-baseline gap-3">
