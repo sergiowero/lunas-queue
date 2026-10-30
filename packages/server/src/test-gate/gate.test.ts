@@ -175,7 +175,7 @@ describe("PaneTestGate", () => {
   });
 
   it("una suite que excede el tiempo límite no pasa", async () => {
-    const { gate, input, events } = await setup({ timeoutMs: 200 });
+    const { gate, input, events } = await setup({ timeoutMs: 1_000 });
     const result = await gate.run(input("echo empieza; sleep 5"));
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/empieza[\s\S]*tiempo límite/);

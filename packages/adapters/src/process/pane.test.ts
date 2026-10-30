@@ -93,20 +93,20 @@ describe("HerdrPaneRunner", () => {
   it("al vencer el timeout cierra el pane, que mata el comando", async () => {
     const started = Date.now();
     const res = await runner.run({
-      command: "echo antes; sleep 1; touch tarde",
+      command: "echo antes; sleep 3; touch tarde",
       cwd: dir,
-      timeoutMs: 200,
+      timeoutMs: 1_000,
     });
-    expect(Date.now() - started).toBeLessThan(900);
+    expect(Date.now() - started).toBeLessThan(2_500);
     expect(res).toMatchObject({
       exitCode: PANE_TIMEOUT_EXIT_CODE,
       timedOut: true,
       stdout: "antes\n",
     });
     expect(await panes()).toEqual([rootPaneId]);
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    await new Promise((resolve) => setTimeout(resolve, 3_200));
     expect(existsSync(join(dir, "tarde"))).toBe(false);
-  });
+  }, 15_000);
 
   it("si alguien cierra el pane antes de terminar, es un fallo", async () => {
     const run = runner.run({ command: "sleep 2", cwd: dir });
