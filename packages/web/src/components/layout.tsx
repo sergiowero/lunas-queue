@@ -20,6 +20,9 @@ export function Layout() {
             <Link to="/queue" className={nav} activeProps={active}>
               Cola
             </Link>
+            <Link to="/in-progress" className={nav} activeProps={active}>
+              En curso
+            </Link>
             <Link
               to="/inbox"
               className={nav}
