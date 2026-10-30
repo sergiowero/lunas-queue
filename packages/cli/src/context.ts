@@ -6,13 +6,15 @@ import {
   prepareDatabase,
   ShellProcessRunner,
 } from "@lunasq/server";
-import { findAssetsRoot } from "./assets.ts";
+import { findAssetsRoot, findWebRoot } from "./assets.ts";
 import { type Paths, resolvePaths } from "./paths.ts";
 
 export interface MachineContext {
   paths: Paths;
   /** Carpeta con `skills/` y `agents/` (los assets del repo o del paquete publicado). */
   assetsRoot: string;
+  /** Build del front end, si existe (ADR uw-29-e2e). */
+  webRoot?: string | undefined;
   runner: ProcessRunner;
   nodeVersion: string;
   /** Lanza si better-sqlite3 no carga o las migraciones no aplican. */
@@ -26,6 +28,7 @@ export function machineContext(): MachineContext {
   return {
     paths: resolvePaths(),
     assetsRoot: findAssetsRoot(),
+    webRoot: findWebRoot(),
     runner: new ShellProcessRunner(),
     nodeVersion: process.versions.node,
     checkSqlite: () => prepareDatabase(":memory:").$client.close(),

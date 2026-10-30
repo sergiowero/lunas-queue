@@ -130,6 +130,7 @@ async function start(
     mcpConfigPath: ctx.paths.mcpConfig,
     hookSettingsPath: ctx.paths.hookSettings,
     telemetry: config.telemetry,
+    ...(ctx.webRoot && { webRoot: ctx.webRoot }),
     log: err,
   });
   out(`LunasQ en ${runtime.url}`);

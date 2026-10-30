@@ -11,6 +11,9 @@ import type { GitAdapter, GitCommitInfo, GitFile, RebaseResult } from "./types.t
 export const DEFAULT_GIT_TIMEOUT_MS = 60_000;
 export const DEFAULT_FETCH_TIMEOUT_MS = 5 * 60_000;
 
+const FETCH_RACE = /incorrect old value provided|cannot lock ref/;
+const FETCH_RACE_ATTEMPTS = 4;
+
 export interface RealGitOptions {
   /** Ruta del binario (por defecto `git` en el PATH). */
   bin?: string;
@@ -55,9 +58,22 @@ export class RealGit implements GitAdapter {
       .find(([, name]) => name === ref)?.[0];
     if (!sha) throw new GitError("git_failed", `${input.remote} no tiene ${ref}`);
     const refspec = `+${ref}:refs/remotes/${input.remote}/${input.branch}`;
-    await this.ok(input.cwd, ["fetch", "--quiet", "--no-tags", input.remote, refspec], {
-      timeoutMs: this.fetchTimeoutMs,
-    });
+    // Dos fetch del mismo ref en el mismo repo (el hook after_merge y el worktree del dependiente
+    // que se libera) compiten por él y git aborta al segundo con «incorrect old value provided»:
+    // el ref ya quedó al día, así que se repite.
+    for (let attempt = 1; ; attempt++) {
+      const res = await this.run(
+        input.cwd,
+        ["fetch", "--quiet", "--no-tags", input.remote, refspec],
+        { timeoutMs: this.fetchTimeoutMs },
+      );
+      if (res.exitCode === 0) break;
+      if (attempt < FETCH_RACE_ATTEMPTS && FETCH_RACE.test(res.stderr)) continue;
+      throw new GitError(
+        "git_failed",
+        `fetch en ${input.cwd} (exit ${res.exitCode}): ${res.stderr.trim()}`,
+      );
+    }
     return this.resolveCommit({ cwd: input.cwd, ref: sha });
   }
 

@@ -11,7 +11,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "tsc -b",
-    "e2e": "echo \"e2e: pendiente (UW-29)\"",
+    "e2e": "pnpm --filter @lunasq/web build && pnpm --filter @lunasq/e2e e2e",
     "lunasq": "node packages/cli/src/bin.ts"
   },
   "devDependencies": {

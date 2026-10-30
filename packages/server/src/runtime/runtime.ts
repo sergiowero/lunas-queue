@@ -20,6 +20,7 @@ import {
   ProjectRepository,
   TaskWorktreeRepository,
 } from "@lunasq/db";
+import type { SchedulerConfigInput } from "@lunasq/schemas";
 import { createApp } from "../app.ts";
 import { DeliveryService } from "../delivery/service.ts";
 import { subscribeDelivery } from "../delivery/subscribe.ts";
@@ -50,6 +51,12 @@ export interface RuntimeOptions {
    * y no monta los endpoints.
    */
   telemetry?: boolean;
+  /** Build del front end (`packages/web/dist/app`); sin él el servidor solo expone la API. */
+  webRoot?: string;
+  /** Cada cuánto se consultan en GitHub los PR abiertos (por defecto 60 s). */
+  prPollIntervalMs?: number;
+  /** Límites y cadencia del scheduler; sin esto, los defaults de ADR 0014. */
+  scheduler?: SchedulerConfigInput;
   adapters?: {
     herdr?: HerdrAdapter;
     github?: GitHubAdapter;
@@ -144,6 +151,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     hooks: { settingsPath: opts.hookSettingsPath, url: urls.hooks },
     publisher,
     paneEnv,
+    ...(opts.scheduler && { config: opts.scheduler }),
     onDispatchError: (error, runId) => log(`dispatcher: run ${runId}: ${error.message}`),
     onSchedulerError: (error) => log(`scheduler: ${error.message}`),
     onReconcileError: (error, subject) =>
@@ -161,6 +169,8 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const app = createApp({
     db,
     telemetry: opts.telemetry !== false,
+    ...(opts.scheduler && { scheduler: opts.scheduler }),
+    ...(opts.webRoot && { webRoot: opts.webRoot }),
     testGate,
     phaseHooks: hooks,
     hooks,
@@ -176,6 +186,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     github,
     db,
     publisher,
+    ...(opts.prPollIntervalMs !== undefined && { intervalMs: opts.prPollIntervalMs }),
     onError: (error) => log(`github: ${error.message}`),
   });
   const unsubscribeAfterMerge = subscribeAfterMergeHooks({

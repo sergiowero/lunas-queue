@@ -2,6 +2,7 @@
 // monorepo salvo better-sqlite3 (nativo, con prebuild), más las migraciones y los assets que el
 // bundle busca junto a sí (`bin/../drizzle`, `bin/../assets`). Node no quita tipos dentro de
 // node_modules, así que el paquete publicado no puede llevar los `.ts` del repo.
+import { execFileSync } from "node:child_process";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { build } from "esbuild";
@@ -27,6 +28,11 @@ export async function buildPackage(outdir = join(cli, "dist")): Promise<string> 
     logLevel: "warning",
   });
   await cp(join(repo, "packages", "db", "drizzle"), join(outdir, "drizzle"), { recursive: true });
+  // El front end va en `web/`, que `lunasq start` sirve; siempre se arma de nuevo para no
+  // publicar un build viejo.
+  const webDist = join(repo, "packages", "web", "dist", "app");
+  execFileSync("pnpm", ["--filter", "@lunasq/web", "build"], { cwd: repo, stdio: "inherit" });
+  await cp(webDist, join(outdir, "web"), { recursive: true });
   for (const dir of ["skills", "agents"]) {
     await cp(join(repo, "assets", dir), join(outdir, "assets", dir), {
       recursive: true,

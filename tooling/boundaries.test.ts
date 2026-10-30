@@ -13,6 +13,8 @@ const allowed: Record<string, string[]> = {
   server: ["domain", "db", "adapters", "schemas"],
   web: ["schemas"],
   cli: ["server"],
+  // Piloto end-to-end (UW-29): compone el runtime con fakes de adapters; no lo importa nadie.
+  e2e: ["server", "adapters", "schemas"],
 };
 
 const root = join(import.meta.dirname, "..");

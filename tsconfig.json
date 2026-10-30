@@ -23,6 +23,9 @@
       "path": "packages/cli"
     },
     {
+      "path": "packages/e2e"
+    },
+    {
       "path": "tooling"
     }
   ]

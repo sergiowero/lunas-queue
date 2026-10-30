@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { normalizePath, toAgent, toEvent } from "./wire.ts";
+import { normalizePath, snapshotWire, toAgent, toEvent, toSnapshot } from "./wire.ts";
 
 describe("traducción del protocolo de herdr", () => {
   it("traduce los eventos de ciclo de vida con sus dos formas de payload", () => {
@@ -43,5 +43,21 @@ describe("traducción del protocolo de herdr", () => {
     expect(agent.tokens).toEqual({ task: "t1" });
     expect(agent.session).toEqual({ kind: "id", source: "herdr:claude", value: "uuid" });
     expect(agent.title).toBeUndefined();
+  });
+
+  it("el snapshot descarta los agentes sin nombre que el usuario abrió a mano", () => {
+    const agent = { agent: "claude", pane_id: "w1:p1", workspace_id: "w1", agent_status: "idle" };
+    const snapshot = toSnapshot(
+      snapshotWire.parse({
+        snapshot: {
+          version: "0.9.5",
+          protocol: 22,
+          workspaces: [],
+          panes: [],
+          agents: [agent, { ...agent, name: null }, { ...agent, name: "t1-refine-1" }],
+        },
+      }),
+    );
+    expect(snapshot.agents.map((a) => a.name)).toEqual(["t1-refine-1"]);
   });
 });

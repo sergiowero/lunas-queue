@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -14,7 +14,7 @@ beforeAll(async () => {
   // Dentro de packages/cli: el bundle resuelve better-sqlite3 desde su node_modules.
   outdir = await buildPackage(join(import.meta.dirname, "..", "dist-test"));
   home = mkdtempSync(join(tmpdir(), "lunasq-bundle-"));
-}, 60_000);
+}, 120_000);
 
 afterAll(() => {
   rmSync(outdir, { recursive: true, force: true });
@@ -33,6 +33,10 @@ describe("paquete npm", () => {
     const pkg = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8"));
     expect(pkg).toMatchObject({ name: "lunasq", bin: { lunasq: "bin/lunasq.js" } });
     expect(Object.keys(pkg.dependencies)).toEqual(["better-sqlite3"]);
+  });
+
+  it("incluye el build del front end junto al binario", () => {
+    expect(existsSync(join(outdir, "web", "index.html"))).toBe(true);
   });
 
   it("el bundle corre, aplica las migraciones y encuentra los assets junto a sí", async () => {

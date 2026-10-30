@@ -130,6 +130,30 @@ describe("RealGit", () => {
     expect(fetched).toBe(remoteSha);
   });
 
+  it("fetch repite cuando otro fetch del mismo ref le gana la carrera", async () => {
+    const cwd = newRepo({ "a.txt": { content: "a" } });
+    const remoteSha = git(cwd, "rev-parse", "origin/main").trim();
+    // git que falla el primer `fetch` como lo hace uno que pierde la carrera por el ref.
+    const dir = join(dirname(cwd), "bin");
+    mkdirSync(dir);
+    const flag = join(dir, "failed-once");
+    const bin = join(dir, "git");
+    writeFileSync(
+      bin,
+      `#!/bin/sh\ncase " $* " in *" fetch "*) [ ! -e '${flag}' ] && { : > '${flag}'; echo 'error: fetching ref refs/remotes/origin/main failed: incorrect old value provided' >&2; exit 1; };; esac\nexec git "$@"\n`,
+      { mode: 0o755 },
+    );
+    const racy = new RealGit({ bin });
+    expect(await racy.fetch({ cwd, remote: "origin", branch: "main" })).toBe(remoteSha);
+    expect(existsSync(flag)).toBe(true);
+  });
+
+  it("fetch no repite un fallo que no es la carrera", async () => {
+    const cwd = newRepo({ "a.txt": { content: "a" } });
+    git(cwd, "remote", "set-url", "origin", join(dirname(cwd), "no-existe"));
+    await expect(adapter.fetch({ cwd, remote: "origin", branch: "main" })).rejects.toThrow();
+  });
+
   it("commitAll no corre los hooks de git del repo y, si el commit falla, deja el índice limpio", async () => {
     const cwd = newRepo({ "a.txt": { content: "a" } });
     const marker = join(dirname(cwd), "hook-ran");
