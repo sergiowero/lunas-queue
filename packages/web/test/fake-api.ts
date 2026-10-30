@@ -11,6 +11,7 @@ import type {
   EvidenceSource,
   Phase,
   Project,
+  ProjectHooksView,
   Question,
   QueueEntry,
   RunView,
@@ -18,11 +19,13 @@ import type {
   SpecContent,
   SubState,
   Task,
+  TaskGraph,
   TaskState,
   TaskUsage,
   UsageTotals,
 } from "@lunasq/schemas";
 import {
+  type HookExecutionView,
   QuestionAnswer,
   SpecEditAndApprove,
   SpecRequestChanges,
@@ -89,6 +92,11 @@ export class FakeApi {
   readonly evidence = new Map<string, string>();
   /** Origen de la evidencia por tarea; sin entrada, el worktree. */
   readonly evidenceSource = new Map<string, EvidenceSource>();
+  /** Hooks de la rama base por proyecto; sin entrada, GET .../hooks responde 502 como sin red. */
+  readonly hooks = new Map<string, Json<ProjectHooksView>>();
+  readonly hookExecutions: Json<HookExecutionView>[] = [];
+  /** Si es true, GET .../hooks/executions responde 500. */
+  hookExecutionsFail = false;
   readonly requests: Request[] = [];
   readonly questions: Json<Question>[] = [];
   /** Lo que respondería el RunWatcher: los agentes bloqueados ahora. */
@@ -289,7 +297,10 @@ export class FakeApi {
     const [resource, id, sub, version, action] = parts;
     const notFound: [number, unknown] = [404, { error: "not_found" }];
 
-    if (resource === "projects" && method === "GET") return [200, this.projects];
+    if (resource === "graph") return [200, this.graph(url.searchParams.get("projectId"))];
+    if (resource === "projects" && method === "GET") {
+      return sub === "hooks" ? this.projectHooks(id, version, url) : [200, this.projects];
+    }
     if (resource === "questions") return this.question(method, url, id, sub, body);
     if (resource === "blocked") {
       if (method === "GET") return [200, this.blocked];
@@ -348,6 +359,60 @@ export class FakeApi {
       default:
         return notFound;
     }
+  }
+
+  /** Como TaskViewRepository.graph: las del proyecto y el otro extremo de sus aristas. */
+  private graph(projectId: string | null): Json<TaskGraph> {
+    const mine = (id: string) => !projectId || this.task(id).projectId === projectId;
+    const edges = this.edges.filter((e) => mine(e.taskId) || mine(e.dependsOnId));
+    const linked = new Set(edges.flatMap((e) => [e.taskId, e.dependsOnId]));
+    const nodes = this.tasks
+      .filter((t) => !projectId || t.projectId === projectId || linked.has(t.id))
+      .map((t) => ({
+        id: t.id,
+        projectId: t.projectId,
+        intent: t.intent,
+        state: t.state,
+        subState: t.subState,
+        prState: t.prState,
+        priority: t.priority,
+      }));
+    return { nodes, edges: edges.map((e) => ({ ...e })) };
+  }
+
+  private projectHooks(
+    projectId: string | undefined,
+    rest: string | undefined,
+    url: URL,
+  ): [number, unknown] {
+    if (!projectId || !this.projects.some((p) => p.id === projectId)) {
+      return [404, { error: "not_found" }];
+    }
+    if (rest === "executions") {
+      if (this.hookExecutionsFail) return [500, { error: "internal" }];
+      const tasks = new Set(this.tasks.filter((t) => t.projectId === projectId).map((t) => t.id));
+      // Como TaskViewRepository.hookExecutions: la más reciente de cada tarea por script, y a lo
+      // más `limit` tareas por punto y script.
+      const limit = Number(url.searchParams.get("limit") ?? 10);
+      const perHook = new Map<string, number>();
+      const seen = new Set<string>();
+      const rows = [...this.hookExecutions]
+        .filter((e) => tasks.has(e.taskId))
+        .sort((a, b) => b.eventId - a.eventId)
+        .filter((e) => {
+          const key = `${e.point}/${e.script}`;
+          if (seen.has(`${e.taskId}/${key}`)) return false;
+          seen.add(`${e.taskId}/${key}`);
+          const n = (perHook.get(key) ?? 0) + 1;
+          perHook.set(key, n);
+          return n <= limit;
+        });
+      return [200, rows];
+    }
+    const hooks = this.hooks.get(projectId);
+    return hooks
+      ? [200, hooks]
+      : [502, { error: "hooks_unavailable", message: "no se pudo leer la rama base" }];
   }
 
   private question(

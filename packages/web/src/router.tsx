@@ -5,11 +5,13 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   type RouterHistory,
   redirect,
 } from "@tanstack/react-router";
 import { Layout } from "./components/layout.tsx";
 import { BoardPage } from "./pages/board.tsx";
+import { HooksPage } from "./pages/hooks.tsx";
 import { InboxPage } from "./pages/inbox.tsx";
 import { NewTaskPage } from "./pages/new-task.tsx";
 import { ProjectsPage } from "./pages/projects.tsx";
@@ -52,6 +54,25 @@ const boardRoute = createRoute({
   component: BoardPage,
 });
 
+const hooksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/projects/$projectId/hooks",
+  component: HooksPage,
+});
+
+export type DagSearch = { projectId?: string };
+
+const dagRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/dag",
+  validateSearch: (search: Record<string, unknown>): DagSearch =>
+    typeof search.projectId === "string" && search.projectId !== ""
+      ? { projectId: search.projectId }
+      : {},
+  // React Flow pesa la mitad del bundle: se carga al abrir el DAG.
+  component: lazyRouteComponent(() => import("./pages/dag.tsx"), "DagPage"),
+});
+
 export type NewTaskSearch = { projectId?: string };
 
 const newTaskRoute = createRoute({
@@ -74,6 +95,8 @@ const routeTree = rootRoute.addChildren([
   inboxRoute,
   projectsRoute,
   boardRoute,
+  hooksRoute,
+  dagRoute,
   newTaskRoute,
   taskRoute,
 ]);

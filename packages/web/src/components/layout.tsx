@@ -41,6 +41,9 @@ export function Layout() {
             >
               Proyectos
             </Link>
+            <Link to="/dag" className={nav} activeProps={active}>
+              DAG
+            </Link>
             <Link to="/tasks/new" className={nav} activeProps={active}>
               Nueva tarea
             </Link>

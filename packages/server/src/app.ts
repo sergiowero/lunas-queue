@@ -16,6 +16,7 @@ import {
 } from "@lunasq/db";
 import { SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
 import { Hono } from "hono";
+import { type HookLister, hookRoutes } from "./api/hooks.ts";
 import { projectRoutes } from "./api/projects.ts";
 import {
   type AgentFocuser,
@@ -27,7 +28,7 @@ import {
 import { specRoutes } from "./api/specs.ts";
 import { changeStreamRoutes, DEFAULT_CHANGE_STREAM_INTERVAL_MS } from "./api/stream.ts";
 import { taskRoutes } from "./api/tasks.ts";
-import { queueRoutes, taskViewRoutes } from "./api/views.ts";
+import { graphRoutes, queueRoutes, taskViewRoutes } from "./api/views.ts";
 import {
   type CommitVerifier,
   GitCommitVerifier,
@@ -55,6 +56,11 @@ export interface AppDeps {
    * servidor pasa el HookService. Sin él, los puntos pasan sin correr nada.
    */
   phaseHooks?: PhaseHooks;
+  /**
+   * Hooks de la rama base para la vista de hooks: quien compone el servidor pasa el HookService.
+   * Sin él, `GET /api/projects/:id/hooks` responde 503.
+   */
+  hooks?: HookLister;
   /**
    * Responde las Questions: quien compone el servidor pasa el QuestionService del orquestador.
    * Sin él, `POST /api/questions/:id/answer` responde 503.
@@ -86,6 +92,7 @@ export function createApp({
   testGate,
   commitVerifier,
   phaseHooks,
+  hooks,
   questions,
   blocked,
   focus,
@@ -118,11 +125,13 @@ export function createApp({
   const app = new Hono()
     .route("/mcp", mcpRoutes(mcp))
     .route(SUBAGENT_HOOK_PATH, subagentHookRoutes(db))
+    .route("/api/projects/:id/hooks", hookRoutes({ projects, views: taskViews, hooks }))
     .route("/api/projects", projectRoutes(projects))
     .route("/api/tasks/:id/specs", specRoutes(new SpecRepository(db)))
     .route("/api/blocked", blockedRoutes(blocked ?? (() => []), focus))
     .route("/api/questions", questionRoutes(new QuestionRepository(db), questions))
     .route("/api/queue", queueRoutes(views))
+    .route("/api/graph", graphRoutes(views))
     .route("/api/stream", changeStreamRoutes(taskViews, changeStreamIntervalMs))
     .route("/api/tasks", taskViewRoutes(views))
     .route("/api/tasks", taskRoutes(tasks))

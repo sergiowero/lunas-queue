@@ -158,6 +158,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     db,
     testGate,
     phaseHooks: hooks,
+    hooks,
     // Bandeja (ADR uw-27-bandeja): responder preguntas, listar bloqueos y enfocar su pane.
     questions: orchestrator.questions,
     blocked: () => orchestrator.watcher.blocked(),

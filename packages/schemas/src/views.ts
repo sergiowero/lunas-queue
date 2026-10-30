@@ -1,8 +1,17 @@
 // Vistas de solo lectura que consume el front end (UW-21, ADR uw-21-front-end): Runs, Event log,
 // usage, evidencia y la cola global. Se derivan de las tablas; ninguna se escribe por la API.
 import { z } from "zod";
-import { Actor, AgentKind, Phase, RunResult, SessionSource } from "./enums.ts";
-import { Task } from "./task.ts";
+import {
+  Actor,
+  AgentKind,
+  Phase,
+  PrState,
+  RunResult,
+  SessionSource,
+  SubState,
+  TaskState,
+} from "./enums.ts";
+import { Priority, Task } from "./task.ts";
 
 /** Un Run como lo ve la UI: sin el run token, que solo vive en el pane del agente. */
 export const RunView = z.strictObject({
@@ -100,3 +109,33 @@ export type QueueEntry = z.infer<typeof QueueEntry>;
 
 export const QueueQuery = z.strictObject({ projectId: z.uuid().optional() });
 export type QueueQuery = z.infer<typeof QueueQuery>;
+
+/** Una tarea del DAG: lo justo para dibujar el nodo y llevar a su detalle. */
+export const TaskGraphNode = z.strictObject({
+  id: z.uuid(),
+  projectId: z.uuid(),
+  intent: z.string(),
+  state: TaskState,
+  subState: SubState.nullable(),
+  prState: PrState.nullable(),
+  priority: Priority,
+});
+export type TaskGraphNode = z.infer<typeof TaskGraphNode>;
+
+/** `taskId` depende de `dependsOnId`: la flecha del DAG va de `dependsOnId` a `taskId`. */
+export const TaskGraphEdge = z.strictObject({ taskId: z.uuid(), dependsOnId: z.uuid() });
+export type TaskGraphEdge = z.infer<typeof TaskGraphEdge>;
+
+/**
+ * Las aristas reales de task_dependencies. Con `projectId`, las tareas del proyecto más las de
+ * otros proyectos al otro extremo de una arista suya (dependencias entre proyectos); sin él,
+ * todas. Todo extremo de una arista aparece entre los nodos.
+ */
+export const TaskGraph = z.strictObject({
+  nodes: z.array(TaskGraphNode),
+  edges: z.array(TaskGraphEdge),
+});
+export type TaskGraph = z.infer<typeof TaskGraph>;
+
+export const TaskGraphQuery = z.strictObject({ projectId: z.uuid().optional() });
+export type TaskGraphQuery = z.infer<typeof TaskGraphQuery>;

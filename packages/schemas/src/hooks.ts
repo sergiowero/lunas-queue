@@ -86,3 +86,39 @@ export const HookPointCompletedPayload = z.strictObject({
   commitSkipped: z.boolean(),
 });
 export type HookPointCompletedPayload = z.infer<typeof HookPointCompletedPayload>;
+
+/** Un hook de la rama base tal como lo ve la vista: script, ajustes efectivos y contenido. */
+export const HookView = z.strictObject({
+  script: HookScriptName,
+  policy: HookPolicy,
+  timeoutSeconds: z.int().min(1),
+  content: z.string(),
+});
+export type HookView = z.infer<typeof HookView>;
+
+/** Los hooks de un proyecto en `lunasq/hooks/` de la rama base, por punto y en orden de ejecución. */
+export const ProjectHooksView = z.strictObject({
+  baseRef: commitSha,
+  // Error de lunasq/hooks/config; con él, los ajustes mostrados son los defaults.
+  configError: z.string().nullable(),
+  points: z.array(z.strictObject({ point: HookPoint, hooks: z.array(HookView) })),
+});
+export type ProjectHooksView = z.infer<typeof ProjectHooksView>;
+
+/** Una ejecución de hook (evento hook.executed) con la tarea en la que corrió. */
+export const HookExecutionView = z.strictObject({
+  eventId: z.int().min(1),
+  taskId: z.uuid(),
+  taskIntent: z.string(),
+  at: z.date(),
+  ...HookExecutedPayload.shape,
+});
+export type HookExecutionView = z.infer<typeof HookExecutionView>;
+
+export const DEFAULT_HOOK_EXECUTIONS_PER_HOOK = 10;
+
+/** `limit`: a lo más cuántas tareas (las más recientes) por punto y script. */
+export const HookExecutionsQuery = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(100).default(DEFAULT_HOOK_EXECUTIONS_PER_HOOK),
+});
+export type HookExecutionsQuery = z.infer<typeof HookExecutionsQuery>;

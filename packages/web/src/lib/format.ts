@@ -61,3 +61,15 @@ export function formatTokens(usage: UsageTotals): string {
 export function formatCost(cost: number | null): string {
   return cost === null ? "—" : `$${cost.toFixed(2)}`;
 }
+
+/** Duración legible: milisegundos, segundos o minutos. */
+export function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms} ms`;
+  if (ms < 60_000) return `${(Math.round(ms / 100) / 10).toLocaleString("es")} s`;
+  return `${Math.round(ms / 60_000)} min`;
+}
+
+/** Un timeout es un ajuste, no una medida: se muestra exacto, sin redondear a minutos. */
+export function formatTimeout(seconds: number): string {
+  return seconds >= 60 && seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds} s`;
+}
