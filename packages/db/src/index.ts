@@ -12,5 +12,6 @@ export * from "./schema.ts";
 export * from "./specs.ts";
 export * from "./task-prs.ts";
 export * from "./task-transitions.ts";
+export * from "./task-views.ts";
 export * from "./task-worktrees.ts";
 export * from "./tasks.ts";

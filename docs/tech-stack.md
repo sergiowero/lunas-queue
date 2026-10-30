@@ -87,12 +87,12 @@ Cada componente del diseño queda resuelto con piezas de la misma base, sin serv
 | --- | --- |
 | Base | React + Vite + TypeScript |
 | Routing | TanStack Router |
-| Datos del servidor | TanStack Query, con invalidación desde SSE |
-| Componentes y estilos | shadcn/ui sobre Tailwind CSS |
-| Tablas (cola, backlog, Runs) | TanStack Table |
+| Datos del servidor | TanStack Query, con invalidación desde SSE (refresco periódico hasta UW-27, [ADR uw-21-front-end](decisions/uw-21-front-end.md)) |
+| Componentes y estilos | shadcn/ui sobre Tailwind CSS 4 (`class-variance-authority`, `clsx`, `tailwind-merge`) |
+| Tablas (cola, backlog, Runs) | TanStack Table 8.x |
 | DAG de dependencias | React Flow (`@xyflow/react`) con layout automático (dagre) |
 | Diff de versiones de spec | Visor de diff de texto |
-| Render de handoffs y evidencia | Visor de JSON y render de markdown |
+| Render de handoffs y evidencia | Visor de JSON y render de markdown (`react-markdown`, sin HTML crudo) |
 
 ## Estructura del repositorio `lunas-queue`
 
@@ -105,7 +105,7 @@ Monorepo con pnpm workspaces; la regla es que el dominio no depende de nada exte
 | `packages/db` | Esquema Drizzle, migraciones, repositorios, outbox | `schemas`, `domain` |
 | `packages/adapters` | Adapter de herdr (real y fake), adapter de `gh`, adapter de git (lectura de la rama base y commits), runner de procesos (también en un pane de herdr), ejecutor de hooks y gate de tests | `schemas` |
 | `packages/server` | Hono: API, SSE, LunasQ MCP, endpoints OTLP; scheduler, dispatcher y reconciliación; generador de evidencia | `domain`, `db`, `adapters`, `schemas` |
-| `packages/web` | Front end React + Vite; se compila a estáticos que sirve `server` | `schemas` |
+| `packages/web` | Front end React + Vite; se compila a estáticos (`dist/app`) que sirve `server` con `@hono/node-server` | `schemas` (solo tipos) |
 | `packages/cli` | Binario `lunasq`: `start`, `install`, `doctor` | `server` |
 | `assets/skills` | Skills de fase: `refine-task`, `implement-task`, `verify-task`, `deliver-task` | — |
 | `assets/agents` | Definiciones de los 4 subagentes revisores | — |
