@@ -9,6 +9,7 @@ import { type ReactNode, useId, useState } from "react";
 import { Muted, Section } from "../components/section.tsx";
 import { Loading, MutationError, QueryError, StateBadges } from "../components/status.tsx";
 import { SpecVersions } from "../components/task/spec.tsx";
+import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Label, Textarea } from "../components/ui/input.tsx";
@@ -45,6 +46,7 @@ function Item({
       className="flex flex-col gap-3 rounded-md border border-border p-3"
     >
       <header className="flex flex-wrap items-baseline gap-2">
+        {task && <TaskNumber number={task.number} />}
         <Link id={id} to="/tasks/$taskId" params={{ taskId }} className="font-medium underline">
           {task ? taskLabel(task) : taskId}
         </Link>
