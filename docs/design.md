@@ -30,7 +30,7 @@ Siete entidades bastan (más UsageRecord, ver Consumo); la clave es separar la *
 | Entidad | Propósito | Campos clave |
 | --- | --- | --- |
 | Project | Un repo y su configuración; mapea 1:1 a un workspace de herdr | repo, rama base, perfil de agente por fase (kind, modelo, args), límite de concurrencia, comando de tests, hooks por fase (en lunasq/hooks/ del repo), ruta local, bootstrap del worktree |
-| Task | Unidad de trabajo en la cola | intent, tags, prioridad (entero sin signo), estado, sub‑estado, iteración de verificación, branch, ruta del worktree, URL y estado del PR (abierto / mergeado / cerrado), etiqueta de riesgo (read‑only), caused\_by (tarea que originó este bugfix, opcional), usage (read‑only) |
+| Task | Unidad de trabajo en la cola | número (#N, secuencial global), intent, tags, prioridad (entero sin signo), estado, sub‑estado, iteración de verificación, branch, ruta del worktree, URL y estado del PR (abierto / mergeado / cerrado), etiqueta de riesgo (read‑only), caused\_by (tarea que originó este bugfix, opcional), usage (read‑only) |
 | TaskDependency | Arista del DAG | task\_id, depends\_on\_id |
 | Spec | Salida versionada del refinamiento | versión, modelo de dominio (bounded context, glosario, agregados, invariantes, eventos), requerimientos, acceptance criteria, task list, estado de aprobación |
 | Run | Un intento de un agente en una fase | fase, tipo de agente, workspace/pane/nombre en herdr, identidad de sesión del agente (session id nativo o nombre de sesión), run token, inicio, fin, resultado, failure\_reason (texto), handoff (JSON), usage (read‑only) |
@@ -42,6 +42,7 @@ Decisiones de modelado:
 - **Spec versionada.** Cada ronda de refinamiento crea una versión nueva; la aprobación humana se liga a una versión concreta. Implementación y verificación leen siempre la versión aprobada. Versiones, autor, diff y reglas del gate en [ADR 0013](decisions/0013-specs-y-aprobacion.md).
 - **Acceptance criteria como items direccionables.** Cada criterio tiene id, para que el verificador emita un veredicto por criterio (pass / fail / evidencia) y no un booleano global.
 - **Event log como auditoría.** Permite reconstruir por qué una tarea regresó a in progress y alimenta la UI de historial.
+- **Número de tarea (#N).** Además de su UUID, cada tarea recibe al crearse un entero secuencial y global (no por proyecto), inmutable y que no se reutiliza aunque la tarea se cancele. Sirve para identificarla ante personas: título del pane y label del workspace en herdr, notificaciones, UI y menciones `#N` en el intent, que el detalle enlaza a la tarea mencionada. El UUID sigue siendo la identidad en rutas, llaves foráneas, branch y nombre del agente ([ADR 0015](decisions/0015-numero-de-tarea.md)).
 - **Run token y timeouts.** Cada Run tiene un token único que se inyecta al pane; solo el Run activo puede mover la tarea. Las tareas atoradas se detectan con señales de herdr y un timeout por fase, sin heartbeat del agente.
 
 ## Máquina de estados
@@ -200,8 +201,8 @@ El dispatcher es un worker de larga vida con dos entradas (eventos de la BD y ev
 
 1. **Claim.** El scheduler elige la tarea de mayor score del ready set y la reclama de forma atómica en la BD, creando un Run con un token único. Si el claim falla, la tarea ya fue tomada.
 2. **Asegurar workspace del proyecto.** Si no existe en herdr, crearlo; guardar su id en Project.
-3. **Asegurar checkout de la tarea.** Siempre, en todas las fases. La primera vez `worktree create` crea branch y checkout desde la rama base (no es idempotente: antes se consulta `worktree list` y se usa `open` si ya existe; ADR 0004); en fases siguientes y loops de rework `worktree open` reabre el mismo.
-4. **Levantar agente.** Crear pane/tab (con `pane split --env`, que fija las variables del Run en el pane), `agent start` con nombre determinístico (`t<12 hex del task id>-<fase>-<n>`, que cabe en el patrón de 32 caracteres de herdr; [ADR uw-16-dispatcher](decisions/uw-16-dispatcher.md)) y el perfil de esa fase: kind como --kind; modelo y argumentos extra después de --. El nombre determinístico hace la operación idempotente.
+3. **Asegurar checkout de la tarea.** Siempre, en todas las fases. La primera vez `worktree create` crea branch y checkout desde la rama base (no es idempotente: antes se consulta `worktree list` y se usa `open` si ya existe; ADR 0004); en fases siguientes y loops de rework `worktree open` reabre el mismo. El label del workspace es `<proyecto> #N`.
+4. **Levantar agente.** Crear pane/tab (con `pane split --env`, que fija las variables del Run en el pane), `agent start` con nombre determinístico (`t<12 hex del task id>-<fase>-<n>`, que cabe en el patrón de 32 caracteres de herdr; [ADR uw-16-dispatcher](decisions/uw-16-dispatcher.md)) y el perfil de esa fase: kind como --kind; modelo y argumentos extra después de --. El nombre determinístico hace la operación idempotente. El título del pane (`pane report-metadata`) es `LunasQ <fase> #N`; nombre y branch siguen con el UUID.
 5. **Prompt de fase.** Enviar un prompt corto que invoque la skill de la fase y le indique el task id; el agente obtiene el contexto completo vía MCP, no por el prompt.
 6. **Observar.** El Run pasa a running; el dispatcher escucha los cambios de estado del pane en herdr y arranca el timer de la fase.
 7. **Cerrar fase.** La señal primaria es la tool MCP de fin de fase con salida estructurada. Se aplica la transición en la BD, se guarda la identidad de sesión en el Run, se cierra el pane y se libera el slot.
@@ -637,6 +638,7 @@ Resumen de lo ya decidido; cada punto está reflejado en su sección.
 | Concurrencia | Límites configurables; global con default de 5; por proyecto y por tipo de agente opcionales |
 | Preemption | No; una tarea solo toma slots libres |
 | Prioridad | Entero sin signo; mayor número = mayor prioridad |
+| Identificación de tareas | UUID como identidad; número #N secuencial global para personas (herdr, notificaciones, UI, menciones) |
 | Dependencias | Solo bloqueantes; satisfechas con el PR mergeado a la rama base; sin stacked branches |
 | Refinamiento | Espera a que las dependencias estén satisfechas |
 | Detección de merge | Polling con el CLI `gh` en v1 |
