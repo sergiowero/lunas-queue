@@ -182,6 +182,11 @@ export interface HerdrAdapter {
    * `esc`… Sirve para aceptar el diálogo de confianza de carpeta (ADR 0004).
    */
   sendKeys(input: { name: string; keys: string[] }): Promise<void>;
+  /**
+   * Lleva la vista del humano al pane del agente (`agent focus`): así responde un permiso en la
+   * TUI. `agent_not_found` si el agente no existe.
+   */
+  focusAgent(name: string): Promise<HerdrAgent>;
 
   /** Título y tokens del sidebar (task id, fase, iteración). */
   reportMetadata(input: {

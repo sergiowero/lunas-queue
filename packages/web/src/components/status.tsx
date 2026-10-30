@@ -1,5 +1,6 @@
-// Piezas compartidas por las páginas: estado de una tarea, carga y errores de consulta.
+// Piezas compartidas por las páginas: estado de una tarea, carga y errores de consulta y escritura.
 import type { SubState, TaskState } from "@lunasq/schemas";
+import { ApiError } from "../lib/api.ts";
 import { STATE_LABEL, SUB_STATE_LABEL } from "../lib/format.ts";
 import { Badge } from "./ui/badge.tsx";
 
@@ -28,5 +29,23 @@ export function QueryError({ error }: { error: Error }) {
     <p role="alert" className="text-sm text-destructive">
       Error al cargar: {error.message}
     </p>
+  );
+}
+
+/** Error de una escritura, con los issues de validación del servidor si los trae. */
+export function MutationError({ error }: { error: Error }) {
+  const issues = error instanceof ApiError ? error.issues : [];
+  return (
+    <div role="alert" className="text-sm text-destructive">
+      <p>{error.message}</p>
+      {issues.length > 0 && (
+        <ul className="list-disc pl-5 font-mono text-xs">
+          {issues.map((issue, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: los issues pueden repetirse y la lista no se reordena.
+            <li key={i}>{`${issue.path.join(".") || "(raíz)"}: ${issue.message}`}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

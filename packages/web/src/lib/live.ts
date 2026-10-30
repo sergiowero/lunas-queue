@@ -1,6 +1,7 @@
 // Actualización en vivo (ADR uw-21-front-end): el servidor manda `change` por SSE con las tareas que
-// tuvieron eventos y aquí se invalidan sus consultas y las listas. EventSource reconecta solo y
-// manda Last-Event-ID; el refresco periódico del QueryClient queda como red de seguridad.
+// tuvieron eventos y aquí se invalidan sus consultas y las listas, incluida la bandeja. Los bloqueos
+// no dejan eventos y se refrescan solos (ADR uw-27-bandeja). EventSource reconecta solo y manda
+// Last-Event-ID; el refresco periódico del QueryClient queda como red de seguridad.
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
@@ -9,7 +10,14 @@ export const CHANGE_STREAM_URL = "/api/stream";
 export function invalidateChanges(queryClient: QueryClient, taskIds: string[]): void {
   void queryClient.invalidateQueries({ queryKey: ["queue"] });
   void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  invalidateInbox(queryClient);
   for (const id of taskIds) void queryClient.invalidateQueries({ queryKey: ["task", id] });
+}
+
+/** Preguntas y bloqueos; las specs por aprobar salen de ["tasks"]. */
+export function invalidateInbox(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: ["questions"] });
+  void queryClient.invalidateQueries({ queryKey: ["blocked"] });
 }
 
 export function useLiveUpdates(): void {
