@@ -18,11 +18,14 @@ const CONTROL_PORT = Number(process.env.E2E_CONTROL_PORT ?? 7462);
 const WEB_ROOT = fileURLToPath(new URL("../../web/dist/app", import.meta.url));
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
-// La entrega reescribe commits con `git commit-tree`: sin identidad de committer (CI) git aborta.
+// Los commits que hace LunasQ (evidencia, trailers, rebase) necesitan identidad de autor y de
+// committer: en CI no hay config de git y, a diferencia de macOS, git no la deduce del hostname.
 // Sin config global tampoco influyen la firma ni los hooks del git del desarrollador.
 process.env.GIT_CONFIG_GLOBAL = "/dev/null";
-process.env.GIT_COMMITTER_NAME = "LunasQ e2e";
-process.env.GIT_COMMITTER_EMAIL = "e2e@lunasq.test";
+for (const role of ["AUTHOR", "COMMITTER"]) {
+  process.env[`GIT_${role}_NAME`] = "LunasQ e2e";
+  process.env[`GIT_${role}_EMAIL`] = "e2e@lunasq.test";
+}
 
 const root = mkdtempSync(join(tmpdir(), "lunasq-e2e-"));
 const fixture = createFixture(root);

@@ -65,11 +65,27 @@ async function expectBlocked(page: Page, id: string) {
 }
 
 async function waitForState(page: Page, id: string, predicate: (t: TaskView) => boolean) {
-  await expect
-    .poll(async () => predicate((await tasks(page)).find((t) => t.id === id) as TaskView), {
-      timeout: 60_000,
-    })
-    .toBe(true);
+  try {
+    await expect
+      .poll(async () => predicate((await tasks(page)).find((t) => t.id === id) as TaskView), {
+        timeout: 60_000,
+      })
+      .toBe(true);
+  } catch (error) {
+    // Sin esto un fallo de CI solo dice «false»: se agrega dónde quedó la tarea y qué registró el servidor.
+    const task = (await tasks(page)).find((t) => t.id === id);
+    const { errors } = await control<{ errors: string[] }>("/state");
+    const events = (await (await page.request.get(`/api/tasks/${id}/events`)).json()) as {
+      type: string;
+      payload: unknown;
+    }[];
+    const tail = events
+      .slice(-4)
+      .map((e) => `${e.type} ${JSON.stringify(e.payload).slice(0, 300)}`);
+    throw new Error(
+      `${error instanceof Error ? error.message : error}\ntarea: ${task?.state}/${task?.subState}\nservidor: ${errors.join(" | ") || "sin errores"}\n${tail.join("\n")}`,
+    );
+  }
 }
 
 test.describe.configure({ mode: "serial" });
