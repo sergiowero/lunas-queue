@@ -138,6 +138,33 @@ describe("detalle de tarea", () => {
     expect(await block.findByRole("heading", { name: "Run 1" })).toBeTruthy();
   });
 
+  it("el panel Evidencia nace colapsado al volver a una tarea ya visitada", async () => {
+    const { fake, task, dep } = seeded();
+    fake.evidence.set(task.id, "# Evidencia\n\n## Run 1");
+    fake.evidence.set(dep.id, "# Evidencia\n\n## Run 2");
+    const { user, router } = renderApp(`/tasks/${task.id}`, fake);
+    const toggleOf = async () =>
+      (await section("Evidencia")).findByRole("button", { name: "Evidencia" });
+
+    await toggleOf();
+    await router.navigate({ to: "/tasks/$taskId", params: { taskId: dep.id } });
+    const depToggle = await toggleOf();
+    await user.click(depToggle);
+    expect(depToggle.getAttribute("aria-expanded")).toBe("true");
+
+    await router.navigate({ to: "/tasks/$taskId", params: { taskId: task.id } });
+    await waitFor(async () =>
+      expect(screen.getByRole("heading", { name: "Login con email" })).toBeTruthy(),
+    );
+    expect((await toggleOf()).getAttribute("aria-expanded")).toBe("false");
+
+    await router.navigate({ to: "/tasks/$taskId", params: { taskId: dep.id } });
+    await waitFor(async () =>
+      expect(screen.getByRole("heading", { name: "Esquema de usuarios" })).toBeTruthy(),
+    );
+    expect((await toggleOf()).getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("avisa cuando aún no hay archivo de evidencia al expandir el panel", async () => {
     const { fake, task } = seeded();
     const { user } = renderApp(`/tasks/${task.id}`, fake);
