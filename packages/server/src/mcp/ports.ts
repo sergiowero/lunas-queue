@@ -1,8 +1,9 @@
-// Puertos del LunasQ MCP hacia el worktree: el gate de tests y la comprobación de commits. El gate
-// corre en un pane de herdr y deja su resultado en el Event log (test-gate/, UW-11); la
-// comprobación de commits corre comandos de git con el ProcessRunner de adapters.
+// Puertos del LunasQ MCP hacia el worktree: el gate de tests, la comprobación de commits y los
+// hooks de fase. El gate corre en un pane de herdr y deja su resultado en el Event log
+// (test-gate/, UW-11); la comprobación de commits corre comandos de git con el ProcessRunner de
+// adapters; los hooks los corre HookService (hooks/, UW-10).
 import type { ProcessRunner } from "@lunasq/adapters";
-import type { TestGateTrigger } from "@lunasq/schemas";
+import type { HookPoint, HookPointOutcome, TestGateTrigger } from "@lunasq/schemas";
 
 export type TestGateInput = {
   taskId: string;
@@ -37,6 +38,34 @@ export interface CommitVerifier {
   uncommitted(worktreePath: string): Promise<string[]>;
   /** Sha del HEAD del worktree; null si no se puede leer. */
   head(worktreePath: string): Promise<string | null>;
+}
+
+export type PhaseHookInput = {
+  taskId: string;
+  point: HookPoint;
+  runId: string;
+  /** Resultado de la fase para los hooks `after_*` (p. ej. el veredicto). */
+  phaseResult?: string | null;
+};
+
+export type PhaseHookResult = {
+  outcome: HookPointOutcome;
+  /** La tarea pasó a needs_human con `hook_failed`. */
+  escalated: boolean;
+  failedScript: string | null;
+  error: string | null;
+};
+
+/** Hooks de un punto de fase; HookService lo cumple. */
+export interface PhaseHooks {
+  run(input: PhaseHookInput): Promise<PhaseHookResult>;
+}
+
+/** Sin hooks compuestos: cada punto pasa sin correr nada, como un proyecto sin `lunasq/hooks/`. */
+export class NoPhaseHooks implements PhaseHooks {
+  async run(_input: PhaseHookInput): Promise<PhaseHookResult> {
+    return { outcome: "passed", escalated: false, failedScript: null, error: null };
+  }
 }
 
 export const GATE_OUTPUT_LIMIT = 4000;

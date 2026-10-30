@@ -39,6 +39,8 @@ export const ProjectLimits = z.strictObject({
   phaseTimeoutMinutes: z
     .partialRecord(Phase, positiveInt.max(MAX_PHASE_TIMEOUT_MINUTES))
     .optional(),
+  // Reworks del loop de verificación antes de needs_human; sin valor, 3 (ADR 0007).
+  maxVerificationIterations: positiveInt.max(20).optional(),
 });
 export type ProjectLimits = z.infer<typeof ProjectLimits>;
 

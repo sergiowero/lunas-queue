@@ -1,5 +1,12 @@
 // Tests de contrato de cada tool del LunasQ MCP, por el cliente oficial de MCP.
-import { closeRun, createQuestion, listEvents, RunRepository, SpecRepository } from "@lunasq/db";
+import {
+  closeRun,
+  createQuestion,
+  listEvents,
+  ProjectRepository,
+  RunRepository,
+  SpecRepository,
+} from "@lunasq/db";
 import { insertRun, setTaskPosition } from "@lunasq/db/test-helpers";
 import { specContentExample } from "@lunasq/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
@@ -67,6 +74,45 @@ describe("get_task_context", () => {
       previousAttempt: { runId: verify1.id, failureReason: null, handoff: { runId: verify1.id } },
       questions: [{ id: question.id, question: "¿Ok?", status: "open", answer: null }],
     });
+  });
+
+  it("tras un reject, implementación recibe solo los must-fix y no el historial", async () => {
+    const h = mcpHarness();
+    const task = h.task(implementing);
+    const verify1 = insertRun(h.db, task.id, {
+      phase: "verify",
+      iteration: 0,
+      startedAt: new Date(1000),
+    });
+    const reject = handoffFor("verification-reject", verify1);
+    closeRun(h.db, verify1.id, { result: "success", handoff: reject });
+    const run = insertRun(h.db, task.id, { phase: "implement", iteration: 1 });
+    const { call } = await h.connect(run.runToken);
+    const { body } = await call("get_task_context");
+    expect(body).toMatchObject({
+      verificationHistory: [],
+      rework: { runId: verify1.id, iteration: 0, mustFix: reject.body.mustFix },
+    });
+  });
+
+  it("sin reject previo, o con un pass como último veredicto, no hay rework", async () => {
+    const h = mcpHarness();
+    const task = h.task(implementing);
+    const verify1 = insertRun(h.db, task.id, { phase: "verify", startedAt: new Date(1000) });
+    closeRun(h.db, verify1.id, {
+      result: "success",
+      handoff: handoffFor("verification-pass", verify1),
+    });
+    // Un conflicto en la entrega devuelve a implementación sin rework del verificador.
+    const run = insertRun(h.db, task.id, { phase: "implement" });
+    const { call } = await h.connect(run.runToken);
+    expect((await call("get_task_context")).body).toMatchObject({ rework: null });
+  });
+
+  it("verificación no recibe rework", async () => {
+    const h = mcpHarness();
+    const { call } = await h.session("verify", verifying);
+    expect((await call("get_task_context")).body).toMatchObject({ rework: null });
   });
 
   it("repetirla no mueve la marca de lectura", async () => {
@@ -229,6 +275,52 @@ describe("submit_for_verification", () => {
     });
   });
 
+  it("corre after_implementation y before_verification antes del gate", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    const order: string[] = [];
+    h.testGate.run = async (input) => {
+      order.push(`gate:${h.commitVerifier.headSha}`);
+      return { passed: input.command !== null, output: "" };
+    };
+    // Un hook que commitea mueve el HEAD: el gate corre sobre el commit nuevo.
+    h.phaseHooks.onRun = (input) => {
+      order.push(input.point);
+      if (input.point === "before_verification") h.commitVerifier.headSha = "d".repeat(40);
+    };
+    await call("submit_for_verification", { handoff: handoffFor("implementation", run) });
+    expect(order).toEqual([
+      "after_implementation",
+      "before_verification",
+      `gate:${"d".repeat(40)}`,
+    ]);
+    expect(h.phaseHooks.calls.map((c) => c.runId)).toEqual([run.id, run.id]);
+    expect(h.taskOf(task.id)).toMatchObject({ state: "verification", subState: "queued" });
+  });
+
+  it("un hook bloqueado detiene la llamada antes del gate y no transiciona", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    h.phaseHooks.results.after_implementation = {
+      outcome: "blocked",
+      escalated: true,
+      failedScript: "10-lint",
+      error: "lint en rojo",
+    };
+    const result = await call("submit_for_verification", {
+      handoff: handoffFor("implementation", run),
+    });
+    expect(result.body).toMatchObject({
+      error: "hook_blocked",
+      message: expect.stringContaining("needs_human"),
+      output: "lint en rojo",
+    });
+    expect(h.phaseHooks.calls.map((c) => c.point)).toEqual(["after_implementation"]);
+    expect(h.testGate.calls).toHaveLength(0);
+    expect(h.taskOf(task.id)).toMatchObject(implementing);
+    expect(runOf(h, run.id)?.endedAt).toBeNull();
+  });
+
   it("una suite en rojo bloquea la transición aunque el agente diga lo contrario", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
@@ -362,7 +454,7 @@ describe("submit_verdict", () => {
   it("reject vuelve a in_progress con iteración + 1 y cierra el Run", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
-    const handoff = handoffFor("verification-reject", run);
+    const handoff = h.verdictFor("verification-reject", run);
     const result = await call("submit_verdict", { handoff });
     expect(result).toEqual({ isError: false, body: { verdict: "reject" } });
     expect(h.taskOf(task.id)).toMatchObject({
@@ -376,7 +468,7 @@ describe("submit_verdict", () => {
   it("pass guarda el veredicto con el Run abierto y no transiciona: la entrega emite el pass", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
-    const handoff = handoffFor("verification-pass", run);
+    const handoff = h.verdictFor("verification-pass", run);
     expect(await call("submit_verdict", { handoff })).toEqual({
       isError: false,
       body: { verdict: "pass" },
@@ -388,7 +480,7 @@ describe("submit_verdict", () => {
     expect((await call("submit_verdict", { handoff })).isError).toBe(false);
     expect(h.testGate.calls).toHaveLength(1);
     const reject = await call("submit_verdict", {
-      handoff: handoffFor("verification-reject", run),
+      handoff: h.verdictFor("verification-reject", run),
     });
     expect(reject.body).toMatchObject({ error: "verdict_already_recorded" });
     expect(h.taskOf(task.id)).toMatchObject(verifying);
@@ -397,7 +489,7 @@ describe("submit_verdict", () => {
   it("antes de aceptar un pass, LunasQ corre el gate de tests en el worktree", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
-    await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    await call("submit_verdict", { handoff: h.verdictFor("verification-pass", run) });
     expect(h.testGate.calls).toEqual([
       {
         taskId: task.id,
@@ -413,7 +505,9 @@ describe("submit_verdict", () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     h.testGate.result = { passed: false, output: "FAIL order.test.ts" };
-    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    const result = await call("submit_verdict", {
+      handoff: h.verdictFor("verification-pass", run),
+    });
     expect(result).toMatchObject({
       isError: true,
       body: { error: "test_gate_failed", output: "FAIL order.test.ts" },
@@ -421,18 +515,25 @@ describe("submit_verdict", () => {
     expect(h.taskOf(task.id)).toMatchObject(verifying);
     expect(runOf(h, run.id)).toMatchObject({ handoff: null, endedAt: null });
 
-    // El Run sigue abierto: el verificador puede corregir su veredicto a reject.
-    const reject = await call("submit_verdict", {
-      handoff: handoffFor("verification-reject", run),
-    });
-    expect(reject.body).toEqual({ verdict: "reject" });
+    // El Run sigue abierto: el verificador puede corregir su veredicto a reject. Los 4 revisores
+    // ya corrieron en este Run, así que el reject los reporta a todos.
+    const reject = h.verdictFor("verification-reject", run);
+    const ran = { status: "ran", findings: [] };
+    reject.body.reviewers = {
+      ...(reject.body.reviewers as object),
+      "lunasq-ux-reviewer": ran,
+      "lunasq-ui-reviewer": ran,
+    };
+    expect((await call("submit_verdict", { handoff: reject })).body).toEqual({ verdict: "reject" });
   });
 
   it("un pass con el worktree sucio se rechaza antes del gate", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     h.commitVerifier.dirty = ["src/order.ts"];
-    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    const result = await call("submit_verdict", {
+      handoff: h.verdictFor("verification-pass", run),
+    });
     expect(result.body).toMatchObject({
       error: "dirty_worktree",
       issues: [{ path: "src/order.ts" }],
@@ -446,7 +547,9 @@ describe("submit_verdict", () => {
     const { run, call } = await h.ready("verify", verifying);
     // El verificador commiteó algo propio, p. ej. borrar los tests en rojo.
     h.commitVerifier.headSha = "b".repeat(40);
-    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    const result = await call("submit_verdict", {
+      handoff: h.verdictFor("verification-pass", run),
+    });
     expect(result.body).toMatchObject({ error: "head_changed" });
     expect(h.testGate.calls).toHaveLength(0);
     expect(runOf(h, run.id)?.handoff).toBeNull();
@@ -454,7 +557,7 @@ describe("submit_verdict", () => {
     // Vale el último gate en verde: tras un rework, el HEAD nuevo.
     h.gated(run.taskId, "b".repeat(40));
     expect(
-      (await call("submit_verdict", { handoff: handoffFor("verification-pass", run) })).body,
+      (await call("submit_verdict", { handoff: h.verdictFor("verification-pass", run) })).body,
     ).toEqual({ verdict: "pass" });
   });
 
@@ -464,7 +567,9 @@ describe("submit_verdict", () => {
     const run = insertRun(h.db, t.id, { phase: "verify" });
     const { call } = await h.connect(run.runToken);
     await call("get_task_context");
-    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    const result = await call("submit_verdict", {
+      handoff: h.verdictFor("verification-pass", run),
+    });
     expect(result.body).toMatchObject({ error: "head_changed" });
   });
 
@@ -475,7 +580,9 @@ describe("submit_verdict", () => {
       h.commitVerifier.headSha = "c".repeat(40);
       return { passed: true, output: "" };
     };
-    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    const result = await call("submit_verdict", {
+      handoff: h.verdictFor("verification-pass", run),
+    });
     expect(result.body).toMatchObject({ error: "head_changed" });
     expect(runOf(h, run.id)?.handoff).toBeNull();
   });
@@ -484,7 +591,7 @@ describe("submit_verdict", () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     h.commitVerifier.dirty = ["src/order.ts"];
-    await call("submit_verdict", { handoff: handoffFor("verification-reject", run) });
+    await call("submit_verdict", { handoff: h.verdictFor("verification-reject", run) });
     expect(h.testGate.calls).toHaveLength(0);
   });
 
@@ -499,7 +606,7 @@ describe("submit_verdict", () => {
         release = resolve;
       });
     };
-    const handoff = handoffFor("verification-pass", run);
+    const handoff = h.verdictFor("verification-pass", run);
     const first = call("submit_verdict", { handoff });
     await vi.waitFor(() => expect(started).toBe(1));
     expect((await call("submit_verdict", { handoff })).body).toMatchObject({
@@ -517,7 +624,9 @@ describe("submit_verdict", () => {
       closeRun(h.db, run.id, { result: "failure", failureReason: "timeout" });
       return { passed: true, output: "" };
     };
-    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    const result = await call("submit_verdict", {
+      handoff: h.verdictFor("verification-pass", run),
+    });
     expect(result.body).toMatchObject({ error: "invalid_run_token" });
     expect(runOf(h, run.id)).toMatchObject({ handoff: null, result: "failure" });
   });
@@ -525,7 +634,7 @@ describe("submit_verdict", () => {
   it("tras un pass, el token ya no puede preguntar ni reportar fallo", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
-    await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    await call("submit_verdict", { handoff: h.verdictFor("verification-pass", run) });
     for (const [tool, args] of [
       ["ask_human", { question: "¿Algo más?" }],
       ["report_failure", { reason: "me arrepentí" }],
@@ -540,7 +649,7 @@ describe("submit_verdict", () => {
   it("un veredicto que no cubre todos los criterios de la spec se rechaza", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
-    const handoff = handoffFor("verification-pass", run);
+    const handoff = h.verdictFor("verification-pass", run);
     handoff.body.criteriaVerdicts = (handoff.body.criteriaVerdicts as unknown[]).slice(0, 1);
     const result = await call("submit_verdict", { handoff });
     expect(result.body).toMatchObject({
@@ -552,7 +661,7 @@ describe("submit_verdict", () => {
   it("un handoff inválido se rechaza con sus errores", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
-    const handoff = handoffFor("verification-pass", run);
+    const handoff = h.verdictFor("verification-pass", run);
     handoff.body.riskLabel = "altísimo";
     const result = await call("submit_verdict", { handoff });
     expect(result.body).toMatchObject({
@@ -564,8 +673,150 @@ describe("submit_verdict", () => {
   it("en la iteración máxima un reject escala a needs_human", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", { ...verifying, verificationIteration: 3 });
-    await call("submit_verdict", { handoff: handoffFor("verification-reject", run) });
+    await call("submit_verdict", { handoff: h.verdictFor("verification-reject", run) });
     expect(h.taskOf(task.id)).toMatchObject({ state: "needs_human" });
+  });
+});
+
+describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)", () => {
+  const verdictEvents = (h: ReturnType<typeof mcpHarness>, taskId: string) =>
+    listEvents(h.db, taskId).filter((e) => e.type === "verification.verdict_recorded");
+
+  it("rechaza un revisor reportado que no aparece en los hooks del Run, sin efectos", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    // Solo corrió el revisor de seguridad; el veredicto dice que corrió también el de código.
+    h.reviewersRan(run.id, ["lunasq-security-reviewer"]);
+    const result = await call("submit_verdict", {
+      handoff: handoffFor("verification-reject", run),
+    });
+    expect(result).toMatchObject({
+      isError: true,
+      body: {
+        error: "reviewer_evidence_mismatch",
+        issues: [{ path: "body.reviewers.lunasq-code-reviewer" }],
+      },
+    });
+    expect(h.taskOf(task.id)).toMatchObject(verifying);
+    expect(runOf(h, run.id)).toMatchObject({ handoff: null, endedAt: null });
+    expect(h.testGate.calls).toHaveLength(0);
+    expect(h.phaseHooks.calls).toHaveLength(0);
+  });
+
+  it("rechaza un revisor omitido que sí corrió y terminó en el Run", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("verify", verifying);
+    h.reviewersRan(run.id, ["lunasq-ux-reviewer"]);
+    const result = await call("submit_verdict", {
+      handoff: h.verdictFor("verification-reject", run),
+    });
+    expect(result.body).toMatchObject({
+      error: "reviewer_evidence_mismatch",
+      issues: [{ path: "body.reviewers.lunasq-ux-reviewer" }],
+    });
+  });
+
+  it("los hooks de otro Run no cuentan como evidencia", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    const other = insertRun(h.db, task.id, { phase: "verify", endedAt: new Date() });
+    h.reviewersRan(other.id, ["lunasq-security-reviewer", "lunasq-code-reviewer"]);
+    const result = await call("submit_verdict", {
+      handoff: handoffFor("verification-reject", run),
+    });
+    expect(result.body).toMatchObject({ error: "reviewer_evidence_mismatch" });
+  });
+
+  it("un reject fija la etiqueta de riesgo y publica el veredicto en el mismo paso", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    await call("submit_verdict", { handoff: h.verdictFor("verification-reject", run) });
+    expect(h.taskOf(task.id)).toMatchObject({ riskLabel: "medium", verificationIteration: 1 });
+    expect(verdictEvents(h, task.id).map((e) => e.payload)).toEqual([
+      {
+        runId: run.id,
+        verdict: "reject",
+        iteration: 0,
+        riskLabel: "medium",
+        mustFix: 1,
+        refuted: 0,
+        skippedReviewers: ["lunasq-ux-reviewer", "lunasq-ui-reviewer"],
+      },
+    ]);
+  });
+
+  it("un pass fija la etiqueta de riesgo, publica el veredicto y repetirlo no lo duplica", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    const handoff = h.verdictFor("verification-pass", run);
+    await call("submit_verdict", { handoff });
+    await call("submit_verdict", { handoff });
+    expect(h.taskOf(task.id)).toMatchObject({ ...verifying, riskLabel: "low" });
+    expect(verdictEvents(h, task.id).map((e) => e.payload)).toEqual([
+      expect.objectContaining({ verdict: "pass", riskLabel: "low", refuted: 1 }),
+    ]);
+  });
+
+  it("el tope de iteraciones sale de la config del proyecto", async () => {
+    const h = mcpHarness();
+    new ProjectRepository(h.db).update(h.project.id, { limits: { maxVerificationIterations: 1 } });
+    const first = await h.ready("verify", verifying);
+    await first.call("submit_verdict", {
+      handoff: h.verdictFor("verification-reject", first.run),
+    });
+    expect(h.taskOf(first.task.id)).toMatchObject({
+      state: "in_progress",
+      verificationIteration: 1,
+    });
+
+    const second = await h.ready("verify", { ...verifying, verificationIteration: 1 });
+    await second.call("submit_verdict", {
+      handoff: h.verdictFor("verification-reject", second.run),
+    });
+    expect(h.taskOf(second.task.id)).toMatchObject({ state: "needs_human", subState: null });
+  });
+
+  it("corre after_verification con el veredicto antes de registrarlo", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    await call("submit_verdict", { handoff: h.verdictFor("verification-reject", run) });
+    expect(h.phaseHooks.calls).toEqual([
+      { taskId: task.id, point: "after_verification", runId: run.id, phaseResult: "reject" },
+    ]);
+  });
+
+  it("after_verification corre después del gate del pass", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("verify", verifying);
+    const order: string[] = [];
+    h.testGate.run = async () => {
+      order.push("gate");
+      return { passed: true, output: "" };
+    };
+    h.phaseHooks.onRun = (input) => order.push(input.point);
+    await call("submit_verdict", { handoff: h.verdictFor("verification-pass", run) });
+    expect(order).toEqual(["gate", "after_verification"]);
+  });
+
+  it("un after_verification bloqueado no registra el veredicto", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    h.phaseHooks.results.after_verification = {
+      outcome: "blocked",
+      escalated: true,
+      failedScript: "10-notify",
+      error: null,
+    };
+    const result = await call("submit_verdict", {
+      handoff: h.verdictFor("verification-reject", run),
+    });
+    expect(result.body).toMatchObject({
+      error: "hook_blocked",
+      message: expect.stringContaining("10-notify"),
+    });
+    expect(runOf(h, run.id)).toMatchObject({ handoff: null, endedAt: null });
+    expect(verdictEvents(h, task.id)).toEqual([]);
+    expect(h.taskOf(task.id)?.riskLabel).toBeNull();
   });
 });
 

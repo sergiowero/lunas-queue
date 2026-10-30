@@ -23,6 +23,8 @@ import {
   type SchedulerConfig,
   type StatePosition,
   TASK_TRANSITIONED,
+  VERDICT_RECORDED,
+  VerdictRecordedPayload,
 } from "@lunasq/schemas";
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
@@ -220,6 +222,22 @@ export class RunRepository {
       .map((r) => r.handoff);
   }
 
+  /** El Run más nuevo de la fase con handoff guardado, con su iteración; null si no hay. */
+  latestHandoff(
+    taskId: string,
+    phase: Phase,
+  ): { runId: string; iteration: number; handoff: unknown } | null {
+    return (
+      this.db
+        .select({ runId: runs.id, iteration: runs.iteration, handoff: runs.handoff })
+        .from(runs)
+        .where(and(eq(runs.taskId, taskId), eq(runs.phase, phase), isNotNull(runs.handoff)))
+        .orderBy(desc(runs.startedAt), desc(sql`rowid`))
+        .limit(1)
+        .get() ?? null
+    );
+  }
+
   /** El último Run cerrado de la fase, sin contar `exceptRunId`: el intento anterior. */
   previousRun(taskId: string, phase: Phase, exceptRunId: string): RunRow | null {
     return (
@@ -362,6 +380,21 @@ export function closeRun(
     .returning({ id: runs.id })
     .all();
   return closed.length > 0;
+}
+
+/**
+ * Registra el veredicto del approver (ADR uw-23-verificacion): fija la etiqueta de riesgo de la
+ * tarea y agrega `verification.verdict_recorded` al Event log y al outbox. Corre dentro de la
+ * transacción de `submit_verdict`.
+ */
+export function recordVerdict(db: Writer, taskId: string, payload: VerdictRecordedPayload): void {
+  const parsed = VerdictRecordedPayload.parse(payload);
+  db.update(tasks).set({ riskLabel: parsed.riskLabel }).where(eq(tasks.id, taskId)).run();
+  appendEvent(
+    db,
+    { taskId, type: VERDICT_RECORDED, actor: "agent", payload: parsed },
+    { publish: true },
+  );
 }
 
 /**

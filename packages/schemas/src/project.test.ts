@@ -73,8 +73,12 @@ describe("ProjectLimits", () => {
     expect(ProjectLimits.parse({})).toEqual({});
   });
 
-  it("acepta concurrencia y timeout por fase", () => {
-    const limits = { concurrency: 2, phaseTimeoutMinutes: { implement: 60 } };
+  it("acepta concurrencia, timeout por fase y tope de iteraciones", () => {
+    const limits = {
+      concurrency: 2,
+      phaseTimeoutMinutes: { implement: 60 },
+      maxVerificationIterations: 5,
+    };
     expect(ProjectLimits.parse(limits)).toEqual(limits);
   });
 
@@ -84,6 +88,8 @@ describe("ProjectLimits", () => {
     { phaseTimeoutMinutes: { verify: 0 } },
     { phaseTimeoutMinutes: { review: 10 } },
     { global: 5 },
+    { maxVerificationIterations: 0 },
+    { maxVerificationIterations: 21 },
   ])("rechaza %j", (limits) => {
     expect(ProjectLimits.safeParse(limits).success).toBe(false);
   });
