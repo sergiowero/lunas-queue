@@ -89,6 +89,23 @@ describe("actualización en vivo por SSE", () => {
     expect(source?.closed).toBe(true);
   });
 
+  it("una tarea que sale de In progress desaparece de la pestaña En curso", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const fake = new FakeApi();
+    const project = fake.addProject();
+    const task = fake.addTask(project.id, { intent: "Saldrá de curso" });
+    fake.transition(task.id, "in_progress", "running");
+    fake.addTask(project.id, { intent: "Sigue en curso", state: "in_progress", subState: "queued" });
+    renderApp("/in-progress", fake);
+    await screen.findByText("Saldrá de curso");
+
+    fake.transition(task.id, "verification", "queued");
+    const source = FakeEventSource.instances.find((s) => s.url === CHANGE_STREAM_URL);
+    source?.emit("change", JSON.stringify({ taskIds: [task.id] }));
+    await waitFor(() => expect(screen.queryByText("Saldrá de curso")).toBeNull());
+    expect(screen.getByText("Sigue en curso")).toBeTruthy();
+  });
+
   it("un change trae a la bandeja la pregunta nueva", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
