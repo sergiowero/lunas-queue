@@ -1,7 +1,9 @@
 // Lógica de las tools del LunasQ MCP, sin transporte (docs/design.md §MCPs y skills, ADR
 // uw-15-mcp-tools). Cada llamada pasa por el mismo orden de guardas: run token de un Run activo,
 // tool permitida en la fase del Run y get_task_context ya leído. Las tools de salida escriben el
-// handoff, el cierre del Run y la transición de la tarea en una sola transacción IMMEDIATE.
+// handoff, el cierre del Run y la transición de la tarea en una sola transacción IMMEDIATE. La
+// fase de verificación (ADR uw-23-verificacion) agrega los hooks de fase, la evidencia de los
+// revisores, el tope de iteraciones del proyecto y la etiqueta de riesgo.
 import {
   appendChecklist,
   applyTransition,
@@ -15,19 +17,24 @@ import {
   ProjectRepository,
   RunRepository,
   type RunRow,
+  RunSubagentRepository,
+  recordVerdict,
   SpecRepository,
   TaskRepository,
   type TransitionTaskInput,
   type Tx,
 } from "@lunasq/db";
+import { checkReviewerEvidence, maxVerificationIterations } from "@lunasq/domain";
 import {
   type AskHumanInput,
   type ChecklistItem,
   type Handoff,
   type HandoffError,
   type HandoffPhase,
+  type HookPoint,
   type Phase,
   parseHandoff,
+  REVIEWER_NAMES,
   type ReportFailureInput,
   type Spec,
   type TaskContext,
@@ -36,7 +43,7 @@ import {
   type TestGateTrigger,
   type UpdateChecklistInput,
 } from "@lunasq/schemas";
-import type { CommitVerifier, TestGate } from "./ports.ts";
+import type { CommitVerifier, PhaseHooks, TestGate } from "./ports.ts";
 
 export const TOOL_NAMES = [
   "get_task_context",
@@ -81,6 +88,10 @@ export type McpErrorCode =
   // Un pass sobre un HEAD distinto del que pasó el gate de submit_for_verification.
   | "head_changed"
   | "verdict_already_recorded"
+  // Un revisor reportado que no aparece en los hooks del Run, u omitido que sí corrió.
+  | "reviewer_evidence_mismatch"
+  // Un hook de fase con política block falló: la tarea pasó a needs_human.
+  | "hook_blocked"
   | "no_worktree"
   // La máquina de estados rechazó la transición (estado de la tarea, guard o actor).
   | "transition_rejected";
@@ -120,6 +131,7 @@ export interface McpServiceDeps {
   db: LunasqDatabase;
   testGate: TestGate;
   commitVerifier: CommitVerifier;
+  phaseHooks: PhaseHooks;
 }
 
 export class LunasqMcpService {
@@ -130,6 +142,8 @@ export class LunasqMcpService {
   readonly #tasks: TaskRepository;
   readonly #testGate: TestGate;
   readonly #commits: CommitVerifier;
+  readonly #hooks: PhaseHooks;
+  readonly #subagents: RunSubagentRepository;
   // Runs con un gate de tests en curso: un reintento no lanza una segunda suite en paralelo.
   readonly #gating = new Set<string>();
 
@@ -141,6 +155,8 @@ export class LunasqMcpService {
     this.#tasks = new TaskRepository(deps.db);
     this.#testGate = deps.testGate;
     this.#commits = deps.commitVerifier;
+    this.#hooks = deps.phaseHooks;
+    this.#subagents = new RunSubagentRepository(deps.db);
   }
 
   /** Guardas comunes: Run activo, tool de su fase y contexto leído (salvo get_task_context). */
@@ -201,7 +217,12 @@ export class LunasqMcpService {
           : null,
       implementation:
         this.#storedHandoffs(task.id, "implement").filter(isImplementation).at(-1) ?? null,
-      verificationHistory: this.#storedHandoffs(task.id, "verify").filter(isVerification),
+      // El implementador recibe solo los must-fix del último reject; el historial es del verificador.
+      verificationHistory:
+        run.phase === "verify"
+          ? this.#storedHandoffs(task.id, "verify").filter(isVerification)
+          : [],
+      rework: run.phase === "implement" ? this.#rework(task.id) : null,
       previousAttempt: previous
         ? {
             runId: previous.id,
@@ -298,6 +319,9 @@ export class LunasqMcpService {
 
     const { task, project } = this.#taskAndProject(run);
     if (!task.worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
+    // Tras un hook bloqueado la tarea ya escaló: un reintento no vuelve a correr hooks ni gate.
+    const moved = notRunning(task, "in_progress");
+    if (moved) return moved;
 
     const worktreePath = task.worktreePath;
     const rejected = await this.#gated(run, () =>
@@ -339,10 +363,25 @@ export class LunasqMcpService {
     );
     if (!coverage.ok) return coverage;
 
-    // Antes de aceptar un pass, LunasQ vuelve a correr la suite. Si el Run ya registró un
-    // veredicto, la transacción decide (idempotente o verdict_already_recorded) sin otra suite.
-    if (handoff.body.verdict === "pass" && this.#runs.get(run.id)?.handoff === null) {
-      const rejected = await this.#gated(run, () => this.#checkPass(run));
+    // Si el Run ya registró un veredicto, la transacción decide (idempotente o
+    // verdict_already_recorded) sin volver a comprobar evidencia, correr la suite ni los hooks.
+    if (this.#runs.get(run.id)?.handoff === null) {
+      // Tras un hook bloqueado la tarea ya escaló: un reintento no vuelve a correr hooks ni gate.
+      const moved = notRunning(this.#taskAndProject(run).task, "verification");
+      if (moved) return moved;
+      const issues = checkReviewerEvidence(handoff.body, this.#subagents.forRun(run.id));
+      if (issues.length > 0) {
+        return fail(
+          "reviewer_evidence_mismatch",
+          "los revisores del veredicto no coinciden con los registrados por los hooks del Run",
+          { issues },
+        );
+      }
+      const rejected = await this.#gated(run, async () => {
+        // Antes de aceptar un pass, LunasQ vuelve a correr la suite.
+        const pass = handoff.body.verdict === "pass" ? await this.#checkPass(run) : null;
+        return pass ?? (await this.#runHooks(run, "after_verification", handoff.body.verdict));
+      });
       if (rejected) return rejected;
     }
 
@@ -358,22 +397,37 @@ export class LunasqMcpService {
           fail("verdict_already_recorded", "este Run ya registró un veredicto distinto"),
         );
       }
-      if (handoff.body.verdict === "reject") {
+      const { body } = handoff;
+      const summary = {
+        runId: run.id,
+        verdict: body.verdict,
+        iteration: run.iteration,
+        riskLabel: body.riskLabel,
+        mustFix: body.mustFix.length,
+        refuted: body.refuted.length,
+        skippedReviewers: REVIEWER_NAMES.filter((n) => body.reviewers[n].status === "skipped"),
+      };
+      if (body.verdict === "reject") {
+        const { project } = this.#taskAndProject(run);
         this.#close(tx, run, { result: "success", handoff });
+        // Con el tope del proyecto alcanzado, la máquina de estados manda la tarea a needs_human.
         this.#transition(tx, {
           taskId: run.taskId,
           actor: "agent",
-          command: { type: "verdict_rework" },
+          command: { type: "verdict_rework", maxIterations: maxVerificationIterations(project) },
           expected: { state: "verification", subState: "running" },
         });
+        recordVerdict(tx, run.taskId, summary);
         return { ok: true, data: { verdict: "reject" } };
       }
-      // Pass: el Run sigue abierto y la entrega (UW-26) emite verdict_pass tras crear el PR.
+      // Pass: el Run sigue abierto y la entrega (UW-26) emite verdict_pass tras crear el PR; la
+      // arranca el evento verification.verdict_recorded.
       const task = this.#tasks.get(run.taskId);
       if (task?.state !== "verification" || task.subState !== "running") {
         throw new Rejected(fail("transition_rejected", "la tarea no está en verification/running"));
       }
       this.#runs.recordHandoff(run.id, handoff);
+      recordVerdict(tx, run.taskId, summary);
       return { ok: true, data: { verdict: "pass" } };
     });
   }
@@ -537,7 +591,44 @@ export class LunasqMcpService {
         })),
       });
     }
+    // Los hooks corren antes del gate: así la suite prueba el HEAD con lo que commiteen y el
+    // verificador se despacha cuando ya terminaron.
+    for (const point of ["after_implementation", "before_verification"] as const) {
+      const blocked = await this.#runHooks(run, point);
+      if (blocked) return blocked;
+    }
     return this.#runGate(run, worktreePath, project, "submit_for_verification");
+  }
+
+  /** Hooks del punto; null si no bloqueó. Un punto bloqueado ya escaló la tarea (HookService). */
+  async #runHooks(
+    run: RunRow,
+    point: HookPoint,
+    phaseResult?: string,
+  ): Promise<Extract<Outcome<never>, { ok: false }> | null> {
+    const result = await this.#hooks.run({
+      taskId: run.taskId,
+      point,
+      runId: run.id,
+      ...(phaseResult === undefined ? {} : { phaseResult }),
+    });
+    if (result.outcome !== "blocked") return null;
+    const where = result.failedScript ? ` en ${result.failedScript}` : "";
+    return fail(
+      "hook_blocked",
+      `el punto ${point} bloqueó${where}${result.escalated ? ": la tarea pasó a needs_human" : ""}`,
+      result.error ? { output: result.error } : {},
+    );
+  }
+
+  /** Must-fix del último veredicto si fue reject; null si no hay o si el último fue pass. */
+  #rework(taskId: string): TaskContext["rework"] {
+    const latest = this.#runs.latestHandoff(taskId, "verify");
+    const handoff = latest ? storedHandoff(latest.handoff) : undefined;
+    if (!latest || !handoff || !isVerification(handoff) || handoff.body.verdict !== "reject") {
+      return null;
+    }
+    return { runId: latest.runId, iteration: latest.iteration, mustFix: handoff.body.mustFix };
   }
 
   #taskAndProject(run: RunRow) {
@@ -584,6 +675,15 @@ const staleRun = () =>
     "invalid_run_token",
     "el Run se cerró mientras corría la llamada: esta sesión ya no es la activa",
   );
+
+/** Rechazo sin efectos si la tarea ya no está en `<state>/running` (p. ej. escaló a needs_human). */
+function notRunning(task: { state: string; subState: string | null }, state: string) {
+  if (task.state === state && task.subState === "running") return null;
+  return fail(
+    "transition_rejected",
+    `la tarea está en ${task.state}${task.subState ? `/${task.subState}` : ""}, no en ${state}/running`,
+  );
+}
 
 function storedHandoff(value: unknown): Handoff | undefined {
   const parsed = parseHandoff(value);

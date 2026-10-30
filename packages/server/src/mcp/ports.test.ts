@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ShellProcessRunner } from "@lunasq/adapters";
 import { afterEach, describe, expect, it } from "vitest";
-import { GitCommitVerifier, tailOf } from "./ports.ts";
+import type { HookService } from "../hooks/service.ts";
+import { GitCommitVerifier, type PhaseHooks, tailOf } from "./ports.ts";
+
+// HookService es lo que la composición del servidor pasa como PhaseHooks: si deja de cumplir el
+// puerto, el typecheck falla aquí y no recién en UW-29.
+const _hookServiceIsPhaseHooks = (service: HookService): PhaseHooks => service;
+void _hookServiceIsPhaseHooks;
 
 const dirs: string[] = [];
 afterEach(() => {

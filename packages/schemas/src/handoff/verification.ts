@@ -10,6 +10,7 @@ export const Finding = z.strictObject({
   evidence: Text,
   criterionId: CriterionId.optional(),
 });
+export type Finding = z.infer<typeof Finding>;
 
 export const ReviewerReport = z.discriminatedUnion(
   "status",
@@ -37,9 +38,14 @@ export const Reviewers = z.strictObject({
   "lunasq-code-reviewer": ReviewerReport,
 });
 export const REVIEWER_NAMES = Reviewers.keyof().options;
+export type ReviewerName = (typeof REVIEWER_NAMES)[number];
 
 // Quién originó un hallazgo consolidado: un revisor o el propio approver.
 export const FindingSource = z.enum([...REVIEWER_NAMES, "approver"]);
+
+// Hallazgo que el implementador debe corregir, con el revisor (o el approver) que lo originó.
+export const MustFixFinding = Finding.extend({ source: FindingSource });
+export type MustFixFinding = z.infer<typeof MustFixFinding>;
 
 export const VerificationBody = z
   .strictObject({
@@ -53,7 +59,7 @@ export const VerificationBody = z
       50,
     ).min(1),
     reviewers: Reviewers,
-    mustFix: list(Finding.extend({ source: FindingSource })),
+    mustFix: list(MustFixFinding),
     refuted: list(z.strictObject({ finding: Finding, reason: Text, source: FindingSource })),
     riskLabel: RiskLabel,
   })
@@ -90,6 +96,8 @@ export const VerificationBody = z
       });
     }
   });
+
+export type VerificationBody = z.infer<typeof VerificationBody>;
 
 export const VerificationHandoff = z.strictObject({
   ...envelopeShape,

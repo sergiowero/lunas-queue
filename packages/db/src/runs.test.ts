@@ -1,5 +1,10 @@
 import { agentName } from "@lunasq/domain";
-import { SchedulerConfig, type SchedulerConfigInput, TASK_TRANSITIONED } from "@lunasq/schemas";
+import {
+  SchedulerConfig,
+  type SchedulerConfigInput,
+  TASK_TRANSITIONED,
+  VERDICT_RECORDED,
+} from "@lunasq/schemas";
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { migrateDatabase, openDatabase } from "./client.ts";
@@ -15,8 +20,9 @@ import {
   latestChecklist,
   listQuestions,
   RunRepository,
+  recordVerdict,
 } from "./runs.ts";
-import { events, tasks } from "./schema.ts";
+import { events, outbox, tasks } from "./schema.ts";
 import { transitionTask } from "./task-transitions.ts";
 import {
   freshDatabase,
@@ -86,6 +92,30 @@ describe("RunRepository: lo que usa el LunasQ MCP", () => {
     closeRun(db, second.id, { result: "success", handoff: { n: 2 } });
     expect(repo.handoffs(task.id, "verify")).toEqual([{ n: 1 }, { n: 2 }]);
     expect(repo.handoffs(task.id, "implement")).toEqual([]);
+  });
+
+  it("latestHandoff devuelve el último Run de la fase con handoff, con su iteración", () => {
+    const { db, task, repo } = mcpSetup();
+    expect(repo.latestHandoff(task.id, "verify")).toBeNull();
+    const first = insertRun(db, task.id, {
+      phase: "verify",
+      iteration: 0,
+      startedAt: new Date(1000),
+    });
+    closeRun(db, first.id, { result: "success", handoff: { n: 1 } });
+    const second = insertRun(db, task.id, {
+      phase: "verify",
+      iteration: 1,
+      startedAt: new Date(2000),
+    });
+    closeRun(db, second.id, { result: "success", handoff: { n: 2 } });
+    const open = insertRun(db, task.id, { phase: "verify", startedAt: new Date(3000) });
+    closeRun(db, open.id, { result: "failure", failureReason: "x" });
+    expect(repo.latestHandoff(task.id, "verify")).toEqual({
+      runId: second.id,
+      iteration: 1,
+      handoff: { n: 2 },
+    });
   });
 
   it("previousRun es el último Run cerrado de la fase, sin contar el actual", () => {
@@ -473,5 +503,36 @@ describe("RunRepository.fail", () => {
       .all()
       .filter((e) => (e.payload as { command: string }).command === "run_failed");
     expect(failures).toEqual([]);
+  });
+});
+
+describe("recordVerdict", () => {
+  const payload = (runId: string) => ({
+    runId,
+    verdict: "reject" as const,
+    iteration: 0,
+    riskLabel: "high" as const,
+    mustFix: 1,
+    refuted: 0,
+    skippedReviewers: [],
+  });
+
+  it("fija la etiqueta de riesgo de la tarea y publica el evento del veredicto", () => {
+    const { db, task } = mcpSetup();
+    const run = insertRun(db, task.id, { phase: "verify" });
+    recordVerdict(db, task.id, payload(run.id));
+    expect(db.select().from(tasks).where(eq(tasks.id, task.id)).get()?.riskLabel).toBe("high");
+    const [event] = listEvents(db, task.id).filter((e) => e.type === VERDICT_RECORDED);
+    expect(event).toMatchObject({ actor: "agent", payload: payload(run.id) });
+    const queued = db.select().from(outbox).all();
+    expect(queued.map((o) => o.eventId)).toContain(event?.id);
+  });
+
+  it("rechaza un payload inválido sin escribir nada", () => {
+    const { db, task } = mcpSetup();
+    expect(() =>
+      recordVerdict(db, task.id, { ...payload("no-uuid"), riskLabel: "x" } as never),
+    ).toThrow();
+    expect(db.select().from(tasks).where(eq(tasks.id, task.id)).get()?.riskLabel).toBeNull();
   });
 });

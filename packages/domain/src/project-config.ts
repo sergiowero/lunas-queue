@@ -1,6 +1,7 @@
 // Puerto de lectura de la configuración de un Project (docs/decisions/0008-config-proyecto.md).
 // Dispatcher, gate de tests y hooks dependen de esta interfaz, no de la base.
 import { type AgentProfile, type Phase, Project } from "@lunasq/schemas";
+import { DEFAULT_MAX_ITERATIONS } from "./state-machine.ts";
 
 export interface ProjectConfigReader {
   get(projectId: string): Project | null;
@@ -10,8 +11,20 @@ export interface ProjectConfigReader {
 
 export const DEFAULT_PHASE_TIMEOUT_MINUTES = 30;
 
+/** El approver de verificación corre en Sonnet salvo que el perfil fije otro modelo. */
+export const DEFAULT_VERIFY_MODEL = "sonnet";
+
 export function phaseProfile(config: Project, phase: Phase): AgentProfile {
-  return config.agentProfiles[phase];
+  const profile = config.agentProfiles[phase];
+  if (phase === "verify" && profile.model === undefined) {
+    return { ...profile, model: DEFAULT_VERIFY_MODEL };
+  }
+  return profile;
+}
+
+/** Reworks que admite el loop de verificación antes de pasar a needs_human. */
+export function maxVerificationIterations(config: Project): number {
+  return config.limits.maxVerificationIterations ?? DEFAULT_MAX_ITERATIONS;
 }
 
 export function phaseTimeoutMs(config: Project, phase: Phase): number {

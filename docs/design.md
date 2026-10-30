@@ -260,8 +260,8 @@ Cada proyecto puede configurar comandos que LunasQ ejecuta al inicio y al final 
 | Hook | Cuándo corre | Ejemplos |
 | --- | --- | --- |
 | `before_refinement` / `after_refinement` | Antes de despachar al refinador / después de `submit_spec`, antes del gate humano | Preparar datos de prueba; notificar que hay una spec por aprobar |
-| `before_implementation` / `after_implementation` | Antes de despachar al implementador / después de `submit_for_verification` y del gate de tests | Levantar servicios locales; análisis estático adicional |
-| `before_verification` / `after_verification` | Antes de despachar al verificador / después de `submit_verdict` | Deploy a un ambiente efímero para los revisores de UI y UX; reporte de cobertura |
+| `before_implementation` / `after_implementation` | Antes de despachar al implementador / al recibir `submit_for_verification`, antes del gate de tests ([ADR uw-23-verificacion](decisions/uw-23-verificacion.md)) | Levantar servicios locales; análisis estático adicional |
+| `before_verification` / `after_verification` | Al recibir `submit_for_verification`, tras `after_implementation` y antes del gate, así el verificador se despacha cuando terminó / al recibir `submit_verdict`, antes de registrar el veredicto | Deploy a un ambiente efímero para los revisores de UI y UX; reporte de cobertura |
 | `before_delivery` / `after_delivery` | Antes del rebase, push y PR / después de crear el PR | Bump de versión y changelog antes del push; avisar en un canal que hay PR |
 | `after_merge` | Cuando LunasQ detecta el PR mergeado | Deploy a staging o producción, publicar release |
 | `on_failure` | Cuando un Run termina sin éxito | Recolectar logs, avisar por otro canal |
@@ -430,13 +430,13 @@ La fase de verificación es **una sola sesión de Claude Code** (un slot) que la
 | --- | --- | --- |
 | Revisores de solo lectura | `tools` en el frontmatter de cada subagente, sin Edit ni Write; Bash queda para leer el diff y el prompt prohíbe escribir | Un revisor no tiene herramientas de edición; con Bash, no escribir depende de su prompt ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) |
 | Evidencia de ejecución | Hooks `SubagentStart` y `SubagentStop` (tipo `http`, con el run token en el header) que reportan a LunasQ cada subagente; el dispatcher los pasa en un settings estable con `--settings` ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) | LunasQ sabe qué revisores corrieron en ese Run |
-| Veredicto completo | `submit_verdict` exige, por cada uno de los 4 revisores, su reporte o la justificación de por qué no se lanzó, y se rechaza si un revisor reportado no aparece en los hooks | Cada revisor corre o queda omitido con justificación auditada |
+| Veredicto completo | `submit_verdict` exige, por cada uno de los 4 revisores, su reporte o la justificación de por qué no se lanzó, y se rechaza si un revisor reportado no aparece terminado en los hooks del Run o si uno omitido sí terminó ([ADR uw-23-verificacion](decisions/uw-23-verificacion.md)) | Cada revisor corre o queda omitido con justificación auditada |
 | Gate de tests | LunasQ ejecuta el comando de tests del proyecto en el worktree antes de aceptar un pass | No hay pass con la suite en rojo, aunque el agente diga lo contrario |
 
 **Detalles de implementación**
 
 - **Definiciones:** LunasQ las instala como subagentes de usuario en `~/.claude/agents/lunasq/`. Un proyecto puede sobrescribir un revisor con uno del mismo nombre en su `.claude/agents/`, porque el nivel de proyecto tiene prioridad.
-- **Modelos:** los revisores usan Opus, fijado en el `model` de su frontmatter; el approver usa Sonnet, definido en el perfil de agente de la fase.
+- **Modelos:** los revisores usan Opus, fijado en el `model` de su frontmatter; el approver usa Sonnet, el modelo por defecto del perfil de la fase (`DEFAULT_VERIFY_MODEL`), que el perfil puede cambiar.
 - **Esperar resultados:** el dispatcher pasa `CLAUDE_CODE_FORK_SUBAGENT=0` al pane para que el approver espere los reportes de forma predecible.
 - **Revisores de UI/UX con navegador:** si necesitan ver la app, su definición declara el MCP de navegador en `mcpServers`, así solo esos subagentes cargan esas tools.
 - **Consumo por revisor:** el tracking de uso desglosa por subagente con el atributo `agent.name` (requiere `OTEL_LOG_TOOL_DETAILS=1` para nombres custom).
@@ -516,7 +516,7 @@ La tool no espera la respuesta dentro de la llamada MCP: los clientes MCP tienen
 
 - El verificador corre en un agente nuevo, con la spec aprobada y el diff, sin el contexto del implementador.
 - Rework devuelve la tarea a in progress con los hallazgos como input estructurado; el contador de iteración sube.
-- Al llegar a 3 iteraciones (configurable), la tarea pasa a *needs human* en lugar de seguir el loop.
+- Al llegar a 3 iteraciones (configurable por proyecto con `limits.maxVerificationIterations`), la tarea pasa a *needs human* en lugar de seguir el loop.
 - La revisión la hacen 4 subagentes especializados y la sesión principal decide como approver (ver Verificación con subagentes).
 
 **Entrega (completed)**

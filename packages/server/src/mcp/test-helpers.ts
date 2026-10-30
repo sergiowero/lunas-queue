@@ -1,7 +1,13 @@
 // Arnés de los tests de contrato del LunasQ MCP: el cliente oficial de MCP habla con la app de
 // Hono en memoria, con el gate de tests y la comprobación de commits falsos.
 import { readFileSync } from "node:fs";
-import { appendEvent, type LunasqDatabase, SpecRepository, TaskRepository } from "@lunasq/db";
+import {
+  appendEvent,
+  type LunasqDatabase,
+  RunSubagentRepository,
+  SpecRepository,
+  TaskRepository,
+} from "@lunasq/db";
 import {
   insertProject,
   insertRun,
@@ -20,6 +26,9 @@ import { createApp } from "../app.ts";
 import type {
   CommitCheckInput,
   CommitVerifier,
+  PhaseHookInput,
+  PhaseHookResult,
+  PhaseHooks,
   TestGate,
   TestGateInput,
   TestGateResult,
@@ -46,6 +55,27 @@ export class FakeTestGate implements TestGate {
   async run(input: TestGateInput): Promise<TestGateResult> {
     this.calls.push(input);
     return this.result;
+  }
+}
+
+/** Hooks de fase falsos: registran cada punto y devuelven el resultado configurado por punto. */
+export class FakePhaseHooks implements PhaseHooks {
+  readonly calls: PhaseHookInput[] = [];
+  results: Partial<Record<PhaseHookInput["point"], PhaseHookResult>> = {};
+  /** Se llama antes de devolver el resultado: simula un hook que commitea o tarda. */
+  onRun: ((input: PhaseHookInput) => void) | null = null;
+
+  async run(input: PhaseHookInput): Promise<PhaseHookResult> {
+    this.calls.push(input);
+    this.onRun?.(input);
+    return (
+      this.results[input.point] ?? {
+        outcome: "passed",
+        escalated: false,
+        failedScript: null,
+        error: null,
+      }
+    );
   }
 }
 
@@ -93,7 +123,13 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
   });
   const testGate = new FakeTestGate();
   const commitVerifier = new FakeCommitVerifier();
-  const app = createApp({ db, testGate: options.testGate?.(db) ?? testGate, commitVerifier });
+  const phaseHooks = new FakePhaseHooks();
+  const app = createApp({
+    db,
+    testGate: options.testGate?.(db) ?? testGate,
+    commitVerifier,
+    phaseHooks,
+  });
 
   async function connect(token?: string) {
     const client = new Client({ name: "lunasq-test", version: "0.0.0" });
@@ -181,17 +217,44 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
 
   const taskOf = (taskId: string) => new TaskRepository(db).get(taskId);
 
+  const subagents = new RunSubagentRepository(db);
+  /** Registra, como los hooks SubagentStart y SubagentStop, una ejecución terminada por revisor. */
+  function reviewersRan(runId: string, names: readonly string[]) {
+    for (const name of names) {
+      const ref = { agentId: `${name}-${runId}`, agentType: name };
+      subagents.recordStart(runId, ref);
+      subagents.recordStop(runId, ref);
+    }
+  }
+
+  /** Veredicto de ejemplo con los revisores que reporta `ran` registrados en los hooks del Run. */
+  function verdictFor(
+    example: "verification-pass" | "verification-reject",
+    run: { id: string; taskId: string },
+  ) {
+    const handoff = handoffFor(example, run);
+    const reviewers = handoff.body.reviewers as Record<string, { status: string }>;
+    reviewersRan(
+      run.id,
+      Object.keys(reviewers).filter((name) => reviewers[name]?.status === "ran"),
+    );
+    return handoff;
+  }
+
   return {
     db,
     project,
     app,
     testGate,
     commitVerifier,
+    phaseHooks,
     connect,
     task,
     session,
     ready,
     gated,
     taskOf,
+    reviewersRan,
+    verdictFor,
   };
 }

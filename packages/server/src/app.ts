@@ -14,7 +14,13 @@ import { Hono } from "hono";
 import { projectRoutes } from "./api/projects.ts";
 import { specRoutes } from "./api/specs.ts";
 import { taskRoutes } from "./api/tasks.ts";
-import { type CommitVerifier, GitCommitVerifier, type TestGate } from "./mcp/ports.ts";
+import {
+  type CommitVerifier,
+  GitCommitVerifier,
+  NoPhaseHooks,
+  type PhaseHooks,
+  type TestGate,
+} from "./mcp/ports.ts";
 import { mcpRoutes } from "./mcp/routes.ts";
 import { LunasqMcpService } from "./mcp/service.ts";
 import { SUBAGENT_HOOK_PATH, subagentHookRoutes } from "./subagents/routes.ts";
@@ -29,14 +35,20 @@ export interface AppDeps {
   testGate?: TestGate;
   /** Por defecto corre git en el worktree. */
   commitVerifier?: CommitVerifier;
+  /**
+   * Hooks after_implementation, before_verification y after_verification: quien compone el
+   * servidor pasa el HookService. Sin él, los puntos pasan sin correr nada.
+   */
+  phaseHooks?: PhaseHooks;
 }
 
-export function createApp({ db, testGate, commitVerifier }: AppDeps): Hono {
+export function createApp({ db, testGate, commitVerifier, phaseHooks }: AppDeps): Hono {
   const runner = new ShellProcessRunner();
   const mcp = new LunasqMcpService({
     db,
     testGate: testGate ?? new UnavailableTestGate(),
     commitVerifier: commitVerifier ?? new GitCommitVerifier(runner),
+    phaseHooks: phaseHooks ?? new NoPhaseHooks(),
   });
   return new Hono()
     .route("/mcp", mcpRoutes(mcp))

@@ -1,9 +1,15 @@
 // Entradas de las tools del LunasQ MCP, el contexto que devuelve get_task_context y los eventos
 // que escriben (docs/design.md §MCPs y skills, ADR uw-15-mcp-tools).
 import { z } from "zod";
-import { Phase, QuestionStatus, SubState, TaskState } from "./enums.ts";
+import { Phase, QuestionStatus, RiskLabel, SubState, TaskState } from "./enums.ts";
 import { checkUnique, list } from "./handoff/common.ts";
-import { HandoffV1, ImplementationHandoff, VerificationHandoff } from "./handoff/index.ts";
+import {
+  HandoffV1,
+  ImplementationHandoff,
+  MustFixFinding,
+  REVIEWER_NAMES,
+  VerificationHandoff,
+} from "./handoff/index.ts";
 import { SpecContent } from "./spec.ts";
 
 const TaskItemId = z.string().regex(/^T-[1-9]\d*$/, {
@@ -61,6 +67,22 @@ export const ChecklistUpdatedPayload = z.strictObject({
 });
 export type ChecklistUpdatedPayload = z.infer<typeof ChecklistUpdatedPayload>;
 
+export const VERDICT_RECORDED = "verification.verdict_recorded";
+
+// Resumen del veredicto para el Event log y el outbox; el handoff completo queda en el Run. Con
+// pass, la entrega (UW-26) arranca con este evento.
+export const VerdictRecordedPayload = z.strictObject({
+  runId: z.uuid(),
+  verdict: z.enum(["pass", "reject"]),
+  // Iteración de verificación del Run, en base 0: el primer veredicto de la tarea tiene 0.
+  iteration: z.int().min(0),
+  riskLabel: RiskLabel,
+  mustFix: z.int().min(0),
+  refuted: z.int().min(0),
+  skippedReviewers: z.array(z.enum(REVIEWER_NAMES)),
+});
+export type VerdictRecordedPayload = z.infer<typeof VerdictRecordedPayload>;
+
 export const QuestionCreatedPayload = z.strictObject({ questionId: z.uuid(), runId: z.uuid() });
 export type QuestionCreatedPayload = z.infer<typeof QuestionCreatedPayload>;
 
@@ -91,8 +113,12 @@ export const TaskContext = z.strictObject({
     .nullable(),
   // El último handoff de implementación: afirmaciones que el verificador comprueba.
   implementation: ImplementationHandoff.nullable(),
-  // Veredictos de iteraciones anteriores, del más viejo al más nuevo.
+  // Veredictos de iteraciones anteriores, del más viejo al más nuevo; solo en verificación.
   verificationHistory: z.array(VerificationHandoff),
+  // En implementación tras un reject: solo los must-fix del último veredicto, con su evidencia.
+  rework: z
+    .strictObject({ runId: z.uuid(), iteration: z.int().min(0), mustFix: z.array(MustFixFinding) })
+    .nullable(),
   // Handoff del último Run de la misma fase, si se reintenta.
   previousAttempt: z
     .strictObject({
