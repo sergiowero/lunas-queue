@@ -98,8 +98,13 @@ describe("startRuntime", () => {
     const pane = runs.forTask(task.id)[0]?.herdrPane as string;
     expect(herdr.paneEnv(pane)).toMatchObject(telemetryEnv(on.url));
 
+    // El endpoint OTLP responde con el flag activo: un token desconocido no tiene efectos.
+    const logs = (url: string) => fetch(`${url}/v1/logs`, { method: "POST", body: "{}" });
+    expect((await logs(on.url)).status).toBe(200);
+
     const off = await start(options({ telemetry: false }));
     expect(off.paneEnv).not.toHaveProperty("CLAUDE_CODE_ENABLE_TELEMETRY");
+    expect((await logs(off.url)).status).toBe(404);
   });
 
   it("monta el stream de notificaciones", async () => {

@@ -33,13 +33,36 @@ describe("RunView", () => {
 
 describe("TaskUsage", () => {
   it("parte de totales en cero", () => {
-    expect(TaskUsage.parse({ total: EMPTY_USAGE, byRun: [] }).total).toEqual({
+    const empty = {
+      total: EMPTY_USAGE,
+      byRun: [],
+      byPhase: [],
+      byAgent: [],
+      byModel: [],
+      byReviewer: [],
+    };
+    expect(TaskUsage.parse(empty).total).toEqual({
       inputTokens: 0,
       outputTokens: 0,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
       costUsd: null,
     });
+  });
+
+  it("desglosa por fase (con rework), agente, modelo y revisor", () => {
+    const usage = TaskUsage.parse({
+      total: EMPTY_USAGE,
+      byRun: [],
+      byPhase: [{ phase: "rework", usage: EMPTY_USAGE }],
+      byAgent: [{ agentKind: "claude", usage: EMPTY_USAGE }],
+      byModel: [{ model: "claude-opus-5-5", usage: EMPTY_USAGE }],
+      byReviewer: [{ reviewer: "lunasq-code-reviewer", usage: EMPTY_USAGE }],
+    });
+    expect(usage.byPhase[0]?.phase).toBe("rework");
+    expect(() =>
+      TaskUsage.parse({ ...usage, byPhase: [{ phase: "otra", usage: EMPTY_USAGE }] }),
+    ).toThrow();
   });
 });
 

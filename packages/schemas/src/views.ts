@@ -64,9 +64,21 @@ export const EMPTY_USAGE: UsageTotals = {
   costUsd: null,
 };
 
+/** Fase para el desglose: el rework son los Runs de implementación después del primer rechazo. */
+export const UsagePhase = z.enum(["refine", "implement", "rework", "verify", "deliver"]);
+export type UsagePhase = z.infer<typeof UsagePhase>;
+
+/**
+ * Task.usage (read-only, ADR uw-20-usage-collector): total y desglose por Run, fase, agente,
+ * modelo y revisor de verificación. Solo trae los grupos con registros.
+ */
 export const TaskUsage = z.strictObject({
   total: UsageTotals,
   byRun: z.array(z.strictObject({ runId: z.uuid(), phase: Phase, usage: UsageTotals })),
+  byPhase: z.array(z.strictObject({ phase: UsagePhase, usage: UsageTotals })),
+  byAgent: z.array(z.strictObject({ agentKind: AgentKind, usage: UsageTotals })),
+  byModel: z.array(z.strictObject({ model: z.string(), usage: UsageTotals })),
+  byReviewer: z.array(z.strictObject({ reviewer: z.string(), usage: UsageTotals })),
 });
 export type TaskUsage = z.infer<typeof TaskUsage>;
 

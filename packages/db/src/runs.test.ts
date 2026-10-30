@@ -55,6 +55,13 @@ describe("RunRepository: lo que usa el LunasQ MCP", () => {
     expect(repo.activeByToken("desconocido")).toBeNull();
   });
 
+  it("byToken encuentra el Run aunque esté cerrado", () => {
+    const { db, task, repo } = mcpSetup();
+    const old = insertRun(db, task.id, { endedAt: new Date(), result: "success" });
+    expect(repo.byToken(old.runToken)?.id).toBe(old.id);
+    expect(repo.byToken("desconocido")).toBeNull();
+  });
+
   it("markContextRead guarda la primera lectura y no la mueve al repetir", () => {
     const { db, task, repo } = mcpSetup();
     const run = insertRun(db, task.id);

@@ -31,6 +31,7 @@ import {
   phasePrompt,
   resolveSession,
   runEnv,
+  telemetryRunEnv,
 } from "@lunasq/domain";
 import {
   type Project,
@@ -433,12 +434,15 @@ export class PhaseDispatcher implements Dispatcher {
         return pane.paneId;
       }
     }
+    const identity = { runToken: run.runToken, taskId: run.taskId, runId: run.id, phase };
     const pane = await this.herdr.splitPane({
       paneId: worktree.rootPaneId,
       cwd: worktree.path,
       env: {
         ...this.paneEnv,
-        ...runEnv({ runToken: run.runToken, taskId: run.taskId, runId: run.id, phase }),
+        ...runEnv(identity),
+        // Con la telemetría apagada (`paneEnv` sin CLAUDE_CODE_ENABLE_TELEMETRY) no se atribuye nada.
+        ...(this.paneEnv.CLAUDE_CODE_ENABLE_TELEMETRY === "1" && telemetryRunEnv(identity)),
       },
     });
     this.runs.recordPane(run.id, { workspaceId: pane.workspaceId, paneId: pane.paneId });

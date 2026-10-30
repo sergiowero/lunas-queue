@@ -131,7 +131,7 @@ LunasQ no embebe ninguna de estas herramientas: las invoca como procesos o las c
 | --- | --- |
 | `LUNASQ_RUN_TOKEN`, `LUNASQ_TASK_ID`, `LUNASQ_RUN_ID`, `LUNASQ_PHASE` | Identificar el Run ante el LunasQ MCP y en hooks |
 | `CLAUDE_CODE_ENABLE_TELEMETRY=1`, `OTEL_METRICS_EXPORTER=otlp`, `OTEL_LOGS_EXPORTER=otlp`, `OTEL_EXPORTER_OTLP_PROTOCOL=http/json`, `OTEL_EXPORTER_OTLP_ENDPOINT` | Enviar uso y eventos al usage collector local |
-| `OTEL_RESOURCE_ATTRIBUTES` (tarea, Run, fase) | Atribuir el consumo a la tarea |
+| `OTEL_RESOURCE_ATTRIBUTES` (`lunasq.task_id`, `lunasq.run_id`, `lunasq.phase`) y `OTEL_EXPORTER_OTLP_HEADERS` (run token) | Atribuir el consumo a la tarea y autenticar al Run ante el usage collector ([ADR uw-20-usage-collector](decisions/uw-20-usage-collector.md)) |
 | `OTEL_LOG_TOOL_DETAILS=1` | Nombres reales de los subagentes en el desglose por revisor |
 | `CLAUDE_CODE_FORK_SUBAGENT=0` | Que el approver espere a los revisores en verificación |
 

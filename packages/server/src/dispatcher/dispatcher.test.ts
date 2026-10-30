@@ -189,6 +189,30 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
     expect(herdr.paneEnv(run?.herdrPane ?? "")).toMatchObject({ CLAUDE_CODE_FORK_SUBAGENT: "1" });
   });
 
+  it("con telemetría activa, el pane lleva los atributos del Run y el run token como header OTLP", async () => {
+    const { db, project, herdr, dispatcher, runs } = setup({
+      dispatcher: { paneEnv: { CLAUDE_CODE_ENABLE_TELEMETRY: "1" } },
+    });
+    const task = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+    const [run] = runs.forTask(task.id);
+    expect(herdr.paneEnv(run?.herdrPane ?? "")).toMatchObject({
+      OTEL_RESOURCE_ATTRIBUTES: `lunasq.task_id=${task.id},lunasq.run_id=${run?.id},lunasq.phase=refine`,
+      OTEL_EXPORTER_OTLP_HEADERS: `X-LunasQ-Run-Token=${run?.runToken}`,
+    });
+  });
+
+  it("con telemetría apagada, el pane no lleva variables OTEL", async () => {
+    const { db, project, herdr, dispatcher, runs } = setup();
+    const task = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+    const [run] = runs.forTask(task.id);
+    const env = herdr.paneEnv(run?.herdrPane ?? "");
+    expect(Object.keys(env).filter((k) => k.startsWith("OTEL_"))).toEqual([]);
+  });
+
   it("repetir el despacho no duplica agentes ni panes", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();
     const task = insertTask(db, project.id);

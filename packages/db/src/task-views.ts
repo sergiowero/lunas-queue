@@ -6,15 +6,17 @@ import {
   HOOK_EXECUTED,
   HookExecutedPayload,
   type HookExecutionView,
+  REVIEWER_NAMES,
   RunView,
   type TaskGraph,
   type TaskUsage,
+  type UsagePhase,
   type UsageTotals,
 } from "@lunasq/schemas";
-import { asc, eq, getTableColumns, gt, inArray, max, or, sql } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, gt, inArray, max, or, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
-import { events, runs, taskDependencies, tasks, usageRecords } from "./schema.ts";
+import { events, runSubagents, runs, taskDependencies, tasks, usageRecords } from "./schema.ts";
 
 const {
   runToken: _token,
@@ -34,6 +36,10 @@ const totals = {
     number | null
   >`case when count(${usageRecords.costUsd}) = count(*) then sum(${usageRecords.costUsd}) end`,
 };
+
+// El rework son los Runs de implementación de una iteración de verificación posterior a la primera.
+const PHASE_ORDER: UsagePhase[] = ["refine", "implement", "rework", "verify", "deliver"];
+const usagePhase = sql<UsagePhase>`case when ${runs.phase} = 'implement' and ${runs.iteration} > 0 then 'rework' else ${runs.phase} end`;
 
 function toTotals(row: UsageTotals): UsageTotals {
   return {
@@ -87,11 +93,53 @@ export class TaskViewRepository {
       .innerJoin(runs, eq(usageRecords.runId, runs.id))
       .where(eq(runs.taskId, taskId))
       .get();
+    const grouped = <C>(column: C, ...extra: Parameters<typeof and>) =>
+      this.db
+        .select({ key: sql<string>`${column}`, ...totals })
+        .from(usageRecords)
+        .innerJoin(runs, eq(usageRecords.runId, runs.id))
+        .where(and(eq(runs.taskId, taskId), ...extra));
+    const byPhase = grouped(usagePhase).groupBy(usagePhase).all();
+    const byAgent = grouped(runs.agentKind)
+      .groupBy(runs.agentKind)
+      .orderBy(asc(runs.agentKind))
+      .all();
+    const byModel = grouped(usageRecords.model)
+      .groupBy(usageRecords.model)
+      .orderBy(asc(usageRecords.model))
+      .all();
+    // Solo los revisores de verificación: se unen por el agent_id que registraron los hooks.
+    const byReviewer = grouped(
+      runSubagents.agentType,
+      inArray(runSubagents.agentType, [...REVIEWER_NAMES]),
+    )
+      .innerJoin(
+        runSubagents,
+        and(
+          eq(runSubagents.runId, usageRecords.runId),
+          eq(runSubagents.agentId, usageRecords.agentId),
+        ),
+      )
+      .groupBy(runSubagents.agentType)
+      .orderBy(asc(runSubagents.agentType))
+      .all();
     return {
       total: total ? toTotals(total) : EMPTY_USAGE,
       byRun: byRun.map(({ runId, phase, ...usage }) => ({
         runId,
         phase,
+        usage: toTotals(usage),
+      })),
+      byPhase: byPhase
+        .map(({ key, ...usage }) => ({ phase: key as UsagePhase, usage: toTotals(usage) }))
+        .sort((a, b) => PHASE_ORDER.indexOf(a.phase) - PHASE_ORDER.indexOf(b.phase)),
+      byAgent: byAgent.map(({ key, ...usage }) => ({
+        agentKind: key as "claude",
+        usage: toTotals(usage),
+      })),
+      byModel: byModel.map(({ key, ...usage }) => ({ model: key, usage: toTotals(usage) })),
+      byReviewer: byReviewer.map(({ key, ...usage }) => ({
+        reviewer: key,
         usage: toTotals(usage),
       })),
     };

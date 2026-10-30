@@ -10,6 +10,7 @@ import {
   phasePrompt,
   resolveSession,
   runEnv,
+  telemetryRunEnv,
 } from "./dispatch.ts";
 
 const TASK = "0f3c9a2e-7b41-4d2a-9e0c-5a6b7c8d9e10";
@@ -45,6 +46,17 @@ describe("runEnv", () => {
       LUNASQ_TASK_ID: TASK,
       LUNASQ_RUN_ID: "run-1",
       LUNASQ_PHASE: "verify",
+    });
+  });
+});
+
+describe("telemetryRunEnv", () => {
+  it("fija tarea, Run y fase como atributos de recurso y el run token como header OTLP", () => {
+    expect(
+      telemetryRunEnv({ runToken: "tok", taskId: TASK, runId: "run-1", phase: "verify" }),
+    ).toEqual({
+      OTEL_RESOURCE_ATTRIBUTES: `lunasq.task_id=${TASK},lunasq.run_id=run-1,lunasq.phase=verify`,
+      OTEL_EXPORTER_OTLP_HEADERS: "X-LunasQ-Run-Token=tok",
     });
   });
 });

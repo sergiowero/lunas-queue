@@ -44,7 +44,11 @@ export interface RuntimeOptions {
   /** Archivo MCP estable (ADR 0002) y settings con los hooks de subagentes (ADR uw-19-revisores). */
   mcpConfigPath: string;
   hookSettingsPath: string;
-  /** Telemetría de Claude Code hacia el usage collector local; activa por defecto. */
+  /**
+   * Feature flag del usage collector (ADR uw-20-usage-collector): telemetría de Claude Code hacia
+   * los endpoints OTLP locales; activa por defecto. `false` quita las variables OTEL de los panes
+   * y no monta los endpoints.
+   */
   telemetry?: boolean;
   adapters?: {
     herdr?: HerdrAdapter;
@@ -65,8 +69,8 @@ export interface Runtime {
 
 /**
  * Variables con las que Claude Code exporta métricas y eventos al collector propio
- * (docs/tech-stack.md, Variables que el dispatcher pasa a cada pane). Los atributos por Run
- * (`OTEL_RESOURCE_ATTRIBUTES`) los agrega el dispatcher.
+ * (docs/tech-stack.md, Variables que el dispatcher pasa a cada pane). Los atributos por Run y el
+ * header de autenticación (`telemetryRunEnv`) los agrega el dispatcher.
  */
 export function telemetryEnv(baseUrl: string): Record<string, string> {
   return {
@@ -156,6 +160,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const testGate = new PaneTestGate({ db, git, herdr, worktrees: orchestrator.worktrees });
   const app = createApp({
     db,
+    telemetry: opts.telemetry !== false,
     testGate,
     phaseHooks: hooks,
     hooks,

@@ -154,6 +154,10 @@ describe("GET /api/tasks/:id/usage", () => {
     expect(body).toEqual({
       total: { ...EMPTY_USAGE, outputTokens: 4 },
       byRun: [{ runId: run.id, phase: "refine", usage: { ...EMPTY_USAGE, outputTokens: 4 } }],
+      byPhase: [{ phase: "refine", usage: { ...EMPTY_USAGE, outputTokens: 4 } }],
+      byAgent: [{ agentKind: "claude", usage: { ...EMPTY_USAGE, outputTokens: 4 } }],
+      byModel: [{ model: "opus", usage: { ...EMPTY_USAGE, outputTokens: 4 } }],
+      byReviewer: [],
     });
   });
 

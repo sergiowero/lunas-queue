@@ -15,4 +15,5 @@ export * from "./runtime/index.ts";
 export * from "./scheduler/index.ts";
 export * from "./subagents/index.ts";
 export * from "./test-gate/index.ts";
+export * from "./usage/index.ts";
 export * from "./worktrees/index.ts";

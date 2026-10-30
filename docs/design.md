@@ -473,7 +473,7 @@ En v1 aplica a Claude Code; Codex, previsto para v2, también lo permite. Ambos 
 - **Task.usage** (read‑only, derivado): total de tokens y costo, desglose por fase (refinamiento, implementación, verificación, rework), por agente, modelo y revisor de verificación. Nunca se edita; se recalcula desde los UsageRecords.
 - **Tabla de precios versionada** por modelo, para agentes que solo reportan tokens.
 
-**Componente nuevo:** Usage collector. Recibe OTLP, normaliza por agente y escribe UsageRecords en la BD.
+**Componente nuevo:** Usage collector. Recibe OTLP, normaliza por agente y escribe UsageRecords en la BD. En Claude Code la fuente es el evento `api_request` (una llamada, un UsageRecord, deduplicado por `request_id`) y el revisor se resuelve con el `agent_id` de los hooks de subagentes; las métricas son delta y se descartan ([ADR uw-20-usage-collector](decisions/uw-20-usage-collector.md)). El flag `telemetry` lo apaga.
 
 **Limitaciones**
 

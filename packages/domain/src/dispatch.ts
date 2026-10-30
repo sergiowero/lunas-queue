@@ -3,7 +3,9 @@
 // args de arranque, prompt de fase y qué identidad de sesión guarda el Run.
 import {
   type AgentProfile,
+  RESOURCE_ATTRIBUTES,
   RUN_ENV,
+  RUN_TOKEN_HEADER,
   type SchedulablePhase,
   type SessionSource,
 } from "@lunasq/schemas";
@@ -60,6 +62,22 @@ export function runEnv(run: RunIdentity): Record<string, string> {
     [RUN_ENV.taskId]: run.taskId,
     [RUN_ENV.runId]: run.runId,
     [RUN_ENV.phase]: run.phase,
+  };
+}
+
+/**
+ * Entorno OTLP propio de cada Run (ADR uw-20-usage-collector): los atributos de tarea, Run y fase
+ * que Claude Code copia a cada log, y el run token como header con el que el usage collector
+ * autentica y atribuye el consumo. Los ids y el token no llevan caracteres que escapar.
+ */
+export function telemetryRunEnv(run: RunIdentity): Record<string, string> {
+  return {
+    OTEL_RESOURCE_ATTRIBUTES: [
+      `${RESOURCE_ATTRIBUTES.taskId}=${run.taskId}`,
+      `${RESOURCE_ATTRIBUTES.runId}=${run.runId}`,
+      `${RESOURCE_ATTRIBUTES.phase}=${run.phase}`,
+    ].join(","),
+    OTEL_EXPORTER_OTLP_HEADERS: `${RUN_TOKEN_HEADER}=${run.runToken}`,
   };
 }
 
