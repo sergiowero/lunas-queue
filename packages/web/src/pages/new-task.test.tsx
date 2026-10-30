@@ -164,7 +164,9 @@ describe("alta de tareas", () => {
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "uno");
     await screen.findByLabelText("Intent");
-    await waitFor(() => expect(fake.requests.some((r) => r.path.startsWith("/api/tasks"))).toBe(true));
+    await waitFor(() =>
+      expect(fake.requests.some((r) => r.path.startsWith("/api/tasks"))).toBe(true),
+    );
     expect(screen.queryByText("Depende de")).toBeNull();
   });
 
