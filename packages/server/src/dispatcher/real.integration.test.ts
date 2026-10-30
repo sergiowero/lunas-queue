@@ -124,6 +124,10 @@ describe.skipIf(!enabled)("dispatcher contra herdr real", { timeout: 60_000 }, (
       herdr,
       processes: new ShellProcessRunner(),
       mcp: { configPath: join(dir, "mcp.json"), url: "http://127.0.0.1:4518/mcp" },
+      hooks: {
+        settingsPath: join(dir, "settings.json"),
+        url: "http://127.0.0.1:4518/hooks/subagent",
+      },
       config: { tickIntervalMs: 60_000 },
       paneEnv: {
         ZDOTDIR: join(dir, "zdot"),
@@ -145,7 +149,9 @@ describe.skipIf(!enabled)("dispatcher contra herdr real", { timeout: 60_000 }, (
       // Args y env llegaron al proceso del agente.
       const args = readFileSync(join(out, `${row.id}.args`), "utf8");
       expect(args).toContain("--model haiku --permission-mode auto");
-      expect(args).toContain(`--mcp-config ${join(dir, "mcp.json")} --strict-mcp-config`);
+      expect(args).toContain(
+        `--mcp-config ${join(dir, "mcp.json")} --strict-mcp-config --settings ${join(dir, "settings.json")}`,
+      );
       expect(args).toContain(`--session-id ${row.agentSession}`);
       expect(readFileSync(join(out, `${row.id}.token`), "utf8")).toBe(row.runToken);
       expect(existsSync(join(out, `${row.id}.keys`))).toBe(true);

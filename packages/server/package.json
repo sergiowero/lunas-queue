@@ -10,7 +10,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "test:herdr": "LUNASQ_HERDR_INTEGRATION=1 vitest run src/dispatcher/real.integration.test.ts"
+    "test:herdr": "LUNASQ_HERDR_INTEGRATION=1 vitest run src/dispatcher/real.integration.test.ts",
+    "test:claude": "LUNASQ_CLAUDE_INTEGRATION=1 vitest run src/subagents/real.integration.test.ts"
   },
   "dependencies": {
     "@lunasq/adapters": "workspace:*",

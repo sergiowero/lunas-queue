@@ -252,6 +252,25 @@ export const questions = sqliteTable(
   ],
 );
 
+// Subagentes que lanzó la sesión de un Run, según los hooks SubagentStart y SubagentStop
+// (ADR uw-19-revisores). Un hook se puede perder o repetir: cualquiera de los dos crea la fila.
+export const runSubagents = sqliteTable(
+  "run_subagents",
+  {
+    id: id(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    // agent_id de Claude Code: único dentro de la sesión.
+    agentId: text("agent_id").notNull(),
+    agentType: text("agent_type").notNull(),
+    startedAt: integer("started_at", { mode: "timestamp_ms" }),
+    stoppedAt: integer("stopped_at", { mode: "timestamp_ms" }),
+    transcriptPath: text("transcript_path"),
+  },
+  (t) => [unique("run_subagents_run_agent_unique").on(t.runId, t.agentId)],
+);
+
 export const usageRecords = sqliteTable(
   "usage_records",
   {

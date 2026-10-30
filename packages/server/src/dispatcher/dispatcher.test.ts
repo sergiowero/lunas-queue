@@ -21,6 +21,7 @@ import {
 } from "./dispatcher.ts";
 
 const MCP_CONFIG = "/cfg/lunasq-mcp.json";
+const HOOK_SETTINGS = "/cfg/lunasq-settings.json";
 
 const stoppables: { stop(): Promise<void> }[] = [];
 afterEach(async () => {
@@ -64,6 +65,7 @@ function setup(
       projects,
       ...(opts.config && { config: opts.config }),
       mcpConfigPath: MCP_CONFIG,
+      hookSettingsPath: HOOK_SETTINGS,
       paneEnv: { EXTRA: "1" },
       newSessionId: () => `sess-${++sessions}`,
       onError: (error, runId) => errors.push({ error, runId }),
@@ -153,12 +155,15 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
       "--mcp-config",
       MCP_CONFIG,
       "--strict-mcp-config",
+      "--settings",
+      HOOK_SETTINGS,
       "--session-id",
       "sess-1",
     ]);
     expect(herdr.paneEnv(run.herdrPane ?? "")).toMatchObject({
       EXTRA: "1",
       MCP_TOOL_TIMEOUT: String(DEFAULT_MCP_TOOL_TIMEOUT_MS),
+      CLAUDE_CODE_FORK_SUBAGENT: "0",
       LUNASQ_RUN_TOKEN: run.runToken,
       LUNASQ_TASK_ID: task.id,
       LUNASQ_RUN_ID: run.id,
@@ -171,6 +176,17 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
     const snap = await herdr.snapshot();
     expect(snap.panes.find((p) => p.paneId === run.herdrPane)?.cwd).toBe(row?.worktreePath);
     expect(workspaces.get(project.id)).not.toBeNull();
+  });
+
+  it("paneEnv sobrescribe los defaults del pane, como CLAUDE_CODE_FORK_SUBAGENT", async () => {
+    const { db, project, herdr, dispatcher, runs } = setup({
+      dispatcher: { paneEnv: { CLAUDE_CODE_FORK_SUBAGENT: "1" } },
+    });
+    const task = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+    const [run] = runs.forTask(task.id);
+    expect(herdr.paneEnv(run?.herdrPane ?? "")).toMatchObject({ CLAUDE_CODE_FORK_SUBAGENT: "1" });
   });
 
   it("repetir el despacho no duplica agentes ni panes", async () => {

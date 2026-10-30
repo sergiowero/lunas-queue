@@ -49,9 +49,13 @@ describe("runEnv", () => {
 });
 
 describe("agentArgs", () => {
-  const base = { mcpConfigPath: "/cfg/mcp.json", sessionId: "sess-1" };
+  const base = {
+    mcpConfigPath: "/cfg/mcp.json",
+    settingsPath: "/cfg/settings.json",
+    sessionId: "sess-1",
+  };
 
-  it("antepone el modelo, conserva los args del perfil y agrega MCP estricto y session id", () => {
+  it("antepone el modelo, conserva los args del perfil y agrega MCP estricto, hooks y session id", () => {
     expect(
       agentArgs({ kind: "claude", model: "opus", args: ["--permission-mode", "auto"] }, base),
     ).toEqual([
@@ -62,6 +66,8 @@ describe("agentArgs", () => {
       "--mcp-config",
       "/cfg/mcp.json",
       "--strict-mcp-config",
+      "--settings",
+      "/cfg/settings.json",
       "--session-id",
       "sess-1",
     ]);
@@ -72,6 +78,8 @@ describe("agentArgs", () => {
       "--mcp-config",
       "/cfg/mcp.json",
       "--strict-mcp-config",
+      "--settings",
+      "/cfg/settings.json",
       "--session-id",
       "sess-1",
     ]);
@@ -83,6 +91,8 @@ describe("agentArgs", () => {
       "--mcp-config=/x",
       "--strict-mcp-config",
       "--session-id",
+      "--settings",
+      "--settings=/x",
       "--model",
     ]) {
       expect(() => agentArgs({ kind: "claude", model: "opus", args: [flag, "x"] }, base)).toThrow(

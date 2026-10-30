@@ -11,6 +11,7 @@ const TABLES = [
   "outbox",
   "projects",
   "questions",
+  "run_subagents",
   "runs",
   "specs",
   "task_dependencies",

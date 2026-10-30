@@ -10,5 +10,6 @@ export {
   type PhaseDispatcherOptions,
   type RunObserver,
 } from "./dispatcher.ts";
+export { ensureHookSettings, hookSettings } from "./hook-settings.ts";
 export { ensureMcpConfig, mcpConfig } from "./mcp-config.ts";
 export { Orchestrator, type OrchestratorOptions } from "./orchestrator.ts";

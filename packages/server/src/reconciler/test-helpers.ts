@@ -69,6 +69,7 @@ export function harness(
     worktrees,
     projects,
     mcpConfigPath: "/cfg/lunasq-mcp.json",
+    hookSettingsPath: "/cfg/lunasq-settings.json",
     observer: watcher,
     newSessionId: () => `sess-${++sessions}`,
     onError: (error, runId) => errors.push({ error, runId }),
