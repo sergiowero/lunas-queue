@@ -8,6 +8,7 @@ import { type Notification, SchedulerConfig, type SchedulerConfigInput } from "@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Escalator } from "../notifications/escalator.ts";
 import { OutboxPublisher } from "../outbox/publisher.ts";
+import type { RunEvidenceSink } from "./dispatcher.ts";
 import { Orchestrator } from "./orchestrator.ts";
 
 const cleanups: (() => Promise<void> | void)[] = [];
@@ -20,6 +21,7 @@ function setup(
     config?: SchedulerConfigInput;
     db?: ReturnType<typeof migratedDatabase>;
     herdr?: FakeHerdr;
+    evidence?: RunEvidenceSink;
   } = {},
 ) {
   const db = opts.db ?? migratedDatabase();
@@ -45,6 +47,7 @@ function setup(
     },
     publisher,
     notifications: { notify, escalator },
+    ...(opts.evidence && { evidence: opts.evidence }),
     config: { tickIntervalMs: 60_000, ...opts.config },
   });
   cleanups.push(() => orchestrator.stop());
@@ -128,6 +131,30 @@ describe("Orchestrator", () => {
     cleanups.push(() => publisher.stop());
 
     await vi.waitFor(async () => expect(await herdr.getAgent(run.herdrName ?? "")).toBeUndefined());
+  });
+
+  it("registra la evidencia del Run que cerró una tool del MCP al salir la tarea de running", async () => {
+    const recorded: string[] = [];
+    const { db, herdr, orchestrator, publisher, project } = setup({
+      evidence: { recordRun: async (id) => void recorded.push(id) },
+    });
+    const task = insertTask(db, project.id);
+    await orchestrator.start();
+    await orchestrator.dispatcher.idle();
+    const [run] = new RunRepository(db).forTask(task.id);
+    if (!run?.herdrName) throw new Error("sin Run");
+
+    closeRun(db, run.id, { result: "failure", failureReason: "x" });
+    transitionTask(db, {
+      taskId: task.id,
+      actor: "system",
+      command: { type: "escalate", reason: "phase_timeout" },
+    });
+    await publisher.start();
+    cleanups.push(() => publisher.stop());
+
+    await vi.waitFor(async () => expect(await herdr.getAgent(run.herdrName ?? "")).toBeUndefined());
+    expect(recorded).toEqual([run.id]);
   });
 
   it("un Run abierto no se limpia aunque llegue la transición", async () => {

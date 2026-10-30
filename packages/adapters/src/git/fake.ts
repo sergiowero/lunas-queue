@@ -1,6 +1,7 @@
 // Fake en memoria del adapter de git. Cada checkout (cwd) tiene sus refs y un working tree que
 // solo sabe si está sucio; los commits son árboles inmutables. Cumple la suite de contrato.
 import { createHash } from "node:crypto";
+import { EVIDENCE_DIR } from "@lunasq/schemas";
 import { GitError } from "./errors.ts";
 import type { GitAdapter, GitFile } from "./types.ts";
 
@@ -21,8 +22,12 @@ interface FakeCheckout {
   refs: Map<string, string>;
   /** Ramas del remoto (`origin`), que `fetch` copia a `<remote>/<rama>`. */
   remote: Map<string, string>;
-  dirty: boolean;
+  /** Rutas con cambios sin commit; `setDirty` usa una ruta genérica. */
+  dirty: Set<string>;
 }
+
+const GENERIC_CHANGE = "(cambios)";
+const isEvidence = (path: string) => path.startsWith(`${EVIDENCE_DIR}/`);
 
 export class FakeGit implements GitAdapter {
   private readonly checkouts = new Map<string, FakeCheckout>();
@@ -47,7 +52,7 @@ export class FakeGit implements GitAdapter {
         ["HEAD", sha],
       ]),
       remote: new Map([[opts.branch, sha]]),
-      dirty: false,
+      dirty: new Set(),
     };
     this.checkouts.set(cwd, checkout);
     return sha;
@@ -62,7 +67,20 @@ export class FakeGit implements GitAdapter {
 
   /** Simula cambios sin commit en el working tree (un hook que escribe archivos). */
   setDirty(cwd: string, dirty = true) {
-    this.checkout(cwd).dirty = dirty;
+    const checkout = this.checkout(cwd);
+    if (dirty) checkout.dirty.add(GENERIC_CHANGE);
+    else checkout.dirty.clear();
+  }
+
+  /** Escribe `path` en el working tree sin commitear. */
+  writeWorkingFile(cwd: string, path: string) {
+    this.checkout(cwd).dirty.add(path);
+  }
+
+  /** Rutas del árbol de HEAD. */
+  trackedFiles(cwd: string): string[] {
+    const head = this.commits.get(this.checkout(cwd).refs.get("HEAD") ?? "");
+    return [...(head?.tree.keys() ?? [])];
   }
 
   async fetch(input: { cwd: string; remote: string; branch: string }) {
@@ -100,20 +118,45 @@ export class FakeGit implements GitAdapter {
   }
 
   async isDirty(cwd: string) {
-    return this.checkout(cwd).dirty;
+    return [...this.checkout(cwd).dirty].some((path) => !isEvidence(path));
   }
 
   async commitAll(input: { cwd: string; message: string; trailers: Record<string, string> }) {
     const checkout = this.checkout(input.cwd);
-    if (!checkout.dirty) return null;
+    const paths = [...checkout.dirty].filter((path) => !isEvidence(path));
+    if (paths.length === 0) return null;
+    return this.commitDirty(input, paths);
+  }
+
+  async commitPaths(input: {
+    cwd: string;
+    paths: string[];
+    message: string;
+    trailers: Record<string, string>;
+  }) {
+    const checkout = this.checkout(input.cwd);
+    const paths = input.paths.filter((path) => checkout.dirty.has(path));
+    if (paths.length === 0) return null;
+    return this.commitDirty(input, paths);
+  }
+
+  private commitDirty(
+    input: { cwd: string; message: string; trailers: Record<string, string> },
+    paths: string[],
+  ) {
+    const checkout = this.checkout(input.cwd);
     const parent = this.commits.get(checkout.refs.get("HEAD") ?? "");
     const trailers = Object.entries(input.trailers).map(([k, v]) => `${k}: ${v}`);
     const message = trailers.length
       ? `${input.message}\n\n${trailers.join("\n")}\n`
       : `${input.message}\n`;
-    const sha = this.store(new Map(parent?.tree), message);
+    const tree = new Map(parent?.tree);
+    for (const path of paths) {
+      checkout.dirty.delete(path);
+      if (path !== GENERIC_CHANGE) tree.set(path, { content: Buffer.alloc(0), executable: false });
+    }
+    const sha = this.store(tree, message);
     checkout.refs.set("HEAD", sha);
-    checkout.dirty = false;
     this.commitLog.push({ cwd: input.cwd, sha, message: input.message, trailers: input.trailers });
     return sha;
   }
@@ -124,7 +167,7 @@ export class FakeGit implements GitAdapter {
     this.checkouts.set(input.path, {
       refs: new Map([["HEAD", input.commit]]),
       remote: new Map(),
-      dirty: false,
+      dirty: new Set(),
     });
   }
 

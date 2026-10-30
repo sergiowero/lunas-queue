@@ -480,6 +480,91 @@ describe("PhaseDispatcher: cierre de fase", () => {
   });
 });
 
+describe("PhaseDispatcher: archivo de evidencia al cerrar el Run (UW-24)", () => {
+  async function withEvidence(recordRun?: (runId: string) => Promise<unknown>) {
+    const calls: { runId: string; endedAt: Date | null; paneOpen: boolean }[] = [];
+    const ctx = setup();
+    const task = insertTask(ctx.db, ctx.project.id);
+    const dispatcher = ctx.make({
+      evidence: {
+        recordRun: async (runId) => {
+          const run = ctx.runs.get(runId);
+          const snap = await ctx.herdr.snapshot();
+          calls.push({
+            runId,
+            endedAt: run?.endedAt ?? null,
+            paneOpen: snap.panes.some((p) => p.paneId === run?.herdrPane),
+          });
+          await recordRun?.(runId);
+        },
+      },
+    });
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+    const [run] = ctx.runs.forTask(task.id);
+    if (!run) throw new Error("sin Run");
+    return { ...ctx, dispatcher, calls, task, run };
+  }
+
+  it("closeRun registra el Run ya cerrado y con el pane ya cerrado, para un transcript completo", async () => {
+    const { dispatcher, calls, run } = await withEvidence();
+    await dispatcher.closeRun(run.id, { result: "success", handoff: { a: 1 } });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ runId: run.id, paneOpen: false });
+    expect(calls[0]?.endedAt).toBeInstanceOf(Date);
+  });
+
+  it("closeRun sobre un Run que ya cerró el MCP también lo registra", async () => {
+    const { db, dispatcher, calls, run } = await withEvidence();
+    closeRun(db, run.id, { result: "success", handoff: { spec: 1 } });
+    await dispatcher.closeRun(run.id, { result: "failure" });
+    expect(calls.map((c) => c.runId)).toEqual([run.id]);
+  });
+
+  it("releaseRun registra el Run que cerró una tool de salida del MCP", async () => {
+    const { db, dispatcher, calls, run } = await withEvidence();
+    await dispatcher.releaseRun(run.id);
+    expect(calls).toHaveLength(0);
+    closeRun(db, run.id, { result: "success", handoff: { spec: 1 } });
+    await dispatcher.releaseRun(run.id);
+    expect(calls.map((c) => c.runId)).toEqual([run.id]);
+  });
+
+  it("failRun registra el Run fallido", async () => {
+    const { dispatcher, calls, run } = await withEvidence();
+    await dispatcher.failRun(run.id, "el agente salió");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.endedAt).toBeInstanceOf(Date);
+  });
+
+  it("un Run que falla al lanzar queda registrado", async () => {
+    const calls: string[] = [];
+    const ctx = setup({
+      dispatcher: { evidence: { recordRun: async (id) => void calls.push(id) } },
+    });
+    ctx.processes.respond((c) =>
+      c.command === "pnpm install" ? { exitCode: 1, stderr: "pnpm: not found" } : {},
+    );
+    const task = insertTask(ctx.db, ctx.project.id);
+    await ctx.dispatcher.dispatch(refine(task));
+    await ctx.dispatcher.idle();
+    const [run] = ctx.runs.forTask(task.id);
+    expect(run?.result).toBe("failure");
+    expect(calls).toEqual([run?.id]);
+  });
+
+  it("un fallo al escribir la evidencia se reporta y no impide cerrar el pane ni el Run", async () => {
+    const { dispatcher, herdr, errors, run, runs } = await withEvidence(async () => {
+      throw new Error("disco lleno");
+    });
+    const res = await dispatcher.closeRun(run.id, { result: "success" });
+    expect(res.closed).toBe(true);
+    expect(runs.get(run.id)?.result).toBe("success");
+    expect(await herdr.getAgent(run.herdrName ?? "")).toBeUndefined();
+    expect(errors.map((e) => [e.runId, e.error.message])).toEqual([[run.id, "disco lleno"]]);
+  });
+});
+
 describe("PhaseDispatcher: hallazgos de la revisión", () => {
   it("cerrar el Run durante el bootstrap detiene el lanzamiento sin dejar agente ni pane", async () => {
     const watched: string[] = [];

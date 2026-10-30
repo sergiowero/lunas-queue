@@ -25,14 +25,30 @@ export interface GitAdapter {
   listFiles(input: { cwd: string; commit: string; dir: string }): Promise<GitFile[]>;
   /** Contenido de `path` en el commit `commit`; undefined si no existe o no es un archivo. */
   readFile(input: { cwd: string; commit: string; path: string }): Promise<Buffer | undefined>;
-  /** true si el working tree tiene cambios sin commit, incluidos archivos no rastreados. */
+  /**
+   * true si el working tree tiene cambios sin commit, incluidos archivos no rastreados. Ignora
+   * `lunasq/tasks/`: ahí LunasQ deja el archivo de evidencia sin commitear (ADR
+   * uw-24-archivo-evidencia).
+   */
   isDirty(cwd: string): Promise<boolean>;
   /**
    * `add -A` y commit con los trailers (`Clave: valor`). Devuelve el sha, o null si no había
-   * cambios: repetirlo no crea commits vacíos.
+   * cambios: repetirlo no crea commits vacíos. No incluye `lunasq/tasks/`; eso lo commitea
+   * `commitPaths`.
    */
   commitAll(input: {
     cwd: string;
+    message: string;
+    trailers: Record<string, string>;
+  }): Promise<string | null>;
+  /**
+   * Commit solo de `paths` (relativas al worktree, también si están ignoradas), con los trailers.
+   * Lo demás que haya en el índice o el working tree queda como estaba. Devuelve el sha, o null
+   * si esas rutas no tenían cambios.
+   */
+  commitPaths(input: {
+    cwd: string;
+    paths: string[];
     message: string;
     trailers: Record<string, string>;
   }): Promise<string | null>;

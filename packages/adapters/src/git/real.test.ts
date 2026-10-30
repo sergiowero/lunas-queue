@@ -68,6 +68,7 @@ gitContract("git real", async () => ({
   writeWorkingFile: async (cwd, path, content) => writeTree(cwd, { [path]: { content } }),
   freePath: async () => join(root, `free${++repos}`),
   headMessage: async (cwd) => git(cwd, "log", "-1", "--format=%B"),
+  trackedFiles: async (cwd) => git(cwd, "ls-tree", "-r", "--name-only", "HEAD").split("\n"),
   cleanup: async () => {},
 }));
 

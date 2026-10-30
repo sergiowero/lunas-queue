@@ -8,6 +8,7 @@ export {
   isDispatchError,
   PhaseDispatcher,
   type PhaseDispatcherOptions,
+  type RunEvidenceSink,
   type RunObserver,
 } from "./dispatcher.ts";
 export { ensureHookSettings, hookSettings } from "./hook-settings.ts";

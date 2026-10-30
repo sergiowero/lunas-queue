@@ -14,6 +14,8 @@ export interface GitContractHarness {
   pushToRemote(cwd: string, files: RepoFiles): Promise<void>;
   /** Escribe en el working tree del checkout sin commitear. */
   writeWorkingFile(cwd: string, path: string, content: string): Promise<void>;
+  /** Rutas rastreadas en HEAD. */
+  trackedFiles(cwd: string): Promise<string[]>;
   /** Una ruta que todavía no existe, para un worktree temporal. */
   freePath(): Promise<string>;
   /** Mensaje completo del commit en HEAD. */
@@ -157,6 +159,69 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(message).toMatch(/\n\nLunasQ-Task: t1\nLunasQ-Run: r1\n*$/);
 
         expect(await git.commitAll({ cwd, message: "otra", trailers: {} })).toBeNull();
+      });
+
+      it("isDirty y commitAll ignoran lunasq/tasks/, que es de LunasQ", async () => {
+        const cwd = await h.newRepo(hooks);
+        await h.writeWorkingFile(cwd, "lunasq/tasks/t1.md", "# evidencia\n");
+        expect(await git.isDirty(cwd)).toBe(false);
+        expect(
+          await git.commitAll({ cwd, message: "nada", trailers: { "LunasQ-Task": "t1" } }),
+        ).toBeNull();
+
+        // Un cambio del agente sí cuenta, y su commit no arrastra la evidencia.
+        await h.writeWorkingFile(cwd, "VERSION", "1.0.1\n");
+        expect(await git.isDirty(cwd)).toBe(true);
+        const before = await git.resolveCommit({ cwd, ref: "HEAD" });
+        const sha = await git.commitAll({ cwd, message: "cambio", trailers: {} });
+        expect(sha).not.toBe(before);
+        expect(await git.isDirty(cwd)).toBe(false);
+        expect(await h.trackedFiles(cwd)).not.toContain("lunasq/tasks/t1.md");
+      });
+    });
+
+    describe("commitPaths", () => {
+      it("commitea solo esas rutas con los trailers y no crea commits vacíos", async () => {
+        const cwd = await h.newRepo(hooks);
+        await h.writeWorkingFile(cwd, "lunasq/tasks/t1.md", "# evidencia\n");
+        await h.writeWorkingFile(cwd, "VERSION", "1.0.1\n");
+
+        const sha = await git.commitPaths({
+          cwd,
+          paths: ["lunasq/tasks/t1.md"],
+          message: "chore(lunasq): evidencia",
+          trailers: { "LunasQ-Task": "t1", "LunasQ-Run": "r1" },
+        });
+        expect(sha).toMatch(/^[0-9a-f]{40}$/);
+        expect(sha).toBe(await git.resolveCommit({ cwd, ref: "HEAD" }));
+        expect(await h.trackedFiles(cwd)).toContain("lunasq/tasks/t1.md");
+        expect(await h.trackedFiles(cwd)).not.toContain("VERSION");
+        // El cambio ajeno sigue sin commitear.
+        expect(await git.isDirty(cwd)).toBe(true);
+
+        const message = await h.headMessage(cwd);
+        expect(message).toMatch(/^chore\(lunasq\): evidencia\n/);
+        expect(message).toMatch(/\n\nLunasQ-Task: t1\nLunasQ-Run: r1\n*$/);
+
+        expect(
+          await git.commitPaths({
+            cwd,
+            paths: ["lunasq/tasks/t1.md"],
+            message: "otra",
+            trailers: {},
+          }),
+        ).toBeNull();
+      });
+
+      it("commitea una nueva versión del archivo ya rastreado", async () => {
+        const cwd = await h.newRepo(hooks);
+        const input = { cwd, paths: ["lunasq/tasks/t1.md"], message: "evidencia", trailers: {} };
+        await h.writeWorkingFile(cwd, "lunasq/tasks/t1.md", "uno\n");
+        const first = await git.commitPaths(input);
+        await h.writeWorkingFile(cwd, "lunasq/tasks/t1.md", "uno\ndos\n");
+        const second = await git.commitPaths(input);
+        expect(second).not.toBe(first);
+        expect(second).toBe(await git.resolveCommit({ cwd, ref: "HEAD" }));
       });
     });
   });

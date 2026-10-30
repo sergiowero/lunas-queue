@@ -2,6 +2,7 @@
 // venir de la configuración del proyecto y no deben poder inyectar comandos.
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { EVIDENCE_DIR } from "@lunasq/schemas";
 import { GitError } from "./errors.ts";
 import type { GitAdapter, GitFile } from "./types.ts";
 
@@ -21,6 +22,9 @@ interface GitRun {
   stderr: string;
   exitCode: number;
 }
+
+// Pathspec que deja fuera el archivo de evidencia de LunasQ de los chequeos y de `commitAll`.
+const EXCLUDE_EVIDENCE = [".", `:(exclude)${EVIDENCE_DIR}`];
 
 const REGULAR_FILE = "100644";
 const EXECUTABLE_FILE = "100755";
@@ -85,19 +89,55 @@ export class RealGit implements GitAdapter {
   }
 
   async isDirty(cwd: string) {
-    const res = await this.ok(cwd, ["status", "--porcelain", "--untracked-files=all", "-z"]);
+    const res = await this.ok(cwd, [
+      "status",
+      "--porcelain",
+      "--untracked-files=all",
+      "-z",
+      "--",
+      ...EXCLUDE_EVIDENCE,
+    ]);
     return res.stdout.length > 0;
   }
 
   async commitAll(input: { cwd: string; message: string; trailers: Record<string, string> }) {
     if (!(await this.isDirty(input.cwd))) return null;
-    await this.ok(input.cwd, ["add", "--all"]);
+    await this.ok(input.cwd, ["add", "--all", "--", ...EXCLUDE_EVIDENCE]);
+    return this.commitStaged(input, []);
+  }
+
+  async commitPaths(input: {
+    cwd: string;
+    paths: string[];
+    message: string;
+    trailers: Record<string, string>;
+  }) {
+    if (input.paths.length === 0) return null;
+    // --force: el archivo de evidencia puede estar en un .gitignore del proyecto.
+    await this.ok(input.cwd, ["add", "--force", "--", ...input.paths]);
+    const staged = await this.run(input.cwd, ["diff", "--cached", "--quiet", "--", ...input.paths]);
+    if (staged.exitCode === 0) return null;
+    // `-- <rutas>` commitea solo esas rutas, aunque haya otras cosas en el índice.
+    return this.commitStaged(input, ["--only", "--", ...input.paths]);
+  }
+
+  private async commitStaged(
+    input: { cwd: string; message: string; trailers: Record<string, string> },
+    extra: string[],
+  ) {
     // Los trailers van en su propio párrafo. Con `--trailer`, git toma como bloque de trailers un
     // asunto de una línea con `: ` (`chore(lunasq): …`) y los pega sin línea en blanco.
     const trailers = Object.entries(input.trailers).map(([k, v]) => `${k}: ${v}`);
     const paragraphs = trailers.length ? ["--message", trailers.join("\n")] : [];
     try {
-      await this.ok(input.cwd, ["commit", "--quiet", "--message", input.message, ...paragraphs]);
+      await this.ok(input.cwd, [
+        "commit",
+        "--quiet",
+        "--message",
+        input.message,
+        ...paragraphs,
+        ...extra,
+      ]);
     } catch (err) {
       // Sin esto el índice queda preparado y el siguiente commit vería un worktree ya sucio.
       await this.run(input.cwd, ["reset", "--quiet"]);
