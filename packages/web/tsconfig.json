@@ -3,7 +3,9 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "dist",
-    "lib": ["ES2024", "DOM", "DOM.Iterable"]
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client", "node"]
   },
   "include": ["src", "test", "*.ts"],
   "references": [
