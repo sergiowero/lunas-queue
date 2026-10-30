@@ -123,7 +123,7 @@ describe("bandeja", () => {
     await user.paste("{}");
     await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
 
-    expect((await spec.findByRole("alert")).textContent).toMatch(/content: Invalid input/);
+    expect((await spec.findByRole("alert")).textContent).toMatch(/content\.domainModel: /);
     expect(fake.task(task.id).state).toBe("refined");
   });
 
@@ -266,17 +266,46 @@ describe("bandeja", () => {
     expect(fake.focused).toHaveLength(1);
   });
 
-  it("una consulta fallida no se lee como bandeja vacía", async () => {
+  it.each([
+    ["/api/questions", "Preguntas abiertas", "Ningún agente espera una respuesta."],
+    ["/api/tasks", "Specs por aprobar", "Ninguna spec espera aprobación."],
+  ])("si falla %s no se lee como bandeja vacía", async (path, sectionName, empty) => {
     const { fake } = seeded();
     const route = fake.fetch;
     const failing = async (input: RequestInfo | URL, init?: RequestInit) =>
-      String(input).startsWith("/api/questions")
+      String(input).startsWith(path)
         ? new Response(JSON.stringify({ error: "internal" }), { status: 500 })
         : route(input, init);
     renderApp("/inbox", Object.assign(fake, { fetch: failing }));
 
-    expect(await (await section("Preguntas abiertas")).findByRole("alert")).toBeTruthy();
+    expect(await (await section(sectionName)).findByRole("alert")).toBeTruthy();
     expect(screen.queryByText("Nada espera por ti.")).toBeNull();
+    expect(screen.queryByText(empty)).toBeNull();
+  });
+
+  it("muestra solo el error de la última acción sobre la spec", async () => {
+    const { fake, project } = seeded();
+    const task = fake.addTask(project.id, { intent: "Login con email" });
+    fake.addSpec(task.id);
+    fake.transition(task.id, "refined", null);
+    const { user } = renderApp("/inbox", fake);
+
+    const spec = await item("Specs por aprobar", "Login con email");
+    // Otro actor saca la tarea de refined: aprobar responde 409.
+    fake.task(task.id).state = "in_progress";
+    await user.click(await spec.findByRole("button", { name: "Aprobar v1" }));
+    expect((await spec.findByRole("alert")).textContent).toMatch(/no en refined/);
+    fake.task(task.id).state = "refined";
+    await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
+    const editor = spec.getByLabelText("Contenido de la spec (JSON)");
+    await user.clear(editor);
+    await user.click(editor);
+    await user.paste("{}");
+    await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
+
+    const alert = await spec.findByRole("alert");
+    await waitFor(() => expect(alert.textContent).toMatch(/content\.domainModel/));
+    expect(alert.textContent).not.toMatch(/no en refined/);
   });
 
   it("los bloqueos se refrescan solos aunque no lleguen eventos", () => {

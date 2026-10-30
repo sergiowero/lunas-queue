@@ -22,7 +22,12 @@ import type {
   TaskUsage,
   UsageTotals,
 } from "@lunasq/schemas";
-import { TaskCreate } from "@lunasq/schemas";
+import {
+  QuestionAnswer,
+  SpecEditAndApprove,
+  SpecRequestChanges,
+  TaskCreate,
+} from "@lunasq/schemas";
 import type { Json } from "../src/lib/api.ts";
 
 const EMPTY: UsageTotals = {
@@ -49,6 +54,23 @@ export const SPEC_CONTENT: SpecContent = {
 type Request = { method: string; path: string; body: unknown };
 
 const conflict = (error: string, message: string): [number, unknown] => [409, { error, message }];
+
+/** Valida como el servidor (`invalidInput`): 400 con los issues del esquema, o los datos. */
+function validate<T>(
+  schema: {
+    safeParse: (
+      body: unknown,
+    ) =>
+      | { success: true; data: T }
+      | { success: false; error: { issues: { path: PropertyKey[]; message: string }[] } };
+  },
+  body: unknown,
+): { ok: true; data: T } | { ok: false; response: [number, unknown] } {
+  const parsed = schema.safeParse(body);
+  if (parsed.success) return { ok: true, data: parsed.data };
+  const issues = parsed.error.issues.map((i) => ({ path: i.path.map(String), message: i.message }));
+  return { ok: false, response: [400, { error: "invalid_input", issues }] };
+}
 
 let seq = 0;
 const uuid = () => {
@@ -272,7 +294,9 @@ export class FakeApi {
     if (resource === "blocked") {
       if (method === "GET") return [200, this.blocked];
       const agent = this.blocked.find((b) => b.runId === id);
-      if (sub !== "focus" || !agent) return [404, { error: "not_blocked" }];
+      if (sub !== "focus" || !agent) {
+        return [404, { error: "not_blocked", message: "el Run no tiene un agente bloqueado" }];
+      }
       if (this.focusError) {
         const { status, ...error } = this.focusError;
         return [status, error];
@@ -338,16 +362,13 @@ export class FakeApi {
       return [200, this.questions.filter((q) => !status || q.status === status)];
     }
     const question = this.questions.find((q) => q.id === id);
-    if (!question) return [404, { error: "not_found" }];
-    if (method === "GET") return [200, question];
+    if (method === "GET") return question ? [200, question] : [404, { error: "not_found" }];
     if (sub !== "answer") return [404, { error: "not_found" }];
-    const answer = (body as { answer?: unknown }).answer;
-    if (typeof answer !== "string" || answer.trim() === "") {
-      return [
-        400,
-        { error: "invalid_input", issues: [{ path: ["answer"], message: "Too small" }] },
-      ];
-    }
+    // Como el servidor: primero el cuerpo, después la pregunta.
+    const input = validate(QuestionAnswer, body);
+    if (!input.ok) return input.response;
+    if (!question) return [404, { error: "not_found" }];
+    const answer = input.data.answer;
     if (question.status !== "open") {
       return conflict("not_open", `la pregunta ya está en ${question.status}`);
     }
@@ -401,6 +422,16 @@ export class FakeApi {
   ): [number, unknown] {
     const versions = this.specs.filter((s) => s.taskId === task.id);
     if (Number.isNaN(version)) return [200, versions];
+    // Como el servidor: en un POST se valida el cuerpo antes de buscar la versión.
+    const input =
+      method !== "POST"
+        ? null
+        : action === "edit-and-approve"
+          ? validate(SpecEditAndApprove, body)
+          : action === "request-changes"
+            ? validate(SpecRequestChanges, body)
+            : null;
+    if (input && !input.ok) return input.response;
     const spec = versions.find((s) => s.version === version);
     if (!spec) return [404, { error: "not_found" }];
     if (method === "GET" && action === "diff") {
@@ -448,13 +479,7 @@ export class FakeApi {
       return [200, { spec, task }];
     }
     if (action === "edit-and-approve") {
-      const content = (body as { content?: unknown }).content as SpecContent | undefined;
-      if (!content || typeof content !== "object" || !Array.isArray(content.criteria)) {
-        return [
-          400,
-          { error: "invalid_input", issues: [{ path: ["content"], message: "Invalid input" }] },
-        ];
-      }
+      const { content } = (input?.ok ? input.data : body) as { content: SpecContent };
       const edited = this.addSpec(task.id, content);
       Object.assign(edited, {
         createdBy: "human",
@@ -467,13 +492,7 @@ export class FakeApi {
       return [200, { spec: edited, task }];
     }
     if (action === "request-changes") {
-      const comments = (body as { comments?: unknown }).comments;
-      if (typeof comments !== "string" || comments.trim() === "") {
-        return [
-          400,
-          { error: "invalid_input", issues: [{ path: ["comments"], message: "Too small" }] },
-        ];
-      }
+      const { comments } = (input?.ok ? input.data : body) as { comments: string };
       Object.assign(spec, { approval: "changes_requested", reviewComments: comments });
       this.event(task.id, "spec.changes_requested", "human", { version, comments });
       this.transition(task.id, "draft", "queued");

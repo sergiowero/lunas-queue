@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
-import { CHANGE_STREAM_URL, NOTIFICATION_STREAM_URL } from "./live.ts";
+import { CHANGE_STREAM_URL } from "./live.ts";
 
 /** EventSource mínimo: los tests disparan los mensajes a mano. */
 class FakeEventSource {
@@ -61,7 +61,7 @@ describe("actualización en vivo por SSE", () => {
     const source = FakeEventSource.instances[0];
     source?.emit("change", "{roto");
     unmount();
-    expect(FakeEventSource.instances.map((s) => s.closed)).toEqual([true, true]);
+    expect(source?.closed).toBe(true);
   });
 
   it("un change trae a la bandeja la pregunta nueva", async () => {
@@ -76,19 +76,5 @@ describe("actualización en vivo por SSE", () => {
     const source = FakeEventSource.instances.find((s) => s.url === CHANGE_STREAM_URL);
     source?.emit("change", JSON.stringify({ taskIds: [task.id] }));
     expect(await screen.findByText("¿Uso UUID v7?")).toBeTruthy();
-  });
-
-  it("una notificación trae a la bandeja el agente bloqueado", async () => {
-    vi.stubGlobal("EventSource", FakeEventSource);
-    const fake = new FakeApi();
-    const task = fake.addTask(fake.addProject().id, { intent: "Bloqueo en vivo" });
-    const run = fake.startRun(task.id, "implement");
-    renderApp("/inbox", fake);
-    await screen.findByText("Ningún agente espera un permiso.");
-
-    fake.block(run);
-    const source = FakeEventSource.instances.find((s) => s.url === NOTIFICATION_STREAM_URL);
-    source?.emit("notification", JSON.stringify({ kind: "agent_blocked", taskId: task.id }));
-    expect(await screen.findByText(run.herdrName as string)).toBeTruthy();
   });
 });

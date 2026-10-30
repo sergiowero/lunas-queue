@@ -169,16 +169,30 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
     await queryClient.invalidateQueries({ queryKey: ["queue"] });
     await queryClient.invalidateQueries({ queryKey: ["tasks"] });
   };
+  // Solo se muestra el error de la última acción: cada una limpia el de las otras. Un 409 no
+  // refresca el panel: desmontaría el gate con el error; el cambio que lo causó llega por SSE.
   const approve = useMutation({
     mutationFn: () => api.approveSpec(task.id, spec.version),
+    onMutate: () => {
+      requestChanges.reset();
+      editAndApprove.reset();
+    },
     onSuccess,
   });
   const requestChanges = useMutation({
     mutationFn: () => api.requestChanges(task.id, spec.version, comments.trim()),
+    onMutate: () => {
+      approve.reset();
+      editAndApprove.reset();
+    },
     onSuccess,
   });
   const editAndApprove = useMutation({
     mutationFn: (content: SpecContent) => api.editAndApprove(task.id, spec.version, content),
+    onMutate: () => {
+      approve.reset();
+      requestChanges.reset();
+    },
     onSuccess,
   });
   const pending = approve.isPending || requestChanges.isPending || editAndApprove.isPending;

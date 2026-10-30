@@ -55,10 +55,12 @@ function Item({
   );
 }
 
-function SpecsSection({ refined, pending }: { refined: Json<Task>[]; pending: boolean }) {
+function SpecsSection({ refined, tasks }: { refined: Json<Task>[]; tasks: Inbox["tasks"] }) {
   return (
     <Section title="Specs por aprobar">
-      {pending ? (
+      {tasks.error ? (
+        <QueryError error={tasks.error} />
+      ) : tasks.isPending ? (
         <Loading />
       ) : refined.length === 0 ? (
         <Muted>Ninguna spec espera aprobación.</Muted>
@@ -223,8 +225,7 @@ export function InboxPage() {
         <h1 className="text-xl font-semibold">Bandeja</h1>
         {loaded && inbox.count === 0 && <Muted>Nada espera por ti.</Muted>}
       </div>
-      {inbox.tasks.error && <QueryError error={inbox.tasks.error} />}
-      <SpecsSection refined={inbox.refined} pending={inbox.tasks.isPending} />
+      <SpecsSection refined={inbox.refined} tasks={inbox.tasks} />
       <QuestionsSection questions={inbox.questions} tasks={inbox.byId} />
       <BlockedSection blocked={inbox.blocked} tasks={inbox.byId} />
     </div>
