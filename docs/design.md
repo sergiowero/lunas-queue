@@ -495,7 +495,7 @@ Hay un solo gate humano obligatorio (aprobar la spec) y cuatro puntos de escalam
 
 **Aprobación de la spec (refined)**
 
-- La UI muestra la versión de la spec con diff contra la anterior.
+- La UI muestra la versión de la spec con diff contra la anterior en el detalle de la tarea. La bandeja solo lista las tareas en refined con un enlace a ese detalle ([ADR 0015](decisions/0015-bandeja-lista-de-specs.md)).
 - El humano puede: **aprobar**, **pedir cambios** con comentarios (nueva ronda de refinamiento con esos comentarios como input) o **editar la spec directamente** y aprobar.
 - Al aprobar, la tarea entra al ready set de implementación; no se despacha nada mientras espera.
 
@@ -543,8 +543,7 @@ Cualquier otro fallo (push, `gh`, un hook bloqueado) escala a Needs human. Una e
 **Front end: vistas mínimas**
 
 - Tablero por proyecto (columnas por estado) y vista global de la cola ordenada por score.
-- Pestaña «En curso» con las tareas In progress y las que tienen un agente corriendo (sub-estado running) de todos los proyectos; la etiqueta In progress va en azul en todas las vistas. Detalle: [ADR uw-21-front-end](decisions/uw-21-front-end.md).
-- Bandeja de aprobaciones y preguntas pendientes (todo lo que espera al humano); los bloqueos por permiso incluyen un acceso que enfoca el pane en herdr. Detalle: [ADR uw-27-bandeja](decisions/uw-27-bandeja.md).
+- Bandeja de aprobaciones y preguntas pendientes (todo lo que espera al humano); las specs por aprobar son una lista de enlaces al detalle de la tarea, donde se aprueban; los bloqueos por permiso incluyen un acceso que enfoca el pane en herdr. Detalle: [ADR uw-27-bandeja](decisions/uw-27-bandeja.md) y [ADR 0015](decisions/0015-bandeja-lista-de-specs.md).
 - Detalle de tarea: spec y versiones, Runs, event log, enlace al pane en herdr.
 - Vista de hooks por proyecto: contenido de `lunasq/hooks/` en la rama base y últimas ejecuciones.
 

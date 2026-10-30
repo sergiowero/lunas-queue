@@ -1,5 +1,5 @@
 // Versiones de la spec, su contenido y el diff contra la anterior (ADR 0013), con el gate: aprobar,
-// pedir cambios o editar y aprobar. El detalle de tarea y la bandeja (UW-27) usan el mismo panel.
+// pedir cambios o editar y aprobar. Solo lo monta el detalle de tarea: la bandeja enlaza a él (ADR 0015).
 import type { Spec, SpecApproval, SpecContent, SpecDiff, Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -241,7 +241,7 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
   );
 }
 
-/** Versiones, contenido, diff y gate; sin marco, para el detalle de tarea y la bandeja. */
+/** Versiones, contenido, diff y gate; sin marco. */
 export function SpecVersions({ task }: { task: Json<Task> }) {
   const specs = useQuery(queries.specs(task.id));
   // La elección vale contra la última versión que había: si llega otra, se muestra la nueva para

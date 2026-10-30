@@ -13,9 +13,9 @@ El piloto tiene dos partes. La suite e2e (`pnpm e2e`, [ADR uw-29-e2e](decisions/
 
 1. Crea el proyecto (`POST /api/projects`: repo, rama base, ruta local y comando de tests).
 2. Crea tres tareas desde **Nueva tarea**: A, B (depende de A) y C (depende de B). Haz que A sea ambigua para forzar una pregunta.
-3. **Pregunta:** responde en la **Bandeja** cuando el refinador pregunte; aprueba la spec de A. Comprueba que el agente retoma con tu respuesta.
+3. **Pregunta:** responde en la **Bandeja** cuando el refinador pregunte; luego abre A desde «Specs por aprobar» de la Bandeja y aprueba su spec en el detalle de la tarea. Comprueba que el agente retoma con tu respuesta.
 4. **Dependencias:** B y C no arrancan hasta que el PR de la anterior se mergea. Mergea el PR de A en GitHub y comprueba que B avanza en el siguiente poll.
-5. **Rework:** en B, rechaza algo en la spec (**Pedir cambios**) o deja que el verificador rechace; comprueba que vuelve a implementación con los must-fix y que la iteración sube.
+5. **Rework:** en B, abre B desde la Bandeja y rechaza algo en la spec (**Pedir cambios**) o deja que el verificador rechace; comprueba que vuelve a implementación con los must-fix y que la iteración sube.
 6. **Hook:** en **Hooks** del proyecto, comprueba la ejecución de `10-smoke.sh` y que `10-lint.sh` falló sin detener la fase.
 7. Mergea B y C. Cada tarea debe terminar en un PR mergeable (rebasado sobre la base, con evidencia y etiqueta de riesgo).
 

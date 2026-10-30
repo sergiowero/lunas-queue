@@ -1,6 +1,6 @@
 # UW-27 — Bandeja de aprobaciones, preguntas y bloqueos
 
-- Estado: aceptada
+- Estado: aceptada; la parte de specs por aprobar la supera [ADR 0015](0015-bandeja-lista-de-specs.md)
 - Fecha: 2026-10-30
 - Unidad: UW-27 · Código: `packages/web/src/pages/inbox.tsx`, `packages/web/src/lib/inbox.ts`, `packages/web/src/components/task/spec.tsx`, `packages/server/src/api/questions.ts` (`blockedRoutes`), `packages/server/src/runtime/runtime.ts`, `HerdrAdapter.focusAgent`
 
@@ -11,9 +11,9 @@ El criterio de UW-27 es que todo lo que espera al humano aparezca y se resuelva 
 ## Decisión
 
 - **Una página, `/inbox`, con cuatro secciones**: «Specs por aprobar», «Tareas que necesitan atención», «Preguntas abiertas» y «Agentes bloqueados». Cada pendiente es un `article` con el intent de la tarea (enlace al detalle) y su proyecto. El menú muestra «Bandeja» con el total de pendientes.
-- **Specs por aprobar = tareas en `refined`.** Se derivan de `GET /api/tasks`, sin ruta nueva: en `refined` la última versión siempre está pendiente, porque aprobar o pedir cambios saca a la tarea de ese estado. Cada una monta `SpecVersions`, el mismo componente del detalle de tarea (versiones, contenido, diff contra la anterior y gate), así ambos lugares no divergen.
+- **Specs por aprobar = tareas en `refined`.** Se derivan de `GET /api/tasks`, sin ruta nueva: en `refined` la última versión siempre está pendiente, porque aprobar o pedir cambios saca a la tarea de ese estado. *Superado por ADR 0015: la sección es solo una lista de enlaces al detalle de la tarea, donde vive el gate (versiones, contenido, diff y aprobar).*
 - **Tareas que necesitan atención = tareas en `needs_human`.** Se derivan de `GET /api/tasks`, igual que las specs. Sin esta sección, una tarea escalada (reintentos agotados, loop de verificación agotado, timeout de fase, fallo de entrega) no aparecía en la bandeja ni en el contador. Cada tarjeta enlaza al detalle de la tarea.
-- **Editar y aprobar** (`POST /api/tasks/:id/specs/:version/edit-and-approve`, UW-12) se suma al gate, en la bandeja y en el detalle. El contenido se edita como JSON con formato. El cliente solo comprueba que parsea; `SpecContent` lo valida el servidor y la UI muestra sus issues (`ruta: mensaje`). Validar en el cliente metería zod en el bundle (ADR uw-21-front-end). Un editor por campos queda fuera de v1.
+- **Editar y aprobar** (`POST /api/tasks/:id/specs/:version/edit-and-approve`, UW-12) se suma al gate del detalle (en la bandeja hasta ADR 0015). El contenido se edita como JSON con formato. El cliente solo comprueba que parsea; `SpecContent` lo valida el servidor y la UI muestra sus issues (`ruta: mensaje`). Validar en el cliente metería zod en el bundle (ADR uw-21-front-end). Un editor por campos queda fuera de v1.
 - **Errores.**
   - Una consulta que falla se muestra en su sección. «Nada espera por ti.» solo aparece con las tres consultas en éxito.
   - En el gate de spec se muestra solo el error de la última acción: cada acción limpia el error de las otras.
