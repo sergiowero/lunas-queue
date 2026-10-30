@@ -99,6 +99,8 @@ export class FakeHerdr implements HerdrAdapter {
 
   /** Notificaciones mostradas, para que los tests las inspeccionen. */
   readonly notifications: { title: string; body?: string; sound?: string }[] = [];
+  /** Último agente enfocado con `focusAgent`. */
+  focused: string | undefined;
 
   constructor(opts: FakeHerdrOptions = {}) {
     this.promptDurationMs = opts.promptDurationMs ?? 5;
@@ -355,6 +357,12 @@ export class FakeHerdr implements HerdrAdapter {
         else return this.exitAgent(agent.name);
       }
     }
+  }
+
+  async focusAgent(name: string) {
+    const agent = this.requireAgent(name);
+    this.focused = agent.name;
+    return this.toAgent(agent);
   }
 
   async reportMetadata(input: { paneId: string; title?: string; tokens?: Record<string, string> }) {

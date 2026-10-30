@@ -1,11 +1,15 @@
 // Cliente de la API de LunasQ. Los tipos vienen de @lunasq/schemas; por JSON las fechas llegan
 // como string ISO, así que cada respuesta se tipa con Json<T>.
 import type {
+  BlockedAgent,
   EventView,
   Project,
+  Question,
+  QuestionDelivery,
   QueueEntry,
   RunView,
   Spec,
+  SpecContent,
   SpecDiff,
   Task,
   TaskCreate,
@@ -58,6 +62,7 @@ const post = <T>(path: string, body: unknown = {}) =>
 const task = (id: string) => `/api/tasks/${encodeURIComponent(id)}`;
 
 export type SpecResponse = { spec: Json<Spec>; task: Json<Task> };
+export type AnswerResponse = { question: Json<Question>; delivery: QuestionDelivery };
 
 export const api = {
   projects: () => request<Project[]>("/api/projects"),
@@ -91,4 +96,11 @@ export const api = {
     post<SpecResponse>(`${task(id)}/specs/${version}/approve`),
   requestChanges: (id: string, version: number, comments: string) =>
     post<SpecResponse>(`${task(id)}/specs/${version}/request-changes`, { comments }),
+  editAndApprove: (id: string, version: number, content: SpecContent) =>
+    post<SpecResponse>(`${task(id)}/specs/${version}/edit-and-approve`, { content }),
+  openQuestions: () => request<Question[]>("/api/questions?status=open"),
+  answerQuestion: (id: string, answer: string) =>
+    post<AnswerResponse>(`/api/questions/${encodeURIComponent(id)}/answer`, { answer }),
+  blocked: () => request<BlockedAgent[]>("/api/blocked"),
+  focusBlocked: (runId: string) => post<void>(`/api/blocked/${encodeURIComponent(runId)}/focus`),
 };

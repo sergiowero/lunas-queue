@@ -84,6 +84,15 @@ describe("RealHerdr con exec simulado", () => {
     ).rejects.toMatchObject({ code: "pane_not_found" });
   });
 
+  it("focusAgent corre `agent focus` con el nombre del agente", async () => {
+    const { exec, calls } = scripted({
+      "agent focus": () => ({ stdout: agentJson("blocked"), stderr: "", exitCode: 0 }),
+    });
+    const agent = await new RealHerdr({ exec }).focusAgent("t1-refine-1");
+    expect(calls[0]?.args).toEqual(["agent", "focus", "t1-refine-1"]);
+    expect(agent).toMatchObject({ paneId: "w2:p2", status: "blocked" });
+  });
+
   it("los comandos que esperan dan al CLI margen sobre el timeout de herdr", async () => {
     const { exec, calls } = scripted({
       "agent wait": () => ({ stdout: agentJson("done"), stderr: "", exitCode: 0 }),

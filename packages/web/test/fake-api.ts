@@ -1,14 +1,17 @@
 // API de LunasQ en memoria para los tests del front end. Responde las mismas rutas y formas que
 // packages/server (tipadas con Json<T> de @lunasq/schemas) y deja simular lo que hacen el
-// scheduler y los agentes: transiciones, Runs, specs, usage y evidencia. Valida y rechaza como el
-// servidor (TaskCreate, 422 de referencias, 409 del gate y de la máquina de estados).
+// scheduler y los agentes: transiciones, Runs, specs, usage, evidencia, preguntas y bloqueos. Valida
+// y rechaza como el servidor (TaskCreate, 422 de referencias, 409 del gate y de la máquina de
+// estados, 409 de preguntas ya respondidas).
 
 import type {
   Actor,
+  BlockedAgent,
   EventView,
   EvidenceSource,
   Phase,
   Project,
+  Question,
   QueueEntry,
   RunView,
   Spec,
@@ -65,6 +68,15 @@ export class FakeApi {
   /** Origen de la evidencia por tarea; sin entrada, el worktree. */
   readonly evidenceSource = new Map<string, EvidenceSource>();
   readonly requests: Request[] = [];
+  readonly questions: Json<Question>[] = [];
+  /** Lo que respondería el RunWatcher: los agentes bloqueados ahora. */
+  blocked: Json<BlockedAgent>[] = [];
+  /** Nombres de agente que la UI pidió enfocar en herdr. */
+  readonly focused: string[] = [];
+  /** Si se fija, `POST /api/blocked/:runId/focus` responde este error de herdr. */
+  focusError: { status: number; error: string; message: string } | null = null;
+  /** Si el agente que preguntó sigue vivo: la respuesta va al pane; si no, a un Run nuevo. */
+  agentAlive = false;
   /** Si se fija, GET /api/queue responde esto tal cual. */
   queue: Json<QueueEntry>[] | null = null;
   private clock = Date.parse("2026-10-29T10:00:00Z");
@@ -196,6 +208,42 @@ export class FakeApi {
     return spec;
   }
 
+  /** Como `ask_human`: guarda la Question y pasa la tarea a waiting_human. */
+  ask(taskId: string, question: string, context: string | null = null): Json<Question> {
+    const task = this.task(taskId);
+    const run = this.runs.findLast((r) => r.taskId === taskId);
+    const created: Json<Question> = {
+      id: uuid(),
+      taskId,
+      runId: run?.id ?? null,
+      question,
+      context,
+      status: "open",
+      answer: null,
+      answeredBy: null,
+      answeredAt: null,
+      createdAt: this.now(),
+    };
+    this.questions.push(created);
+    this.event(taskId, "question.created", "agent", { questionId: created.id });
+    this.transition(taskId, task.state, "waiting_human");
+    return created;
+  }
+
+  /** Como el RunWatcher cuando herdr reporta `blocked`. */
+  block(run: Json<RunView>): Json<BlockedAgent> {
+    const agent: Json<BlockedAgent> = {
+      runId: run.id,
+      taskId: run.taskId,
+      phase: run.phase as BlockedAgent["phase"],
+      agentName: run.herdrName ?? "agente",
+      paneId: run.herdrPane ?? "p-?",
+      since: this.now(),
+    };
+    this.blocked.push(agent);
+    return agent;
+  }
+
   task(id: string): Json<Task> {
     const task = this.tasks.find((t) => t.id === id);
     if (!task) throw new Error(`tarea ${id} no existe`);
@@ -220,6 +268,18 @@ export class FakeApi {
     const notFound: [number, unknown] = [404, { error: "not_found" }];
 
     if (resource === "projects" && method === "GET") return [200, this.projects];
+    if (resource === "questions") return this.question(method, url, id, sub, body);
+    if (resource === "blocked") {
+      if (method === "GET") return [200, this.blocked];
+      const agent = this.blocked.find((b) => b.runId === id);
+      if (sub !== "focus" || !agent) return [404, { error: "not_blocked" }];
+      if (this.focusError) {
+        const { status, ...error } = this.focusError;
+        return [status, error];
+      }
+      this.focused.push(agent.agentName);
+      return [204, null];
+    }
     if (resource === "queue") return [200, this.queue ?? this.defaultQueue(url)];
     if (resource !== "tasks") return notFound;
 
@@ -264,6 +324,47 @@ export class FakeApi {
       default:
         return notFound;
     }
+  }
+
+  private question(
+    method: string,
+    url: URL,
+    id: string | undefined,
+    sub: string | undefined,
+    body: unknown,
+  ): [number, unknown] {
+    if (!id) {
+      const status = url.searchParams.get("status");
+      return [200, this.questions.filter((q) => !status || q.status === status)];
+    }
+    const question = this.questions.find((q) => q.id === id);
+    if (!question) return [404, { error: "not_found" }];
+    if (method === "GET") return [200, question];
+    if (sub !== "answer") return [404, { error: "not_found" }];
+    const answer = (body as { answer?: unknown }).answer;
+    if (typeof answer !== "string" || answer.trim() === "") {
+      return [
+        400,
+        { error: "invalid_input", issues: [{ path: ["answer"], message: "Too small" }] },
+      ];
+    }
+    if (question.status !== "open") {
+      return conflict("not_open", `la pregunta ya está en ${question.status}`);
+    }
+    const task = this.task(question.taskId);
+    if (task.subState !== "waiting_human") {
+      return conflict("task_not_waiting", "la tarea ya no espera una respuesta");
+    }
+    const delivery = this.agentAlive ? "pane" : "new_run";
+    Object.assign(question, {
+      status: "answered",
+      answer: answer.trim(),
+      answeredBy: "human",
+      answeredAt: this.now(),
+    });
+    this.event(task.id, "question.answered", "human", { questionId: id, delivery });
+    this.transition(task.id, task.state, delivery === "pane" ? "running" : "queued");
+    return [200, { question, delivery }];
   }
 
   private create(body: unknown): [number, unknown] {
@@ -345,6 +446,25 @@ export class FakeApi {
       this.event(task.id, "spec.approved", "human", { specId: spec.id, version });
       this.transition(task.id, "in_progress", "queued");
       return [200, { spec, task }];
+    }
+    if (action === "edit-and-approve") {
+      const content = (body as { content?: unknown }).content as SpecContent | undefined;
+      if (!content || typeof content !== "object" || !Array.isArray(content.criteria)) {
+        return [
+          400,
+          { error: "invalid_input", issues: [{ path: ["content"], message: "Invalid input" }] },
+        ];
+      }
+      const edited = this.addSpec(task.id, content);
+      Object.assign(edited, {
+        createdBy: "human",
+        approval: "approved",
+        approvedBy: "human",
+        approvedAt: this.now(),
+      });
+      this.event(task.id, "spec.approved", "human", { specId: edited.id, version: edited.version });
+      this.transition(task.id, "in_progress", "queued");
+      return [200, { spec: edited, task }];
     }
     if (action === "request-changes") {
       const comments = (body as { comments?: unknown }).comments;

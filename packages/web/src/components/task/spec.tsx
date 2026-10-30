@@ -1,12 +1,12 @@
-// Versiones de la spec, su contenido y el diff contra la anterior (ADR 0013). Aprobar o pedir
-// cambios se puede desde aquí; la bandeja (UW-27) suma editar y aprobar.
-import type { Spec, SpecApproval, SpecDiff, Task } from "@lunasq/schemas";
+// Versiones de la spec, su contenido y el diff contra la anterior (ADR 0013), con el gate: aprobar,
+// pedir cambios o editar y aprobar. El detalle de tarea y la bandeja (UW-27) usan el mismo panel.
+import type { Spec, SpecApproval, SpecContent, SpecDiff, Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type Json } from "../../lib/api.ts";
 import { queries } from "../../lib/queries.ts";
 import { Muted, Section } from "../section.tsx";
-import { Loading, QueryError } from "../status.tsx";
+import { Loading, MutationError, QueryError } from "../status.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { Label, Textarea } from "../ui/input.tsx";
@@ -108,11 +108,63 @@ function Diff({ taskId, version }: { taskId: string; version: number }) {
   );
 }
 
+/** Editar y aprobar (§Aprobación de la spec): el contenido va como JSON y el servidor lo valida. */
+function Editor({
+  spec,
+  pending,
+  onSave,
+  onCancel,
+}: {
+  spec: Json<Spec>;
+  pending: boolean;
+  onSave: (content: SpecContent) => void;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState(() => JSON.stringify(spec.content, null, 2));
+  const [parseError, setParseError] = useState<string | null>(null);
+  const save = () => {
+    try {
+      const content = JSON.parse(text) as SpecContent;
+      setParseError(null);
+      onSave(content);
+    } catch (error) {
+      setParseError(`JSON inválido: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={`content-${spec.id}`}>Contenido de la spec (JSON)</Label>
+      <Textarea
+        id={`content-${spec.id}`}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        spellCheck={false}
+        className="min-h-80 font-mono text-xs"
+      />
+      <div className="flex gap-2">
+        <Button onClick={save} disabled={pending}>
+          Guardar y aprobar
+        </Button>
+        <Button variant="outline" onClick={onCancel} disabled={pending}>
+          Cancelar edición
+        </Button>
+      </div>
+      {parseError && (
+        <p role="alert" className="text-sm text-destructive">
+          {parseError}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
   const queryClient = useQueryClient();
   const [comments, setComments] = useState("");
+  const [editing, setEditing] = useState(false);
   const onSuccess = async () => {
     setComments("");
+    setEditing(false);
     await queryClient.invalidateQueries({ queryKey: ["task", task.id] });
     await queryClient.invalidateQueries({ queryKey: ["queue"] });
     await queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -125,92 +177,108 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
     mutationFn: () => api.requestChanges(task.id, spec.version, comments.trim()),
     onSuccess,
   });
-  const pending = approve.isPending || requestChanges.isPending;
-  const error = approve.error ?? requestChanges.error;
+  const editAndApprove = useMutation({
+    mutationFn: (content: SpecContent) => api.editAndApprove(task.id, spec.version, content),
+    onSuccess,
+  });
+  const pending = approve.isPending || requestChanges.isPending || editAndApprove.isPending;
+  const error = approve.error ?? requestChanges.error ?? editAndApprove.error;
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <Button onClick={() => approve.mutate()} disabled={pending} className="self-start">
-        {`Aprobar v${spec.version}`}
-      </Button>
-      <Label htmlFor={`comments-${spec.id}`}>Comentarios</Label>
-      <Textarea
-        id={`comments-${spec.id}`}
-        value={comments}
-        onChange={(e) => setComments(e.target.value)}
-        placeholder="Qué debe cambiar el refinador"
-      />
-      <Button
-        variant="outline"
-        className="self-start"
-        disabled={pending || comments.trim() === ""}
-        onClick={() => requestChanges.mutate()}
-      >
-        Pedir cambios
-      </Button>
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error.message}
-        </p>
+      {editing ? (
+        <Editor
+          spec={spec}
+          pending={pending}
+          onSave={(content) => editAndApprove.mutate(content)}
+          onCancel={() => {
+            editAndApprove.reset();
+            setEditing(false);
+          }}
+        />
+      ) : (
+        <>
+          <div className="flex gap-2">
+            <Button onClick={() => approve.mutate()} disabled={pending}>
+              {`Aprobar v${spec.version}`}
+            </Button>
+            <Button variant="outline" onClick={() => setEditing(true)} disabled={pending}>
+              Editar y aprobar
+            </Button>
+          </div>
+          <Label htmlFor={`comments-${spec.id}`}>Comentarios</Label>
+          <Textarea
+            id={`comments-${spec.id}`}
+            value={comments}
+            onChange={(e) => setComments(e.target.value)}
+            placeholder="Qué debe cambiar el refinador"
+          />
+          <Button
+            variant="outline"
+            className="self-start"
+            disabled={pending || comments.trim() === ""}
+            onClick={() => requestChanges.mutate()}
+          >
+            Pedir cambios
+          </Button>
+        </>
       )}
+      {error && <MutationError error={error} />}
     </div>
   );
 }
 
-export function SpecPanel({ task }: { task: Json<Task> }) {
+/** Versiones, contenido, diff y gate; sin marco, para el detalle de tarea y la bandeja. */
+export function SpecVersions({ task }: { task: Json<Task> }) {
   const specs = useQuery(queries.specs(task.id));
   // La elección vale contra la última versión que había: si llega otra, se muestra la nueva para
   // que el gate (que solo aplica a la última) no quede oculto.
   const [choice, setChoice] = useState<{ version: number; latest: number } | null>(null);
 
-  if (specs.error) {
-    return (
-      <Section title="Spec">
-        <QueryError error={specs.error} />
-      </Section>
-    );
-  }
-  const versions = specs.data ?? [];
+  if (specs.error) return <QueryError error={specs.error} />;
+  if (specs.isPending) return <Loading />;
+  const versions = specs.data;
   const latest = versions.at(-1);
   const chosen =
     choice && choice.latest === latest?.version
       ? versions.find((s) => s.version === choice.version)
       : undefined;
   const spec = chosen ?? latest;
+  if (!spec || !latest) return <Muted>El refinamiento todavía no entrega una spec.</Muted>;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {versions.map((s) => (
+          <Button
+            key={s.id}
+            size="sm"
+            variant={s.version === spec.version ? "default" : "outline"}
+            aria-pressed={s.version === spec.version}
+            onClick={() => setChoice({ version: s.version, latest: latest.version })}
+          >
+            {`v${s.version}`}
+          </Button>
+        ))}
+        <Badge variant={spec.approval === "approved" ? "default" : "outline"}>
+          {APPROVAL_LABEL[spec.approval]}
+        </Badge>
+        <span className="text-xs text-muted-foreground">{`autor: ${spec.createdBy}`}</span>
+      </div>
+      {spec.reviewComments && (
+        <p className="text-sm">{`Comentarios de revisión: ${spec.reviewComments}`}</p>
+      )}
+      <Content spec={spec} />
+      <Diff taskId={task.id} version={spec.version} />
+      {task.state === "refined" &&
+        spec.approval === "pending" &&
+        spec.version === latest.version && <Review task={task} spec={spec} />}
+    </div>
+  );
+}
+
+export function SpecPanel({ task }: { task: Json<Task> }) {
   return (
     <Section title="Spec">
-      {specs.isPending ? (
-        <Loading />
-      ) : !spec || !latest ? (
-        <Muted>El refinamiento todavía no entrega una spec.</Muted>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            {versions.map((s) => (
-              <Button
-                key={s.id}
-                size="sm"
-                variant={s.version === spec.version ? "default" : "outline"}
-                aria-pressed={s.version === spec.version}
-                onClick={() => setChoice({ version: s.version, latest: latest.version })}
-              >
-                {`v${s.version}`}
-              </Button>
-            ))}
-            <Badge variant={spec.approval === "approved" ? "default" : "outline"}>
-              {APPROVAL_LABEL[spec.approval]}
-            </Badge>
-            <span className="text-xs text-muted-foreground">{`autor: ${spec.createdBy}`}</span>
-          </div>
-          {spec.reviewComments && (
-            <p className="text-sm">{`Comentarios de revisión: ${spec.reviewComments}`}</p>
-          )}
-          <Content spec={spec} />
-          <Diff taskId={task.id} version={spec.version} />
-          {task.state === "refined" &&
-            spec.approval === "pending" &&
-            spec.version === latest.version && <Review task={task} spec={spec} />}
-        </div>
-      )}
+      <SpecVersions task={task} />
     </Section>
   );
 }
