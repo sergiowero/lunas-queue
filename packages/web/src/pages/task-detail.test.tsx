@@ -35,6 +35,16 @@ describe("detalle de tarea", () => {
     ).toBeTruthy();
   });
 
+  it("una tarea In progress muestra su etiqueta de estado en azul", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "in_progress", "running");
+    renderApp(`/tasks/${task.id}`, fake);
+
+    await screen.findByRole("heading", { name: "Login con email" });
+    expect(screen.getByText("In progress").dataset.variant).toBe("info");
+    expect(screen.getByText("corriendo")).toBeTruthy();
+  });
+
   it("lista los Runs con resultado, failure_reason, pane y handoff", async () => {
     const { fake, task } = seeded();
     const failed = fake.startRun(task.id, "refine");

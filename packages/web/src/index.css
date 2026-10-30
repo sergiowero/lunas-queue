@@ -12,6 +12,9 @@
   --color-secondary: oklch(0.97 0 0);
   --color-secondary-foreground: oklch(0.205 0 0);
   --color-destructive: oklch(0.577 0.245 27.325);
+  /* Azul de las tareas In progress (ADR uw-21-front-end). */
+  --color-info: oklch(0.546 0.245 262.881);
+  --color-info-foreground: oklch(0.985 0 0);
   --color-ring: oklch(0.708 0 0);
 }
 

@@ -1,15 +1,21 @@
 // Piezas compartidas por las páginas: estado de una tarea, carga y errores de consulta y escritura.
 import type { SubState, TaskState } from "@lunasq/schemas";
+import type { ComponentProps } from "react";
 import { ApiError } from "../lib/api.ts";
 import { STATE_LABEL, SUB_STATE_LABEL } from "../lib/format.ts";
 import { Badge } from "./ui/badge.tsx";
 
+/** Solo In progress va en azul y Needs human en rojo; el resto queda neutro. */
+function stateVariant(state: TaskState): ComponentProps<typeof Badge>["variant"] {
+  if (state === "in_progress") return "info";
+  if (state === "needs_human") return "destructive";
+  return "secondary";
+}
+
 export function StateBadges({ state, subState }: { state: TaskState; subState: SubState | null }) {
   return (
     <span className="inline-flex gap-1">
-      <Badge variant={state === "needs_human" ? "destructive" : "secondary"}>
-        {STATE_LABEL[state]}
-      </Badge>
+      <Badge variant={stateVariant(state)}>{STATE_LABEL[state]}</Badge>
       {subState && <Badge variant="outline">{SUB_STATE_LABEL[subState]}</Badge>}
     </span>
   );
