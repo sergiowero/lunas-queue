@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ShellProcessRunner } from "@lunasq/adapters";
 import { afterEach, describe, expect, it } from "vitest";
-import { GitCommitVerifier, tailOf } from "./ports.ts";
+import type { HookService } from "../hooks/service.ts";
+import { GitCommitVerifier, type PhaseHooks, tailOf } from "./ports.ts";
+
+// HookService es lo que la composición del servidor pasa como PhaseHooks: si deja de cumplir el
+// puerto, el typecheck falla aquí y no recién en UW-29.
+const _hookServiceIsPhaseHooks = (service: HookService): PhaseHooks => service;
+void _hookServiceIsPhaseHooks;
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -55,6 +61,28 @@ describe("GitCommitVerifier contra un repo real", () => {
         commits: [work, base, unknown],
       }),
     ).toEqual([base, unknown]);
+  });
+
+  it("rechaza un commit que ya está en origin/<base> aunque la base local vaya atrasada", async () => {
+    const { dir, base } = repo();
+    // El worktree sale de origin/main (ADR 0012); la main local se quedó en `base`.
+    git(dir, "reset", "-q", "--hard", base);
+    git(dir, "init", "-q", "--bare", join(dir, ".git", "origin.git"));
+    git(dir, "remote", "add", "origin", join(dir, ".git", "origin.git"));
+    writeFileSync(join(dir, "upstream.txt"), "upstream");
+    git(dir, "add", "upstream.txt");
+    git(dir, "commit", "-q", "-m", "upstream");
+    const upstream = git(dir, "rev-parse", "HEAD");
+    git(dir, "push", "-q", "origin", "HEAD:main");
+    git(dir, "fetch", "-q", "origin");
+    writeFileSync(join(dir, "work.txt"), "work");
+    git(dir, "add", "work.txt");
+    git(dir, "commit", "-q", "-m", "work");
+    const work = git(dir, "rev-parse", "HEAD");
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    expect(
+      await verifier.missing({ worktreePath: dir, baseBranch: "main", commits: [work, upstream] }),
+    ).toEqual([upstream]);
   });
 
   it("una rama base inexistente no da los commits por buenos", async () => {

@@ -27,7 +27,7 @@
   - El dispatcher (UW-16) solo detiene y limpia el pane.
 - **`submit_for_verification`.** Cobertura de criterios → worktree limpio → commits → gate de tests → transacción. Detalle:
   - Con cambios sin commitear (`git status --porcelain`, incluidos archivos sin seguimiento) responde `dirty_worktree`, porque el gate debe correr sobre lo que va en los commits.
-  - `CommitVerifier` (puerto) comprueba que cada SHA esté en el `HEAD` del worktree y no en la rama base; `GitCommitVerifier` lo hace con `git merge-base` por el `ProcessRunner`.
+  - `CommitVerifier` (puerto) comprueba que cada SHA esté en el `HEAD` del worktree y no en la rama base, ni en la local ni en `origin/<base>` cuando existe (el worktree sale de `origin/<base>` y la local puede ir atrasada; [ADR uw-18-skills-fase](uw-18-skills-fase.md)). `GitCommitVerifier` lo hace con `git merge-base` por el `ProcessRunner`.
   - `TestGate` (puerto) corre el comando de tests del proyecto en el worktree. `ShellTestGate` es la implementación mínima hasta UW-11: sin comando de tests, el gate no pasa.
   - Los comandos de git pasan los argumentos tras `--end-of-options`, así una rama base con forma de opción no se interpreta como opción.
   - `ShellTestGate` corta a los 20 minutos por defecto (`DEFAULT_GATE_TIMEOUT_MS`, configurable).

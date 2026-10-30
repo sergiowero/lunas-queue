@@ -80,7 +80,9 @@ describe("gate de tests en el LunasQ MCP", () => {
   it("un pass con la suite real en rojo no se acepta", async () => {
     const h = await harness();
     const { task, run, call } = await h.ready("verify", verifying);
-    const result = await call("submit_verdict", { handoff: handoffFor("verification-pass", run) });
+    const result = await call("submit_verdict", {
+      handoff: h.verdictFor("verification-pass", run),
+    });
     expect(result.body).toMatchObject({ error: "test_gate_failed" });
     expect(new RunRepository(h.db).get(run.id)?.handoff).toBeNull();
     // El primero es el gate en verde de submit_for_verification con que llega la tarea.
