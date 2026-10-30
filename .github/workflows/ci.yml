@@ -20,6 +20,18 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+
+  # Check aparte (UW-29): la suite de Playwright contra el servidor completo con herdr y GitHub falsos.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @lunasq/e2e exec playwright install --with-deps chromium
       - run: pnpm e2e
       - uses: actions/upload-artifact@v5
@@ -29,3 +41,4 @@ jobs:
           path: |
             packages/e2e/playwright-report/
             packages/e2e/test-results/
+          if-no-files-found: ignore
