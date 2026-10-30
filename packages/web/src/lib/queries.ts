@@ -12,6 +12,18 @@ export const queries = {
       queryKey: ["tasks", projectId ?? null],
       queryFn: () => api.tasks(projectId),
     }),
+  graph: (projectId?: string) =>
+    queryOptions({ queryKey: ["graph", projectId ?? null], queryFn: () => api.graph(projectId) }),
+  projectHooks: (projectId: string) =>
+    queryOptions({
+      queryKey: ["project", projectId, "hooks"],
+      queryFn: () => api.projectHooks(projectId),
+    }),
+  hookExecutions: (projectId: string) =>
+    queryOptions({
+      queryKey: ["project", projectId, "hook-executions"],
+      queryFn: () => api.hookExecutions(projectId),
+    }),
   task: (id: string) => queryOptions({ queryKey: ["task", id], queryFn: () => api.task(id) }),
   dependencies: (id: string) =>
     queryOptions({ queryKey: ["task", id, "dependencies"], queryFn: () => api.dependencies(id) }),

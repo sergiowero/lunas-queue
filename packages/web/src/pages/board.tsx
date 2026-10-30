@@ -60,14 +60,32 @@ export function BoardPage() {
           <h1 className="text-xl font-semibold">{project.name}</h1>
           <p className="text-sm text-muted-foreground">{project.repo}</p>
         </div>
-        <Link
-          to="/tasks/new"
-          search={{ projectId }}
-          className={buttonVariants({ size: "sm" })}
-          aria-label="Nueva tarea en este proyecto"
-        >
-          Nueva tarea
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            to="/dag"
+            search={{ projectId }}
+            className={buttonVariants({ size: "sm", variant: "outline" })}
+            aria-label="DAG de este proyecto"
+          >
+            DAG
+          </Link>
+          <Link
+            to="/projects/$projectId/hooks"
+            params={{ projectId }}
+            className={buttonVariants({ size: "sm", variant: "outline" })}
+            aria-label="Hooks de este proyecto"
+          >
+            Hooks
+          </Link>
+          <Link
+            to="/tasks/new"
+            search={{ projectId }}
+            className={buttonVariants({ size: "sm" })}
+            aria-label="Nueva tarea en este proyecto"
+          >
+            Nueva tarea
+          </Link>
+        </div>
       </div>
       <div className="flex gap-3 overflow-x-auto pb-2">
         {BOARD_STATES.map((state) => {

@@ -18,6 +18,7 @@ import {
   type SchedulerConfig,
   type Task,
   type TaskEvidence,
+  TaskGraphQuery,
 } from "@lunasq/schemas";
 import { Hono } from "hono";
 import { invalidInput, notFound } from "./http.ts";
@@ -153,4 +154,12 @@ export function taskViewRoutes(deps: ViewDeps): Hono {
       const evidence = await findEvidence(deps, task);
       return evidence ? c.json(evidence) : c.json({ error: "evidence_not_found" }, 404);
     });
+}
+
+export function graphRoutes(deps: ViewDeps): Hono {
+  return new Hono().get("/", (c) => {
+    const query = TaskGraphQuery.safeParse(c.req.query());
+    if (!query.success) return invalidInput(c, query.error);
+    return c.json(deps.views.graph(query.data.projectId));
+  });
 }

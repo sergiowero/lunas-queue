@@ -1,7 +1,7 @@
 import { EMPTY_USAGE } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import { appendEvent } from "./event-log.ts";
-import { usageRecords } from "./schema.ts";
+import { taskDependencies, usageRecords } from "./schema.ts";
 import { TaskViewRepository } from "./task-views.ts";
 import { insertProject, insertRun, insertTask, migratedDatabase } from "./test-helpers.ts";
 
@@ -152,5 +152,167 @@ describe("TaskViewRepository.changesSince", () => {
     });
     expect(views.changesSince(first.id)).toEqual({ lastId: last.id, taskIds: [other.id, task.id] });
     expect(views.changesSince(last.id)).toEqual({ lastId: last.id, taskIds: [] });
+  });
+});
+
+describe("TaskViewRepository.graph", () => {
+  const edge = (db: ReturnType<typeof migratedDatabase>, taskId: string, dependsOnId: string) =>
+    db.insert(taskDependencies).values({ taskId, dependsOnId }).run();
+
+  it("devuelve las tareas del proyecto, incluso sin aristas, y sus aristas reales", () => {
+    const { db, project, task, views } = setup();
+    const base = insertTask(db, project.id, { intent: "Base" });
+    const isolated = insertTask(db, project.id, { intent: "Aislada" });
+    edge(db, task.id, base.id);
+
+    const graph = views.graph(project.id);
+    expect(graph.nodes.map((n) => n.id).sort()).toEqual([base.id, isolated.id, task.id].sort());
+    expect(graph.nodes.find((n) => n.id === base.id)).toEqual({
+      id: base.id,
+      projectId: project.id,
+      intent: "Base",
+      state: "draft",
+      subState: "queued",
+      prState: null,
+      priority: 100,
+    });
+    expect(graph.edges).toEqual([{ taskId: task.id, dependsOnId: base.id }]);
+  });
+
+  it("un proyecto sin aristas devuelve sus tareas y ninguna arista", () => {
+    const { project, task, views } = setup();
+    expect(views.graph(project.id)).toMatchObject({ nodes: [{ id: task.id }], edges: [] });
+  });
+
+  it("incluye al otro extremo de una dependencia entre proyectos, pero no el resto del otro", () => {
+    const { db, project, task, views } = setup();
+    const other = insertProject(db);
+    const upstream = insertTask(db, other.id, { intent: "Ajena con arista" });
+    insertTask(db, other.id, { intent: "Ajena sin arista" });
+    edge(db, task.id, upstream.id);
+
+    const graph = views.graph(project.id);
+    expect(graph.nodes.map((n) => n.intent).sort()).toEqual(["Ajena con arista", "Hacer algo"]);
+    expect(graph.edges).toEqual([{ taskId: task.id, dependsOnId: upstream.id }]);
+  });
+
+  it("sin proyecto devuelve todas las tareas y aristas, y las aristas son dependencias reales", () => {
+    const { db, project, task, views } = setup();
+    const other = insertProject(db);
+    const b = insertTask(db, other.id);
+    edge(db, b.id, task.id);
+    const graph = views.graph();
+    expect(graph.nodes.map((n) => n.id).sort()).toEqual([b.id, task.id].sort());
+    expect(graph.edges).toEqual([{ taskId: b.id, dependsOnId: task.id }]);
+    expect(views.graph(project.id).edges).toEqual([{ taskId: b.id, dependsOnId: task.id }]);
+  });
+});
+
+describe("TaskViewRepository.hookExecutions", () => {
+  const executed = (point: string, script: string, over: Record<string, unknown> = {}) => ({
+    point,
+    script,
+    baseRef: "a".repeat(40),
+    runId: null,
+    policy: "block",
+    timeoutSeconds: 600,
+    exitCode: 0,
+    timedOut: false,
+    durationMs: 12,
+    passed: true,
+    output: "ok",
+    ...over,
+  });
+
+  it("devuelve las ejecuciones del proyecto, las más nuevas primero, con la tarea", () => {
+    const { db, project, task, views } = setup();
+    const other = insertProject(db);
+    const foreign = insertTask(db, other.id);
+    const e1 = appendEvent(db, {
+      taskId: task.id,
+      type: "hook.executed",
+      actor: "system",
+      payload: executed("before_delivery", "10-bump"),
+    });
+    appendEvent(db, {
+      taskId: task.id,
+      type: "hook.point_completed",
+      actor: "system",
+      payload: {},
+    });
+    appendEvent(db, {
+      taskId: foreign.id,
+      type: "hook.executed",
+      actor: "system",
+      payload: executed("before_delivery", "10-bump"),
+    });
+    const e2 = appendEvent(db, {
+      taskId: task.id,
+      type: "hook.executed",
+      actor: "system",
+      payload: executed("after_merge", "deploy", { exitCode: 1, passed: false, output: "boom" }),
+    });
+
+    const rows = views.hookExecutions(project.id, 10);
+    expect(rows.map((r) => r.eventId)).toEqual([e2.id, e1.id]);
+    expect(rows[0]).toMatchObject({
+      taskId: task.id,
+      taskIntent: "Hacer algo",
+      point: "after_merge",
+      script: "deploy",
+      exitCode: 1,
+      passed: false,
+      output: "boom",
+    });
+    expect(rows[0]?.at).toBeInstanceOf(Date);
+  });
+
+  it("deja la ejecución más reciente de cada tarea en cada script", () => {
+    const { db, project, task, views } = setup();
+    const other = insertTask(db, project.id, { intent: "Otra" });
+    const add = (taskId: string, over: Record<string, unknown>) =>
+      appendEvent(db, {
+        taskId,
+        type: "hook.executed",
+        actor: "system",
+        payload: executed("before_delivery", "10-bump", over),
+      });
+    add(task.id, { exitCode: 1, passed: false });
+    const newest = add(task.id, { output: "segunda" });
+    const o = add(other.id, {});
+
+    const rows = views.hookExecutions(project.id, 10);
+    expect(rows.map((r) => r.eventId)).toEqual([o.id, newest.id]);
+    expect(rows[1]).toMatchObject({ output: "segunda", passed: true });
+  });
+
+  it("limita las tareas por punto y script sin que un hook desplace a otro", () => {
+    const { db, project, views } = setup();
+    const old = insertTask(db, project.id, { intent: "Vieja" });
+    appendEvent(db, {
+      taskId: old.id,
+      type: "hook.executed",
+      actor: "system",
+      payload: executed("after_merge", "deploy"),
+    });
+    for (let i = 0; i < 5; i++) {
+      const t = insertTask(db, project.id);
+      appendEvent(db, {
+        taskId: t.id,
+        type: "hook.executed",
+        actor: "system",
+        payload: executed("before_delivery", "10-bump"),
+      });
+    }
+    const rows = views.hookExecutions(project.id, 2);
+    expect(rows.filter((r) => r.script === "10-bump")).toHaveLength(2);
+    // after_merge es la ejecución más vieja del proyecto y sigue apareciendo.
+    expect(rows.find((r) => r.script === "deploy")).toMatchObject({ taskId: old.id });
+  });
+
+  it("se salta payloads que no son de hook", () => {
+    const { db, project, task, views } = setup();
+    appendEvent(db, { taskId: task.id, type: "hook.executed", actor: "system", payload: { x: 1 } });
+    expect(views.hookExecutions(project.id, 10)).toEqual([]);
   });
 });

@@ -151,6 +151,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     db,
     testGate: new PaneTestGate({ db, git, herdr, worktrees: orchestrator.worktrees }),
     phaseHooks: hooks,
+    hooks,
   });
   if (orchestrator.notifications) {
     app.route("/api/notifications", orchestrator.notifications.routes);

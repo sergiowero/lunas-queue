@@ -9,6 +9,12 @@ export const CHANGE_STREAM_URL = "/api/stream";
 export function invalidateChanges(queryClient: QueryClient, taskIds: string[]): void {
   void queryClient.invalidateQueries({ queryKey: ["queue"] });
   void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  // El DAG cambia con las aristas y los estados; las ejecuciones de hooks son eventos de tarea.
+  // El contenido de los hooks (["project", id, "hooks"]) viene de git y no se invalida por eventos.
+  void queryClient.invalidateQueries({ queryKey: ["graph"] });
+  void queryClient.invalidateQueries({
+    predicate: (q) => q.queryKey[0] === "project" && q.queryKey[2] === "hook-executions",
+  });
   for (const id of taskIds) void queryClient.invalidateQueries({ queryKey: ["task", id] });
 }
 

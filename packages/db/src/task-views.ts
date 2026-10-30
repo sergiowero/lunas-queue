@@ -1,10 +1,20 @@
 // Lecturas que alimentan el detalle de tarea y la cola del front end (UW-21, ADR uw-21-front-end):
 // Runs sin su token, Event log y usage agregado. Solo lee; nada aquí cambia estado.
-import { EMPTY_USAGE, EventView, RunView, type TaskUsage, type UsageTotals } from "@lunasq/schemas";
-import { asc, eq, getTableColumns, gt, max, sql } from "drizzle-orm";
+import {
+  EMPTY_USAGE,
+  EventView,
+  HOOK_EXECUTED,
+  HookExecutedPayload,
+  type HookExecutionView,
+  RunView,
+  type TaskGraph,
+  type TaskUsage,
+  type UsageTotals,
+} from "@lunasq/schemas";
+import { asc, eq, getTableColumns, gt, inArray, max, or, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
-import { events, runs, tasks, usageRecords } from "./schema.ts";
+import { events, runs, taskDependencies, tasks, usageRecords } from "./schema.ts";
 
 const {
   runToken: _token,
@@ -123,6 +133,93 @@ export class TaskViewRepository {
       lastId: rows.at(-1)?.id ?? afterId,
       taskIds: [...new Set(rows.map((r) => r.taskId))],
     };
+  }
+
+  /**
+   * El DAG de dependencias. Con `projectId`, sus tareas más las de otros proyectos al otro
+   * extremo de una arista suya; sin él, todo. Las aristas son las de task_dependencies, sin
+   * derivar nada. Una sola transacción: nodos y aristas salen del mismo estado.
+   */
+  graph(projectId?: string): TaskGraph {
+    return this.db.transaction((tx) => {
+      const inProject = tx
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(eq(tasks.projectId, projectId ?? ""));
+      const edges = tx
+        .select({ taskId: taskDependencies.taskId, dependsOnId: taskDependencies.dependsOnId })
+        .from(taskDependencies)
+        .where(
+          projectId === undefined
+            ? undefined
+            : or(
+                inArray(taskDependencies.taskId, inProject),
+                inArray(taskDependencies.dependsOnId, inProject),
+              ),
+        )
+        .orderBy(asc(sql`${taskDependencies}.rowid`))
+        .all();
+      const linked = [...new Set(edges.flatMap((e) => [e.taskId, e.dependsOnId]))];
+      const nodes = tx
+        .select({
+          id: tasks.id,
+          projectId: tasks.projectId,
+          intent: tasks.intent,
+          state: tasks.state,
+          subState: tasks.subState,
+          prState: tasks.prState,
+          priority: tasks.priority,
+        })
+        .from(tasks)
+        .where(
+          projectId === undefined
+            ? undefined
+            : or(eq(tasks.projectId, projectId), inArray(tasks.id, linked)),
+        )
+        .orderBy(asc(tasks.createdAt), asc(sql`${tasks}.rowid`))
+        .all();
+      return { nodes, edges };
+    });
+  }
+
+  /**
+   * Últimas ejecuciones de hooks (hook.executed) del proyecto: la más reciente de cada tarea en
+   * cada script, y a lo más `perHook` tareas (las más recientes) por punto y script, así un hook
+   * que corre poco no se pierde tras las ejecuciones de otros. Las más nuevas primero. Un payload
+   * que no cumple el esquema se salta: el Event log es append-only y no se corrige.
+   */
+  hookExecutions(projectId: string, perHook: number): HookExecutionView[] {
+    const hook = (alias: string) =>
+      sql.raw(
+        `json_extract(${alias}payload, '$.point'), json_extract(${alias}payload, '$.script')`,
+      );
+    const rows = this.db.all<{
+      eventId: number;
+      taskId: string;
+      taskIntent: string;
+      at: number;
+      payload: string | null;
+    }>(sql`
+      with latest as (
+        select e.id, e.task_id, t.intent, e.created_at, e.payload,
+          row_number() over (
+            partition by e.task_id, ${hook("e.")} order by e.id desc
+          ) as per_task
+        from events e join tasks t on t.id = e.task_id
+        where t.project_id = ${projectId} and e.type = ${HOOK_EXECUTED}
+      ), ranked as (
+        select *, row_number() over (partition by ${hook("")} order by id desc) as per_hook
+        from latest where per_task = 1
+      )
+      select id as eventId, task_id as taskId, intent as taskIntent, created_at as at, payload
+      from ranked where per_hook <= ${perHook} order by id desc
+    `);
+    const result: HookExecutionView[] = [];
+    for (const { payload, at, ...row } of rows) {
+      const parsed = HookExecutedPayload.safeParse(payload === null ? null : JSON.parse(payload));
+      if (parsed.success) result.push({ ...row, at: new Date(at), ...parsed.data });
+    }
+    return result;
   }
 
   private exists(taskId: string): boolean {

@@ -2,7 +2,9 @@
 // como string ISO, así que cada respuesta se tipa con Json<T>.
 import type {
   EventView,
+  HookExecutionView,
   Project,
+  ProjectHooksView,
   QueueEntry,
   RunView,
   Spec,
@@ -11,6 +13,7 @@ import type {
   TaskCreate,
   TaskDependencies,
   TaskEvidence,
+  TaskGraph,
   TaskUsage,
 } from "@lunasq/schemas";
 
@@ -69,6 +72,14 @@ export const api = {
     request<Task[]>(
       projectId ? `/api/tasks?projectId=${encodeURIComponent(projectId)}` : "/api/tasks",
     ),
+  graph: (projectId?: string) =>
+    request<TaskGraph>(
+      projectId ? `/api/graph?projectId=${encodeURIComponent(projectId)}` : "/api/graph",
+    ),
+  projectHooks: (projectId: string) =>
+    request<ProjectHooksView>(`/api/projects/${encodeURIComponent(projectId)}/hooks`),
+  hookExecutions: (projectId: string) =>
+    request<HookExecutionView[]>(`/api/projects/${encodeURIComponent(projectId)}/hooks/executions`),
   task: (id: string) => request<Task>(task(id)),
   dependencies: (id: string) => request<TaskDependencies>(`${task(id)}/dependencies`),
   runs: (id: string) => request<RunView[]>(`${task(id)}/runs`),

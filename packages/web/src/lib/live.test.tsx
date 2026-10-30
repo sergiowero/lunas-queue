@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
@@ -52,6 +52,31 @@ describe("actualización en vivo por SSE", () => {
     fake.transition(task.id, "refined", null);
     source?.emit("change", JSON.stringify({ taskIds: [task.id] }));
     expect(await screen.findByText("Refined")).toBeTruthy();
+  });
+
+  it("un change refresca el DAG y las ejecuciones de hooks", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const fake = new FakeApi();
+    const project = fake.addProject();
+    const a = fake.addTask(project.id, { intent: "Primera" });
+    const b = fake.addTask(project.id, { intent: "Segunda" });
+    fake.hooks.set(project.id, { baseRef: "a".repeat(40), configError: null, points: [] });
+    const { router } = renderApp("/dag", fake);
+    await screen.findByText("Ninguna tarea depende de otra.");
+
+    fake.edges.push({ taskId: b.id, dependsOnId: a.id });
+    FakeEventSource.instances[0]?.emit("change", JSON.stringify({ taskIds: [b.id] }));
+    expect(await screen.findByRole("list", { name: "Dependencias" })).toBeTruthy();
+
+    await router.navigate({ to: "/projects/$projectId/hooks", params: { projectId: project.id } });
+    await screen.findByRole("heading", { name: /Hooks/ });
+    const before = fake.requests.filter((r) => r.path.endsWith("/hooks/executions")).length;
+    FakeEventSource.instances[0]?.emit("change", JSON.stringify({ taskIds: [a.id] }));
+    await waitFor(() =>
+      expect(
+        fake.requests.filter((r) => r.path.endsWith("/hooks/executions")).length,
+      ).toBeGreaterThan(before),
+    );
   });
 
   it("ignora mensajes ilegibles y cierra la conexión al desmontar", async () => {
