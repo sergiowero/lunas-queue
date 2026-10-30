@@ -51,6 +51,29 @@ describe("HerdrPaneRunner", () => {
     expect(res.stdout).toBe(`${dir}\nt-1\n`);
   });
 
+  it("con envAllowlist el comando no ve el resto del env del pane", async () => {
+    process.env.LUNASQ_TEST_SECRET = "no-debe-verse";
+    process.env.LUNASQ_TEST_KEEP = "se queda";
+    try {
+      const res = await runner.run({
+        command: `printf '%s|%s|%s|%s' "\${LUNASQ_TEST_SECRET-}" "$LUNASQ_TEST_KEEP" "$LUNASQ_TASK_ID" "\${LUNASQ_NO_EXISTE+definida}"`,
+        cwd: dir,
+        env: { LUNASQ_TASK_ID: "t-1" },
+        envAllowlist: ["LUNASQ_TEST_KEEP", "LUNASQ_NO_EXISTE", "PATH"],
+      });
+      expect(res).toMatchObject({ exitCode: 0, stdout: "|se queda|t-1|" });
+    } finally {
+      delete process.env.LUNASQ_TEST_SECRET;
+      delete process.env.LUNASQ_TEST_KEEP;
+    }
+  });
+
+  it("rechaza nombres de la allowlist que no son de shell", async () => {
+    await expect(runner.run({ command: "true", cwd: dir, envAllowlist: ["A;rm"] })).rejects.toThrow(
+      /variable/,
+    );
+  });
+
   it("el comando no lee la terminal: stdin es /dev/null", async () => {
     const res = await runner.run({ command: "cat; echo fin", cwd: dir, timeoutMs: 2_000 });
     expect(res).toMatchObject({ exitCode: 0, stdout: "fin\n", timedOut: false });

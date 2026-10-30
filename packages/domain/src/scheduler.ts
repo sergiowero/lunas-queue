@@ -27,7 +27,11 @@ export type SchedulerTask = {
   createdAt: Date;
   /** Desde cuándo la tarea espera en su posición actual: la base del aging. */
   readySince: Date;
+  /** Runs fallidos seguidos de su fase pendiente y cuándo terminó el último: base del backoff. */
+  retry?: RetryState;
 };
+
+export type RetryState = { failures: number; lastFailedAt: Date };
 
 /**
  * Tareas vivas (no terminales), las terminales de las que alguna viva depende, y las aristas de
@@ -74,6 +78,21 @@ export function pendingPhase(state: TaskState): SchedulablePhase | null {
 
 const HOUR_MS = 3_600_000;
 
+/**
+ * Cuándo puede volver a despacharse una tarea tras `failures` Runs fallidos seguidos:
+ * `retryBackoffMs·2^(failures-1)` desde el último fallo, con tope en `maxRetryBackoffMs`.
+ * null si no hay fallos que esperar.
+ */
+export function retryAt(retry: RetryState | undefined, config: SchedulerConfig): Date | null {
+  if (!retry || retry.failures < 1) return null;
+  // El exponente se acota antes de calcular: 2^40 ya excede cualquier tope razonable.
+  const wait = Math.min(
+    config.retryBackoffMs * 2 ** Math.min(retry.failures - 1, 40),
+    config.maxRetryBackoffMs,
+  );
+  return new Date(retry.lastFailedAt.getTime() + wait);
+}
+
 /** Agente vivo: running, o waiting_human (la pregunta puede contestarse con el agente vivo). */
 function holdsSlot(task: SchedulerTask): boolean {
   return (
@@ -106,6 +125,8 @@ export function rankReady(
   const ranked: RankedTask[] = [];
   for (const task of snapshot.tasks) {
     if (pendingPhase(task.state) === null || task.subState !== "queued") continue;
+    const retryTime = retryAt(task.retry, config);
+    if (retryTime && retryTime.getTime() > now.getTime()) continue;
     if (!graph.dependenciesOf(task.id).every((id) => satisfies(byId.get(id)))) continue;
 
     const blocked = graph
@@ -271,6 +292,9 @@ function copyTask(task: SchedulerTask): SchedulerTask {
     ...task,
     createdAt: new Date(task.createdAt.getTime()),
     readySince: new Date(task.readySince.getTime()),
+    ...(task.retry && {
+      retry: { ...task.retry, lastFailedAt: new Date(task.retry.lastFailedAt.getTime()) },
+    }),
   };
 }
 

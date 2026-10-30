@@ -1,5 +1,5 @@
-// Composición de la API HTTP, del LunasQ MCP y del endpoint de hooks de subagentes. El servidor (listen, SSE) se monta en unidades
-// posteriores.
+// Composición de la API HTTP, del LunasQ MCP y del endpoint de hooks de subagentes. El servidor
+// (listen, SSE) se monta en unidades posteriores.
 import { ShellProcessRunner } from "@lunasq/adapters";
 import {
   type LunasqDatabase,
@@ -14,20 +14,20 @@ import { Hono } from "hono";
 import { projectRoutes } from "./api/projects.ts";
 import { specRoutes } from "./api/specs.ts";
 import { taskRoutes } from "./api/tasks.ts";
-import {
-  type CommitVerifier,
-  GitCommitVerifier,
-  ShellTestGate,
-  type TestGate,
-} from "./mcp/ports.ts";
+import { type CommitVerifier, GitCommitVerifier, type TestGate } from "./mcp/ports.ts";
 import { mcpRoutes } from "./mcp/routes.ts";
 import { LunasqMcpService } from "./mcp/service.ts";
 import { SUBAGENT_HOOK_PATH, subagentHookRoutes } from "./subagents/routes.ts";
+import { UnavailableTestGate } from "./test-gate/gate.ts";
 
 export interface AppDeps {
   db: LunasqDatabase;
-  /** Por defecto corren comandos de shell en el worktree; los tests pasan fakes. */
+  /**
+   * Gate de tests: quien compone el servidor pasa un PaneTestGate. Sin él, ninguna verificación
+   * pasa. Los tests pasan fakes.
+   */
   testGate?: TestGate;
+  /** Por defecto corre git en el worktree. */
   commitVerifier?: CommitVerifier;
 }
 
@@ -35,7 +35,7 @@ export function createApp({ db, testGate, commitVerifier }: AppDeps): Hono {
   const runner = new ShellProcessRunner();
   const mcp = new LunasqMcpService({
     db,
-    testGate: testGate ?? new ShellTestGate(runner),
+    testGate: testGate ?? new UnavailableTestGate(),
     commitVerifier: commitVerifier ?? new GitCommitVerifier(runner),
   });
   return new Hono()

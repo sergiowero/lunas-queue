@@ -2,49 +2,19 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FakeProcessRunner, ShellProcessRunner } from "@lunasq/adapters";
+import { ShellProcessRunner } from "@lunasq/adapters";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  DEFAULT_GATE_TIMEOUT_MS,
-  GATE_OUTPUT_LIMIT,
-  GitCommitVerifier,
-  ShellTestGate,
-} from "./ports.ts";
+import { GitCommitVerifier, tailOf } from "./ports.ts";
 
 const dirs: string[] = [];
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-const gate = { taskId: "t", runId: "r", worktreePath: "/wt" };
-
-describe("ShellTestGate", () => {
-  it("pasa solo con exit 0 y corre el comando en el worktree", async () => {
-    const runner = new FakeProcessRunner(() => ({ exitCode: 0, stdout: "ok" }));
-    const result = await new ShellTestGate(runner).run({ ...gate, command: "pnpm test" });
-    expect(result).toEqual({ passed: true, output: "ok" });
-    expect(runner.calls[0]).toMatchObject({
-      command: "pnpm test",
-      cwd: "/wt",
-      timeoutMs: DEFAULT_GATE_TIMEOUT_MS,
-    });
-
-    runner.respond(() => ({ exitCode: 1, stderr: "1 failed" }));
-    expect(await new ShellTestGate(runner).run({ ...gate, command: "pnpm test" })).toEqual({
-      passed: false,
-      output: "1 failed",
-    });
-  });
-
-  it("falla sin comando de tests o si excede el tiempo, y recorta la salida", async () => {
-    const runner = new FakeProcessRunner(() => ({ timedOut: true, stdout: "x".repeat(10_000) }));
-    expect((await new ShellTestGate(runner).run({ ...gate, command: null })).passed).toBe(false);
-    expect(runner.calls).toHaveLength(0);
-    const slow = await new ShellTestGate(runner, { timeoutMs: 5 }).run({ ...gate, command: "t" });
-    expect(slow.passed).toBe(false);
-    expect(slow.output).toMatch(/tiempo límite/);
-    expect(runner.calls[0]?.timeoutMs).toBe(5);
-    expect(slow.output.length).toBeLessThan(GATE_OUTPUT_LIMIT + 100);
+describe("tailOf", () => {
+  it("conserva el final de un texto largo y deja intacto uno corto", () => {
+    expect(tailOf("abcdef", 3)).toBe("def");
+    expect(tailOf("ab", 3)).toBe("ab");
   });
 });
 

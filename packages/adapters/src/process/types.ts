@@ -8,6 +8,11 @@ export interface ProcessInput {
   cwd: string;
   /** Se suma al env del proceso de LunasQ. */
   env?: Record<string, string>;
+  /**
+   * Si viene, el comando no hereda el env completo: solo estas variables (las que estén
+   * definidas) y las de `env`. Así no le llegan credenciales como `GH_TOKEN`.
+   */
+  envAllowlist?: string[];
   /** Sin límite si se omite. */
   timeoutMs?: number;
 }

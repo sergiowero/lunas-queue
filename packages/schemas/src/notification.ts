@@ -1,5 +1,5 @@
 // Notificaciones al humano (docs/design.md §Señales y §Human-in-the-loop): las cuatro
-// situaciones de escalamiento. El id es determinístico y es la clave de deduplicación
+// situaciones de escalamiento, más los reintentos agotados. El id es determinístico y es la clave de deduplicación
 // en todos los canales (toast de herdr y SSE hacia la UI).
 import { z } from "zod";
 import { EntityId, ShortText, Text } from "./handoff/common.ts";
@@ -9,6 +9,8 @@ export const NotificationKind = z.enum([
   "agent_blocked",
   "phase_timeout",
   "verification_exhausted",
+  // Run fallido tras agotar los reintentos de la fase (ADR uw-17-reconciliacion).
+  "retries_exhausted",
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 

@@ -1,7 +1,7 @@
 // Arnés de los tests de contrato del LunasQ MCP: el cliente oficial de MCP habla con la app de
 // Hono en memoria, con el gate de tests y la comprobación de commits falsos.
 import { readFileSync } from "node:fs";
-import { SpecRepository, TaskRepository } from "@lunasq/db";
+import { appendEvent, type LunasqDatabase, SpecRepository, TaskRepository } from "@lunasq/db";
 import {
   insertProject,
   insertRun,
@@ -9,7 +9,7 @@ import {
   migratedDatabase,
   setTaskPosition,
 } from "@lunasq/db/test-helpers";
-import type { Phase, StatePosition } from "@lunasq/schemas";
+import { type Phase, type StatePosition, TEST_GATE_EXECUTED } from "@lunasq/schemas";
 
 type Position = StatePosition & { verificationIteration?: number };
 
@@ -63,6 +63,12 @@ export class FakeCommitVerifier implements CommitVerifier {
   async uncommitted(_worktreePath: string): Promise<string[]> {
     return this.dirty;
   }
+
+  headSha: string | null = "a".repeat(40);
+
+  async head(_worktreePath: string): Promise<string | null> {
+    return this.headSha;
+  }
 }
 
 export type CallResult = { isError: boolean; body: Record<string, unknown> };
@@ -72,12 +78,22 @@ afterEach(async () => {
   for (const client of clients.splice(0)) await client.close();
 });
 
-export function mcpHarness() {
+export interface McpHarnessOptions {
+  /** Gate real en vez del fake; recibe la base del arnés. */
+  testGate?: (db: LunasqDatabase) => TestGate;
+  testCommand?: string;
+  worktreePath?: string;
+}
+
+export function mcpHarness(options: McpHarnessOptions = {}) {
   const db = migratedDatabase();
-  const project = insertProject(db, { testCommand: "pnpm test", baseBranch: "main" });
+  const project = insertProject(db, {
+    testCommand: options.testCommand ?? "pnpm test",
+    baseBranch: "main",
+  });
   const testGate = new FakeTestGate();
   const commitVerifier = new FakeCommitVerifier();
-  const app = createApp({ db, testGate, commitVerifier });
+  const app = createApp({ db, testGate: options.testGate?.(db) ?? testGate, commitVerifier });
 
   async function connect(token?: string) {
     const client = new Client({ name: "lunasq-test", version: "0.0.0" });
@@ -111,7 +127,7 @@ export function mcpHarness() {
     const row = insertTask(db, project.id, {
       state: "draft",
       subState: "running",
-      worktreePath: "/wt/tarea",
+      worktreePath: options.worktreePath ?? "/wt/tarea",
       branch: "lunasq/tarea",
     });
     if (opts.approved ?? true) {
@@ -129,8 +145,31 @@ export function mcpHarness() {
   async function session(phase: Phase, position: Position, opts: { approved?: boolean } = {}) {
     const t = task(position, opts);
     const run = insertRun(db, t.id, { phase });
+    // En verificación, la tarea llega con el gate de submit_for_verification en verde en su HEAD.
+    if (phase === "verify") gated(t.id, commitVerifier.headSha);
     const { call } = await connect(run.runToken);
     return { task: t, run, call };
+  }
+
+  /** Registra un gate en verde de submit_for_verification sobre `headSha`. */
+  function gated(taskId: string, headSha: string | null) {
+    appendEvent(db, {
+      taskId,
+      type: TEST_GATE_EXECUTED,
+      actor: "system",
+      payload: {
+        runId: "run-implementacion",
+        trigger: "submit_for_verification",
+        command: "pnpm test",
+        headSha,
+        exitCode: 0,
+        timedOut: false,
+        durationMs: 1,
+        passed: true,
+        output: "",
+        error: null,
+      },
+    });
   }
 
   async function ready(phase: Phase, position: Position, opts: { approved?: boolean } = {}) {
@@ -142,5 +181,17 @@ export function mcpHarness() {
 
   const taskOf = (taskId: string) => new TaskRepository(db).get(taskId);
 
-  return { db, project, app, testGate, commitVerifier, connect, task, session, ready, taskOf };
+  return {
+    db,
+    project,
+    app,
+    testGate,
+    commitVerifier,
+    connect,
+    task,
+    session,
+    ready,
+    gated,
+    taskOf,
+  };
 }

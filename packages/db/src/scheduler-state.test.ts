@@ -6,7 +6,7 @@ import { appendEvent } from "./event-log.ts";
 import { SchedulerStateRepository } from "./scheduler-state.ts";
 import { taskDependencies, tasks } from "./schema.ts";
 import { transitionTask } from "./task-transitions.ts";
-import { insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
+import { insertProject, insertRun, insertTask, migratedDatabase } from "./test-helpers.ts";
 
 schedulerStateReaderContract("SchedulerStateRepository", (seeds, edges) => {
   const db = migratedDatabase();
@@ -111,5 +111,51 @@ describe("SchedulerStateRepository: readySince", () => {
     const task = insertTask(db, project.id);
     db.insert(taskDependencies).values({ taskId: task.id, dependsOnId: dep.id }).run();
     expect(repo.snapshot().edges).toEqual([{ taskId: task.id, dependsOnId: dep.id }]);
+  });
+});
+
+describe("SchedulerStateRepository: retry", () => {
+  function setup() {
+    const db = migratedDatabase();
+    const project = insertProject(db);
+    const repo = new SchedulerStateRepository(db);
+    const retry = (taskId: string) => repo.snapshot().tasks.find((t) => t.id === taskId)?.retry;
+    return { db, project, retry };
+  }
+  const at = (s: number) => new Date(Date.UTC(2026, 9, 29, 12, 0, s));
+
+  it("cuenta los Runs fallidos seguidos de la fase pendiente y el fin del último", () => {
+    const { db, project, retry } = setup();
+    const task = insertTask(db, project.id, { state: "in_progress", subState: "queued" });
+    insertRun(db, task.id, { startedAt: at(0), endedAt: at(1), result: "failure" });
+    insertRun(db, task.id, { startedAt: at(2), endedAt: at(3), result: "failure" });
+    expect(retry(task.id)).toEqual({ failures: 2, lastFailedAt: at(3) });
+  });
+
+  it("un Run exitoso posterior corta la racha", () => {
+    const { db, project, retry } = setup();
+    const task = insertTask(db, project.id, { state: "in_progress", subState: "queued" });
+    insertRun(db, task.id, { startedAt: at(0), endedAt: at(1), result: "failure" });
+    insertRun(db, task.id, { startedAt: at(2), endedAt: at(3), result: "success" });
+    expect(retry(task.id)).toBeUndefined();
+  });
+
+  it("los fallos de otra fase no cuentan", () => {
+    const { db, project, retry } = setup();
+    const task = insertTask(db, project.id, { state: "in_progress", subState: "queued" });
+    insertRun(db, task.id, {
+      phase: "refine",
+      startedAt: at(0),
+      endedAt: at(1),
+      result: "failure",
+    });
+    expect(retry(task.id)).toBeUndefined();
+  });
+
+  it("solo aplica a tareas en queued", () => {
+    const { db, project, retry } = setup();
+    const task = insertTask(db, project.id, { state: "in_progress", subState: "running" });
+    insertRun(db, task.id, { startedAt: at(0), endedAt: at(1), result: "failure" });
+    expect(retry(task.id)).toBeUndefined();
   });
 });

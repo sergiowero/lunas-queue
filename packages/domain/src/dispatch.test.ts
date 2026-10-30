@@ -4,6 +4,8 @@ import {
   agentArgs,
   agentName,
   DispatchRuleError,
+  isAgentName,
+  nudgePrompt,
   phasePrompt,
   resolveSession,
   runEnv,
@@ -114,6 +116,27 @@ describe("phasePrompt", () => {
 
   it("es una sola línea: herdr la manda como un solo prompt", () => {
     expect(phasePrompt("verify", TASK)).not.toContain("\n");
+  });
+});
+
+describe("isAgentName", () => {
+  it("reconoce los nombres que arma agentName y nada más", () => {
+    expect(isAgentName(agentName(TASK, "verify", 3))).toBe(true);
+    expect(isAgentName("t0f3c9a2e7b41-deliver-1")).toBe(false);
+    expect(isAgentName("t0f3c9a2e7b41-refine-0")).toBe(false);
+    expect(isAgentName("mi-agente")).toBe(false);
+    expect(isAgentName(`x${agentName(TASK, "refine", 1)}`)).toBe(false);
+  });
+});
+
+describe("nudgePrompt", () => {
+  it("recuerda la fase abierta y las tools de salida, en una sola línea", () => {
+    const prompt = nudgePrompt("implement", TASK);
+    expect(prompt).toContain(TASK);
+    expect(prompt).toContain("implement-task");
+    expect(prompt).toContain("report_failure");
+    expect(prompt).toContain("ask_human");
+    expect(prompt).not.toContain("\n");
   });
 });
 

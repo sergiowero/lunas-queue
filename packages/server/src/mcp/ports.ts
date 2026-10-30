@@ -1,7 +1,8 @@
-// Puertos del LunasQ MCP hacia el worktree: el gate de tests y la comprobación de commits. Las
-// implementaciones de aquí corren comandos con el ProcessRunner de adapters; UW-11 reemplaza el
-// gate por la ejecución en un pane de herdr con su registro de salida.
+// Puertos del LunasQ MCP hacia el worktree: el gate de tests y la comprobación de commits. El gate
+// corre en un pane de herdr y deja su resultado en el Event log (test-gate/, UW-11); la
+// comprobación de commits corre comandos de git con el ProcessRunner de adapters.
 import type { ProcessRunner } from "@lunasq/adapters";
+import type { TestGateTrigger } from "@lunasq/schemas";
 
 export type TestGateInput = {
   taskId: string;
@@ -9,6 +10,8 @@ export type TestGateInput = {
   worktreePath: string;
   /** Comando de tests del proyecto; sin él no hay gate en verde. */
   command: string | null;
+  /** Qué pidió el gate; queda en el evento `test_gate.executed`. */
+  trigger: TestGateTrigger;
 };
 
 export type TestGateResult = {
@@ -32,6 +35,8 @@ export interface CommitVerifier {
   missing(input: CommitCheckInput): Promise<string[]>;
   /** Archivos con cambios sin commitear: el gate debe correr sobre lo commiteado. */
   uncommitted(worktreePath: string): Promise<string[]>;
+  /** Sha del HEAD del worktree; null si no se puede leer. */
+  head(worktreePath: string): Promise<string | null>;
 }
 
 export const GATE_OUTPUT_LIMIT = 4000;
@@ -39,37 +44,12 @@ export const GATE_OUTPUT_LIMIT = 4000;
 /** Tiempo límite por defecto del gate: una suite colgada no debe correr para siempre. */
 export const DEFAULT_GATE_TIMEOUT_MS = 20 * 60_000;
 
-const tail = (text: string) =>
-  text.length > GATE_OUTPUT_LIMIT ? text.slice(text.length - GATE_OUTPUT_LIMIT) : text;
+/** El final de la salida, que es donde está el error. */
+export const tailOf = (text: string, limit: number) =>
+  text.length > limit ? text.slice(text.length - limit) : text;
 
 /** Comillas de shell POSIX: el valor llega como un solo argumento literal. */
 const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
-
-export class ShellTestGate implements TestGate {
-  readonly #runner: ProcessRunner;
-  readonly #timeoutMs: number;
-
-  constructor(runner: ProcessRunner, opts: { timeoutMs?: number } = {}) {
-    this.#runner = runner;
-    this.#timeoutMs = opts.timeoutMs ?? DEFAULT_GATE_TIMEOUT_MS;
-  }
-
-  async run(input: TestGateInput): Promise<TestGateResult> {
-    if (!input.command) {
-      return { passed: false, output: "el proyecto no tiene comando de tests configurado" };
-    }
-    const result = await this.#runner.run({
-      command: input.command,
-      cwd: input.worktreePath,
-      timeoutMs: this.#timeoutMs,
-    });
-    const output = tail(`${result.stdout}${result.stderr}`);
-    if (result.timedOut) {
-      return { passed: false, output: `${output}\nel gate de tests excedió su tiempo límite` };
-    }
-    return { passed: result.exitCode === 0, output };
-  }
-}
 
 export class GitCommitVerifier implements CommitVerifier {
   readonly #runner: ProcessRunner;
@@ -94,6 +74,14 @@ export class GitCommitVerifier implements CommitVerifier {
       if (result.exitCode !== 0) missing.push(sha);
     }
     return missing;
+  }
+
+  async head(worktreePath: string): Promise<string | null> {
+    const result = await this.#runner.run({
+      command: "git rev-parse --verify --quiet HEAD^{commit}",
+      cwd: worktreePath,
+    });
+    return result.exitCode === 0 ? result.stdout.trim() : null;
   }
 
   async uncommitted(worktreePath: string): Promise<string[]> {

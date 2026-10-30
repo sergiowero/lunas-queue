@@ -12,12 +12,13 @@ const valid = {
 };
 
 describe("Notification", () => {
-  it("cubre los cuatro puntos de escalamiento del diseño", () => {
+  it("cubre los cuatro puntos de escalamiento del diseño y los reintentos agotados", () => {
     expect(NotificationKind.options).toEqual([
       "question_open",
       "agent_blocked",
       "phase_timeout",
       "verification_exhausted",
+      "retries_exhausted",
     ]);
   });
 

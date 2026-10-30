@@ -32,6 +32,20 @@ const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
 /**
+ * Con allowlist, `cmd.sh` corre con `env -i` y solo las variables de la allowlist que el pane
+ * tenga definidas, más las de `env`. Los nombres ya están validados como nombres de shell.
+ */
+const launch = (input: ProcessInput) => {
+  if (input.envAllowlist === undefined) return `/bin/sh "$d/cmd.sh"`;
+  const names = [...new Set([...input.envAllowlist, ...Object.keys(input.env ?? {})])];
+  return [
+    "set --",
+    ...names.map((n) => `[ -n "\${${n}+x}" ] && set -- "$@" "${n}=$${n}"`),
+    `env -i "$@" /bin/sh "$d/cmd.sh"`,
+  ].join("\n");
+};
+
+/**
  * Corre `cmd.sh` con /bin/sh, muestra su salida en el pane y la copia a `out.log`; el exit code
  * se escribe al final con un rename, así nunca se lee a medias. El cwd y el env se vuelven a fijar
  * aquí porque los rc del shell del pane pueden cambiarlos, y stdin es /dev/null para que un
@@ -43,7 +57,7 @@ cd ${shellQuote(input.cwd)} || { echo 1 > "$d/exit"; exit 1; }
 ${Object.entries(input.env ?? {})
   .map(([k, v]) => `export ${k}=${shellQuote(v)}`)
   .join("\n")}
-{ /bin/sh "$d/cmd.sh" </dev/null; echo $? > "$d/exit.tmp"; } 2>&1 | tee "$d/out.log"
+{ ${launch(input)} </dev/null; echo $? > "$d/exit.tmp"; } 2>&1 | tee "$d/out.log"
 mv "$d/exit.tmp" "$d/exit"
 `;
 
@@ -67,7 +81,9 @@ export class HerdrPaneRunner implements ProcessRunner {
    * LunasQ. Lanza si herdr no puede abrir el pane.
    */
   async run(input: ProcessInput): Promise<ProcessResult> {
-    const badName = Object.keys(input.env ?? {}).find((name) => !ENV_NAME.test(name));
+    const badName = [...Object.keys(input.env ?? {}), ...(input.envAllowlist ?? [])].find(
+      (name) => !ENV_NAME.test(name),
+    );
     if (badName !== undefined) throw new Error(`nombre de variable inválido: ${badName}`);
     const dir = await mkdtemp(join(this.stateDir, "lunasq-pane-"));
     try {

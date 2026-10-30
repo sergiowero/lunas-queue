@@ -15,3 +15,4 @@ export * from "./scheduler.ts";
 export * from "./spec.ts";
 export * from "./subagents.ts";
 export * from "./task.ts";
+export * from "./test-gate.ts";

@@ -47,8 +47,9 @@ import { isWorktreeError, type WorktreeService } from "../worktrees/service.ts";
 /** Cuánto esperar a que Claude Code quede listo tras aceptar la confianza de carpeta. */
 export const DEFAULT_TRUST_TIMEOUT_MS = 15_000;
 /**
- * `MCP_TOOL_TIMEOUT` de Claude Code en el pane: `submit_for_verification` corre el gate de tests
- * dentro de la llamada (ADR uw-15-mcp-tools), así que debe cubrir su timeout con margen.
+ * `MCP_TOOL_TIMEOUT` de Claude Code en el pane: `submit_for_verification` y un `submit_verdict`
+ * con pass corren el gate de tests dentro de la llamada (ADR uw-11-gate-tests), así que debe
+ * cubrir su timeout con margen.
  */
 export const DEFAULT_MCP_TOOL_TIMEOUT_MS = DEFAULT_GATE_TIMEOUT_MS + 5 * 60_000;
 /** `--timeout` de `agent start`: lo que tarda el agente en quedar listo para prompts. */
@@ -130,6 +131,8 @@ export class PhaseDispatcher implements Dispatcher {
   /** Cierres de un mismo Run en orden; no esperan al lanzamiento (puede tardar minutos). */
   private readonly closeLocks = new KeyedLock();
   private readonly inFlight = new Set<Promise<unknown>>();
+  /** Runs con un lanzamiento en segundo plano en curso. */
+  private readonly launching = new Set<string>();
 
   constructor(opts: PhaseDispatcherOptions) {
     this.db = opts.db;
@@ -170,10 +173,13 @@ export class PhaseDispatcher implements Dispatcher {
     this.background(claim.run.id);
   }
 
-  /** Retoma los Runs reclamados que no llegaron a mandar su prompt (tras una caída). */
+  /**
+   * Retoma los Runs reclamados que no llegaron a mandar su prompt (tras una caída). Salta los que
+   * ya se están lanzando: la reconciliación (UW-17) lo llama en cada pasada.
+   */
   async recover(): Promise<void> {
     for (const run of this.runs.active()) {
-      if (run.launchedAt === null) this.background(run.id);
+      if (run.launchedAt === null && !this.launching.has(run.id)) this.background(run.id);
     }
   }
 
@@ -256,9 +262,13 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   private background(runId: string): void {
+    this.launching.add(runId);
     const job = this.launch(runId).catch((error: unknown) => this.onError(asError(error), runId));
     this.inFlight.add(job);
-    void job.finally(() => this.inFlight.delete(job));
+    void job.finally(() => {
+      this.inFlight.delete(job);
+      this.launching.delete(runId);
+    });
   }
 
   /** Lanza RunClosed si el Run se cerró mientras se lanzaba. */

@@ -40,4 +40,26 @@ describe("TaskWorktreeRepository", () => {
       /no-existe/,
     );
   });
+
+  it("releasable lista las tareas canceladas o mergeadas que conservan su worktree", () => {
+    const { db, project, repo } = setup();
+    const withWt = (overrides: Parameters<typeof insertTask>[2]) => {
+      const task = insertTask(db, project.id, overrides);
+      repo.recordWorktree(task.id, { branch: `lunasq/${task.id}`, worktreePath: `/wt/${task.id}` });
+      return task;
+    };
+    const cancelled = withWt({ state: "cancelled" });
+    const merged = withWt({ state: "completed", prState: "merged" });
+    withWt({ state: "completed", prState: "open" });
+    withWt({ state: "verification", subState: "running", prState: "merged" });
+    withWt({ state: "in_progress", subState: "queued" });
+    insertTask(db, project.id, { state: "cancelled" });
+
+    expect(
+      repo
+        .releasable()
+        .map((t) => t.id)
+        .sort(),
+    ).toEqual([cancelled.id, merged.id].sort());
+  });
 });
