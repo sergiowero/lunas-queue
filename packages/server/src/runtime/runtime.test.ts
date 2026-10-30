@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeGit, FakeGitHub, FakeHerdr, FakeProcessRunner } from "@lunasq/adapters";
@@ -65,6 +65,35 @@ describe("prepareDatabase", () => {
 });
 
 describe("startRuntime", () => {
+  it("sirve el build del front end desde la misma URL cuando recibe webRoot", async () => {
+    const opts = options();
+    const webRoot = join(opts.dir, "web");
+    mkdirSync(webRoot);
+    writeFileSync(join(webRoot, "index.html"), "<!doctype html><title>LunasQ</title>");
+    const runtime = await start({ ...opts, webRoot });
+
+    const home = await fetch(`${runtime.url}/queue`);
+    expect(home.status).toBe(200);
+    expect(await home.text()).toContain("<title>LunasQ</title>");
+    expect((await fetch(`${runtime.url}/api/projects`)).status).toBe(200);
+  });
+
+  it("pasa la cadencia del poll de PRs y del scheduler: una inválida impide arrancar", async () => {
+    await expect(startRuntime(options({ prPollIntervalMs: 10 }))).rejects.toThrow(
+      "intervalMs debe ser un entero >= 1000",
+    );
+    await expect(startRuntime(options({ scheduler: { tickIntervalMs: 10 } }))).rejects.toThrow();
+    const runtime = await start(
+      options({ prPollIntervalMs: 1_000, scheduler: { tickIntervalMs: 1_000 } }),
+    );
+    expect((await fetch(`${runtime.url}/api/queue`)).status).toBe(200);
+  });
+
+  it("sin webRoot no sirve estáticos", async () => {
+    const runtime = await start(options());
+    expect((await fetch(`${runtime.url}/queue`)).status).toBe(404);
+  });
+
   it("sirve la API en localhost y escribe los archivos MCP y de hooks con su URL", async () => {
     const opts = options();
     const runtime = await start(opts);

@@ -25,6 +25,18 @@ export function findAssetsRoot(): string {
   return found;
 }
 
+/**
+ * Build del front end: junto al binario en el paquete publicado (`bin/../web`) o en
+ * `packages/web/dist/app` del repo. Sin build, `start` sirve solo la API.
+ */
+export function findWebRoot(): string | undefined {
+  const candidates = [fileURLToPath(new URL("../web/", import.meta.url))];
+  // Solo en el repo: en un paquete instalado `../../web` sería de otro paquete.
+  const repoWeb = fileURLToPath(new URL("../../web/", import.meta.url));
+  if (existsSync(join(repoWeb, "vite.config.ts"))) candidates.push(join(repoWeb, "dist", "app"));
+  return candidates.find((dir) => existsSync(join(dir, "index.html")));
+}
+
 export interface AssetTarget {
   kind: "skill" | "agents";
   name: string;

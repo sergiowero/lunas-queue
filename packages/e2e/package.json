@@ -1,0 +1,21 @@
+{
+  "name": "@lunasq/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Piloto end-to-end: Playwright contra el servidor completo con herdr y GitHub falsos",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@lunasq/adapters": "workspace:*",
+    "@lunasq/schemas": "workspace:*",
+    "@lunasq/server": "workspace:*",
+    "@modelcontextprotocol/client": "^2.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}

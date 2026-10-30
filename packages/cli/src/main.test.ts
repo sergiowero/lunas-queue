@@ -94,6 +94,24 @@ describe("lunasq", () => {
     expect(stop).toHaveBeenCalledOnce();
   });
 
+  it("start sirve el front end cuando la máquina tiene su build", async () => {
+    const { deps, ctx } = setup();
+    await install(ctx);
+    const startRuntime = vi.fn(
+      async (_: RuntimeOptions): Promise<Runtime> => ({
+        url: "http://x",
+        paneEnv: {},
+        stop: async () => {},
+      }),
+    );
+    const context = () => ({ ...ctx, webRoot: "/srv/web" });
+    await main(["start"], { ...deps, context, startRuntime, untilSignal: async () => {} });
+    expect(startRuntime.mock.calls[0]?.[0]).toMatchObject({ webRoot: "/srv/web" });
+
+    await main(["start"], { ...deps, startRuntime, untilSignal: async () => {} });
+    expect(startRuntime.mock.calls[1]?.[0]).not.toHaveProperty("webRoot");
+  });
+
   it("un error inesperado sale con 1 y su mensaje", async () => {
     const { deps, ctx, err } = setup();
     await install(ctx);

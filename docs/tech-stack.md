@@ -107,6 +107,7 @@ Monorepo con pnpm workspaces; la regla es que el dominio no depende de nada exte
 | `packages/server` | Hono: API, SSE, LunasQ MCP, endpoints OTLP; scheduler, dispatcher y reconciliación; generador de evidencia | `domain`, `db`, `adapters`, `schemas` |
 | `packages/web` | Front end React + Vite; se compila a estáticos (`dist/app`) que sirve `server` con `@hono/node-server` | `schemas` (solo tipos) |
 | `packages/cli` | Binario `lunasq`: `start`, `install`, `doctor`; el proceso que arranca `start` lo compone `server` (`startRuntime`) | `server` |
+| `packages/e2e` | Piloto end-to-end: Playwright contra `startRuntime` con herdr y GitHub falsos y git real ([ADR uw-29-e2e](decisions/uw-29-e2e.md)); nadie lo importa | `server`, `adapters`, `schemas` |
 | `assets/skills` | Skills de fase: `refine-task`, `implement-task`, `verify-task` ([ADR uw-18-skills-fase](decisions/uw-18-skills-fase.md)) | — |
 | `assets/agents` | Definiciones de los 4 subagentes revisores | — |
 
