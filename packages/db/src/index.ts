@@ -16,3 +16,4 @@ export * from "./task-transitions.ts";
 export * from "./task-views.ts";
 export * from "./task-worktrees.ts";
 export * from "./tasks.ts";
+export * from "./usage.ts";

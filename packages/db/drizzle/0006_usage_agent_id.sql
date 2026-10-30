@@ -1,0 +1,1 @@
+ALTER TABLE `usage_records` ADD `agent_id` text;

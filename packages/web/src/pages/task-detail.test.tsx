@@ -76,6 +76,10 @@ describe("detalle de tarea", () => {
     fake.usage.set(task.id, {
       total: usage,
       byRun: [{ runId: run.id, phase: "implement", usage }],
+      byPhase: [{ phase: "implement", usage }],
+      byAgent: [{ agentKind: "claude", usage }],
+      byModel: [{ model: "opus", usage }],
+      byReviewer: [],
     });
     renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Usage");

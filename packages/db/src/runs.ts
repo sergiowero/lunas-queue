@@ -196,6 +196,14 @@ export class RunRepository {
     );
   }
 
+  /**
+   * El Run con ese token, esté o no cerrado. La telemetría llega con retraso (Claude Code vacía su
+   * buffer al salir), así que el usage collector acepta también el último lote de un Run cerrado.
+   */
+  byToken(token: string): RunRow | null {
+    return this.db.select().from(runs).where(eq(runs.runToken, token)).get() ?? null;
+  }
+
   /** Registra la primera lectura del contexto; repetir devuelve la misma fecha. */
   markContextRead(runId: string, at = new Date()): Date | null {
     this.db

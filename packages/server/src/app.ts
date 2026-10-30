@@ -40,6 +40,7 @@ import { mcpRoutes } from "./mcp/routes.ts";
 import { LunasqMcpService } from "./mcp/service.ts";
 import { SUBAGENT_HOOK_PATH, subagentHookRoutes } from "./subagents/routes.ts";
 import { UnavailableTestGate } from "./test-gate/gate.ts";
+import { usageRoutes } from "./usage/routes.ts";
 import { webRoutes } from "./web/static.ts";
 
 export interface AppDeps {
@@ -76,6 +77,11 @@ export interface AppDeps {
    * `POST /api/blocked/:runId/focus` responde 503.
    */
   focus?: AgentFocuser;
+  /**
+   * Usage collector (`POST /v1/logs`, `/v1/metrics`). `false` no monta los endpoints y Claude Code
+   * recibe 404; es el feature flag `telemetry` de `~/.lunasq/config.json` (ADR uw-20-usage-collector).
+   */
+  telemetry?: boolean;
   /** Configuración del scheduler: la cola muestra el mismo score con el que despacha. */
   scheduler?: SchedulerConfigInput;
   /** Lectura de la evidencia en el repo cuando el worktree ya no existe; por defecto git real. */
@@ -97,6 +103,7 @@ export function createApp({
   blocked,
   focus,
   scheduler,
+  telemetry = true,
   webRoot,
   git = new RealGit(),
   now = () => new Date(),
@@ -145,5 +152,6 @@ export function createApp({
       }
       return c.json({ error: "internal" }, 500);
     });
+  if (telemetry) app.route("/", usageRoutes(db));
   return webRoot ? app.route("/", webRoutes(webRoot)) : app;
 }

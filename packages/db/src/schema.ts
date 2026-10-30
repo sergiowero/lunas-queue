@@ -288,6 +288,9 @@ export const usageRecords = sqliteTable(
     source: text("source", { enum: values(UsageSource) }).notNull(),
     // Id del mensaje o request en la fuente; deduplica reingestas de OTel o transcript.
     sourceRef: text("source_ref"),
+    // agent_id del subagente que hizo la llamada (evento api_request de Claude Code); NULL si fue la
+    // sesión principal. Se une con run_subagents para el desglose por revisor.
+    agentId: text("agent_id"),
     pricingVersion: text("pricing_version"),
     createdAt: createdAt(),
   },

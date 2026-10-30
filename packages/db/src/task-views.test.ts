@@ -1,6 +1,7 @@
 import { EMPTY_USAGE } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import { appendEvent } from "./event-log.ts";
+import { RunSubagentRepository } from "./run-subagents.ts";
 import { taskDependencies, usageRecords } from "./schema.ts";
 import { TaskViewRepository } from "./task-views.ts";
 import { insertProject, insertRun, insertTask, migratedDatabase } from "./test-helpers.ts";
@@ -107,7 +108,14 @@ describe("TaskViewRepository.usage", () => {
 
   it("devuelve totales en cero sin UsageRecords", () => {
     const { task, views } = setup();
-    expect(views.usage(task.id)).toEqual({ total: EMPTY_USAGE, byRun: [] });
+    expect(views.usage(task.id)).toEqual({
+      total: EMPTY_USAGE,
+      byRun: [],
+      byPhase: [],
+      byAgent: [],
+      byModel: [],
+      byReviewer: [],
+    });
   });
 
   it("devuelve null si la tarea no existe", () => {
@@ -121,6 +129,101 @@ describe("TaskViewRepository.usage", () => {
     usage(db, run.id, { costUsd: 2, sourceRef: "1" });
     usage(db, run.id, { inputTokens: 5, sourceRef: "2" });
     expect(views.usage(task.id)?.total).toEqual({ ...EMPTY_USAGE, inputTokens: 5 });
+  });
+});
+
+describe("TaskViewRepository.usage: desgloses", () => {
+  const tokens = (n: number) => ({ ...EMPTY_USAGE, inputTokens: n, costUsd: n / 10 });
+  const rec = (n: number, extra: Partial<typeof usageRecords.$inferInsert> = {}) => ({
+    inputTokens: n,
+    costUsd: n / 10,
+    sourceRef: `r${n}`,
+    ...extra,
+  });
+
+  it("separa el rework de la implementación y agrupa por fase, agente y modelo", () => {
+    const { db, task, views } = setup();
+    const refine = insertRun(db, task.id, { phase: "refine", endedAt: new Date() });
+    const first = insertRun(db, task.id, { phase: "implement", iteration: 0, endedAt: new Date() });
+    const rework = insertRun(db, task.id, {
+      phase: "implement",
+      iteration: 1,
+      endedAt: new Date(),
+    });
+    const verify = insertRun(db, task.id, { phase: "verify", iteration: 1 });
+    usage(db, refine.id, rec(10, { model: "opus" }));
+    usage(db, first.id, rec(20, { model: "sonnet" }));
+    usage(db, first.id, rec(30, { model: "opus" }));
+    usage(db, rework.id, rec(40, { model: "opus" }));
+    usage(db, verify.id, rec(50, { model: "opus" }));
+
+    const result = views.usage(task.id);
+    expect(result?.byPhase).toEqual([
+      { phase: "refine", usage: tokens(10) },
+      { phase: "implement", usage: tokens(50) },
+      { phase: "rework", usage: tokens(40) },
+      { phase: "verify", usage: tokens(50) },
+    ]);
+    expect(result?.byAgent).toEqual([{ agentKind: "claude", usage: tokens(150) }]);
+    expect(result?.byModel).toEqual([
+      { model: "opus", usage: tokens(130) },
+      { model: "sonnet", usage: tokens(20) },
+    ]);
+  });
+
+  it("desglosa por revisor con los agent_id que registraron los hooks de subagentes", () => {
+    const { db, task, views } = setup();
+    const verify = insertRun(db, task.id, { phase: "verify" });
+    const subagents = new RunSubagentRepository(db);
+    subagents.recordStart(verify.id, { agentId: "a1", agentType: "lunasq-code-reviewer" });
+    subagents.recordStart(verify.id, { agentId: "a2", agentType: "lunasq-security-reviewer" });
+    subagents.recordStart(verify.id, { agentId: "a3", agentType: "Explore" });
+    usage(db, verify.id, rec(1)); // sesión principal: el approver
+    usage(db, verify.id, rec(2, { agentId: "a1" }));
+    usage(db, verify.id, rec(3, { agentId: "a1" }));
+    usage(db, verify.id, rec(4, { agentId: "a2" }));
+    usage(db, verify.id, rec(5, { agentId: "a3" })); // subagente que no es revisor
+    usage(db, verify.id, rec(6, { agentId: "a9" })); // hook perdido: no se sabe de quién es
+
+    expect(views.usage(task.id)?.byReviewer).toEqual([
+      { reviewer: "lunasq-code-reviewer", usage: tokens(5) },
+      { reviewer: "lunasq-security-reviewer", usage: tokens(4) },
+    ]);
+    expect(views.usage(task.id)?.total.inputTokens).toBe(21);
+  });
+
+  it("deja el costo en null en el grupo que tiene un registro sin costo, y solo en ese", () => {
+    const { db, task, views } = setup();
+    const refine = insertRun(db, task.id, { phase: "refine", endedAt: new Date() });
+    const verify = insertRun(db, task.id, { phase: "verify" });
+    new RunSubagentRepository(db).recordStart(verify.id, {
+      agentId: "a1",
+      agentType: "lunasq-code-reviewer",
+    });
+    usage(db, refine.id, rec(10));
+    usage(db, verify.id, rec(20, { agentId: "a1" }));
+    usage(db, verify.id, { inputTokens: 5, sourceRef: "sin-costo", agentId: "a1" });
+
+    const result = views.usage(task.id);
+    expect(result?.byPhase.map((g) => [g.phase, g.usage.costUsd])).toEqual([
+      ["refine", 1],
+      ["verify", null],
+    ]);
+    expect(result?.byReviewer).toEqual([
+      { reviewer: "lunasq-code-reviewer", usage: { ...tokens(25), costUsd: null } },
+    ]);
+  });
+
+  it("el hook de otro Run no le atribuye consumo a este", () => {
+    const { db, task, views } = setup();
+    const other = insertRun(db, insertTask(db, insertProject(db).id).id, { phase: "verify" });
+    const verify = insertRun(db, task.id, { phase: "verify" });
+    new RunSubagentRepository(db).recordStart(other.id, {
+      agentId: "a1",
+      agentType: "lunasq-code-reviewer",
+    });
+    usage(db, verify.id, rec(2, { agentId: "a1" }));
+    expect(views.usage(task.id)?.byReviewer).toEqual([]);
   });
 });
 
