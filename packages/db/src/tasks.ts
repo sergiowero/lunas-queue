@@ -123,12 +123,17 @@ export class TaskRepository implements DependencyGraphReader {
         return { dependsOnId, crossProject: target.projectId !== values.projectId };
       });
 
-      const [row] = tx
+      const row = tx
         .insert(tasks)
-        .values({ ...values, causedBy, state: "draft", subState: subStateFor("draft") })
+        .values({
+          ...values,
+          number: nextTaskNumber(tx),
+          causedBy,
+          state: "draft",
+          subState: subStateFor("draft"),
+        })
         .returning()
-        .all();
-      if (!row) throw new Error("insert de task sin fila");
+        .get();
       // Una tarea nueva no tiene dependientes: sus aristas no pueden cerrar un ciclo.
       if (dependsOn.length > 0) {
         tx.insert(taskDependencies)
@@ -136,6 +141,7 @@ export class TaskRepository implements DependencyGraphReader {
           .run();
       }
       const payload: TaskCreatedPayload = {
+        number: row.number ?? undefined,
         projectId: row.projectId,
         intent: row.intent,
         tags: row.tags,
@@ -279,10 +285,11 @@ export class TaskRepository implements DependencyGraphReader {
     const task = findRow(db, taskId);
     if (!task) return null;
     const link = (
-      other: Pick<Row, "id" | "projectId" | "intent" | "state" | "prState">,
+      other: Pick<Row, "id" | "number" | "projectId" | "intent" | "state" | "prState">,
       createdAt: Date,
     ): DependencyLink => ({
       taskId: other.id,
+      number: other.number as number,
       projectId: other.projectId,
       intent: other.intent,
       state: other.state,
@@ -292,6 +299,7 @@ export class TaskRepository implements DependencyGraphReader {
     });
     const columns = {
       id: tasks.id,
+      number: tasks.number,
       projectId: tasks.projectId,
       intent: tasks.intent,
       state: tasks.state,
@@ -329,6 +337,18 @@ export class TaskRepository implements DependencyGraphReader {
   #write<T>(fn: (tx: Tx) => T): T {
     return this.db.transaction(fn, { behavior: "immediate" });
   }
+}
+
+/**
+ * Siguiente número de tarea (#N). Dentro de la transacción IMMEDIATE de create, así dos
+ * creaciones no leen el mismo máximo; el índice único rechaza cualquier repetido (ADR 0015).
+ */
+function nextTaskNumber(db: Reader): number {
+  const row = db
+    .select({ last: sql<number>`coalesce(max(${tasks.number}), 0)` })
+    .from(tasks)
+    .get();
+  return (row?.last ?? 0) + 1;
 }
 
 function assertNotTerminal(task: Row): void {

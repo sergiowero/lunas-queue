@@ -1,8 +1,10 @@
-import { readFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { describe, expect, it } from "vitest";
-import { migrationsFolder } from "./client.ts";
+import { migrateDatabase, migrationsFolder } from "./client.ts";
 import {
   events,
   outbox,
@@ -13,7 +15,13 @@ import {
   tasks,
   usageRecords,
 } from "./schema.ts";
-import { insertProject, insertRun, insertTask, migratedDatabase } from "./test-helpers.ts";
+import {
+  freshDatabase,
+  insertProject,
+  insertRun,
+  insertTask,
+  migratedDatabase,
+} from "./test-helpers.ts";
 
 const CHECK = /CHECK constraint failed/;
 const UNIQUE = /UNIQUE constraint failed/;
@@ -46,6 +54,60 @@ describe("projects", () => {
 });
 
 describe("tasks", () => {
+  it("la migración del número numera las tareas existentes desde 1 en orden de creación", () => {
+    // Base con las migraciones previas a 0007_task_number: las tareas no tienen número.
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-drizzle-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8"));
+      journal.entries = journal.entries.filter((e: { tag: string }) => e.tag < "0007");
+      writeFileSync(journalFile, JSON.stringify(journal));
+      const { db } = freshDatabase();
+      migrate(db, { migrationsFolder: previous });
+      const p = insertProject(db);
+      const raw = db.$client.prepare(
+        "insert into tasks (id, project_id, intent, priority, created_at, updated_at) values (?, ?, 'x', 1, ?, 0)",
+      );
+      // Insertadas fuera de orden; dos con el mismo created_at se desempatan por rowid.
+      raw.run("c", p.id, 300);
+      raw.run("a", p.id, 100);
+      raw.run("b1", p.id, 200);
+      raw.run("b2", p.id, 200);
+
+      migrateDatabase(db);
+
+      const numbered = db.$client
+        .prepare("select id, number from tasks order by number")
+        .all() as { id: string; number: number }[];
+      expect(numbered).toEqual([
+        { id: "a", number: 1 },
+        { id: "b1", number: 2 },
+        { id: "b2", number: 3 },
+        { id: "c", number: 4 },
+      ]);
+      expect(insertTask(db, p.id).number).toBe(5);
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
+  });
+
+  it("la migración del número no recrea tasks", () => {
+    // Recrear la tabla borraría en cascada Runs, aristas y usage.
+    const migration = readFileSync(join(migrationsFolder, "0007_task_number.sql"), "utf8");
+    expect(migration).not.toMatch(/DROP TABLE/);
+  });
+
+  it("número: entero positivo y único, asignado si el insert no lo trae", () => {
+    const db = migratedDatabase();
+    const p = insertProject(db);
+    expect(insertTask(db, p.id).number).toBe(1);
+    expect(insertTask(db, p.id, { number: 10 }).number).toBe(10);
+    expect(insertTask(db, p.id).number).toBe(11);
+    expect(() => insertTask(db, p.id, { number: 10 })).toThrow(UNIQUE);
+    expect(() => insertTask(db, p.id, { number: 0 })).toThrow(CHECK);
+  });
+
   it("nace en draft/queued con iteración 0", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);

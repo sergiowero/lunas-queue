@@ -297,6 +297,7 @@ describe("TaskRepository aristas", () => {
     expect(deps?.dependsOn).toEqual([
       {
         taskId: a.id,
+        number: a.number,
         projectId: a.projectId,
         intent: "Base",
         state: "draft",
@@ -305,7 +306,7 @@ describe("TaskRepository aristas", () => {
         createdAt: expect.any(Date),
       },
     ]);
-    expect(deps?.dependents.map((l) => l.taskId)).toEqual([c.id]);
+    expect(deps?.dependents.map((l) => [l.taskId, l.number])).toEqual([[c.id, c.number]]);
   });
 
   it("agregar una arista toma el lock de escritura antes de leer el DAG", () => {
@@ -354,4 +355,56 @@ dependencyGraphReaderContract("TaskRepository", (edges) => {
   };
   for (const { taskId, dependsOnId } of edges) repo.addDependency(idOf(taskId), idOf(dependsOnId));
   return { reader: repo, idOf };
+});
+
+describe("número de tarea", () => {
+  it("una tarea nueva recibe el siguiente número global y conserva su UUID como id", () => {
+    const { db, repo, create } = repository();
+    for (let i = 0; i < 3; i++) create();
+    const other = insertProject(db);
+    const task = repo.create({ projectId: other.id, intent: "Otra cosa", priority: 1 });
+    expect(task.number).toBe(4);
+    expect(task.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(repo.get(task.id)?.number).toBe(4);
+  });
+
+  it("dos creaciones seguidas tienen números consecutivos y la base rechaza un número repetido", () => {
+    const { db, project, create } = repository();
+    const first = create();
+    const second = create();
+    expect(second.number).toBe(first.number + 1);
+    expect(() => insertTask(db, project.id, { number: first.number })).toThrow(
+      /UNIQUE constraint failed: tasks.number/,
+    );
+  });
+
+  it("el número no cambia al editar ni al transicionar, y la base no deja cambiarlo", () => {
+    const { db, repo, create } = repository();
+    for (let i = 0; i < 6; i++) create();
+    const task = create();
+    expect(task.number).toBe(7);
+    expect(repo.update(task.id, { intent: "Otro intent", tags: ["x"], priority: 5 })?.number).toBe(
+      7,
+    );
+    const cancelled = repo.cancel(task.id);
+    expect(cancelled.ok && cancelled.task.number).toBe(7);
+    expect(repo.get(task.id)?.number).toBe(7);
+    expect(() =>
+      db.$client.prepare("update tasks set number = 99 where id = ?").run(task.id),
+    ).toThrow(/el número de una tarea no cambia/);
+  });
+
+  it("no reutiliza el número de una tarea cancelada", () => {
+    const { repo, create } = repository();
+    create();
+    const last = create();
+    repo.cancel(last.id);
+    expect(create().number).toBe(last.number + 1);
+  });
+
+  it("task.created registra el número asignado", () => {
+    const { db, create } = repository();
+    const task = create();
+    expect(listEvents(db, task.id)[0]?.payload).toMatchObject({ number: task.number });
+  });
 });
