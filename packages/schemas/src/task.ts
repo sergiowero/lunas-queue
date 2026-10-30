@@ -12,6 +12,9 @@ export const Priority = z.int().min(0).max(Number.MAX_SAFE_INTEGER);
 export const TASK_TITLE_MAX = 72;
 export const TaskTitle = z.string().trim().min(1).max(TASK_TITLE_MAX);
 
+/** Número de tarea (#N): secuencial global, inmutable y sin reuso; no sustituye al UUID (ADR 0015). */
+export const TaskNumber = z.int().min(1).max(Number.MAX_SAFE_INTEGER);
+
 const Intent = z.string().trim().min(1).max(10_000);
 const Tags = z.array(z.string().trim().min(1).max(64)).max(32).transform(unique);
 
@@ -46,6 +49,7 @@ export type TaskCancel = z.infer<typeof TaskCancel>;
 
 export const Task = z.strictObject({
   id: z.uuid(),
+  number: TaskNumber,
   projectId: z.uuid(),
   intent: z.string().min(1),
   // null hasta el primer refinamiento; después no cambia.
@@ -69,6 +73,7 @@ export type Task = z.infer<typeof Task>;
 /** La otra tarea de una arista, vista desde una tarea: una de sus dependencias o dependientes. */
 export const DependencyLink = z.strictObject({
   taskId: z.uuid(),
+  number: TaskNumber,
   projectId: z.uuid(),
   intent: z.string(),
   title: TaskTitle.nullable(),
@@ -93,6 +98,8 @@ export const TASK_DEPENDENCY_ADDED = "task.dependency_added";
 export const TASK_DEPENDENCY_REMOVED = "task.dependency_removed";
 
 export const TaskCreatedPayload = z.strictObject({
+  // Opcional: los task.created anteriores al número no lo traen.
+  number: TaskNumber.optional(),
   projectId: z.uuid(),
   intent: z.string(),
   tags: z.array(z.string()),
