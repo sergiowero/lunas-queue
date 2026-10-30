@@ -57,9 +57,9 @@ describe("flujo de punta a punta desde la UI", () => {
     expect(
       (await section("Event log")).getByText("Verification · en cola → Completed"),
     ).toBeTruthy();
-    expect(
-      await (await section("Evidencia")).findByRole("heading", { name: "Run verify" }),
-    ).toBeTruthy();
+    const evidence = await section("Evidencia");
+    await user.click(evidence.getByRole("button", { name: "Evidencia" }));
+    expect(await evidence.findByRole("heading", { name: "Run verify" })).toBeTruthy();
 
     // En el tablero del proyecto queda en Completed.
     await user.click(screen.getByRole("link", { name: "lunas-queue" }));
