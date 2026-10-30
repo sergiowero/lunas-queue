@@ -1,6 +1,6 @@
 // Composición de la API HTTP, del LunasQ MCP, del endpoint de hooks de subagentes y de los
 // estáticos del front end. El servidor (listen, SSE) se monta en unidades posteriores.
-import { ShellProcessRunner } from "@lunasq/adapters";
+import { type GitAdapter, RealGit, ShellProcessRunner } from "@lunasq/adapters";
 import {
   type LunasqDatabase,
   ProjectRepository,
@@ -16,6 +16,7 @@ import { SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
 import { Hono } from "hono";
 import { projectRoutes } from "./api/projects.ts";
 import { specRoutes } from "./api/specs.ts";
+import { changeStreamRoutes, DEFAULT_CHANGE_STREAM_INTERVAL_MS } from "./api/stream.ts";
 import { taskRoutes } from "./api/tasks.ts";
 import { queueRoutes, taskViewRoutes } from "./api/views.ts";
 import { type CommitVerifier, GitCommitVerifier, type TestGate } from "./mcp/ports.ts";
@@ -36,9 +37,13 @@ export interface AppDeps {
   commitVerifier?: CommitVerifier;
   /** Configuración del scheduler: la cola muestra el mismo score con el que despacha. */
   scheduler?: SchedulerConfigInput;
+  /** Lectura de la evidencia en el repo cuando el worktree ya no existe; por defecto git real. */
+  git?: GitAdapter;
   /** Build del front end (`packages/web/dist`); sin él no se sirven estáticos. */
   webRoot?: string;
   now?: () => Date;
+  /** Cada cuánto el stream SSE de cambios mira el Event log. */
+  changeStreamIntervalMs?: number;
 }
 
 export function createApp({
@@ -47,7 +52,9 @@ export function createApp({
   commitVerifier,
   scheduler,
   webRoot,
+  git = new RealGit(),
   now = () => new Date(),
+  changeStreamIntervalMs = DEFAULT_CHANGE_STREAM_INTERVAL_MS,
 }: AppDeps): Hono {
   const runner = new ShellProcessRunner();
   const mcp = new LunasqMcpService({
@@ -56,10 +63,14 @@ export function createApp({
     commitVerifier: commitVerifier ?? new GitCommitVerifier(runner),
   });
   const tasks = new TaskRepository(db);
+  const projects = new ProjectRepository(db);
+  const taskViews = new TaskViewRepository(db);
   const views = {
     db,
     tasks,
-    views: new TaskViewRepository(db),
+    projects,
+    git,
+    views: taskViews,
     state: new SchedulerStateRepository(db),
     config: SchedulerConfig.parse(scheduler ?? {}),
     now,
@@ -67,9 +78,10 @@ export function createApp({
   const app = new Hono()
     .route("/mcp", mcpRoutes(mcp))
     .route(SUBAGENT_HOOK_PATH, subagentHookRoutes(db))
-    .route("/api/projects", projectRoutes(new ProjectRepository(db)))
+    .route("/api/projects", projectRoutes(projects))
     .route("/api/tasks/:id/specs", specRoutes(new SpecRepository(db)))
     .route("/api/queue", queueRoutes(views))
+    .route("/api/stream", changeStreamRoutes(taskViews, changeStreamIntervalMs))
     .route("/api/tasks", taskViewRoutes(views))
     .route("/api/tasks", taskRoutes(tasks))
     .onError((error, c) => {

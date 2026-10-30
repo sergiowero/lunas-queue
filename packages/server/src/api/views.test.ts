@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { FakeGit } from "@lunasq/adapters";
 import { appendEvent, taskDependencies, usageRecords } from "@lunasq/db";
 import {
   insertProject,
@@ -24,12 +25,13 @@ afterEach(() => {
 function setup() {
   const db = migratedDatabase();
   const project = insertProject(db);
-  const app = createApp({ db, now: () => now });
+  const git = new FakeGit();
+  const app = createApp({ db, git, now: () => now });
   const get = async (path: string) => {
     const res = await app.request(path);
     return { status: res.status, body: (await res.json()) as unknown };
   };
-  return { db, project, get };
+  return { db, project, git, get };
 }
 
 type Entry = { task: { id: string }; ready: boolean; score: number | null; usage: unknown };
@@ -172,7 +174,43 @@ describe("GET /api/tasks/:id/evidence", () => {
     writeFileSync(path, "# Evidencia\n");
     expect(await get(`/api/tasks/${task.id}/evidence`)).toEqual({
       status: 200,
-      body: { path, markdown: "# Evidencia\n" },
+      body: { source: "worktree", path, markdown: "# Evidencia\n" },
+    });
+  });
+
+  it("sin worktree la lee de la branch de la tarea en el repo del proyecto", async () => {
+    const { db, project, git, get } = setup();
+    const task = insertTask(db, project.id, { branch: "lunasq/login" });
+    const file = `lunasq/tasks/${task.id}.md`;
+    git.addCheckout(project.localPath, { branch: "main", tree: {} });
+    git.pushToRemote(project.localPath, "lunasq/login", { [file]: { content: "# En la branch" } });
+    await git.fetch({ cwd: project.localPath, remote: "origin", branch: "lunasq/login" });
+    expect(await get(`/api/tasks/${task.id}/evidence`)).toEqual({
+      status: 200,
+      body: { source: "branch", path: `origin/lunasq/login:${file}`, markdown: "# En la branch" },
+    });
+  });
+
+  it("tras el merge, con la branch borrada, la lee de la rama base", async () => {
+    const { db, project, git, get } = setup();
+    const task = insertTask(db, project.id, { branch: "lunasq/borrada", prState: "merged" });
+    const file = `lunasq/tasks/${task.id}.md`;
+    git.addCheckout(project.localPath, {
+      branch: "main",
+      tree: { [file]: { content: "# Mergeada" } },
+    });
+    expect(await get(`/api/tasks/${task.id}/evidence`)).toEqual({
+      status: 200,
+      body: { source: "base", path: `origin/main:${file}`, markdown: "# Mergeada" },
+    });
+  });
+
+  it("un repo inaccesible cuenta como evidencia faltante", async () => {
+    const { db, project, get } = setup();
+    const task = insertTask(db, project.id, { branch: "lunasq/x" });
+    expect(await get(`/api/tasks/${task.id}/evidence`)).toEqual({
+      status: 404,
+      body: { error: "evidence_not_found" },
     });
   });
 

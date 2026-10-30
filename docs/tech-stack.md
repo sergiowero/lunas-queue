@@ -87,7 +87,7 @@ Cada componente del diseño queda resuelto con piezas de la misma base, sin serv
 | --- | --- |
 | Base | React + Vite + TypeScript |
 | Routing | TanStack Router |
-| Datos del servidor | TanStack Query, con invalidación desde SSE (refresco periódico hasta UW-27, [ADR uw-21-front-end](decisions/uw-21-front-end.md)) |
+| Datos del servidor | TanStack Query, con invalidación desde SSE (`GET /api/stream` sigue el Event log, [ADR uw-21-front-end](decisions/uw-21-front-end.md)) |
 | Componentes y estilos | shadcn/ui sobre Tailwind CSS 4 (`class-variance-authority`, `clsx`, `tailwind-merge`) |
 | Tablas (cola, backlog, Runs) | TanStack Table 8.x |
 | DAG de dependencias | React Flow (`@xyflow/react`) con layout automático (dagre) |

@@ -61,8 +61,19 @@ export const TaskUsage = z.strictObject({
 });
 export type TaskUsage = z.infer<typeof TaskUsage>;
 
-/** Archivo de evidencia `lunasq/tasks/{id}.md` del worktree (lo escribe UW-24). */
-export const TaskEvidence = z.strictObject({ path: z.string().min(1), markdown: z.string() });
+/**
+ * Archivo de evidencia `lunasq/tasks/{id}.md` (lo escribe UW-24): del worktree mientras existe; si
+ * ya se limpió, de la branch de la tarea y, tras el merge, de la rama base. `path` es la ruta en
+ * disco o `<ref>:<ruta>` en git.
+ */
+export const EvidenceSource = z.enum(["worktree", "branch", "base"]);
+export type EvidenceSource = z.infer<typeof EvidenceSource>;
+
+export const TaskEvidence = z.strictObject({
+  source: EvidenceSource,
+  path: z.string().min(1),
+  markdown: z.string(),
+});
 export type TaskEvidence = z.infer<typeof TaskEvidence>;
 
 const queueBase = { task: Task, usage: UsageTotals };

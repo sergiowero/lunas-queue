@@ -6,6 +6,7 @@
 import type {
   Actor,
   EventView,
+  EvidenceSource,
   Phase,
   Project,
   QueueEntry,
@@ -61,6 +62,8 @@ export class FakeApi {
   readonly specs: Json<Spec>[] = [];
   readonly usage = new Map<string, Json<TaskUsage>>();
   readonly evidence = new Map<string, string>();
+  /** Origen de la evidencia por tarea; sin entrada, el worktree. */
+  readonly evidenceSource = new Map<string, EvidenceSource>();
   readonly requests: Request[] = [];
   /** Si se fija, GET /api/queue responde esto tal cual. */
   queue: Json<QueueEntry>[] | null = null;
@@ -250,7 +253,11 @@ export class FakeApi {
       case "evidence": {
         const markdown = this.evidence.get(id);
         if (markdown === undefined) return [404, { error: "evidence_not_found" }];
-        return [200, { path: `${task.worktreePath}/lunasq/tasks/${id}.md`, markdown }];
+        const source = this.evidenceSource.get(id) ?? "worktree";
+        const file = `lunasq/tasks/${id}.md`;
+        const path =
+          source === "worktree" ? `${task.worktreePath}/${file}` : `origin/${task.branch}:${file}`;
+        return [200, { source, path, markdown }];
       }
       case "specs":
         return this.spec(task, method, Number(version), action, body);

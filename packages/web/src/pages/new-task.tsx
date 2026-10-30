@@ -1,5 +1,6 @@
 // Alta de tareas: intent, tags, prioridad y dependencias iniciales (TaskCreate, ADR 0010). La
-// validación es la del servidor; aquí solo se muestran sus issues.
+// validación es la del servidor; aquí solo se muestran sus issues. Las dependencias pueden ser de
+// cualquier proyecto; las de otro se marcan como riesgo, igual que en el detalle.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
@@ -38,7 +39,7 @@ export function NewTaskPage() {
   const [priority, setPriority] = useState(String(DEFAULT_PRIORITY));
   const [dependsOn, setDependsOn] = useState<string[]>([]);
   const projects = useQuery(queries.projects());
-  const candidates = useQuery({ ...queries.tasks(projectId), enabled: projectId !== "" });
+  const candidates = useQuery({ ...queries.tasks(), enabled: projectId !== "" });
 
   const create = useMutation({
     mutationFn: api.createTask,
@@ -66,6 +67,11 @@ export function NewTaskPage() {
   if (projects.error) return <QueryError error={projects.error} />;
   if (!projects.data) return <Loading />;
   const live = (candidates.data ?? []).filter((t) => !isTerminal(t.state));
+  // El proyecto elegido primero; después los demás en el orden del listado de proyectos.
+  const groups = [...projects.data]
+    .sort((a, b) => Number(b.id === projectId) - Number(a.id === projectId))
+    .map((project) => ({ project, tasks: live.filter((t) => t.projectId === project.id) }))
+    .filter((group) => group.tasks.length > 0);
 
   return (
     <form onSubmit={submit} className="flex max-w-2xl flex-col gap-4">
@@ -125,18 +131,25 @@ export function NewTaskPage() {
           />
         </div>
       </div>
-      {live.length > 0 && (
-        <fieldset className="flex flex-col gap-1">
+      {groups.length > 0 && (
+        <fieldset className="flex flex-col gap-3">
           <legend className="text-sm font-medium">Depende de</legend>
-          {live.map((task) => (
-            <label key={task.id} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={dependsOn.includes(task.id)}
-                onChange={(e) => toggle(task.id, e.target.checked)}
-              />
-              {task.intent}
-            </label>
+          {groups.map(({ project, tasks }) => (
+            <div key={project.id} className="flex flex-col gap-1">
+              <h2 className="text-xs font-medium text-muted-foreground">
+                {project.id === projectId ? project.name : `${project.name} · otro proyecto`}
+              </h2>
+              {tasks.map((task) => (
+                <label key={task.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={dependsOn.includes(task.id)}
+                    onChange={(e) => toggle(task.id, e.target.checked)}
+                  />
+                  {task.intent}
+                </label>
+              ))}
+            </div>
           ))}
         </fieldset>
       )}

@@ -1,10 +1,10 @@
 // Lecturas que alimentan el detalle de tarea y la cola del front end (UW-21, ADR uw-21-front-end):
 // Runs sin su token, Event log y usage agregado. Solo lee; nada aquí cambia estado.
 import { EMPTY_USAGE, EventView, RunView, type TaskUsage, type UsageTotals } from "@lunasq/schemas";
-import { asc, eq, getTableColumns, sql } from "drizzle-orm";
+import { asc, eq, getTableColumns, gt, max, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
-import { runs, tasks, usageRecords } from "./schema.ts";
+import { events, runs, tasks, usageRecords } from "./schema.ts";
 
 const {
   runToken: _token,
@@ -96,6 +96,33 @@ export class TaskViewRepository {
       .groupBy(runs.taskId)
       .all();
     return new Map(rows.map(({ taskId, ...usage }) => [taskId, toTotals(usage)]));
+  }
+
+  /** Id del último evento escrito; 0 sin eventos. Es el cursor del stream de cambios. */
+  lastEventId(): number {
+    return (
+      this.db
+        .select({ id: max(events.id) })
+        .from(events)
+        .get()?.id ?? 0
+    );
+  }
+
+  /**
+   * Tareas con eventos después de `afterId`, en orden de su primer evento nuevo, y el id del
+   * último. Todo cambio de una tarea deja evento (ADR 0007), así que basta para invalidar la UI.
+   */
+  changesSince(afterId: number): { lastId: number; taskIds: string[] } {
+    const rows = this.db
+      .select({ id: events.id, taskId: events.taskId })
+      .from(events)
+      .where(gt(events.id, afterId))
+      .orderBy(asc(events.id))
+      .all();
+    return {
+      lastId: rows.at(-1)?.id ?? afterId,
+      taskIds: [...new Set(rows.map((r) => r.taskId))],
+    };
   }
 
   private exists(taskId: string): boolean {

@@ -135,3 +135,22 @@ describe("TaskViewRepository.usageByTask", () => {
     expect(totals.has(other.id)).toBe(false);
   });
 });
+
+describe("TaskViewRepository.changesSince", () => {
+  it("devuelve el último id y las tareas con eventos posteriores, sin repetir", () => {
+    const { db, project, task, views } = setup();
+    const other = insertTask(db, project.id);
+    expect(views.lastEventId()).toBe(0);
+    const first = appendEvent(db, { taskId: task.id, type: "a", actor: "human" });
+    appendEvent(db, { taskId: other.id, type: "b", actor: "system" });
+    const last = appendEvent(db, { taskId: task.id, type: "c", actor: "system" });
+
+    expect(views.lastEventId()).toBe(last.id);
+    expect(views.changesSince(first.id - 1)).toEqual({
+      lastId: last.id,
+      taskIds: [task.id, other.id],
+    });
+    expect(views.changesSince(first.id)).toEqual({ lastId: last.id, taskIds: [other.id, task.id] });
+    expect(views.changesSince(last.id)).toEqual({ lastId: last.id, taskIds: [] });
+  });
+});

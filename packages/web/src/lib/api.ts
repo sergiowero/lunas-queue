@@ -65,8 +65,10 @@ export const api = {
     request<QueueEntry[]>(
       projectId ? `/api/queue?projectId=${encodeURIComponent(projectId)}` : "/api/queue",
     ),
-  tasks: (projectId: string) =>
-    request<Task[]>(`/api/tasks?projectId=${encodeURIComponent(projectId)}`),
+  tasks: (projectId?: string) =>
+    request<Task[]>(
+      projectId ? `/api/tasks?projectId=${encodeURIComponent(projectId)}` : "/api/tasks",
+    ),
   task: (id: string) => request<Task>(task(id)),
   dependencies: (id: string) => request<TaskDependencies>(`${task(id)}/dependencies`),
   runs: (id: string) => request<RunView[]>(`${task(id)}/runs`),

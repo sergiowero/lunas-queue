@@ -6,9 +6,9 @@ import { ApiError } from "./lib/api.ts";
 import { createAppRouter } from "./router.tsx";
 import "./index.css";
 
-// Refresco periódico mientras la invalidación por SSE llega con la bandeja (UW-27); ver
-// ADR uw-21-front-end.
-const REFRESH_MS = 3000;
+// Las actualizaciones llegan por SSE (lib/live.ts); el refresco periódico solo cubre un stream
+// caído. Ver ADR uw-21-front-end.
+const REFRESH_MS = 30_000;
 
 const queryClient = new QueryClient({
   defaultOptions: {

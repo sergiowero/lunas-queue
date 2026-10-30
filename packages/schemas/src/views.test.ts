@@ -80,7 +80,10 @@ describe("QueueEntry", () => {
 
 describe("TaskEvidence", () => {
   it("guarda la ruta y el markdown", () => {
-    expect(TaskEvidence.parse({ path: "/w/lunasq/tasks/a.md", markdown: "# a" })).toEqual({
+    expect(
+      TaskEvidence.parse({ source: "worktree", path: "/w/lunasq/tasks/a.md", markdown: "# a" }),
+    ).toEqual({
+      source: "worktree",
       path: "/w/lunasq/tasks/a.md",
       markdown: "# a",
     });

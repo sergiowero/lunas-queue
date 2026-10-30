@@ -1,9 +1,11 @@
 import { Link, Outlet } from "@tanstack/react-router";
+import { useLiveUpdates } from "../lib/live.ts";
 
 const nav = "rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground";
 const active = { className: "bg-muted text-foreground" };
 
 export function Layout() {
+  useLiveUpdates();
   return (
     <div className="min-h-screen">
       <header className="border-b border-border">

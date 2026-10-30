@@ -7,8 +7,11 @@ export const queries = {
   projects: () => queryOptions({ queryKey: ["projects"], queryFn: api.projects }),
   queue: (projectId?: string) =>
     queryOptions({ queryKey: ["queue", projectId ?? null], queryFn: () => api.queue(projectId) }),
-  tasks: (projectId: string) =>
-    queryOptions({ queryKey: ["tasks", projectId], queryFn: () => api.tasks(projectId) }),
+  tasks: (projectId?: string) =>
+    queryOptions({
+      queryKey: ["tasks", projectId ?? null],
+      queryFn: () => api.tasks(projectId),
+    }),
   task: (id: string) => queryOptions({ queryKey: ["task", id], queryFn: () => api.task(id) }),
   dependencies: (id: string) =>
     queryOptions({ queryKey: ["task", id, "dependencies"], queryFn: () => api.dependencies(id) }),

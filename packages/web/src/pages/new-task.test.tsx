@@ -31,6 +31,25 @@ describe("alta de tareas", () => {
     expect(await screen.findByRole("heading", { name: "Login con email" })).toBeTruthy();
   });
 
+  it("permite depender de tareas de otro proyecto y las marca", async () => {
+    const fake = new FakeApi();
+    const mine = fake.addProject({ name: "web" });
+    const other = fake.addProject({ name: "api" });
+    const remote = fake.addTask(other.id, { intent: "Endpoint de login" });
+    const { user } = renderApp("/tasks/new", fake);
+
+    await user.selectOptions(await screen.findByLabelText("Proyecto"), "web");
+    expect(await screen.findByText("api · otro proyecto")).toBeTruthy();
+    await user.type(screen.getByLabelText("Intent"), "Pantalla de login");
+    await user.click(screen.getByLabelText("Endpoint de login"));
+    await user.click(screen.getByRole("button", { name: "Crear tarea" }));
+    await screen.findByRole("heading", { name: "Pantalla de login" });
+    expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
+      projectId: mine.id,
+      dependsOn: [remote.id],
+    });
+  });
+
   it("preselecciona el proyecto de la URL", async () => {
     const fake = new FakeApi();
     fake.addProject({ name: "uno" });

@@ -2,8 +2,10 @@
 // scheduler y, por tarea, Runs, Event log, usage y archivo de evidencia.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { type GitAdapter, isGitError } from "@lunasq/adapters";
 import type {
   LunasqDatabase,
+  ProjectRepository,
   SchedulerStateRepository,
   TaskRepository,
   TaskViewRepository,
@@ -14,6 +16,7 @@ import {
   type QueueEntry,
   QueueQuery,
   type SchedulerConfig,
+  type Task,
   type TaskEvidence,
 } from "@lunasq/schemas";
 import { Hono } from "hono";
@@ -22,15 +25,62 @@ import { invalidInput, notFound } from "./http.ts";
 export interface ViewDeps {
   db: LunasqDatabase;
   tasks: TaskRepository;
+  projects: ProjectRepository;
   views: TaskViewRepository;
+  git: GitAdapter;
   state: SchedulerStateRepository;
   config: SchedulerConfig;
   now: () => Date;
 }
 
-/** Ruta del archivo de evidencia que escribe UW-24 en el worktree de la tarea. */
-export function evidencePath(worktreePath: string, taskId: string): string {
-  return join(worktreePath, "lunasq", "tasks", `${taskId}.md`);
+/** Ruta del archivo de evidencia dentro del repo (UW-24 lo escribe y lo commitea). */
+export function evidenceFile(taskId: string): string {
+  return `lunasq/tasks/${taskId}.md`;
+}
+
+async function readWorktree(worktreePath: string, taskId: string): Promise<string | undefined> {
+  try {
+    return await readFile(join(worktreePath, evidenceFile(taskId)), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+/**
+ * Evidencia de la tarea: del worktree mientras existe; si no, de su branch y, tras el merge (la
+ * branch puede haberse borrado), de la rama base. Lee refs ya presentes en el repo del proyecto,
+ * sin fetch: una lectura de la UI no toca la red. Un ref ausente o un repo inaccesible cuentan
+ * como «no está».
+ */
+async function findEvidence(deps: ViewDeps, task: Task): Promise<TaskEvidence | null> {
+  const file = evidenceFile(task.id);
+  if (task.worktreePath) {
+    const markdown = await readWorktree(task.worktreePath, task.id);
+    if (markdown !== undefined) {
+      return { source: "worktree", path: join(task.worktreePath, file), markdown };
+    }
+  }
+  const project = deps.projects.get(task.projectId);
+  if (!project) return null;
+  const candidates: { source: "branch" | "base"; ref: string }[] = [];
+  if (task.branch) {
+    candidates.push({ source: "branch", ref: `origin/${task.branch}` });
+    candidates.push({ source: "branch", ref: task.branch });
+  }
+  if (task.prState === "merged") {
+    candidates.push({ source: "base", ref: `origin/${project.baseBranch}` });
+  }
+  for (const { source, ref } of candidates) {
+    try {
+      const commit = await deps.git.resolveCommit({ cwd: project.localPath, ref });
+      const content = await deps.git.readFile({ cwd: project.localPath, commit, path: file });
+      if (content) return { source, path: `${ref}:${file}`, markdown: content.toString("utf8") };
+    } catch (error) {
+      if (!isGitError(error)) throw error;
+    }
+  }
+  return null;
 }
 
 /**
@@ -100,16 +150,7 @@ export function taskViewRoutes(deps: ViewDeps): Hono {
     .get("/:id/evidence", async (c) => {
       const task = deps.tasks.get(c.req.param("id"));
       if (!task) return notFound(c);
-      if (!task.worktreePath) return c.json({ error: "evidence_not_found" }, 404);
-      const path = evidencePath(task.worktreePath, task.id);
-      try {
-        const evidence: TaskEvidence = { path, markdown: await readFile(path, "utf8") };
-        return c.json(evidence);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          return c.json({ error: "evidence_not_found" }, 404);
-        }
-        throw error;
-      }
+      const evidence = await findEvidence(deps, task);
+      return evidence ? c.json(evidence) : c.json({ error: "evidence_not_found" }, 404);
     });
 }

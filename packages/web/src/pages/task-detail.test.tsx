@@ -99,12 +99,14 @@ describe("detalle de tarea", () => {
     expect(await screen.findByText("Todavía no hay archivo de evidencia.")).toBeTruthy();
   });
 
-  it("explica que sin worktree la evidencia está en el PR", async () => {
-    const { fake, dep } = seeded();
-    renderApp(`/tasks/${dep.id}`, fake);
-    expect(
-      await screen.findByText("La tarea no tiene worktree: la evidencia viaja en su PR."),
-    ).toBeTruthy();
+  it("indica de dónde salió la evidencia cuando ya no hay worktree", async () => {
+    const { fake, task } = seeded();
+    fake.evidence.set(task.id, "# Evidencia");
+    fake.evidenceSource.set(task.id, "branch");
+    renderApp(`/tasks/${task.id}`, fake);
+    const block = await section("Evidencia");
+    expect(await block.findByText(`origin/lunasq/login:lunasq/tasks/${task.id}.md`)).toBeTruthy();
+    expect(block.getByText(/Desde branch de la tarea/)).toBeTruthy();
   });
 
   it("muestra las versiones de la spec, su contenido y el diff contra la anterior", async () => {
