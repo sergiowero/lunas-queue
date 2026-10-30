@@ -3,9 +3,10 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node"],
+    "resolveJsonModule": true
   },
-  "include": ["src", "test", "*.ts"],
+  "include": ["src", "test", "scripts", "*.ts", "package.json"],
   "references": [
     {
       "path": "../server"

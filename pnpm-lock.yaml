@@ -39,6 +39,13 @@ importers:
       '@lunasq/server':
         specifier: workspace:*
         version: link:../server
+      better-sqlite3:
+        specifier: ^13.0.3
+        version: 13.0.3
+    devDependencies:
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
 
   packages/db:
     dependencies:
