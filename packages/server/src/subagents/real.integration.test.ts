@@ -5,61 +5,25 @@
 // hooks del dispatcher y el run token en el entorno, como en un pane. Para no gastar Opus, los
 // revisores corren con `LUNASQ_REVIEWER_MODEL` (haiku por defecto); `opus` prueba los archivos tal
 // cual.
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Readable } from "node:stream";
 import { RunSubagentRepository } from "@lunasq/db";
 import { insertProject, insertRun, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { REVIEWER_NAMES, RUN_ENV } from "@lunasq/schemas";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../app.ts";
 import { ensureHookSettings } from "../dispatcher/hook-settings.ts";
+import { runClaude, serve } from "../test-helpers/real-claude.ts";
 import { SUBAGENT_HOOK_PATH } from "./routes.ts";
 
 const enabled = process.env.LUNASQ_CLAUDE_INTEGRATION === "1";
-const claudeBin = process.env.CLAUDE_BIN ?? "claude";
 const reviewerModel = process.env.LUNASQ_REVIEWER_MODEL ?? "haiku";
 const agentsDir = new URL("../../../../assets/agents/lunasq/", import.meta.url);
-
-/** Sirve una app de Hono con node:http, sin agregar @hono/node-server. */
-function serve(fetch: (req: Request) => Response | Promise<Response>): Promise<Server> {
-  const server = createServer(async (req, res) => {
-    const body = req.method === "GET" || req.method === "HEAD" ? undefined : Readable.toWeb(req);
-    const response = await fetch(
-      new Request(`http://${req.headers.host}${req.url}`, {
-        method: req.method,
-        headers: req.headers as Record<string, string>,
-        body: body as ReadableStream | undefined,
-        duplex: "half",
-      } as RequestInit),
-    );
-    res.writeHead(response.status, Object.fromEntries(response.headers));
-    res.end(Buffer.from(await response.arrayBuffer()));
-  });
-  return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server)));
-}
-
-function runClaude(cwd: string, args: string[], env: Record<string, string>): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(claudeBin, args, { cwd, env: { ...process.env, ...env } });
-    let out = "";
-    child.stdout.on("data", (d) => {
-      out += d;
-    });
-    child.stderr.on("data", (d) => {
-      out += d;
-    });
-    child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0 ? resolve(out) : reject(new Error(`claude salió con ${code}:\n${out}`)),
-    );
-  });
-}
 
 describe.skipIf(!enabled)("revisores contra Claude Code real", { timeout: 600_000 }, () => {
   let dir: string;

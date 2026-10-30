@@ -107,7 +107,7 @@ Monorepo con pnpm workspaces; la regla es que el dominio no depende de nada exte
 | `packages/server` | Hono: API, SSE, LunasQ MCP, endpoints OTLP; scheduler, dispatcher y reconciliación; generador de evidencia | `domain`, `db`, `adapters`, `schemas` |
 | `packages/web` | Front end React + Vite; se compila a estáticos que sirve `server` | `schemas` |
 | `packages/cli` | Binario `lunasq`: `start`, `install`, `doctor` | `server` |
-| `assets/skills` | Skills de fase: `refine-task`, `implement-task`, `verify-task`, `deliver-task` | — |
+| `assets/skills` | Skills de fase: `refine-task`, `implement-task`, `verify-task` ([ADR uw-18-skills-fase](decisions/uw-18-skills-fase.md)) | — |
 | `assets/agents` | Definiciones de los 4 subagentes revisores | — |
 
 Los assets se versionan con el código y `lunasq install` los copia a `~/.claude/` (skills y `agents/lunasq/`). Las pruebas de integración contra herdr y `gh` reales viven en `packages/adapters` y corren aparte de la suite unitaria.

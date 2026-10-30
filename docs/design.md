@@ -321,10 +321,11 @@ Las tools validan el run token que el dispatcher inyecta al pane; una sesión vi
 | refine-task | Leer el repo, aclarar el intent, modelar con DDD y escribir criterios verificables en lenguaje del dominio | submit\_spec |
 | implement-task | TDD contra la spec aprobada: test que falla, implementación mínima, refactor; commits pequeños | submit\_for\_verification |
 | verify-task | Lanzar los 4 subagentes revisores, consolidar, refutar hallazgos, verificar cada criterio y la coherencia de los tests, sin editar código | submit\_verdict |
-| deliver-task | Rebase sobre rama base, push, crear PR con resumen y criterios | PR url vía MCP |
 | herdr (oficial) | Que el agente sepa operar herdr si necesita panes auxiliares | — |
 
 Regla de diseño: las skills describen el *cómo*; el MCP es el único canal de *salida*. Si un agente termina sin llamar la tool de salida, el dispatcher lo trata como fase incompleta.
+
+La entrega no tiene skill: rebase, push y PR los hace LunasQ dentro del Run del verificador, sin agente ([ADR uw-18-skills-fase](decisions/uw-18-skills-fase.md)). Cada skill trae un handoff de ejemplo válido y la tabla de códigos de error de sus tools.
 
 **Handoff entre fases**
 

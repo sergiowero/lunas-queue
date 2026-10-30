@@ -62,12 +62,16 @@ export class GitCommitVerifier implements CommitVerifier {
     const missing: string[] = [];
     for (const sha of input.commits) {
       // El SHA ya viene validado como hexadecimal por el esquema del handoff; --end-of-options
-      // evita que una rama base como `--foo` se lea como opción de git.
+      // evita que una rama base como `--foo` se lea como opción de git. El worktree sale de
+      // origin/<base> (ADR 0012) y la base local puede ir atrasada: un commit que ya está en
+      // cualquiera de las dos no es de la tarea.
+      const remote = `origin/${input.baseBranch}`;
       const result = await this.#runner.run({
         command: [
           `git rev-parse --verify --quiet --end-of-options ${quote(`${input.baseBranch}^{commit}`)} >/dev/null`,
           `git merge-base --is-ancestor --end-of-options ${quote(sha)} HEAD`,
           `! git merge-base --is-ancestor --end-of-options ${quote(sha)} ${quote(input.baseBranch)}`,
+          `{ ! git rev-parse --verify --quiet --end-of-options ${quote(`${remote}^{commit}`)} >/dev/null || ! git merge-base --is-ancestor --end-of-options ${quote(sha)} ${quote(remote)}; }`,
         ].join(" && "),
         cwd: input.worktreePath,
       });
