@@ -2,7 +2,7 @@
 
 - Estado: aceptada
 - Fecha: 2026-10-29
-- Unidad: UW-18 · Código: `assets/skills/{refine-task,implement-task,verify-task}/SKILL.md`, `packages/server/src/skills/`, `packages/server/src/test-helpers/real-claude.ts`
+- Unidad: UW-18 · Código: `assets/skills/{refine-task,implement-task,verify-task}/SKILL.md`, `packages/server/src/skills/`, `packages/server/src/mcp/ports.ts`, `packages/server/src/test-helpers/real-claude.ts`
 
 ## Contexto
 
@@ -31,6 +31,7 @@
   - `packages/server/src/skills/examples.test.ts` valida con `parseHandoff` el ejemplo de cada skill, así un cambio de esquema rompe la suite si la skill queda atrás.
   - `pnpm --filter @lunasq/server test:skills` prueba el criterio contra Claude Code real. Una tarea de juguete (una calculadora en JavaScript, `node --test`) recorre refinamiento, aprobación de la spec, implementación y verificación. Cada fase corre en un `claude -p` con el `phasePrompt` del dispatcher, el MCP por `--mcp-config` y `--strict-mcp-config` (sin engram), el settings de hooks y el gate de UW-11 con un runner local. Se comprueba que cada Run dejó un handoff que pasa `parseHandoff` con la transición aplicada, que el refinador y el verificador no dejaron cambios, y que cada revisor reportado como `ran` aparece en los hooks del Run. Las fases usan `LUNASQ_SKILL_MODEL` (sonnet por defecto) y los revisores `LUNASQ_REVIEWER_MODEL` (haiku).
 - **Rama base.** Las skills comparan contra `$(git merge-base origin/<base> HEAD)`, porque el worktree sale de `origin/<base>` y la rama local puede ir atrasada (ADR 0012).
+- **Commits de la tarea.** Por la misma razón, `GitCommitVerifier.missing` (UW-15) rechaza también un SHA que ya está en `origin/<base>`, además de los que están en la base local. Así, una `main` local atrasada no hace pasar commits upstream como si fueran de la tarea.
 - `serve` y `runClaude` pasan a `src/test-helpers/real-claude.ts`, compartidos con `test:claude` de UW-19.
 
 ## Resultado
@@ -49,5 +50,4 @@ La revisión con contexto limpio llevó a estos cambios:
 - **UW-23**: la skill ya pide reportar como `ran` solo a los revisores lanzados; `test:skills` comprueba eso mismo contra los hooks, así que la validación de UW-23 no debería romper el flujo.
 - **UW-26**: sin agente en la entrega, la descripción del PR sale de los handoffs (intent, criterios, `riskLabel`), no de una skill.
 - **UW-28**: `lunasq install` copia `assets/skills/*/` a `~/.claude/skills/`. Un proyecto puede sobrescribir una skill con una del mismo nombre en su `.claude/skills/`.
-- `GitCommitVerifier.missing` (UW-15) comprueba los commits contra la rama base local, no contra `origin/<base>`. Con una `main` local atrasada, acepta como commits de la tarea los que ya están upstream. Queda anotado para quien toque el MCP.
 - La prueba real no es determinista: un modelo puede tomar otro camino (por ejemplo, un reject en lugar de un pass). Por eso el test acepta cualquier veredicto válido y solo exige el handoff, la transición y la limpieza del worktree.
