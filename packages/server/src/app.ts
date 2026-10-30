@@ -1,5 +1,5 @@
 // Composición de la API HTTP, del LunasQ MCP y del endpoint de hooks de subagentes. El servidor
-// (listen, SSE) se monta en unidades posteriores.
+// (listen, SSE de notificaciones) lo monta `startRuntime` (runtime/runtime.ts).
 import { ShellProcessRunner } from "@lunasq/adapters";
 import {
   type LunasqDatabase,
