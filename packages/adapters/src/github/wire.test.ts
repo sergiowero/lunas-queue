@@ -74,7 +74,16 @@ describe("parsePr", () => {
       },
       reviewDecision: null,
       reviews: [],
+      labels: [],
     });
+  });
+
+  it("lee los nombres de las etiquetas y descarta las de forma desconocida", () => {
+    const labeled = {
+      ...merged,
+      labels: [{ name: "lunasq:risk-low", color: "0e8a16" }, { id: 1 }, "raro"],
+    };
+    expect(parsePr(labeled).labels).toEqual(["lunasq:risk-low"]);
   });
 
   it("traduce checks pendientes, saltados y de status, y las reviews", () => {

@@ -57,6 +57,16 @@ export function gitHubContract(
       expect((await gh.getPr(pr.url)).url).toBe(pr.url);
     });
 
+    it("addLabels pone las etiquetas, también las que el repo no tenía, y repetirlo no duplica", async () => {
+      const { branch, pr } = await openPr();
+      const label = { name: "lunasq:risk-low", color: "0e8a16", description: "Riesgo bajo" };
+      const labeled = await gh.addLabels({ cwd: branch.cwd, url: pr.url, labels: [label] });
+      expect(labeled.labels).toEqual(["lunasq:risk-low"]);
+      const again = await gh.addLabels({ cwd: branch.cwd, url: pr.url, labels: [label] });
+      expect(again.labels).toEqual(["lunasq:risk-low"]);
+      expect((await gh.getPr(pr.url)).labels).toEqual(["lunasq:risk-low"]);
+    });
+
     it("findOpenPr da null para un branch sin PR", async () => {
       const branch = await h.newBranch();
       expect(await gh.findOpenPr(branch)).toBeNull();

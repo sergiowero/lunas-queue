@@ -521,11 +521,17 @@ La tool no espera la respuesta dentro de la llamada MCP: los clientes MCP tienen
 
 **Entrega (completed)**
 
-1. Rebase o merge de la rama base; si hay conflictos, regresa a in progress.
-2. Correr la suite de tests una última vez.
-3. Commit final, push del branch de la tarea.
-4. Crear PR con el CLI gh, con el intent, los criterios y su evidencia en la descripción, más la etiqueta de riesgo (bajo / medio / alto) que asignó el approver para priorizar tu revisión.
-5. Cerrar panes, conservar o remover el worktree según política, registrar el PR; los dependientes se liberan cuando el PR se mergea.
+La hace LunasQ, sin agente, dentro del Run del verificador, cuando éste registra un pass ([ADR uw-26-entrega](decisions/uw-26-entrega.md)):
+
+1. Hook `before_delivery`.
+2. Rebase sobre `origin/<rama base>`; si hay conflictos, la tarea regresa a in progress (sin subir la iteración) y el implementador recibe los archivos en conflicto.
+3. Trailers `LunasQ-Task` y `LunasQ-Run` en cada commit del branch.
+4. Correr la suite de tests una última vez; en rojo, la tarea regresa a in progress igual que con un conflicto.
+5. Cerrar el Run del verificador, commit del archivo de evidencia y push del branch de la tarea.
+6. Crear PR con el CLI gh, con el intent, los criterios y su evidencia en la descripción, más la etiqueta de riesgo (bajo / medio / alto) que asignó el approver para priorizar tu revisión. Registrar el PR y correr `after_delivery`; si el hook commiteó cambios, se publican con un segundo push.
+7. `verdict_pass`: la tarea queda en Completed. Conservar o remover el worktree según política; los dependientes se liberan cuando el PR se mergea.
+
+Cualquier otro fallo (push, `gh`, un hook bloqueado) escala a Needs human. Una entrega que un reinicio dejó a medias se retoma sola al arrancar.
 
 **Front end: vistas mínimas**
 

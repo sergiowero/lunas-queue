@@ -2,7 +2,7 @@
 // `--flag=valor` para que un título que empieza con `-` no se lea como otra opción.
 import { GhCli, type GhCliOptions } from "./cli.ts";
 import { GitHubError, isGitHubError } from "./errors.ts";
-import type { CreatePrInput, GitHubAdapter, PullRequest } from "./types.ts";
+import type { CreatePrInput, GitHubAdapter, PrLabel, PullRequest } from "./types.ts";
 import { PR_FIELDS, parsePr, parsePrList } from "./wire.ts";
 
 const PR_URL = /^https:\/\/\S+\/pull\/\d+$/;
@@ -47,6 +47,33 @@ export class RealGitHub implements GitHubAdapter {
       throw new GitHubError("invalid_output", `pr create sin URL del PR: ${stdout}`);
     }
     return { pr: await this.getPr(url), created: true };
+  }
+
+  async addLabels(input: { cwd: string; url: string; labels: PrLabel[] }): Promise<PullRequest> {
+    if (!PR_URL.test(input.url)) {
+      throw new GitHubError("not_found", `no es la URL de un PR: ${input.url}`);
+    }
+    for (const label of input.labels) {
+      // --force: si la etiqueta ya existe, la actualiza en vez de fallar.
+      await this.cli.text(
+        [
+          "label",
+          "create",
+          label.name,
+          "--force",
+          ...(label.color ? [`--color=${label.color}`] : []),
+          ...(label.description ? [`--description=${label.description}`] : []),
+        ],
+        { cwd: input.cwd },
+      );
+    }
+    if (input.labels.length > 0) {
+      await this.cli.text(
+        ["pr", "edit", input.url, ...input.labels.map((l) => `--add-label=${l.name}`)],
+        { cwd: input.cwd },
+      );
+    }
+    return this.getPr(input.url);
   }
 
   async findOpenPr(input: {

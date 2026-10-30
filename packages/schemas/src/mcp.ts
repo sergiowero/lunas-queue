@@ -1,6 +1,7 @@
 // Entradas de las tools del LunasQ MCP, el contexto que devuelve get_task_context y los eventos
 // que escriben (docs/design.md §MCPs y skills, ADR uw-15-mcp-tools).
 import { z } from "zod";
+import { DeliveryConflictPayload } from "./delivery.ts";
 import { Phase, QuestionStatus, RiskLabel, SubState, TaskState } from "./enums.ts";
 import { checkUnique, list } from "./handoff/common.ts";
 import {
@@ -119,6 +120,9 @@ export const TaskContext = z.strictObject({
   rework: z
     .strictObject({ runId: z.uuid(), iteration: z.int().min(0), mustFix: z.array(MustFixFinding) })
     .nullable(),
+  // En implementación tras un conflicto de entrega (ADR uw-26-entrega): qué impidió integrar la
+  // rama base. Se limpia cuando el siguiente veredicto queda registrado.
+  deliveryConflict: DeliveryConflictPayload.nullable(),
   // Handoff del último Run de la misma fase, si se reintenta.
   previousAttempt: z
     .strictObject({

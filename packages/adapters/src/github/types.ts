@@ -37,6 +37,15 @@ export interface PullRequest {
   checks: { status: ChecksStatus; items: PrCheck[] };
   reviewDecision: ReviewDecision;
   reviews: PrReview[];
+  /** Nombres de las etiquetas del PR. */
+  labels: string[];
+}
+
+export interface PrLabel {
+  name: string;
+  /** Color hexadecimal sin `#`, para crear la etiqueta si el repo no la tiene. */
+  color?: string;
+  description?: string;
 }
 
 export interface CreatePrInput {
@@ -58,6 +67,11 @@ export interface GitHubAdapter {
   createPr(input: CreatePrInput): Promise<{ pr: PullRequest; created: boolean }>;
   /** PR abierto de `head` hacia `base`, o null. */
   findOpenPr(input: { cwd: string; head: string; base: string }): Promise<PullRequest | null>;
+  /**
+   * Agrega etiquetas al PR, creándolas en el repo si faltan. Idempotente: repetirlo no duplica.
+   * `cwd` es un checkout del repo, de donde `gh` toma el remoto.
+   */
+  addLabels(input: { cwd: string; url: string; labels: PrLabel[] }): Promise<PullRequest>;
   /** Estado, CI y reviews de un PR por su URL. Lanza GitHubError `not_found` si no existe. */
   getPr(url: string): Promise<PullRequest>;
 }
