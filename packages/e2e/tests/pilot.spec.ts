@@ -140,6 +140,7 @@ test.describe("piloto", () => {
     }
     // El archivo de evidencia lleva el veredicto del verificador y los criterios.
     const evidence = page.getByRole("region", { name: "Evidencia" });
+    await evidence.getByRole("button", { name: "Evidencia" }).click();
     await expect(evidence).toContainText(`lunasq/tasks/${a}.md`);
     await expect(evidence).toContainText("Veredicto: pass");
     await expect(evidence).toContainText("AC-1");
