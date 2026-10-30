@@ -297,7 +297,7 @@ export class TaskRepository implements DependencyGraphReader {
       createdAt: Date,
     ): DependencyLink => ({
       taskId: other.id,
-      number: other.number as number,
+      number: requireTaskNumber(other.number),
       projectId: other.projectId,
       intent: other.intent,
       title: other.title,
@@ -365,6 +365,15 @@ export function applyTaskTitle(tx: Tx, taskId: string, title: string): boolean {
   const payload: TaskTitledPayload = { title: parsed };
   appendEvent(tx, { taskId, type: TASK_TITLED, actor: "agent", payload });
   return true;
+}
+
+/**
+ * La columna admite NULL solo para que el trigger tasks_assign_number complete los inserts que no
+ * lo traen; una fila leída siempre lo tiene.
+ */
+export function requireTaskNumber(value: number | null): number {
+  if (value === null) throw new TaskRepositoryError("invalid_row", "tarea sin número");
+  return value;
 }
 
 /**

@@ -77,9 +77,10 @@ describe("tasks", () => {
 
       migrateDatabase(db);
 
-      const numbered = db.$client
-        .prepare("select id, number from tasks order by number")
-        .all() as { id: string; number: number }[];
+      const numbered = db.$client.prepare("select id, number from tasks order by number").all() as {
+        id: string;
+        number: number;
+      }[];
       expect(numbered).toEqual([
         { id: "a", number: 1 },
         { id: "b1", number: 2 },
