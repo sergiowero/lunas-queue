@@ -54,7 +54,11 @@ describe("WorktreeService.ensure", () => {
       timeoutMs: expect.any(Number),
     });
     expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ branch: res.branch, base: "origin/main" }),
+      expect.objectContaining({
+        branch: res.branch,
+        base: "origin/main",
+        label: `${project.name} #${task.number}`,
+      }),
     );
     expect(bootstraps()).toEqual([
       {

@@ -78,9 +78,14 @@ export function harness(
   const taskRow = (id: string) =>
     db.$client
       .prepare(
-        "select state, sub_state as subState, worktree_path as worktreePath from tasks where id = ?",
+        "select number, state, sub_state as subState, worktree_path as worktreePath from tasks where id = ?",
       )
-      .get(id) as { state: string; subState: string | null; worktreePath: string | null };
+      .get(id) as {
+      number: number;
+      state: string;
+      subState: string | null;
+      worktreePath: string | null;
+    };
 
   /** Crea una tarea en draft/queued y despacha su refinamiento hasta mandar el prompt. */
   async function launched(): Promise<{ taskId: string; run: RunRow; name: string }> {

@@ -26,18 +26,23 @@ const escalated = (reason: string, command = "run_failed") =>
 
 describe("escalationNotification", () => {
   it("reintentos agotados → retries_exhausted, con id por evento", () => {
-    expect(escalationNotification(escalated("retries_exhausted"))).toMatchObject({
+    expect(escalationNotification(12, escalated("retries_exhausted"))).toMatchObject({
       id: `retries:${TASK}:42`,
       kind: "retries_exhausted",
       taskId: TASK,
+      title: "Reintentos agotados en #12",
       createdAt: "2026-10-29T12:00:00.000Z",
     });
   });
 
   it("loop de verificación agotado → verification_exhausted", () => {
     expect(
-      escalationNotification(escalated("iterations_exhausted", "verdict_rework")),
-    ).toMatchObject({ id: `iterations:${TASK}:42`, kind: "verification_exhausted" });
+      escalationNotification(12, escalated("iterations_exhausted", "verdict_rework")),
+    ).toMatchObject({
+      id: `iterations:${TASK}:42`,
+      kind: "verification_exhausted",
+      title: "Loop de verificación agotado en #12",
+    });
   });
 
   it.each([
@@ -47,6 +52,6 @@ describe("escalationNotification", () => {
     ["otro topic", message({}, "task.pr_opened")],
     ["payload inválido", message({ command: 1 })],
   ])("%s → nada", (_, msg) => {
-    expect(escalationNotification(msg)).toBeNull();
+    expect(escalationNotification(12, msg)).toBeNull();
   });
 });
