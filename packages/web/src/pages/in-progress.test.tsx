@@ -41,7 +41,13 @@ describe("pestaña En curso", () => {
     const link = await screen.findByRole("link", { name: "Corriendo en uno" });
     expect(link.getAttribute("href")).toBe(`/tasks/${running.id}`);
     const rows = screen.getAllByRole("row").slice(1);
-    expect(rows.map((r) => within(r).getAllByRole("cell").map((c) => c.textContent))).toEqual([
+    expect(
+      rows.map((r) =>
+        within(r)
+          .getAllByRole("cell")
+          .map((c) => c.textContent),
+      ),
+    ).toEqual([
       ["Corriendo en uno", "uno", "corriendo", "300"],
       ["Esperando en dos", "dos", "esperando humano", "50"],
     ]);

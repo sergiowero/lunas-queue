@@ -95,7 +95,11 @@ describe("actualización en vivo por SSE", () => {
     const project = fake.addProject();
     const task = fake.addTask(project.id, { intent: "Saldrá de curso" });
     fake.transition(task.id, "in_progress", "running");
-    fake.addTask(project.id, { intent: "Sigue en curso", state: "in_progress", subState: "queued" });
+    fake.addTask(project.id, {
+      intent: "Sigue en curso",
+      state: "in_progress",
+      subState: "queued",
+    });
     renderApp("/in-progress", fake);
     await screen.findByText("Saldrá de curso");
 
