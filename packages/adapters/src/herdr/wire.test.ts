@@ -60,4 +60,26 @@ describe("traducción del protocolo de herdr", () => {
     );
     expect(snapshot.agents.map((a) => a.name)).toEqual(["t1-refine-1"]);
   });
+
+  it("el snapshot tolera agentes que herdr aún no identificó (sin `agent`)", () => {
+    const named = {
+      name: "t1-refine-1",
+      agent: "claude",
+      pane_id: "w1:p1",
+      workspace_id: "w1",
+      agent_status: "idle",
+    };
+    const snapshot = toSnapshot(
+      snapshotWire.parse({
+        snapshot: {
+          version: "0.9.5",
+          protocol: 22,
+          workspaces: [],
+          panes: [],
+          agents: [{ ...named, name: "t2-refine-1", agent: undefined }, named],
+        },
+      }),
+    );
+    expect(snapshot.agents.map((a) => a.name)).toEqual(["t1-refine-1"]);
+  });
 });

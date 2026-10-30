@@ -68,9 +68,13 @@ export const notificationWire = z.looseObject({
   reason: z.string().nullish(),
 });
 
-// herdr detecta agentes que el usuario abrió a mano y no tienen `name`: LunasQ no puede
-// direccionarlos, así que el snapshot los tolera y `toSnapshot` los descarta.
-const snapshotAgentWire = agentWire.extend({ name: z.string().nullish() });
+// herdr detecta agentes que el usuario abrió a mano y no tienen `name`, o panes recién creados
+// que aún no identifican `agent`: LunasQ no puede direccionarlos, así que el snapshot los tolera
+// y `toSnapshot` los descarta.
+const snapshotAgentWire = agentWire.extend({
+  name: z.string().nullish(),
+  agent: z.string().nullish(),
+});
 
 export const snapshotWire = z.looseObject({
   snapshot: z.looseObject({
@@ -168,7 +172,9 @@ export function toSnapshot(r: z.infer<typeof snapshotWire>): HerdrSnapshot {
     protocol: s.protocol,
     workspaces: s.workspaces.map(toWorkspace),
     panes: s.panes.map(toPane),
-    agents: s.agents.flatMap((a) => (a.name ? [toAgent({ ...a, name: a.name })] : [])),
+    agents: s.agents.flatMap((a) =>
+      a.name && a.agent ? [toAgent({ ...a, name: a.name, agent: a.agent })] : [],
+    ),
   };
 }
 
