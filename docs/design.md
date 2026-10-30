@@ -536,6 +536,7 @@ Cualquier otro fallo (push, `gh`, un hook bloqueado) escala a Needs human. Una e
 **Front end: vistas mínimas**
 
 - Tablero por proyecto (columnas por estado) y vista global de la cola ordenada por score.
+- Pestaña «En curso» con las tareas In progress de todos los proyectos; la etiqueta In progress va en azul en todas las vistas. Detalle: [ADR uw-21-front-end](decisions/uw-21-front-end.md).
 - Vista de DAG de dependencias.
 - Bandeja de aprobaciones y preguntas pendientes (todo lo que espera al humano); los bloqueos por permiso incluyen un acceso que enfoca el pane en herdr. Detalle: [ADR uw-27-bandeja](decisions/uw-27-bandeja.md).
 - Detalle de tarea: spec y versiones, Runs, event log, enlace al pane en herdr.
