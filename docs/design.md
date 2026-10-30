@@ -570,7 +570,9 @@ Cada sección de Run contiene:
 - salida del gate de tests;
 - transcript de la sesión del agente y, en verificación, de los subagentes, convertido a markdown.
 
-Esto evita perder evidencia cuando herdr cierra el pane o cuando Claude Code borra sus transcripts al vencer su periodo de retención ([30 días por defecto](https://code.claude.com/docs/en/sub-agents)). Antes de escribir, LunasQ redacta secretos detectados en los transcripts.
+Esto evita perder evidencia cuando herdr cierra el pane o cuando Claude Code borra sus transcripts al vencer su periodo de retención ([30 días por defecto](https://code.claude.com/docs/en/sub-agents)). Antes de escribir, LunasQ redacta secretos detectados en toda la sección ([ADR uw-24-archivo-evidencia](decisions/uw-24-archivo-evidencia.md)).
+
+Durante el loop de implementación y verificación el archivo queda sin commitear y los chequeos de worktree limpio y de `HEAD` lo ignoran; la entrega lo commitea con los trailers de la tarea antes del push.
 
 **Hallazgos refutados**
 

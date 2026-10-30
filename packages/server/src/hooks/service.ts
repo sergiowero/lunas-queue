@@ -29,6 +29,8 @@ import {
   type TaskWorktreeStore,
 } from "@lunasq/domain";
 import {
+  COMMIT_TRAILER_RUN,
+  COMMIT_TRAILER_TASK,
   HOOK_EXECUTED,
   HOOK_OUTPUT_LIMIT,
   HOOK_POINT_COMPLETED,
@@ -110,9 +112,6 @@ export interface ProjectHooks {
   configError: string | null;
   points: { point: HookPoint; hooks: (PlannedHook & { content: string })[] }[];
 }
-
-const COMMIT_TRAILER_TASK = "LunasQ-Task";
-const COMMIT_TRAILER_RUN = "LunasQ-Run";
 
 /** Comilla simple para sh. */
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;

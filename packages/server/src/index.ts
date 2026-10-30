@@ -2,6 +2,7 @@ export const packageName = "@lunasq/server";
 
 export * from "./app.ts";
 export * from "./dispatcher/index.ts";
+export * from "./evidence/index.ts";
 export * from "./github/index.ts";
 export * from "./hooks/index.ts";
 export * from "./mcp/index.ts";
