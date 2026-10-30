@@ -40,7 +40,14 @@ async function createTask(page: Page, intent: string, dependsOn: string[] = []) 
   await page.goto("/tasks/new");
   await page.getByLabel("Proyecto").selectOption({ label: "Piloto" });
   await page.getByLabel("Intent").fill(intent);
-  for (const dependency of dependsOn) await page.getByLabel(dependency).check();
+  for (const dependency of dependsOn) {
+    await page.getByLabel("Depende de").selectOption({ label: dependency });
+    await expect(
+      page
+        .getByRole("list", { name: "Dependencias elegidas" })
+        .getByText(dependency, { exact: true }),
+    ).toBeVisible();
+  }
   await page.getByRole("button", { name: "Crear tarea" }).click();
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("heading", { level: 1, name: intent })).toBeVisible();
