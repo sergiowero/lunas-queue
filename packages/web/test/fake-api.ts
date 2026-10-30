@@ -151,6 +151,7 @@ export class FakeApi {
     const at = this.now();
     const task: Json<Task> = {
       id: uuid(),
+      number: this.tasks.length + 1,
       projectId,
       intent: "Hacer algo",
       tags: [],
@@ -379,6 +380,7 @@ export class FakeApi {
       .filter((t) => !projectId || t.projectId === projectId || linked.has(t.id))
       .map((t) => ({
         id: t.id,
+        number: t.number,
         projectId: t.projectId,
         intent: t.intent,
         state: t.state,
@@ -638,6 +640,7 @@ export class FakeApi {
       const other = this.task(otherId);
       return {
         taskId: other.id,
+        number: other.number,
         projectId: other.projectId,
         intent: other.intent,
         state: other.state,

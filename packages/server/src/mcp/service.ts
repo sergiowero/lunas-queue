@@ -194,6 +194,7 @@ export class LunasqMcpService {
     const context: TaskContext = {
       task: {
         id: task.id,
+        number: task.number,
         intent: task.intent,
         tags: task.tags,
         state: task.state,

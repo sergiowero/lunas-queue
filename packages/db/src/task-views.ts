@@ -17,6 +17,7 @@ import { and, asc, eq, getTableColumns, gt, inArray, max, or, sql } from "drizzl
 import type { LunasqDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
 import { events, runSubagents, runs, taskDependencies, tasks, usageRecords } from "./schema.ts";
+import { requireTaskNumber } from "./tasks.ts";
 
 const {
   runToken: _token,
@@ -211,6 +212,7 @@ export class TaskViewRepository {
       const nodes = tx
         .select({
           id: tasks.id,
+          number: tasks.number,
           projectId: tasks.projectId,
           intent: tasks.intent,
           state: tasks.state,
@@ -225,7 +227,8 @@ export class TaskViewRepository {
             : or(eq(tasks.projectId, projectId), inArray(tasks.id, linked)),
         )
         .orderBy(asc(tasks.createdAt), asc(sql`${tasks}.rowid`))
-        .all();
+        .all()
+        .map((node) => ({ ...node, number: requireTaskNumber(node.number) }));
       return { nodes, edges };
     });
   }

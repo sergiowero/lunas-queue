@@ -37,6 +37,8 @@ describe("POST /api/tasks", () => {
     const { create, project } = setup();
     const task = await create({ tags: ["auth"] });
     expect(task).toMatchObject({
+      id: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      number: 1,
       projectId: project.id,
       intent: "Hacer algo",
       tags: ["auth"],
