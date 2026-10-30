@@ -55,7 +55,7 @@ export class ShellProcessRunner implements ProcessRunner {
     return new Promise((resolve, reject) => {
       const child = spawn("/bin/sh", ["-c", input.command], {
         cwd: input.cwd,
-        env: { ...process.env, ...input.env },
+        env: { ...inheritedEnv(input.envAllowlist), ...input.env },
         stdio: ["ignore", "pipe", "pipe"],
         detached: true,
       });
@@ -112,6 +112,14 @@ export class ShellProcessRunner implements ProcessRunner {
       });
     });
   }
+}
+
+/** El env del proceso, o solo las variables de la allowlist si la hay. */
+function inheritedEnv(allowlist: string[] | undefined): NodeJS.ProcessEnv {
+  if (allowlist === undefined) return process.env;
+  return Object.fromEntries(
+    allowlist.filter((name) => process.env[name] !== undefined).map((n) => [n, process.env[n]]),
+  );
 }
 
 function killGroup(pid: number | undefined) {

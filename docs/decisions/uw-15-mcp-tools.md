@@ -51,7 +51,7 @@
 - Si se pierde la respuesta de una tool de salida exitosa, el reintento responde `invalid_run_token`, porque el Run ya cerró: no duplica efectos, pero no devuelve el resultado original. UW-18 debe indicar en las skills que ese error después de una tool de salida significa que la fase ya terminó.
 
 - UW-16 crea el Run con su token y no cierra Runs que ya cerró una tool de salida. Al ver la tarea fuera de `running`, limpia el pane.
-- UW-11 reemplaza `ShellTestGate` por la ejecución en un pane de herdr y guarda la salida. El puerto `TestGate` no cambia.
+- UW-11 reemplaza `ShellTestGate` por la ejecución en un pane de herdr y guarda la salida. El puerto `TestGate` no cambia, salvo el campo `trigger`; también corre el gate antes de aceptar un pass ([ADR uw-11-gate-tests](uw-11-gate-tests.md)).
 - El gate es síncrono dentro de la llamada MCP: una suite más larga que el timeout de tools de Claude Code (`MCP_TOOL_TIMEOUT`) corta la llamada. UW-16 debe fijar ese timeout en el perfil de la fase o UW-11 debe acotar la suite.
 - UW-23 agrega a `submit_verdict` la validación de los revisores contra los hooks; UW-26 corre el gate final y emite `verdict_pass`.
 - UW-18 documenta en las skills los códigos de error y que un rechazo se corrige en el mismo Run.

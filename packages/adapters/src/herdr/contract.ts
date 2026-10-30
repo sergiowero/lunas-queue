@@ -342,6 +342,24 @@ export function herdrContract(
         const snap = await herdr.snapshot();
         expect(snap.panes.filter((p) => p.paneId !== rootPaneId && p.cwd === cwd)).toEqual([]);
       });
+
+      it("con envAllowlist el comando solo ve esas variables y las de env", async () => {
+        const { rootPaneId } = await projectWorkspace();
+        const runner = new HerdrPaneRunner({
+          herdr,
+          parentPaneId: rootPaneId,
+          stateDir: tempDir(),
+        });
+        const res = await runner.run({
+          command: `printf '%s|%s|%s' "\${USER-}" "\${HOME:+home}" "$LUNASQ_TASK_ID"`,
+          cwd: tempDir(),
+          env: { LUNASQ_TASK_ID: "t-1" },
+          envAllowlist: ["HOME", "PATH"],
+          timeoutMs: 3_000,
+        });
+        expect(res).toMatchObject({ exitCode: 0, timedOut: false });
+        expect(res.stdout.replaceAll("\r", "")).toBe("|home|t-1");
+      });
     });
 
     describe("agentes", () => {
