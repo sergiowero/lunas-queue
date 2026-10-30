@@ -1,6 +1,7 @@
 // Rutas de la bandeja de preguntas (UW-22, ADR uw-22-preguntas). Listar y consultar leen la base;
 // responder lo hace el QuestionService, que habla con herdr. La validación vive en
 // @lunasq/schemas y la lógica en QuestionRepository y QuestionService.
+import { isHerdrError } from "@lunasq/adapters";
 import type { QuestionRepository, QuestionRow } from "@lunasq/db";
 import {
   type BlockedAgent,
@@ -18,6 +19,9 @@ export interface QuestionAnswerer {
 
 /** Los agentes bloqueados por un permiso en este momento (los observa el RunWatcher). */
 export type BlockedSource = () => BlockedAgent[];
+
+/** Enfoca en herdr el pane de un agente por su nombre (`HerdrAdapter.focusAgent`). */
+export type AgentFocuser = (agentName: string) => Promise<unknown>;
 
 export function toQuestion(row: QuestionRow): Question {
   return {
@@ -62,6 +66,34 @@ export function questionRoutes(questions: QuestionRepository, answerer?: Questio
     });
 }
 
-export function blockedRoutes(blocked: BlockedSource): Hono {
-  return new Hono().get("/", (c) => c.json(blocked()));
+/**
+ * El acceso de la bandeja al pane (ADR uw-27-bandeja): solo enfoca agentes que el RunWatcher ve
+ * bloqueados, así la UI no puede mover la vista de herdr a un agente cualquiera.
+ */
+export function blockedRoutes(blocked: BlockedSource, focus?: AgentFocuser): Hono {
+  return new Hono()
+    .get("/", (c) => c.json(blocked()))
+    .post("/:runId/focus", async (c) => {
+      const agent = blocked().find((b) => b.runId === c.req.param("runId"));
+      if (!agent) {
+        return c.json(
+          { error: "not_blocked", message: "el Run no tiene un agente bloqueado" },
+          404,
+        );
+      }
+      if (!focus) return c.json({ error: "focus_unavailable" }, 503);
+      try {
+        await focus(agent.agentName);
+      } catch (error) {
+        if (isHerdrError(error, "agent_not_found")) {
+          return c.json(
+            { error: "agent_gone", message: `${agent.agentName} ya no está en herdr` },
+            409,
+          );
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        return c.json({ error: "herdr_error", message }, 502);
+      }
+      return c.body(null, 204);
+    });
 }

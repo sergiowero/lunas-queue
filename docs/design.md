@@ -537,7 +537,7 @@ Cualquier otro fallo (push, `gh`, un hook bloqueado) escala a Needs human. Una e
 
 - Tablero por proyecto (columnas por estado) y vista global de la cola ordenada por score.
 - Vista de DAG de dependencias.
-- Bandeja de aprobaciones y preguntas pendientes (todo lo que espera al humano); los bloqueos por permiso incluyen un acceso que enfoca el pane en herdr.
+- Bandeja de aprobaciones y preguntas pendientes (todo lo que espera al humano); los bloqueos por permiso incluyen un acceso que enfoca el pane en herdr. Detalle: [ADR uw-27-bandeja](decisions/uw-27-bandeja.md).
 - Detalle de tarea: spec y versiones, Runs, event log, enlace al pane en herdr.
 - Vista de hooks por proyecto: contenido de `lunasq/hooks/` en la rama base y últimas ejecuciones.
 

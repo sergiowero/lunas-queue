@@ -154,7 +154,15 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     worktrees: orchestrator.worktrees,
   });
   const testGate = new PaneTestGate({ db, git, herdr, worktrees: orchestrator.worktrees });
-  const app = createApp({ db, testGate, phaseHooks: hooks });
+  const app = createApp({
+    db,
+    testGate,
+    phaseHooks: hooks,
+    // Bandeja (ADR uw-27-bandeja): responder preguntas, listar bloqueos y enfocar su pane.
+    questions: orchestrator.questions,
+    blocked: () => orchestrator.watcher.blocked(),
+    focus: (name) => herdr.focusAgent(name),
+  });
   if (orchestrator.notifications) {
     app.route("/api/notifications", orchestrator.notifications.routes);
   }

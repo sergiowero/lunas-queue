@@ -1,3 +1,4 @@
+import { HerdrError } from "@lunasq/adapters";
 import { createQuestion } from "@lunasq/db";
 import { insertProject, insertRun, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { Question } from "@lunasq/schemas";
@@ -171,5 +172,66 @@ describe("GET /api/blocked", () => {
   it("sin fuente responde una lista vacía", async () => {
     const app = createApp({ db: migratedDatabase() });
     expect(await (await app.request("/api/blocked")).json()).toEqual([]);
+  });
+});
+
+describe("POST /api/blocked/:runId/focus", () => {
+  const agent = {
+    runId: "00000000-0000-4000-8000-000000000001",
+    taskId: missing,
+    phase: "implement" as const,
+    agentName: "t1-implement-1",
+    paneId: "w1:p2",
+    since: "2026-10-29T12:00:00.000Z",
+  };
+  const focusApp = (focus?: (name: string) => Promise<unknown>) =>
+    createApp({ db: migratedDatabase(), blocked: () => [agent], ...(focus ? { focus } : {}) });
+  const post = (app: ReturnType<typeof createApp>, runId: string) =>
+    app.request(`/api/blocked/${runId}/focus`, { method: "POST" });
+
+  it("enfoca en herdr el agente bloqueado de ese Run", async () => {
+    const focus = vi.fn(async () => undefined);
+    const res = await post(focusApp(focus), agent.runId);
+    expect(res.status).toBe(204);
+    expect(focus).toHaveBeenCalledWith("t1-implement-1");
+  });
+
+  it("un Run que no está bloqueado responde 404 not_blocked sin tocar herdr", async () => {
+    const focus = vi.fn(async () => undefined);
+    const res = await post(focusApp(focus), missing);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: "not_blocked" });
+    expect(focus).not.toHaveBeenCalled();
+  });
+
+  it("si el agente ya no existe en herdr responde 409 agent_gone", async () => {
+    const res = await post(
+      focusApp(async () => {
+        throw new HerdrError("agent_not_found", "agent target t1-implement-1 not found");
+      }),
+      agent.runId,
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: "agent_gone" });
+  });
+
+  it("otro error de herdr responde 502 herdr_error con el mensaje", async () => {
+    const res = await post(
+      focusApp(async () => {
+        throw new HerdrError("server_unavailable", "herdr no responde");
+      }),
+      agent.runId,
+    );
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({
+      error: "herdr_error",
+      message: expect.stringContaining("herdr no responde"),
+    });
+  });
+
+  it("sin herdr responde 503 focus_unavailable", async () => {
+    const res = await post(focusApp(), agent.runId);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ error: "focus_unavailable" });
   });
 });
