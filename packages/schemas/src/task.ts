@@ -11,6 +11,11 @@ export const Priority = z.int().min(0).max(Number.MAX_SAFE_INTEGER);
 /** Número de tarea (#N): secuencial global, inmutable y sin reuso; no sustituye al UUID (ADR 0015). */
 export const TaskNumber = z.int().min(1).max(Number.MAX_SAFE_INTEGER);
 
+/** Cómo se identifica una tarea ante personas: en herdr, notificaciones y la UI. */
+export function taskLabel(number: number): string {
+  return `#${number}`;
+}
+
 const Intent = z.string().trim().min(1).max(10_000);
 const Tags = z.array(z.string().trim().min(1).max(64)).max(32).transform(unique);
 

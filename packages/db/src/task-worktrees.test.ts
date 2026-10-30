@@ -14,6 +14,7 @@ describe("TaskWorktreeRepository", () => {
     const task = insertTask(db, project.id, { state: "completed", prState: "open" });
     expect(repo.get(task.id)).toEqual({
       id: task.id,
+      number: task.number,
       projectId: project.id,
       state: "completed",
       prState: "open",

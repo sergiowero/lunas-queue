@@ -4,15 +4,21 @@ import type { TaskWorktreeRecord, TaskWorktreeStore } from "@lunasq/domain";
 import { and, eq, isNotNull, or } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { tasks } from "./schema.ts";
+import { requireTaskNumber } from "./tasks.ts";
 
 const columns = {
   id: tasks.id,
+  number: tasks.number,
   projectId: tasks.projectId,
   state: tasks.state,
   prState: tasks.prState,
   branch: tasks.branch,
   worktreePath: tasks.worktreePath,
 };
+
+function toRecord(row: Omit<TaskWorktreeRecord, "number"> & { number: number | null }) {
+  return { ...row, number: requireTaskNumber(row.number) };
+}
 
 export class TaskWorktreeRepository implements TaskWorktreeStore {
   private readonly db: LunasqDatabase;
@@ -22,7 +28,8 @@ export class TaskWorktreeRepository implements TaskWorktreeStore {
   }
 
   get(taskId: string): TaskWorktreeRecord | null {
-    return this.db.select(columns).from(tasks).where(eq(tasks.id, taskId)).get() ?? null;
+    const row = this.db.select(columns).from(tasks).where(eq(tasks.id, taskId)).get();
+    return row ? toRecord(row) : null;
   }
 
   recordWorktree(taskId: string, worktree: { branch: string; worktreePath: string }): void {
@@ -53,7 +60,8 @@ export class TaskWorktreeRepository implements TaskWorktreeStore {
           ),
         ),
       )
-      .all();
+      .all()
+      .map(toRecord);
   }
 
   clearWorktreePath(taskId: string): void {
