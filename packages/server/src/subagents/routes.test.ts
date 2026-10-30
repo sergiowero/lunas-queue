@@ -1,6 +1,6 @@
 import { RunSubagentRepository } from "@lunasq/db";
 import { insertProject, insertRun, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
-import { RUN_TOKEN_HEADER } from "@lunasq/schemas";
+import { REVIEWER_NAMES, RUN_TOKEN_HEADER } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.ts";
 import { SUBAGENT_HOOK_PATH } from "./routes.ts";
@@ -79,5 +79,41 @@ describe("POST /hooks/subagent", () => {
     expect(await bad.json()).toMatchObject({ error: "invalid_hook_input" });
     expect((await post("{no es json")).status).toBe(400);
     expect(recorded()).toEqual([]);
+  });
+
+  it("sin un token activo ni siquiera valida el input: responde {} sin detalles", async () => {
+    const { post } = setup();
+    const res = await post("{no es json", "no-es-un-token");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({});
+  });
+
+  it("con el session id nativo del Run fijado, ignora hooks de otra sesión con el mismo token", async () => {
+    const { db, task } = setup();
+    const run = insertRun(db, insertTask(db, task.projectId).id, {
+      phase: "verify",
+      agentSession: "s-nativa",
+      agentSessionSource: "native",
+    });
+    const app = createApp({ db });
+    const send = (sessionId: string, agentId: string) =>
+      app.request(SUBAGENT_HOOK_PATH, {
+        method: "POST",
+        headers: { "content-type": "application/json", [RUN_TOKEN_HEADER]: run.runToken },
+        body: JSON.stringify({ ...hook("SubagentStart", agentId), session_id: sessionId }),
+      });
+    expect((await send("otra-sesion", "a1")).status).toBe(200);
+    await send("s-nativa", "a2");
+    expect(new RunSubagentRepository(db).forRun(run.id).map((r) => r.agentId)).toEqual(["a2"]);
+  });
+
+  it("registra los 4 revisores de una verificación, uno por agente", async () => {
+    const { post, recorded } = setup();
+    for (const [i, name] of REVIEWER_NAMES.entries()) {
+      await post({ ...hook("SubagentStart", `r${i}`), agent_type: name });
+      await post({ ...hook("SubagentStop", `r${i}`), agent_type: name });
+    }
+    expect(recorded().map((r) => r.agentType)).toEqual([...REVIEWER_NAMES]);
+    expect(recorded().every((r) => r.startedAt && r.stoppedAt)).toBe(true);
   });
 });

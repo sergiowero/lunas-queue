@@ -27,7 +27,7 @@ function parseAgent(file: string): { meta: Record<string, string>; body: string 
   return { meta, body: match[2] ?? "" };
 }
 
-// Los mismos nombres que `REVIEWERS` de @lunasq/schemas (docs/design.md §Verificación con
+// Los mismos nombres que `REVIEWER_NAMES` de @lunasq/schemas (docs/design.md §Verificación con
 // subagentes); este paquete no depende de ninguno.
 const REVIEWERS = [
   "lunasq-security-reviewer",
@@ -70,7 +70,7 @@ describe("@lunasq/assets-agents", () => {
     it("fija el formato compacto: severidad, archivo, evidencia y criterio, o SIN HALLAZGOS", () => {
       const { body } = agent();
       expect(body).toContain("## Formato de salida");
-      expect(body).toContain("[<severidad>] <archivo>:<línea> · <criterio> · <evidencia>");
+      expect(body).toContain("[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>");
       expect(body).toContain("SIN HALLAZGOS");
       expect(body).toMatch(/no edites/i);
     });

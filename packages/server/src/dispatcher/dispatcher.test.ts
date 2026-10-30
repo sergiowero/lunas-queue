@@ -178,6 +178,17 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
     expect(workspaces.get(project.id)).not.toBeNull();
   });
 
+  it("paneEnv sobrescribe los defaults del pane, como CLAUDE_CODE_FORK_SUBAGENT", async () => {
+    const { db, project, herdr, dispatcher, runs } = setup({
+      dispatcher: { paneEnv: { CLAUDE_CODE_FORK_SUBAGENT: "1" } },
+    });
+    const task = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+    const [run] = runs.forTask(task.id);
+    expect(herdr.paneEnv(run?.herdrPane ?? "")).toMatchObject({ CLAUDE_CODE_FORK_SUBAGENT: "1" });
+  });
+
   it("repetir el despacho no duplica agentes ni panes", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();
     const task = insertTask(db, project.id);

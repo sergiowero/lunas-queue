@@ -6,6 +6,7 @@
 // revisores corren con `LUNASQ_REVIEWER_MODEL` (haiku por defecto); `opus` prueba los archivos tal
 // cual.
 import { execFileSync, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -75,7 +76,13 @@ describe.skipIf(!enabled)("revisores contra Claude Code real", { timeout: 600_00
 
   it("una sesión lanza los 4 revisores y LunasQ registra cada ejecución en su Run", async () => {
     const db = migratedDatabase();
-    const run = insertRun(db, insertTask(db, insertProject(db).id).id, { phase: "verify" });
+    // Como el claim del dispatcher: session id nativo, así el endpoint exige esa sesión.
+    const sessionId = randomUUID();
+    const run = insertRun(db, insertTask(db, insertProject(db).id).id, {
+      phase: "verify",
+      agentSession: sessionId,
+      agentSessionSource: "native",
+    });
     server = await serve(createApp({ db }).fetch);
     const { port } = server.address() as AddressInfo;
 
@@ -102,7 +109,17 @@ describe.skipIf(!enabled)("revisores contra Claude Code real", { timeout: 600_00
     ].join(" ");
     const output = await runClaude(
       repo,
-      ["-p", prompt, "--model", "haiku", "--settings", settings, "--strict-mcp-config"],
+      [
+        "-p",
+        prompt,
+        "--model",
+        "haiku",
+        "--settings",
+        settings,
+        "--strict-mcp-config",
+        "--session-id",
+        sessionId,
+      ],
       { [RUN_ENV.runToken]: run.runToken, CLAUDE_CODE_FORK_SUBAGENT: "0" },
     );
 
