@@ -29,7 +29,7 @@ ADR uw-10-hooks deja a UW-23 los puntos `after_implementation`, `before_verifica
   - La comprobación corre antes del gate del pass. Si el Run ya registró un veredicto, no se repite: decide la transacción (idempotente o `verdict_already_recorded`).
 - **Approver en Sonnet.** `phaseProfile(config, "verify")` devuelve `model: "sonnet"` (`DEFAULT_VERIFY_MODEL`) si el perfil no fija modelo. El valor se resuelve al leer, como el timeout de fase (ADR 0008): llega a `--model` y a `runs.model` sin migrar proyectos. Un modelo explícito en el perfil manda.
 - **Tope configurable.** `limits.maxVerificationIterations` (entero de 1 a 20, opcional; default `DEFAULT_MAX_ITERATIONS`, 3) llega como `maxIterations` a `verdict_rework`. La semántica de ADR 0007 no cambia:
-  - Con el default caben tres reworks.
+  - Con el default caben tres reworks. La iteración es de base 0: la primera verificación tiene iteración 0, y así la reportan `verification.verdict_recorded.iteration` y `rework.iteration`.
   - Los rejects de las verificaciones 1 a 3 vuelven a implementación.
   - El reject de la cuarta lleva la tarea a `needs_human` con `iterations_exhausted`.
 - **Riesgo y evento.** En la transacción que guarda el veredicto (pass o reject), `recordVerdict`:
@@ -42,6 +42,7 @@ ADR uw-10-hooks deja a UW-23 los puntos `after_implementation`, `before_verifica
   - **`after_implementation` y `before_verification` corren dentro de `submit_for_verification`**, en ese orden, después de comprobar worktree limpio y commits, y antes del gate. Así el gate prueba el HEAD que incluye lo que commitearon los hooks, el `headSha` que compara el pass ya lo incluye y el verificador se despacha cuando terminaron. El diseño decía «después del gate»; se cambió para no correr la suite dos veces. Los dos llevan el Run del implementador; `before_verification` tiene `LUNASQ_PHASE=verify`, que fija `hookPointPhase`.
   - **`after_verification` corre dentro de `submit_verdict`**, después del gate del pass y antes de la transacción, con `LUNASQ_PHASE_RESULT` igual al veredicto. Correrlo después del reject se descartó: la tarea ya estaría en `in_progress/queued` y el scheduler podría despachar al implementador mientras el hook escribe en el worktree.
   - Un punto `blocked` responde `hook_blocked` con el script y el error. No se registra nada más: HookService ya escaló la tarea a `needs_human` con `hook_failed`. El Run queda abierto, como en los demás escalamientos (UW-17), y al reanudar empieza un Run nuevo de la misma fase.
+  - Antes de los hooks y del gate, las dos tools comprueban que la tarea siga en `in_progress/running` o `verification/running`. Si no, responden `transition_rejected` sin efectos. Así, reintentar después de `hook_blocked` (la tarea ya en `needs_human`) no vuelve a correr hooks ni suite en el worktree mientras lo atiende el humano.
   - Los hooks corren con el candado `gate_in_progress` del Run, así un reintento concurrente no los lanza dos veces. Un reintento después de un rechazo sí los vuelve a correr, por eso deben ser idempotentes (ADR uw-10-hooks).
 
 ## Consecuencias

@@ -30,7 +30,7 @@ import { OutboxPublisher } from "../outbox/publisher.ts";
 import { SUBAGENT_HOOK_PATH } from "../subagents/routes.ts";
 import type { TestGate, TestGateInput, TestGateResult } from "./ports.ts";
 import { RUN_TOKEN_HEADER } from "./routes.ts";
-import { FakeCommitVerifier, handoffFor } from "./test-helpers.ts";
+import { FakeCommitVerifier, FakePhaseHooks, handoffFor } from "./test-helpers.ts";
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -42,12 +42,15 @@ const HEAD = "a".repeat(40);
 /** Gate en verde que deja su `test_gate.executed`, como PaneTestGate. */
 class RecordingGate implements TestGate {
   readonly #db: LunasqDatabase;
+  readonly #order: string[];
 
-  constructor(db: LunasqDatabase) {
+  constructor(db: LunasqDatabase, order: string[]) {
     this.#db = db;
+    this.#order = order;
   }
 
   async run(input: TestGateInput): Promise<TestGateResult> {
+    this.#order.push(`gate:${input.trigger}`);
     appendEvent(
       this.#db,
       {
@@ -91,10 +94,15 @@ async function loop() {
     publisher,
     config: { tickIntervalMs: 60_000 },
   });
+  // Orden de hooks de fase y gates a lo largo del loop.
+  const order: string[] = [];
+  const phaseHooks = new FakePhaseHooks();
+  phaseHooks.onRun = (input) => order.push(input.point);
   const app = createApp({
     db,
-    testGate: new RecordingGate(db),
+    testGate: new RecordingGate(db, order),
     commitVerifier: new FakeCommitVerifier(),
+    phaseHooks,
   });
 
   const project = insertProject(db, { testCommand: "pnpm test", baseBranch: "main" });
@@ -122,7 +130,8 @@ async function loop() {
         run = runs.forTask(task.id).filter((r) => r.phase === phase)[n - 1];
         expect(run?.launchedAt).toBeInstanceOf(Date);
       },
-      { timeout: 5000 },
+      // Cada despacho pasa por outbox, scheduler y dispatcher reales: holgura para CI cargado.
+      { timeout: 15_000 },
     );
     if (!run) throw new Error("sin Run");
     const active = run;
@@ -194,10 +203,10 @@ async function loop() {
       .filter((e) => e.type === VERDICT_RECORDED)
       .map((e) => e.payload as { verdict: string; iteration: number });
 
-  return { db, task, runs, tasks, implement, verify, agent, verdicts };
+  return { db, task, runs, tasks, implement, verify, agent, verdicts, order };
 }
 
-describe("loop implementación ↔ verificación", () => {
+describe("loop implementación ↔ verificación", { timeout: 60_000 }, () => {
   it("caso pass: implementación, verificación en Sonnet con 4 revisores y veredicto pass", async () => {
     const l = await loop();
     await l.implement(1);
@@ -213,6 +222,13 @@ describe("loop implementación ↔ verificación", () => {
     // El Run del approver sigue abierto para la entrega (UW-26), que arranca con este evento.
     expect(l.runs.get(run.id)).toMatchObject({ endedAt: null });
     expect(l.verdicts()).toEqual([expect.objectContaining({ verdict: "pass", iteration: 0 })]);
+    expect(l.order).toEqual([
+      "after_implementation",
+      "before_verification",
+      "gate:submit_for_verification",
+      "gate:verdict_pass",
+      "after_verification",
+    ]);
   });
 
   it("caso reject: vuelve a implementación con los must-fix y el segundo ciclo pasa", async () => {

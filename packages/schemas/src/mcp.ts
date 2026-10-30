@@ -74,7 +74,7 @@ export const VERDICT_RECORDED = "verification.verdict_recorded";
 export const VerdictRecordedPayload = z.strictObject({
   runId: z.uuid(),
   verdict: z.enum(["pass", "reject"]),
-  // Iteración de verificación en la que se emitió (la del Run).
+  // Iteración de verificación del Run, en base 0: el primer veredicto de la tarea tiene 0.
   iteration: z.int().min(0),
   riskLabel: RiskLabel,
   mustFix: z.int().min(0),

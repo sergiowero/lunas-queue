@@ -319,6 +319,9 @@ export class LunasqMcpService {
 
     const { task, project } = this.#taskAndProject(run);
     if (!task.worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
+    // Tras un hook bloqueado la tarea ya escaló: un reintento no vuelve a correr hooks ni gate.
+    const moved = notRunning(task, "in_progress");
+    if (moved) return moved;
 
     const worktreePath = task.worktreePath;
     const rejected = await this.#gated(run, () =>
@@ -363,6 +366,9 @@ export class LunasqMcpService {
     // Si el Run ya registró un veredicto, la transacción decide (idempotente o
     // verdict_already_recorded) sin volver a comprobar evidencia, correr la suite ni los hooks.
     if (this.#runs.get(run.id)?.handoff === null) {
+      // Tras un hook bloqueado la tarea ya escaló: un reintento no vuelve a correr hooks ni gate.
+      const moved = notRunning(this.#taskAndProject(run).task, "verification");
+      if (moved) return moved;
       const issues = checkReviewerEvidence(handoff.body, this.#subagents.forRun(run.id));
       if (issues.length > 0) {
         return fail(
@@ -669,6 +675,15 @@ const staleRun = () =>
     "invalid_run_token",
     "el Run se cerró mientras corría la llamada: esta sesión ya no es la activa",
   );
+
+/** Rechazo sin efectos si la tarea ya no está en `<state>/running` (p. ej. escaló a needs_human). */
+function notRunning(task: { state: string; subState: string | null }, state: string) {
+  if (task.state === state && task.subState === "running") return null;
+  return fail(
+    "transition_rejected",
+    `la tarea está en ${task.state}${task.subState ? `/${task.subState}` : ""}, no en ${state}/running`,
+  );
+}
 
 function storedHandoff(value: unknown): Handoff | undefined {
   const parsed = parseHandoff(value);

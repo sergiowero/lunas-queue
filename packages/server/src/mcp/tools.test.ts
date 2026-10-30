@@ -298,6 +298,29 @@ describe("submit_for_verification", () => {
     expect(h.taskOf(task.id)).toMatchObject({ state: "verification", subState: "queued" });
   });
 
+  it("tras un hook bloqueado, un reintento no vuelve a correr hooks ni gate", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    h.phaseHooks.results.after_implementation = {
+      outcome: "blocked",
+      escalated: true,
+      failedScript: "10-lint",
+      error: null,
+    };
+    // Como HookService: el punto bloqueado escala la tarea; el Run queda abierto.
+    h.phaseHooks.onRun = () =>
+      setTaskPosition(h.db, task.id, { state: "needs_human", subState: null });
+    const handoff = handoffFor("implementation", run);
+    expect((await call("submit_for_verification", { handoff })).body).toMatchObject({
+      error: "hook_blocked",
+    });
+    expect((await call("submit_for_verification", { handoff })).body).toMatchObject({
+      error: "transition_rejected",
+    });
+    expect(h.phaseHooks.calls).toHaveLength(1);
+    expect(h.testGate.calls).toHaveLength(0);
+  });
+
   it("un hook bloqueado detiene la llamada antes del gate y no transiciona", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
@@ -796,6 +819,28 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     h.phaseHooks.onRun = (input) => order.push(input.point);
     await call("submit_verdict", { handoff: h.verdictFor("verification-pass", run) });
     expect(order).toEqual(["gate", "after_verification"]);
+  });
+
+  it("tras un after_verification bloqueado, un reintento no vuelve a correr hooks ni gate", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    h.phaseHooks.results.after_verification = {
+      outcome: "blocked",
+      escalated: true,
+      failedScript: "10-notify",
+      error: null,
+    };
+    h.phaseHooks.onRun = () =>
+      setTaskPosition(h.db, task.id, { state: "needs_human", subState: null });
+    const handoff = h.verdictFor("verification-pass", run);
+    expect((await call("submit_verdict", { handoff })).body).toMatchObject({
+      error: "hook_blocked",
+    });
+    expect((await call("submit_verdict", { handoff })).body).toMatchObject({
+      error: "transition_rejected",
+    });
+    expect(h.phaseHooks.calls).toHaveLength(1);
+    expect(h.testGate.calls).toHaveLength(1);
   });
 
   it("un after_verification bloqueado no registra el veredicto", async () => {
