@@ -29,6 +29,7 @@ import {
   phaseTimeoutMs,
 } from "@lunasq/domain";
 import {
+  type BlockedAgent,
   type Notification,
   type OutboxMessage,
   type SchedulablePhase,
@@ -76,6 +77,7 @@ type Watch = {
   /** Veces que el agente quedó `blocked`: arma el id de cada notificación (ADR 0009). */
   blocks: number;
   blockedId: string | undefined;
+  blockedSince: Date | undefined;
   grace: ReturnType<typeof setTimeout> | undefined;
   /** El timeout ya escaló: no hay más nudges ni timeout, solo se vigila que el pane siga vivo. */
   expired: boolean;
@@ -142,6 +144,7 @@ export class RunWatcher implements RunObserver {
       nudges: 0,
       blocks: 0,
       blockedId: undefined,
+      blockedSince: undefined,
       grace: undefined,
       expired: false,
     };
@@ -160,6 +163,27 @@ export class RunWatcher implements RunObserver {
     clearTimeout(w.grace);
     if (w.blockedId) this.escalator.resolve(w.blockedId);
     w.sub.close().catch((e: unknown) => this.onError(asError(e), runId));
+  }
+
+  /**
+   * Agentes que esperan un permiso en su TUI (herdr `blocked`): se responden en herdr, en el pane
+   * del agente. Es lo que la bandeja muestra como "agente bloqueado".
+   */
+  blocked(): BlockedAgent[] {
+    return [...this.watches.values()].flatMap((w) =>
+      w.blockedSince
+        ? [
+            {
+              runId: w.runId,
+              taskId: w.taskId,
+              phase: w.phase,
+              agentName: w.name,
+              paneId: w.paneId,
+              since: w.blockedSince.toISOString(),
+            },
+          ]
+        : [],
+    );
   }
 
   /** Runs observados. */
@@ -234,6 +258,7 @@ export class RunWatcher implements RunObserver {
     if (status !== "blocked" && w.blockedId) {
       this.escalator.resolve(w.blockedId);
       w.blockedId = undefined;
+      w.blockedSince = undefined;
       w.clock.resume("blocked");
     }
     if (status === "blocked") {
@@ -242,6 +267,7 @@ export class RunWatcher implements RunObserver {
       if (!w.blockedId) {
         w.blocks += 1;
         w.blockedId = `blocked:${w.runId}:${w.blocks}`;
+        w.blockedSince = new Date();
         w.clock.pause("blocked");
         this.escalator.watch({
           id: w.blockedId,

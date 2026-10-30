@@ -6,6 +6,7 @@ import {
   type LunasqDatabase,
   ProjectRepository,
   ProjectRepositoryError,
+  QuestionRepository,
   SchedulerStateRepository,
   SpecRepository,
   SpecRepositoryError,
@@ -16,6 +17,12 @@ import {
 import { SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
 import { Hono } from "hono";
 import { projectRoutes } from "./api/projects.ts";
+import {
+  type BlockedSource,
+  blockedRoutes,
+  type QuestionAnswerer,
+  questionRoutes,
+} from "./api/questions.ts";
 import { specRoutes } from "./api/specs.ts";
 import { changeStreamRoutes, DEFAULT_CHANGE_STREAM_INTERVAL_MS } from "./api/stream.ts";
 import { taskRoutes } from "./api/tasks.ts";
@@ -47,6 +54,16 @@ export interface AppDeps {
    * servidor pasa el HookService. Sin él, los puntos pasan sin correr nada.
    */
   phaseHooks?: PhaseHooks;
+  /**
+   * Responde las Questions: quien compone el servidor pasa el QuestionService del orquestador.
+   * Sin él, `POST /api/questions/:id/answer` responde 503.
+   */
+  questions?: QuestionAnswerer;
+  /**
+   * Agentes bloqueados por un permiso: quien compone el servidor pasa `watcher.blocked`. Sin él,
+   * `GET /api/blocked` responde una lista vacía.
+   */
+  blocked?: BlockedSource;
   /** Configuración del scheduler: la cola muestra el mismo score con el que despacha. */
   scheduler?: SchedulerConfigInput;
   /** Lectura de la evidencia en el repo cuando el worktree ya no existe; por defecto git real. */
@@ -63,6 +80,8 @@ export function createApp({
   testGate,
   commitVerifier,
   phaseHooks,
+  questions,
+  blocked,
   scheduler,
   webRoot,
   git = new RealGit(),
@@ -94,6 +113,8 @@ export function createApp({
     .route(SUBAGENT_HOOK_PATH, subagentHookRoutes(db))
     .route("/api/projects", projectRoutes(projects))
     .route("/api/tasks/:id/specs", specRoutes(new SpecRepository(db)))
+    .route("/api/blocked", blockedRoutes(blocked ?? (() => [])))
+    .route("/api/questions", questionRoutes(new QuestionRepository(db), questions))
     .route("/api/queue", queueRoutes(views))
     .route("/api/stream", changeStreamRoutes(taskViews, changeStreamIntervalMs))
     .route("/api/tasks", taskViewRoutes(views))

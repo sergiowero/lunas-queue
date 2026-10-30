@@ -114,6 +114,20 @@ export function nudgePrompt(phase: SchedulablePhase, taskId: string): string {
   return `LunasQ: la fase ${phase} de la tarea ${taskId} sigue abierta. Si ya terminaste, llama la tool de salida de la skill ${PHASE_SKILL[phase]}; si no puedes seguir, usa report_failure o ask_human del MCP lunasq. Si no, continúa con la fase.`;
 }
 
+/**
+ * Respuesta del humano a una Question (docs/design.md §Preguntas del agente y bloqueos): entra al
+ * pane del agente vivo como prompt nuevo. Una sola línea, porque un salto de línea enviaría el
+ * prompt a medias.
+ */
+export function answerPrompt(
+  phase: SchedulablePhase,
+  taskId: string,
+  input: { question: string; answer: string },
+): string {
+  const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
+  return `LunasQ: respuesta a tu pregunta de la tarea ${taskId}. Pregunta: "${oneLine(input.question)}". Respuesta: "${oneLine(input.answer)}". Continúa la fase ${phase} con la skill ${PHASE_SKILL[phase]} y cierra con su tool de salida.`;
+}
+
 export type SessionIdentity = { value: string; source: SessionSource };
 
 /** Lo mejor disponible, en el orden del diseño: nativo, el de herdr, el nombre del agente. */

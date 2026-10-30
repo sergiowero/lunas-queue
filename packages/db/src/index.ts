@@ -5,6 +5,7 @@ export * from "./event-log.ts";
 export * from "./outbox.ts";
 export * from "./project-workspaces.ts";
 export * from "./projects.ts";
+export * from "./questions.ts";
 export * from "./run-subagents.ts";
 export * from "./runs.ts";
 export * from "./scheduler-state.ts";

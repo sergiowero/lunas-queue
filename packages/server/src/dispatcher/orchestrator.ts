@@ -22,6 +22,8 @@ import {
 import type { Escalator } from "../notifications/escalator.ts";
 import { createNotifications } from "../notifications/index.ts";
 import type { OutboxPublisher } from "../outbox/publisher.ts";
+import { QuestionEscalations } from "../questions/escalations.ts";
+import { QuestionService } from "../questions/service.ts";
 import { escalationNotification } from "../reconciler/escalations.ts";
 import { type ReconcileErrorHandler, Reconciler } from "../reconciler/reconciler.ts";
 import { RunWatcher } from "../reconciler/watcher.ts";
@@ -73,12 +75,15 @@ export class Orchestrator {
   readonly scheduler: Scheduler;
   readonly watcher: RunWatcher;
   readonly reconciler: Reconciler;
+  /** Responde las Questions (ADR uw-22-preguntas): se pasa a `createApp({ questions })`. */
+  readonly questions: QuestionService;
   /** El módulo de notificaciones que se armó por defecto, si no se pasó uno. */
   readonly notifications: ReturnType<typeof createNotifications> | undefined;
   private readonly notify: (n: Notification) => unknown;
   private readonly mcp: { configPath: string; url: string };
   private readonly hooks: { settingsPath: string; url: string };
   private readonly publisher: OutboxPublisher | undefined;
+  private readonly questionEscalations: QuestionEscalations;
   private readonly runs: RunRepository;
   private unsubscribes: (() => void)[] = [];
 
@@ -142,6 +147,19 @@ export class Orchestrator {
       }),
       ...(opts.onReconcileError && { onError: opts.onReconcileError }),
     });
+    this.questionEscalations = new QuestionEscalations({
+      db: opts.db,
+      escalator: notifications.escalator,
+    });
+    this.questions = new QuestionService({
+      db: opts.db,
+      herdr: opts.herdr,
+      dispatcher: this.dispatcher,
+      escalator: notifications.escalator,
+      // El Run viejo ya está cerrado: el scheduler puede despachar el nuevo sin esperar al tick.
+      onAnswered: () => this.scheduler.wake(),
+      ...(opts.onReconcileError && { onError: (error) => opts.onReconcileError?.(error, null) }),
+    });
     this.scheduler = new Scheduler({
       db: opts.db,
       dispatcher: this.dispatcher,
@@ -165,6 +183,7 @@ export class Orchestrator {
         this.publisher.subscribe(TASK_TRANSITIONED, async (m) => {
           this.watcher.onTransition(m);
           this.reconciler.onMessage(m);
+          this.questionEscalations.onTransition(m);
           const notification = escalationNotification(m);
           if (notification) await this.notify(notification);
           await this.onTransition(m);
@@ -173,6 +192,7 @@ export class Orchestrator {
       ];
     }
     await this.reconciler.start();
+    this.questionEscalations.rearm();
     await this.scheduler.start();
   }
 

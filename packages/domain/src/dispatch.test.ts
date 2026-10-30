@@ -3,6 +3,7 @@ import {
   AGENT_NAME_PATTERN,
   agentArgs,
   agentName,
+  answerPrompt,
   DispatchRuleError,
   isAgentName,
   nudgePrompt,
@@ -136,6 +137,20 @@ describe("nudgePrompt", () => {
     expect(prompt).toContain("implement-task");
     expect(prompt).toContain("report_failure");
     expect(prompt).toContain("ask_human");
+    expect(prompt).not.toContain("\n");
+  });
+});
+
+describe("answerPrompt", () => {
+  it("entrega pregunta y respuesta al agente en una sola línea", () => {
+    const prompt = answerPrompt("implement", TASK, {
+      question: "¿Borro la tabla?",
+      answer: "Sí,\nbórrala\n\ny migra los datos",
+    });
+    expect(prompt).toContain(TASK);
+    expect(prompt).toContain("¿Borro la tabla?");
+    expect(prompt).toContain("Sí, bórrala y migra los datos");
+    expect(prompt).toContain("implement-task");
     expect(prompt).not.toContain("\n");
   });
 });
