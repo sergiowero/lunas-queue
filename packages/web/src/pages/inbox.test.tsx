@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { FakeApi, SPEC_CONTENT } from "../../test/fake-api.ts";
+import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 import { BLOCKED_REFRESH_MS, queries } from "../lib/queries.ts";
 
