@@ -97,28 +97,103 @@ describe("detalle de tarea", () => {
     expect(block.getByText("Implementación")).toBeTruthy();
   });
 
-  it("renderiza el archivo de evidencia", async () => {
+  it("el panel Evidencia nace colapsado y no muestra la evidencia", async () => {
     const { fake, task } = seeded();
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");
     renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Evidencia");
+    const toggle = await block.findByRole("button", { name: "Evidencia" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(block.queryByRole("heading", { name: "Run 1" })).toBeNull();
+    expect(block.queryByText(`/w/login/lunasq/tasks/${task.id}.md`)).toBeNull();
+  });
+
+  it("expandir el panel Evidencia muestra origen, ruta y markdown", async () => {
+    const { fake, task } = seeded();
+    fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const block = await section("Evidencia");
+    const toggle = await block.findByRole("button", { name: "Evidencia" });
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(await block.findByRole("heading", { name: "Run 1" })).toBeTruthy();
     expect(block.getByText("verde").tagName).toBe("STRONG");
+    expect(block.getByText(/Desde worktree/)).toBeTruthy();
     expect(block.getByText(`/w/login/lunasq/tasks/${task.id}.md`)).toBeTruthy();
   });
 
-  it("avisa cuando aún no hay archivo de evidencia", async () => {
+  it("colapsar de nuevo el panel Evidencia oculta la evidencia", async () => {
     const { fake, task } = seeded();
-    renderApp(`/tasks/${task.id}`, fake);
-    expect(await screen.findByText("Todavía no hay archivo de evidencia.")).toBeTruthy();
+    fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const block = await section("Evidencia");
+    const toggle = await block.findByRole("button", { name: "Evidencia" });
+    await user.click(toggle);
+    expect(await block.findByRole("heading", { name: "Run 1" })).toBeTruthy();
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(block.queryByRole("heading", { name: "Run 1" })).toBeNull();
+    expect(screen.getByRole("region", { name: "Evidencia" })).toBeTruthy();
+  });
+
+  it("el panel Evidencia se expande con el teclado", async () => {
+    const { fake, task } = seeded();
+    fake.evidence.set(task.id, "# Evidencia\n\n## Run 1");
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const block = await section("Evidencia");
+    const toggle = await block.findByRole("button", { name: "Evidencia" });
+    toggle.focus();
+    await user.keyboard("{Enter}");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(await block.findByRole("heading", { name: "Run 1" })).toBeTruthy();
+  });
+
+  it("el panel Evidencia nace colapsado al volver a una tarea ya visitada", async () => {
+    const { fake, task, dep } = seeded();
+    fake.evidence.set(task.id, "# Evidencia\n\n## Run 1");
+    fake.evidence.set(dep.id, "# Evidencia\n\n## Run 2");
+    const { user, router } = renderApp(`/tasks/${task.id}`, fake);
+    const toggleOf = async () =>
+      (await section("Evidencia")).findByRole("button", { name: "Evidencia" });
+
+    await toggleOf();
+    await router.navigate({ to: "/tasks/$taskId", params: { taskId: dep.id } });
+    const depToggle = await toggleOf();
+    await user.click(depToggle);
+    expect(depToggle.getAttribute("aria-expanded")).toBe("true");
+
+    await router.navigate({ to: "/tasks/$taskId", params: { taskId: task.id } });
+    await waitFor(async () =>
+      expect(screen.getByRole("heading", { name: "Login con email" })).toBeTruthy(),
+    );
+    expect((await toggleOf()).getAttribute("aria-expanded")).toBe("false");
+
+    await router.navigate({ to: "/tasks/$taskId", params: { taskId: dep.id } });
+    await waitFor(async () =>
+      expect(screen.getByRole("heading", { name: "Esquema de usuarios" })).toBeTruthy(),
+    );
+    expect((await toggleOf()).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("avisa cuando aún no hay archivo de evidencia al expandir el panel", async () => {
+    const { fake, task } = seeded();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const block = await section("Evidencia");
+    const toggle = await block.findByRole("button", { name: "Evidencia" });
+    expect(block.queryByText("Todavía no hay archivo de evidencia.")).toBeNull();
+    await user.click(toggle);
+    expect(await block.findByText("Todavía no hay archivo de evidencia.")).toBeTruthy();
+    await user.click(toggle);
+    expect(block.queryByText("Todavía no hay archivo de evidencia.")).toBeNull();
   });
 
   it("indica de dónde salió la evidencia cuando ya no hay worktree", async () => {
     const { fake, task } = seeded();
     fake.evidence.set(task.id, "# Evidencia");
     fake.evidenceSource.set(task.id, "branch");
-    renderApp(`/tasks/${task.id}`, fake);
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Evidencia");
+    await user.click(await block.findByRole("button", { name: "Evidencia" }));
     expect(await block.findByText(`origin/lunasq/login:lunasq/tasks/${task.id}.md`)).toBeTruthy();
     expect(block.getByText(/Desde branch de la tarea/)).toBeTruthy();
   });
