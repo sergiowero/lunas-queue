@@ -43,7 +43,7 @@ describe("cola global", () => {
       "1",
       "Segunda",
       "lunas-queue",
-      "Draft · en cola",
+      "Draften cola",
       "5 → 30",
       "42.5",
       "120 · $1.50",
@@ -53,6 +53,39 @@ describe("cola global", () => {
       "href",
       expect.stringContaining(`/tasks/${b.id}`),
     );
+  });
+
+  it("la columna Estado muestra una etiqueta por tarea, azul solo para In progress", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject();
+    fake.addTask(project.id, { intent: "Borrador" });
+    fake.addTask(project.id, { intent: "Verificando", state: "verification", subState: "running" });
+    fake.addTask(project.id, { intent: "Bloqueada", state: "needs_human", subState: null });
+    fake.addTask(project.id, { intent: "Trabajando", state: "in_progress", subState: "running" });
+    fake.queue = fake.tasks.map((task) => ({
+      task,
+      ready: false,
+      score: null,
+      effectivePriority: null,
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        costUsd: null,
+      },
+    }));
+    renderApp("/queue", fake);
+
+    const row = async (intent: string) =>
+      within((await screen.findByRole("link", { name: intent })).closest("tr") as HTMLElement);
+    const variant = async (intent: string, label: string) =>
+      (await row(intent)).getByText(label).dataset.variant;
+    expect(await variant("Trabajando", "In progress")).toBe("info");
+    expect(await variant("Borrador", "Draft")).toBe("secondary");
+    expect(await variant("Verificando", "Verification")).toBe("secondary");
+    expect(await variant("Bloqueada", "Needs human")).toBe("destructive");
+    expect(screen.getAllByText("In progress")).toHaveLength(1);
   });
 
   it("filtra por proyecto", async () => {

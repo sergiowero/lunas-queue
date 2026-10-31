@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
-import { Loading, QueryError, stateText } from "../components/status.tsx";
+import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
 import { formatCost, formatTokens } from "../lib/format.ts";
@@ -55,7 +55,13 @@ export function QueuePage() {
         id: "project",
         header: "Proyecto",
       }),
-      column.accessor((e) => stateText(e.task), { id: "state", header: "Estado" }),
+      column.accessor((e) => stateText(e.task), {
+        id: "state",
+        header: "Estado",
+        cell: (c) => (
+          <StateBadges state={c.row.original.task.state} subState={c.row.original.task.subState} />
+        ),
+      }),
       column.accessor(priority, { id: "priority", header: "Prioridad" }),
       column.accessor(score, { id: "score", header: "Score" }),
       column.accessor((e) => `${formatTokens(e.usage)} · ${formatCost(e.usage.costUsd)}`, {

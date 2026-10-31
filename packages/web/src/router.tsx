@@ -12,6 +12,7 @@ import {
 import { Layout } from "./components/layout.tsx";
 import { BoardPage } from "./pages/board.tsx";
 import { HooksPage } from "./pages/hooks.tsx";
+import { InProgressPage } from "./pages/in-progress.tsx";
 import { InboxPage } from "./pages/inbox.tsx";
 import { NewTaskPage } from "./pages/new-task.tsx";
 import { ProjectsPage } from "./pages/projects.tsx";
@@ -34,6 +35,12 @@ const queueRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/queue",
   component: QueuePage,
+});
+
+const inProgressRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/in-progress",
+  component: InProgressPage,
 });
 
 const inboxRoute = createRoute({
@@ -92,6 +99,7 @@ const taskRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   queueRoute,
+  inProgressRoute,
   inboxRoute,
   projectsRoute,
   boardRoute,
