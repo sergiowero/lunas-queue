@@ -78,3 +78,14 @@ export function formatDuration(ms: number): string {
 export function formatTimeout(seconds: number): string {
   return seconds >= 60 && seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds} s`;
 }
+
+// Quita secuencias ANSI de salidas guardadas antes de que el servidor las limpiara.
+const ESC = String.fromCharCode(27);
+const ANSI = new RegExp(
+  `${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^\\u0007${ESC}]*(?:\\u0007|${ESC}\\\\)|${ESC}[@-Z\\\\-_]`,
+  "g",
+);
+
+export function stripAnsi(text: string): string {
+  return text.replace(ANSI, "");
+}

@@ -103,6 +103,13 @@ describe("PaneTestGate", () => {
     ]);
   });
 
+  it("la salida guardada en el Event log no lleva secuencias ANSI", async () => {
+    const { gate, input, events } = await setup();
+    const result = await gate.run(input("printf '\\033[2mms\\033[22m ok\\n'"));
+    expect(result.output).toBe("ms ok\n");
+    expect(events()).toMatchObject([{ output: "ms ok\n" }]);
+  });
+
   it("una suite en verde pasa, corre en el worktree y registra el disparo", async () => {
     const { gate, input, events, wt } = await setup();
     const result = await gate.run({ ...input("pwd; echo ok"), trigger: "verdict_pass" });

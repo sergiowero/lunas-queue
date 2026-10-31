@@ -24,6 +24,7 @@ import {
   tailOf,
 } from "../mcp/ports.ts";
 import type { EnsuredWorktree } from "../worktrees/service.ts";
+import { stripAnsi } from "./ansi.ts";
 
 /**
  * Variables del pane que llegan a la suite; el resto (`GH_TOKEN`, claves de API) no. Lo justo
@@ -96,7 +97,8 @@ export class PaneTestGate implements TestGate {
         };
     const { result, error } = execution;
     const passed = error === null && result !== null && result.exitCode === 0 && !result.timedOut;
-    const output = result ? `${result.stdout}${result.stderr}` : "";
+    // Sin secuencias ANSI: el Event log es para leerse, no para reproducir colores.
+    const output = stripAnsi(result ? `${result.stdout}${result.stderr}` : "");
 
     appendEvent(
       this.db,
@@ -114,7 +116,7 @@ export class PaneTestGate implements TestGate {
           durationMs: execution.durationMs,
           passed,
           output: tailOf(output, TEST_GATE_OUTPUT_LIMIT),
-          error: error && tailOf(error, 2000),
+          error: error && stripAnsi(tailOf(error, 2000)),
         }),
       },
       { publish: true },

@@ -128,6 +128,14 @@ describe("detalle de tarea", () => {
     expect(log.getAllByText("system")).toHaveLength(1);
   });
 
+  it("el Event log va colapsado por default", async () => {
+    const { fake, task } = seeded();
+    renderApp(`/tasks/${task.id}`, fake);
+    const log = await section("Event log");
+    const details = (await log.findByText(/Mostrar \d+ eventos?/)).closest("details");
+    expect(details?.open).toBe(false);
+  });
+
   it("muestra el usage total y por Run", async () => {
     const { fake, task } = seeded();
     const run = fake.startRun(task.id, "implement");
