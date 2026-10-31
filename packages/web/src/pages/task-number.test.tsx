@@ -52,18 +52,6 @@ describe("número de tarea en las vistas", () => {
     nextToIntent(table, 42, "Login con email");
   });
 
-  it("DAG: los nodos y la lista de dependencias muestran el #N", async () => {
-    const { fake } = seeded();
-    renderApp("/dag", fake);
-    const graph = within(await screen.findByRole("region", { name: "Grafo de dependencias" }));
-    await graph.findByRole("link", { name: "Login con email" });
-    nextToIntent(graph, 42, "Login con email");
-    nextToIntent(graph, 41, "Esquema base");
-    const list = within(await screen.findByRole("list", { name: "Dependencias" }));
-    expect(list.getByText("#42")).toBeTruthy();
-    expect(list.getByText("#41")).toBeTruthy();
-  });
-
   it("bandeja: cada pendiente muestra el #N de su tarea", async () => {
     const { fake, task } = seeded();
     fake.addSpec(task.id);

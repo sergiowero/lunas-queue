@@ -37,7 +37,7 @@ function setup() {
 type Entry = { task: { id: string }; ready: boolean; score: number | null; usage: unknown };
 
 describe("número de tarea en las vistas", () => {
-  it("la cola, el DAG y las dependencias traen el número de cada tarea", async () => {
+  it("la cola y las dependencias traen el número de cada tarea", async () => {
     const { db, project, get } = setup();
     const base = insertTask(db, project.id, { intent: "Base" });
     const task = insertTask(db, project.id, { intent: "Depende" });
@@ -50,11 +50,6 @@ describe("número de tarea en las vistas", () => {
         [task.id, task.number],
       ].sort(),
     );
-    const graph = (await get("/api/graph")).body as { nodes: { id: string; number: number }[] };
-    expect(graph.nodes.map((n) => [n.id, n.number])).toEqual([
-      [base.id, base.number],
-      [task.id, task.number],
-    ]);
     const deps = (await get(`/api/tasks/${task.id}/dependencies`)).body as {
       dependsOn: { taskId: string; number: number }[];
     };

@@ -677,6 +677,7 @@ export class FakeApi {
       const other = this.task(otherId);
       return {
         taskId: other.id,
+        number: other.number,
         projectId: other.projectId,
         intent: other.intent,
         title: other.title,
