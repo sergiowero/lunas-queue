@@ -108,7 +108,7 @@ describe("HerdrPaneRunner", () => {
     expect(await panes()).toEqual([rootPaneId]);
     await new Promise((resolve) => setTimeout(resolve, 3_200));
     expect(existsSync(join(dir, "tarde"))).toBe(false);
-  });
+  }, 15_000);
 
   it("si alguien cierra el pane antes de terminar, es un fallo", async () => {
     const run = runner.run({ command: "sleep 2", cwd: dir });

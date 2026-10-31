@@ -36,6 +36,7 @@ import {
   type SchedulablePhase,
   SchedulablePhase as SchedulablePhaseSchema,
   TaskTransitionedPayload,
+  taskLabel,
 } from "@lunasq/schemas";
 import type { RunObserver } from "../dispatcher/dispatcher.ts";
 import type { Escalator } from "../notifications/escalator.ts";
@@ -70,6 +71,8 @@ export interface RunWatcherOptions {
 type Watch = {
   runId: string;
   taskId: string;
+  /** Número de la tarea: los títulos de las notificaciones la identifican con #N. */
+  taskNumber: number;
   phase: SchedulablePhase;
   name: string;
   paneId: string;
@@ -134,6 +137,7 @@ export class RunWatcher implements RunObserver {
     const w: Watch = {
       runId,
       taskId: run.taskId,
+      taskNumber: task.number,
       phase: phase.data,
       name: run.herdrName,
       paneId: agent.paneId,
@@ -277,7 +281,7 @@ export class RunWatcher implements RunObserver {
           kind: "agent_blocked",
           taskId: w.taskId,
           runId: w.runId,
-          title: `Agente bloqueado en ${w.taskId.slice(0, 8)}`,
+          title: `Agente bloqueado en ${taskLabel(w.taskNumber)}`,
           body: `El agente ${w.name} (${w.phase}) espera un permiso en herdr desde hace 1 minuto.`,
         });
         // El bloqueo puede ser el límite de uso en forma de menú, no un permiso: se lee la
@@ -437,7 +441,7 @@ export class RunWatcher implements RunObserver {
       kind: "phase_timeout",
       taskId: w.taskId,
       runId: w.runId,
-      title: `Timeout de fase en ${w.taskId.slice(0, 8)}`,
+      title: `Timeout de fase en ${taskLabel(w.taskNumber)}`,
       body: `La fase ${w.phase} superó su timeout${minutes ? ` de ${minutes} min` : ""}. El agente ${w.name} sigue vivo: espera, intervén en herdr o cancela.`,
       createdAt: new Date().toISOString(),
     });

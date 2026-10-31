@@ -73,6 +73,7 @@ describe("QuestionEscalations", () => {
         kind: "question_open",
         taskId: s.task.id,
         runId: s.run.id,
+        title: `Pregunta abierta en #${s.task.number}`,
         body: expect.stringContaining("¿Borro la tabla?"),
       }),
     ]);

@@ -4,10 +4,18 @@ import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 import { queries } from "../lib/queries.ts";
 
-/** Las etiquetas de las opciones del selector de dependencias, sin el placeholder. */
+/** Las etiquetas de las opciones del selector de dependencias (#N · intent), sin el placeholder. */
 function candidateOptions(): string[] {
   const select = screen.getByLabelText("Depende de") as HTMLSelectElement;
   return [...select.options].filter((o) => o.value !== "").map((o) => o.text);
+}
+
+/** El value de la opción cuyo intent es el dado: la etiqueta lleva el #N delante. */
+function optionOf(intent: string): string {
+  const select = screen.getByLabelText("Depende de") as HTMLSelectElement;
+  const option = [...select.options].find((o) => o.text.endsWith(` · ${intent}`));
+  if (!option) throw new Error(`sin opción para «${intent}»`);
+  return option.value;
 }
 
 function chosen(): string[] {
@@ -30,7 +38,7 @@ describe("alta de tareas", () => {
     await user.type(screen.getByLabelText("Tags"), "auth, ui ,");
     await user.clear(screen.getByLabelText("Prioridad"));
     await user.type(screen.getByLabelText("Prioridad"), "250");
-    await user.selectOptions(await screen.findByLabelText("Depende de"), "Base de datos");
+    await user.selectOptions(await screen.findByLabelText("Depende de"), optionOf("Base de datos"));
     await user.click(screen.getByRole("button", { name: "Crear tarea" }));
 
     await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/tasks\/[0-9a-f-]+$/));
@@ -53,8 +61,24 @@ describe("alta de tareas", () => {
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
     const select = await screen.findByLabelText("Depende de");
     expect(select.tagName).toBe("SELECT");
-    expect(candidateOptions()).toEqual(["Base de datos"]);
+    expect(candidateOptions()).toHaveLength(1);
+    expect(candidateOptions()[0]).toMatch(/^#\d+ · Base de datos$/);
     expect(screen.queryAllByRole("checkbox")).toEqual([]);
+  });
+
+  it("el selector y la lista de elegidas muestran el #N de cada tarea", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "lunas-queue" });
+    const dep = fake.addTask(project.id, { intent: "Base de datos", number: 17 });
+    const { user } = renderApp("/tasks/new", fake);
+
+    await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
+    expect(await screen.findByRole("option", { name: "#17 · Base de datos" })).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText("Depende de"), dep.id);
+
+    const list = screen.getByRole("list", { name: "Dependencias elegidas" });
+    expect(within(list).getByText("#17")).toBeTruthy();
+    expect(within(list).getByText("Base de datos")).toBeTruthy();
   });
 
   it("el selector no ofrece tareas terminales", async () => {
@@ -66,7 +90,8 @@ describe("alta de tareas", () => {
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
     await screen.findByLabelText("Depende de");
-    expect(candidateOptions()).toEqual(["Viva"]);
+    expect(candidateOptions()).toHaveLength(1);
+    expect(candidateOptions()[0]).toMatch(/ · Viva$/);
   });
 
   it("elegir una tarea la agrega a la lista, la quita del selector y vuelve al placeholder", async () => {
@@ -77,10 +102,11 @@ describe("alta de tareas", () => {
     const { user } = renderApp("/tasks/new", fake);
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
-    await user.selectOptions(await screen.findByLabelText("Depende de"), "Base de datos");
+    await user.selectOptions(await screen.findByLabelText("Depende de"), optionOf("Base de datos"));
 
     expect(chosen()).toEqual(["Base de datos"]);
-    expect(candidateOptions()).toEqual(["API"]);
+    expect(candidateOptions()).toHaveLength(1);
+    expect(candidateOptions()[0]).toMatch(/ · API$/);
     expect((screen.getByLabelText("Depende de") as HTMLSelectElement).value).toBe("");
   });
 
@@ -92,13 +118,14 @@ describe("alta de tareas", () => {
     const { user } = renderApp("/tasks/new", fake);
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
-    await user.selectOptions(await screen.findByLabelText("Depende de"), "Base de datos");
-    await user.selectOptions(screen.getByLabelText("Depende de"), "API");
+    await user.selectOptions(await screen.findByLabelText("Depende de"), optionOf("Base de datos"));
+    await user.selectOptions(screen.getByLabelText("Depende de"), optionOf("API"));
     expect(chosen()).toEqual(["Base de datos", "API"]);
 
     await user.click(screen.getByRole("button", { name: "Quitar Base de datos" }));
     expect(chosen()).toEqual(["API"]);
-    expect(candidateOptions()).toEqual(["Base de datos"]);
+    expect(candidateOptions()).toHaveLength(1);
+    expect(candidateOptions()[0]).toMatch(/ · Base de datos$/);
   });
 
   it("envía dependsOn con las elegidas en el orden en que se agregaron", async () => {
@@ -110,8 +137,8 @@ describe("alta de tareas", () => {
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
     await user.type(screen.getByLabelText("Intent"), "Pantalla");
-    await user.selectOptions(await screen.findByLabelText("Depende de"), "API");
-    await user.selectOptions(screen.getByLabelText("Depende de"), "Base de datos");
+    await user.selectOptions(await screen.findByLabelText("Depende de"), optionOf("API"));
+    await user.selectOptions(screen.getByLabelText("Depende de"), optionOf("Base de datos"));
     await user.click(screen.getByRole("button", { name: "Crear tarea" }));
 
     await screen.findByRole("heading", { name: "Pantalla" });
@@ -131,7 +158,7 @@ describe("alta de tareas", () => {
     const select = await screen.findByLabelText("Depende de");
     expect(select.querySelector('optgroup[label="api · otro proyecto"]')).not.toBeNull();
     await user.type(screen.getByLabelText("Intent"), "Pantalla de login");
-    await user.selectOptions(select, "Endpoint de login");
+    await user.selectOptions(select, optionOf("Endpoint de login"));
     const list = screen.getByRole("list", { name: "Dependencias elegidas" });
     expect(within(list).getByText("otro proyecto")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Crear tarea" }));
@@ -150,7 +177,7 @@ describe("alta de tareas", () => {
     const { user } = renderApp("/tasks/new", fake);
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "uno");
-    await user.selectOptions(await screen.findByLabelText("Depende de"), "Base de datos");
+    await user.selectOptions(await screen.findByLabelText("Depende de"), optionOf("Base de datos"));
     expect(chosen()).toEqual(["Base de datos"]);
 
     await user.selectOptions(screen.getByLabelText("Proyecto"), "dos");

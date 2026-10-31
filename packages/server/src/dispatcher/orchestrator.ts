@@ -85,6 +85,7 @@ export class Orchestrator {
   private readonly publisher: OutboxPublisher | undefined;
   private readonly questionEscalations: QuestionEscalations;
   private readonly runs: RunRepository;
+  private readonly tasks: TaskWorktreeRepository;
   private unsubscribes: (() => void)[] = [];
 
   constructor(opts: OrchestratorOptions) {
@@ -93,6 +94,7 @@ export class Orchestrator {
     this.hooks = opts.hooks;
     this.publisher = opts.publisher;
     this.runs = new RunRepository(opts.db);
+    this.tasks = new TaskWorktreeRepository(opts.db);
     this.worktrees = new WorktreeService({
       herdr: opts.herdr,
       processes: opts.processes,
@@ -185,7 +187,8 @@ export class Orchestrator {
           this.watcher.onTransition(m);
           this.reconciler.onMessage(m);
           this.questionEscalations.onTransition(m);
-          const notification = escalationNotification(m);
+          const task = this.tasks.get(m.taskId);
+          const notification = task && escalationNotification(task.number, m);
           if (notification) await this.notify(notification);
           await this.onTransition(m);
         }),

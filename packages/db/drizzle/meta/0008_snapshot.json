@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7d8c6c7a-9563-42e4-8fd7-961cd2520a80",
+  "id": "8cfbe56d-48ec-400f-b7e7-aeda3f286a89",
   "prevId": "82443b06-1ec6-439e-ae66-35dd1d0202b9",
   "tables": {
     "events": {
@@ -699,7 +699,7 @@
         },
         "runs_agent_kind_enum": {
           "name": "runs_agent_kind_enum",
-          "value": "\"runs\".\"agent_kind\" in ('claude', 'copilot')"
+          "value": "\"runs\".\"agent_kind\" in ('claude')"
         },
         "runs_result_enum": {
           "name": "runs_result_enum",
@@ -1071,6 +1071,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast(unixepoch('subsec') * 1000 as integer))"
+        },
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -1088,6 +1095,13 @@
             "sub_state"
           ],
           "isUnique": false
+        },
+        "tasks_number_unique": {
+          "name": "tasks_number_unique",
+          "columns": [
+            "number"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -1144,6 +1158,10 @@
         "tasks_risk_label_enum": {
           "name": "tasks_risk_label_enum",
           "value": "\"tasks\".\"risk_label\" in ('low', 'medium', 'high')"
+        },
+        "tasks_number_positive": {
+          "name": "tasks_number_positive",
+          "value": "\"tasks\".\"number\" is null or (typeof(\"tasks\".\"number\") = 'integer' and \"tasks\".\"number\" > 0)"
         }
       }
     },

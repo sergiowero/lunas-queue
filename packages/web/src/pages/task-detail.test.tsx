@@ -63,9 +63,12 @@ describe("detalle de tarea", () => {
 
     const deps = await section("Dependencias");
     const select = await deps.findByLabelText("Agregar dependencia");
-    expect(deps.queryByRole("option", { name: dep.intent })).toBeNull();
-    expect(deps.queryByRole("option", { name: "Ya cancelada" })).toBeNull();
-    expect(deps.queryByRole("option", { name: task.intent })).toBeNull();
+    // Las opciones llevan el #N delante («#N · intent»): se busca por el final del nombre.
+    expect(select.querySelectorAll("option")).toHaveLength(2);
+    expect(deps.queryByRole("option", { name: new RegExp(`· ${dep.intent}$`) })).toBeNull();
+    expect(deps.queryByRole("option", { name: /· Ya cancelada$/ })).toBeNull();
+    expect(deps.queryByRole("option", { name: new RegExp(`· ${task.intent}$`) })).toBeNull();
+    expect(deps.getByRole("option", { name: new RegExp(`· ${extra.intent}$`) })).toBeTruthy();
     await user.selectOptions(select, extra.id);
     await user.click(deps.getByRole("button", { name: "Agregar" }));
 
@@ -375,5 +378,62 @@ describe("detalle de tarea", () => {
   it("avisa si la tarea no existe", async () => {
     renderApp("/tasks/00000000-0000-4000-8000-000000000999");
     expect(await screen.findByText("La tarea no existe.")).toBeTruthy();
+  });
+});
+
+describe("menciones #N en el intent del detalle", () => {
+  it("una mención a una tarea existente es un enlace a su detalle", async () => {
+    const { fake, project, dep } = seeded();
+    const task = fake.addTask(project.id, { intent: `Depende de #${dep.number} para arrancar` });
+    renderApp(`/tasks/${task.id}`, fake);
+
+    const heading = await screen.findByRole("heading", {
+      name: `Depende de #${dep.number} para arrancar`,
+    });
+    const link = await within(heading).findByRole("link", { name: `#${dep.number}` });
+    expect(link).toHaveProperty("href", expect.stringContaining(`/tasks/${dep.id}`));
+  });
+
+  it("un número inexistente, #abc o a#5 se muestran tal cual, sin enlace", async () => {
+    const { fake, project, dep } = seeded();
+    // La última mención sí existe: cuando es enlace, las tareas ya cargaron.
+    const intent = `Ver #999, #abc, a#${dep.number} y #${dep.number}`;
+    const task = fake.addTask(project.id, { intent });
+    renderApp(`/tasks/${task.id}`, fake);
+
+    const heading = await screen.findByRole("heading", { name: intent });
+    await within(heading).findByRole("link", { name: `#${dep.number}` });
+    expect(within(heading).getAllByRole("link")).toHaveLength(1);
+  });
+});
+
+describe("menciones #N en tarjetas y filas que ya son enlace", () => {
+  it("el tablero y la cola muestran el intent como texto plano, sin enlaces anidados", async () => {
+    const { fake, project, dep } = seeded();
+    const intent = `Depende de #${dep.number}`;
+    const task = fake.addTask(project.id, { intent });
+    fake.queue = [
+      {
+        task,
+        ready: true,
+        score: 1,
+        effectivePriority: 1,
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          costUsd: null,
+        },
+      },
+    ];
+    const board = renderApp(`/projects/${project.id}`, fake);
+    const card = await screen.findByRole("link", { name: intent });
+    expect(card.querySelector("a")).toBeNull();
+    board.unmount();
+
+    renderApp("/queue", fake);
+    const row = await screen.findByRole("link", { name: intent });
+    expect(row.querySelector("a")).toBeNull();
   });
 });

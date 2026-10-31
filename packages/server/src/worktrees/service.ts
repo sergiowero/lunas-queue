@@ -12,7 +12,7 @@ import {
   taskBranch,
   worktreeReleased,
 } from "@lunasq/domain";
-import type { Project } from "@lunasq/schemas";
+import { type Project, taskLabel } from "@lunasq/schemas";
 import { KeyedLock } from "./keyed-lock.ts";
 
 export const DEFAULT_BOOTSTRAP_TIMEOUT_MS = 30 * 60_000;
@@ -122,7 +122,7 @@ export class WorktreeService {
           workspaceId,
           branch,
           base,
-          label: `${project.name} ${taskId.slice(0, 8)}`,
+          label: `${project.name} ${taskLabel(task.number)}`,
         });
       });
 

@@ -36,6 +36,27 @@ function setup() {
 
 type Entry = { task: { id: string }; ready: boolean; score: number | null; usage: unknown };
 
+describe("número de tarea en las vistas", () => {
+  it("la cola y las dependencias traen el número de cada tarea", async () => {
+    const { db, project, get } = setup();
+    const base = insertTask(db, project.id, { intent: "Base" });
+    const task = insertTask(db, project.id, { intent: "Depende" });
+    db.insert(taskDependencies).values({ taskId: task.id, dependsOnId: base.id }).run();
+
+    const queue = (await get("/api/queue")).body as { task: { id: string; number: number } }[];
+    expect(queue.map((e) => [e.task.id, e.task.number]).sort()).toEqual(
+      [
+        [base.id, base.number],
+        [task.id, task.number],
+      ].sort(),
+    );
+    const deps = (await get(`/api/tasks/${task.id}/dependencies`)).body as {
+      dependsOn: { taskId: string; number: number }[];
+    };
+    expect(deps.dependsOn).toMatchObject([{ taskId: base.id, number: base.number }]);
+  });
+});
+
 describe("GET /api/queue", () => {
   it("pone primero el ready set en el orden del scheduler y después las demás vivas", async () => {
     const { db, project, get } = setup();

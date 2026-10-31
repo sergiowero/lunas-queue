@@ -27,7 +27,13 @@ describe("get_task_context", () => {
     const { isError, body } = await call("get_task_context");
     expect(isError).toBe(false);
     expect(body).toMatchObject({
-      task: { id: task.id, intent: task.intent, state: "in_progress", worktreePath: "/wt/tarea" },
+      task: {
+        id: task.id,
+        number: task.number,
+        intent: task.intent,
+        state: "in_progress",
+        worktreePath: "/wt/tarea",
+      },
       run: { id: run.id, phase: "implement", iteration: 0 },
       project: { baseBranch: "main", testCommand: "pnpm test" },
       approvedSpec: { version: 1, content: specContentExample() },

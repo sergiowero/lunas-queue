@@ -57,6 +57,8 @@ export function findOrphanWorktrees<W extends { branch?: string }>(
 
 export type TaskWorktreeRecord = WorktreeTaskView & {
   id: string;
+  /** Número de tarea (#N): identifica la tarea en las etiquetas de herdr. */
+  number: number;
   projectId: string;
   branch: string | null;
   /** Se guarda solo cuando el worktree quedó listo (bootstrap incluido) y se borra al removerlo. */

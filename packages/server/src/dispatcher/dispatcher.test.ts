@@ -206,6 +206,8 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
       paneId: run.herdrPane,
       workspaceId: run.herdrWorkspace,
     });
+    // El título del pane identifica la tarea por su número; branch y agente siguen con el UUID.
+    expect(agent?.title).toBe(`LunasQ refine #${task.number}`);
     expect(agent?.tokens).toEqual({
       task: task.id,
       phase: "refine",

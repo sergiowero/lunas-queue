@@ -14,6 +14,7 @@ import {
   type QuestionCancelledPayload,
   TASK_TRANSITIONED,
   TaskTransitionedPayload,
+  taskLabel,
 } from "@lunasq/schemas";
 import type { Escalator } from "../notifications/escalator.ts";
 
@@ -62,13 +63,15 @@ export class QuestionEscalations {
   }
 
   private watch(question: QuestionRow): void {
+    const task = this.tasks.get(question.taskId);
+    if (!task) return;
     this.escalator.watch(
       {
         id: questionNotificationId(question.id),
         kind: "question_open",
         taskId: question.taskId,
         ...(question.runId ? { runId: question.runId } : {}),
-        title: `Pregunta abierta en ${question.taskId.slice(0, 8)}`,
+        title: `Pregunta abierta en ${taskLabel(task.number)}`,
         body: question.question,
       },
       { since: question.createdAt },

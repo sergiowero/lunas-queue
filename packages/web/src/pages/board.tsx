@@ -3,6 +3,7 @@ import type { Task, TaskState } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { Loading, QueryError } from "../components/status.tsx";
+import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 import type { Json } from "../lib/api.ts";
@@ -14,13 +15,16 @@ const route = getRouteApi("/projects/$projectId");
 function TaskCard({ task }: { task: Json<Task> }) {
   return (
     <li className="flex flex-col gap-2 rounded-md border border-border bg-background p-3 text-sm shadow-sm">
-      <Link
-        to="/tasks/$taskId"
-        params={{ taskId: task.id }}
-        className="font-medium hover:underline"
-      >
-        {taskLabel(task)}
-      </Link>
+      <div className="flex items-baseline gap-2">
+        <TaskNumber number={task.number} />
+        <Link
+          to="/tasks/$taskId"
+          params={{ taskId: task.id }}
+          className="font-medium hover:underline"
+        >
+          {taskLabel(task)}
+        </Link>
+      </div>
       <div className="flex flex-wrap gap-1">
         <Badge variant="outline">P{task.priority}</Badge>
         {task.subState && <Badge variant="secondary">{SUB_STATE_LABEL[task.subState]}</Badge>}

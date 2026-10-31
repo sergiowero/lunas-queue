@@ -70,6 +70,7 @@ describe("QueueEntry", () => {
   it("lleva score solo cuando la tarea está en el ready set", () => {
     const task = {
       id: taskId,
+      number: 1,
       projectId,
       intent: "x",
       title: null,
