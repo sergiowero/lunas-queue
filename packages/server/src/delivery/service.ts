@@ -344,14 +344,18 @@ export class DeliveryService {
     return { status: "conflict", reason: detail.reason };
   }
 
-  /** Conflictos de entrega desde el último `resume`: un humano que reanuda concede otra vuelta. */
+  /**
+   * Conflictos de entrega seguidos: desde el último `resume` (un humano que reanuda concede otra
+   * vuelta) o el último `verdict_pass` (un PR entregado que después quedó en conflicto empieza de
+   * cero, ADR pr-en-conflicto).
+   */
   #conflicts(taskId: string): number {
     let count = 0;
     for (const event of listEvents(this.#deps.db, taskId)) {
       if (event.type === DELIVERY_CONFLICT) count += 1;
       else if (event.type === TASK_TRANSITIONED) {
         const payload = event.payload as { command?: string };
-        if (payload.command === "resume") count = 0;
+        if (payload.command === "resume" || payload.command === "verdict_pass") count = 0;
       }
     }
     return count;

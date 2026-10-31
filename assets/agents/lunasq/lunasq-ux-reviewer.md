@@ -1,6 +1,6 @@
 ---
 name: lunasq-ux-reviewer
-description: Revisor de UX de LunasQ para la fase de verificación. Revisa flujos de usuario, estados vacíos, de carga y de error, y accesibilidad en el diff de una tarea contra su spec aprobada. Lánzalo por nombre desde verify-task cuando el diff toca front end.
+description: Revisor de UX de LunasQ para la fase de verificación. Revisa flujos de usuario, estados vacíos, de carga y de error, y accesibilidad en el diff de una tarea contra su spec aprobada. Lánzalo por nombre desde verify-task solo cuando el diff cambia un flujo, una pantalla, sus estados o textos visibles.
 tools: Read, Grep, Glob, Bash
 model: opus
 ---

@@ -1,5 +1,12 @@
 import { FakeGit } from "@lunasq/adapters";
-import { appendEvent, listEvents, RunRepository, TaskRepository } from "@lunasq/db";
+import {
+  appendEvent,
+  listEvents,
+  RunRepository,
+  TaskPrRepository,
+  TaskRepository,
+} from "@lunasq/db";
+import { setTaskPosition } from "@lunasq/db/test-helpers";
 import { DELIVERY_CONFLICT, TASK_PR_OPENED, TASK_TRANSITIONED } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import { OutboxPublisher } from "../outbox/publisher.ts";
@@ -204,6 +211,44 @@ describe("DeliveryService.deliver", () => {
     expect(second.taskNow()).toMatchObject({ state: "needs_human" });
     const escalation = eventsOf(second, TASK_TRANSITIONED).at(-1)?.payload;
     expect(escalation).toMatchObject({ command: "escalate", reason: "delivery_failed" });
+  });
+
+  it("un PR entregado que queda en conflicto se entrega de nuevo sobre el mismo PR, con el conteo de conflictos desde cero", async () => {
+    const h = deliveryHarness();
+    await h.agentCommits();
+    for (let i = 0; i < 3; i++) {
+      appendEvent(h.db, {
+        taskId: h.task.id,
+        type: DELIVERY_CONFLICT,
+        actor: "system",
+        payload: {
+          runId: h.verify.id,
+          reason: "tests_failed",
+          baseBranch: "main",
+          files: [],
+          output: "x",
+        },
+      });
+    }
+    const first = await h.service.deliver(h.task.id);
+    if (first.status !== "delivered") throw new Error(`entrega: ${first.status}`);
+
+    // Otro PR se mergeó y GitHub marca este en conflicto: el poller reabre la tarea.
+    expect(new TaskPrRepository(h.db).recordPrConflict(h.task.id, first.prUrl)).toBe(true);
+    expect(h.taskNow()).toMatchObject({ state: "in_progress", prState: "open" });
+
+    // El implementador integra la base y vuelve a pasar la verificación; la suite final falla una
+    // vez: es el primer conflicto desde el pass, no el cuarto.
+    setTaskPosition(h.db, h.task.id, { state: "verification", subState: "running" });
+    h.testGate.result = { passed: false, output: "1 failed" };
+    expect((await h.service.deliver(h.task.id)).status).toBe("conflict");
+
+    setTaskPosition(h.db, h.task.id, { state: "verification", subState: "running" });
+    h.testGate.result = { passed: true, output: "ok" };
+    const again = await h.service.deliver(h.task.id);
+    expect(again).toMatchObject({ status: "delivered", created: false, prUrl: first.prUrl });
+    expect(h.github.created).toHaveLength(1);
+    expect(h.taskNow()).toMatchObject({ state: "completed", prUrl: first.prUrl });
   });
 
   it("un hook before_delivery bloqueado detiene la entrega antes de tocar git", async () => {

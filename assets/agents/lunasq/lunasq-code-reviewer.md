@@ -1,6 +1,6 @@
 ---
 name: lunasq-code-reviewer
-description: Revisor de código de LunasQ para la fase de verificación. Revisa calidad, diseño, cumplimiento de la spec aprobada y coherencia de los tests con su checklist en el diff de una tarea. Lánzalo por nombre desde verify-task en toda verificación.
+description: Revisor de código de LunasQ para la fase de verificación. Revisa calidad, diseño, cumplimiento de la spec aprobada y coherencia de los tests con su checklist en el diff de una tarea. Lánzalo por nombre desde verify-task cuando el diff cambia código de producción o tests.
 tools: Read, Grep, Glob, Bash
 model: opus
 ---

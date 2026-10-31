@@ -1,6 +1,6 @@
 ---
 name: verify-task
-description: Fase de verificación de LunasQ. Actúa como approver - lanza los 4 subagentes revisores lunasq-*, consolida y refuta sus hallazgos, verifica cada criterio y la coherencia de los tests (con prueba de reversión) sin editar código, y emite pass o reject con submit_verdict del MCP lunasq. Úsala cuando LunasQ te pida verificar una tarea.
+description: Fase de verificación de LunasQ. Actúa como approver - elige según la tarea y el diff cuáles de los subagentes revisores lunasq-* lanzar, consolida y refuta sus hallazgos, verifica cada criterio y la coherencia de los tests (con prueba de reversión) sin editar código, y emite pass o reject con submit_verdict del MCP lunasq. Úsala cuando LunasQ te pida verificar una tarea.
 ---
 
 # verify-task
@@ -22,13 +22,19 @@ Eres el approver de la verificación de una tarea de LunasQ. El prompt te da el 
    - `verificationHistory`: veredictos anteriores; comprueba que sus `mustFix` quedaron resueltos.
    - `previousAttempt` y `questions`; `project.testCommand` y `project.baseBranch`.
 2. **Diff.** `git diff $BASE...HEAD` y `git log $BASE..HEAD`.
-3. **Qué revisores aplican.** Los 4 se reportan siempre, corran o no:
-   - `lunasq-code-reviewer`: siempre.
-   - `lunasq-security-reviewer`: siempre, salvo un diff sin código (solo docs).
-   - `lunasq-ux-reviewer` y `lunasq-ui-reviewer`: solo si el diff toca front end.
+3. **Elegir revisores.** Tú decides en cada tarea cuáles lanzar: cada revisor es una sesión de Opus y su reporte ocupa tu contexto. Lanza solo los que pueden encontrar algo en este diff y omite los demás. Mira primero qué cambió (`git diff --name-only $BASE...HEAD`) y qué pide la spec, y decide con esta tabla:
 
-   Un revisor que no lanzas va como `skipped` con su `justification`.
-4. **Lanzar.** Lanza los que aplican en paralelo, en un solo mensaje, con la tool Agent y por nombre (`subagent_type`). No los pongas en segundo plano: espera sus reportes. A cada uno pásale los criterios de la spec, el comando del diff y los archivos relevantes. Responden una línea por hallazgo, `[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. LunasQ registra cada ejecución por hooks: reporta como `ran` solo a los que lanzaste de verdad.
+   | Revisor | Lánzalo si el diff… | Omítelo si… |
+   | --- | --- | --- |
+   | `lunasq-code-reviewer` | cambia código de producción o tests (trae el checklist de coherencia de tests) | solo cambia docs, comentarios o configuración sin lógica |
+   | `lunasq-security-reviewer` | agrega o cambia una frontera de confianza: entradas externas (HTTP, CLI, archivos, variables de entorno, salida de procesos), ejecución de procesos o comandos, autenticación, tokens, permisos o secretos, rutas o SQL armados con datos de fuera, dependencias nuevas | es lógica interna, un refactor sin superficie nueva, UI sin entradas nuevas, tests o docs |
+   | `lunasq-ux-reviewer` | cambia lo que vive el usuario: un flujo, una pantalla o formulario, la navegación, estados vacíos, de carga o de error, textos visibles, accesibilidad | no toca front end, o lo toca sin cambiar comportamiento (estilos, refactor) |
+   | `lunasq-ui-reviewer` | cambia lo que se ve: componentes, markup, estilos, layout | no cambia nada visible |
+
+   - Cada fila se decide por separado: un cambio de back end suele necesitar solo el de código; uno visual sin flujo nuevo, código y UI; no lances uno «por si acaso» si el diff no toca su área.
+   - Ante una duda real sobre seguridad (no sabes si un dato llega de fuera), lánzalo.
+   - El handoff lleva siempre los 4 nombres, pero reportarlos no es lanzarlos: los que no lanzas van como `skipped` con una `justification` que cite el diff (p. ej. «El diff solo cambia `src/orders/order.ts`, lógica de dominio sin entradas externas»), no una frase genérica.
+4. **Lanzar.** Lanza los que elegiste en paralelo, en un solo mensaje, con la tool Agent y por nombre (`subagent_type`). No los pongas en segundo plano: espera sus reportes. A cada uno pásale los criterios de la spec, el comando del diff y los archivos relevantes. Responden una línea por hallazgo, `[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. LunasQ registra cada ejecución por hooks: reporta como `ran` solo a los que lanzaste de verdad, y como `skipped` solo a los que no lanzaste.
 5. **Consolidar.** Deduplica los hallazgos. Intenta refutar cada `critical` y `major` leyendo el código o corriendo tests:
    - si lo refutas, va a `refuted` con el hallazgo, `reason` y `source` (el revisor que lo hizo);
    - si se sostiene, va a `mustFix` con su `source`;
@@ -53,7 +59,7 @@ Eres el approver de la verificación de una tarea de LunasQ. El prompt te da el 
 
 ## Handoff
 
-Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (un campo de más es error) y de hasta 32 KB. `summary`, los nombres, títulos y términos, los nombres de test y los comandos admiten 500 caracteres; las rutas, 300; el resto de los textos, 2000. Reemplaza `taskId` y `runId` por `task.id` y `run.id` de `get_task_context`. `criteriaVerdicts` nombra exactamente los criterios de la spec aprobada; `reviewers` lleva los 4 nombres, cada uno `ran` con sus `findings` o `skipped` con `justification`; las severidades son `critical`, `major` y `minor`. Ejemplo válido de un reject:
+Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (un campo de más es error) y de hasta 32 KB. `summary`, los nombres, títulos y términos, los nombres de test y los comandos admiten 500 caracteres; las rutas, 300; el resto de los textos, 2000. Reemplaza `taskId` y `runId` por `task.id` y `run.id` de `get_task_context`. `criteriaVerdicts` nombra exactamente los criterios de la spec aprobada; `reviewers` lleva los 4 nombres, cada uno `ran` con sus `findings` o `skipped` con `justification` (los 4 se reportan, no se lanzan los 4); las severidades son `critical`, `major` y `minor`. Ejemplo válido de un reject:
 
 ```json
 {
@@ -73,7 +79,10 @@ Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (
       { "criterionId": "AC-2", "verdict": "fail", "evidence": "El test sigue en verde con la invariante revertida" }
     ],
     "reviewers": {
-      "lunasq-security-reviewer": { "status": "ran", "findings": [] },
+      "lunasq-security-reviewer": {
+        "status": "skipped",
+        "justification": "El diff solo cambia src/orders/order.ts: lógica de dominio sin entradas externas"
+      },
       "lunasq-ux-reviewer": { "status": "skipped", "justification": "El diff no toca el front end" },
       "lunasq-ui-reviewer": { "status": "skipped", "justification": "El diff no toca el front end" },
       "lunasq-code-reviewer": {
@@ -134,7 +143,10 @@ Un pass lleva todos los `criteriaVerdicts` en `pass` y `mustFix` vacío. Solo `b
     { "criterionId": "AC-2", "verdict": "pass", "evidence": "Su test falla al quitar la invariante de envío" }
   ],
   "reviewers": {
-    "lunasq-security-reviewer": { "status": "ran", "findings": [] },
+    "lunasq-security-reviewer": {
+      "status": "skipped",
+      "justification": "El diff solo cambia src/orders/order.ts: lógica de dominio sin entradas externas"
+    },
     "lunasq-ux-reviewer": { "status": "skipped", "justification": "El diff no toca el front end" },
     "lunasq-ui-reviewer": { "status": "skipped", "justification": "El diff no toca el front end" },
     "lunasq-code-reviewer": { "status": "ran", "findings": [] }

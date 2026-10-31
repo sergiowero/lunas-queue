@@ -5,6 +5,7 @@ import { GitHubError } from "./errors.ts";
 import type {
   CheckStatus,
   ChecksStatus,
+  Mergeable,
   PrCheck,
   PrReview,
   PullRequest,
@@ -22,6 +23,7 @@ export const PR_FIELDS = [
   "baseRefName",
   "mergedAt",
   "closedAt",
+  "mergeable",
   "statusCheckRollup",
   "reviewDecision",
   "reviews",
@@ -62,6 +64,8 @@ const GhPr = z.object({
   baseRefName: z.string(),
   mergedAt: optionalDate,
   closedAt: optionalDate,
+  // MERGEABLE, CONFLICTING o UNKNOWN; cualquier otro valor cuenta como unknown.
+  mergeable: z.string().nullish(),
   // Checks y reviews se leen entrada por entrada (parseCheck, parseReview): una forma que no se
   // conoce no debe impedir leer el estado del PR, o el poller nunca vería el merge.
   statusCheckRollup: z.array(z.unknown()).nullish(),
@@ -111,6 +115,11 @@ const REVIEW_STATES: Record<string, ReviewState> = {
   COMMENTED: "commented",
   DISMISSED: "dismissed",
   PENDING: "pending",
+};
+
+const MERGEABLE: Record<string, Mergeable> = {
+  MERGEABLE: "mergeable",
+  CONFLICTING: "conflicting",
 };
 
 const REVIEW_DECISIONS: Record<string, ReviewDecision> = {
@@ -168,6 +177,7 @@ export function parsePr(raw: unknown): PullRequest {
     baseBranch: pr.baseRefName,
     mergedAt: pr.mergedAt,
     closedAt: pr.closedAt,
+    mergeable: MERGEABLE[pr.mergeable ?? ""] ?? "unknown",
     checks: { status: summarizeChecks(items), items },
     reviewDecision: REVIEW_DECISIONS[pr.reviewDecision ?? ""] ?? null,
     reviews,

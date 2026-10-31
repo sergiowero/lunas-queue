@@ -23,4 +23,10 @@ export interface PrTrackingStore {
   recordPrOpened(taskId: string, url: string): boolean;
   /** Registra lo observado si es un cambio válido del PR actual de la tarea; si no, false. */
   recordPrState(taskId: string, observed: ObservedPrState): boolean;
+  /**
+   * El PR abierto de una tarea completed choca con la base: la regresa a in_progress para que el
+   * implementador integre la base (ADR pr-en-conflicto). false si la tarea no está completed o el
+   * PR ya no es el suyo, así repetirlo mientras el PR sigue en conflicto no hace nada.
+   */
+  recordPrConflict(taskId: string, url: string): boolean;
 }

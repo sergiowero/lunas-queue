@@ -1,5 +1,6 @@
 // PR de las tareas (ADR uw-14-adapter-github). Solo toca `pr_url` y `pr_state`: el estado de la
-// tarea cambia únicamente por task-transitions (ADR 0007). Cada cambio deja su evento publicado en
+// tarea cambia únicamente por task-transitions (ADR 0007), también cuando un PR en conflicto la
+// reabre (ADR pr-en-conflicto). Cada cambio deja su evento publicado en
 // el outbox, así el scheduler recalcula el ready set cuando un PR se mergea o se cierra.
 import {
   type ObservedPrState,
@@ -8,15 +9,18 @@ import {
   type TrackedPr,
 } from "@lunasq/domain";
 import {
+  DELIVERY_CONFLICT,
+  DeliveryConflictPayload,
   TASK_PR_OPENED,
   TASK_PR_STATE_CHANGED,
   TaskPrOpenedPayload,
   TaskPrStateChangedPayload,
 } from "@lunasq/schemas";
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { appendEvent } from "./event-log.ts";
-import { tasks } from "./schema.ts";
+import { projects, runs, tasks } from "./schema.ts";
+import { applyTransition } from "./task-transitions.ts";
 
 export type TaskPrErrorCode = "task_not_found" | "pr_already_merged" | "pr_already_open";
 
@@ -106,6 +110,54 @@ export class TaskPrRepository implements PrTrackingStore {
       appendEvent(
         tx,
         { taskId, type: TASK_PR_STATE_CHANGED, actor: "system", payload },
+        { publish: true },
+      );
+      return true;
+    });
+  }
+
+  recordPrConflict(taskId: string, url: string): boolean {
+    return this.#write((tx) => {
+      const row = tx
+        .select({
+          state: tasks.state,
+          prUrl: tasks.prUrl,
+          prState: tasks.prState,
+          baseBranch: projects.baseBranch,
+        })
+        .from(tasks)
+        .innerJoin(projects, eq(projects.id, tasks.projectId))
+        .where(eq(tasks.id, taskId))
+        .get();
+      if (row?.state !== "completed" || row.prUrl !== url || row.prState !== "open") {
+        return false;
+      }
+      // El Run del verificador que dio el pass entregado: el evento lo exige y lo audita.
+      const verifier = tx
+        .select({ id: runs.id })
+        .from(runs)
+        .where(and(eq(runs.taskId, taskId), eq(runs.phase, "verify")))
+        .orderBy(desc(runs.startedAt), desc(sql`rowid`))
+        .limit(1)
+        .get();
+      if (!verifier) return false;
+      const moved = applyTransition(tx, {
+        taskId,
+        actor: "system",
+        command: { type: "delivery_conflict" },
+        expected: { state: "completed", subState: null },
+      });
+      if (!moved.ok) return false;
+      const payload = DeliveryConflictPayload.parse({
+        runId: verifier.id,
+        reason: "pr_conflict",
+        baseBranch: row.baseBranch,
+        files: [],
+        output: null,
+      });
+      appendEvent(
+        tx,
+        { taskId, type: DELIVERY_CONFLICT, actor: "system", payload },
         { publish: true },
       );
       return true;

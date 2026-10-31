@@ -8,6 +8,7 @@ const merged = {
   baseRefName: "main",
   isDraft: false,
   mergedAt: "2026-10-29T15:47:34Z",
+  mergeable: "UNKNOWN",
   number: 10,
   reviewDecision: "",
   reviews: [],
@@ -68,6 +69,7 @@ describe("parsePr", () => {
       baseBranch: "main",
       mergedAt: new Date("2026-10-29T15:47:34Z"),
       closedAt: new Date("2026-10-29T15:47:34Z"),
+      mergeable: "unknown",
       checks: {
         status: "success",
         items: [{ name: "check", status: "success", url: merged.statusCheckRollup[0]?.detailsUrl }],
@@ -84,6 +86,14 @@ describe("parsePr", () => {
       labels: [{ name: "lunasq:risk-low", color: "0e8a16" }, { id: 1 }, "raro"],
     };
     expect(parsePr(labeled).labels).toEqual(["lunasq:risk-low"]);
+  });
+
+  it("lee si el PR choca con la base; un valor ausente o desconocido es unknown", () => {
+    expect(parsePr({ ...open, mergeable: "CONFLICTING" }).mergeable).toBe("conflicting");
+    expect(parsePr({ ...open, mergeable: "MERGEABLE" }).mergeable).toBe("mergeable");
+    expect(parsePr({ ...open, mergeable: "OTRO" }).mergeable).toBe("unknown");
+    const { mergeable: _, ...sinCampo } = open;
+    expect(parsePr(sinCampo).mergeable).toBe("unknown");
   });
 
   it("traduce checks pendientes, saltados y de status, y las reviews", () => {

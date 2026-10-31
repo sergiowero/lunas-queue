@@ -22,6 +22,12 @@ export interface PrReview {
   submittedAt: Date | null;
 }
 
+/**
+ * Si el PR se puede mergear con la base: conflicting si GitHub detecta conflictos; unknown mientras
+ * GitHub no lo calculó (lo calcula en segundo plano después de un push a la base o al PR).
+ */
+export type Mergeable = "mergeable" | "conflicting" | "unknown";
+
 /** null si el repo no exige reviews. */
 export type ReviewDecision = "approved" | "changes_requested" | "review_required" | null;
 
@@ -34,6 +40,7 @@ export interface PullRequest {
   baseBranch: string;
   mergedAt: Date | null;
   closedAt: Date | null;
+  mergeable: Mergeable;
   checks: { status: ChecksStatus; items: PrCheck[] };
   reviewDecision: ReviewDecision;
   reviews: PrReview[];

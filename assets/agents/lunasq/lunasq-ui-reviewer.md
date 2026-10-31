@@ -1,6 +1,6 @@
 ---
 name: lunasq-ui-reviewer
-description: Revisor de UI de LunasQ para la fase de verificación. Revisa consistencia visual, uso de componentes y comportamiento responsive en el diff de una tarea contra su spec aprobada. Lánzalo por nombre desde verify-task cuando el diff toca front end.
+description: Revisor de UI de LunasQ para la fase de verificación. Revisa consistencia visual, uso de componentes y comportamiento responsive en el diff de una tarea contra su spec aprobada. Lánzalo por nombre desde verify-task solo cuando el diff cambia componentes, markup, estilos o layout.
 tools: Read, Grep, Glob, Bash
 model: opus
 ---

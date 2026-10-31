@@ -204,10 +204,13 @@ describe("@lunasq/assets-skills", () => {
     }
   });
 
-  it("verify-task lanza los 4 revisores por nombre, sin segundo plano, y no edita código", () => {
+  it("verify-task elige qué revisores lanzar, los lanza por nombre sin segundo plano, y no edita código", () => {
     const { body } = parseSkill("verify-task");
     for (const reviewer of REVIEWERS) expect(body, reviewer).toContain(reviewer);
     expect(body).toMatch(/segundo plano/);
+    expect(body).toMatch(/Tú decides en cada tarea cuáles lanzar/);
+    expect(body).toMatch(/reportarlos no es lanzarlos/);
+    expect(parseSkill("verify-task").meta.description).not.toMatch(/lanza los 4/);
     expect(body).toMatch(/no edites/i);
     for (const piece of [
       "justification",

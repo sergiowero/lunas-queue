@@ -4,6 +4,7 @@ import { GitHubError } from "./errors.ts";
 import type {
   CreatePrInput,
   GitHubAdapter,
+  Mergeable,
   PrCheck,
   PrLabel,
   PrReview,
@@ -46,6 +47,7 @@ export class FakeGitHub implements GitHubAdapter {
       baseBranch: input.base,
       mergedAt: null,
       closedAt: null,
+      mergeable: "mergeable",
       checks: { status: "none", items: [] },
       reviewDecision: null,
       reviews: [],
@@ -93,6 +95,11 @@ export class FakeGitHub implements GitHubAdapter {
     if (pr.state !== "closed") throw new Error(`el PR ${url} no está cerrado`);
     pr.state = "open";
     pr.closedAt = null;
+  }
+
+  /** Lo que GitHub calcula cuando la base avanza: conflicting si otro merge chocó con el PR. */
+  setMergeable(url: string, mergeable: Mergeable): void {
+    this.#get(url).mergeable = mergeable;
   }
 
   setChecks(url: string, items: PrCheck[]): void {

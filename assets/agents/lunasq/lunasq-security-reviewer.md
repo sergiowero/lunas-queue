@@ -1,6 +1,6 @@
 ---
 name: lunasq-security-reviewer
-description: Revisor de seguridad de LunasQ para la fase de verificación. Busca vulnerabilidades, secretos, validación de entradas y permisos en el diff de una tarea contra su spec aprobada. Lánzalo por nombre desde verify-task.
+description: Revisor de seguridad de LunasQ para la fase de verificación. Busca vulnerabilidades, secretos, validación de entradas y permisos en el diff de una tarea contra su spec aprobada. Lánzalo por nombre desde verify-task solo cuando el diff toca una frontera de confianza (entradas externas, procesos, autenticación, secretos, permisos, rutas o dependencias).
 tools: Read, Grep, Glob, Bash
 model: opus
 ---

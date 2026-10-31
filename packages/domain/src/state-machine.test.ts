@@ -74,6 +74,7 @@ add("in_progress/running", "submit_for_verification", "verification/queued");
 add("verification/running", "verdict_rework", "in_progress/queued");
 add("verification/running", "verdict_pass", "completed/-");
 add("verification/running", "delivery_conflict", "in_progress/queued");
+add("completed/-", "delivery_conflict", "in_progress/queued");
 add("needs_human/-", "resume", "in_progress/queued");
 add("needs_human/-", "cancel", "cancelled/-");
 add("refined/-", "escalate", "needs_human/-");
@@ -124,7 +125,7 @@ describe("transition: tabla completa de estados × comandos", () => {
   it("la tabla cubre las 13 combinaciones y los 14 comandos", () => {
     expect(SNAPSHOTS).toHaveLength(13);
     expect(COMMANDS).toHaveLength(14);
-    expect(Object.keys(VALID)).toHaveLength(41);
+    expect(Object.keys(VALID)).toHaveLength(42);
   });
 });
 

@@ -1,4 +1,5 @@
 import {
+  DELIVERY_CONFLICT,
   TASK_PR_OPENED,
   TASK_PR_STATE_CHANGED,
   TaskPrOpenedPayload,
@@ -10,7 +11,7 @@ import { listEvents } from "./event-log.ts";
 import { listPendingOutbox } from "./outbox.ts";
 import { tasks } from "./schema.ts";
 import { TaskPrRepository } from "./task-prs.ts";
-import { insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
+import { insertProject, insertRun, insertTask, migratedDatabase } from "./test-helpers.ts";
 
 const url = "https://github.com/sergiowero/demo/pull/1";
 const otherUrl = "https://github.com/sergiowero/demo/pull/2";
@@ -143,5 +144,48 @@ describe("TaskPrRepository.listOpen", () => {
     repo.recordPrState(merged.id, { url: otherUrl, state: "merged", at: null });
     expect(repo.listOpen()).toEqual([{ taskId: task.id, url }]);
     expect(repo.listOpen().some((p) => p.taskId === sinPr.id)).toBe(false);
+  });
+});
+
+describe("TaskPrRepository.recordPrConflict", () => {
+  it("regresa la tarea completed a in_progress con el conflicto publicado", () => {
+    const { db, project, repo, task, row } = setup();
+    const verifier = insertRun(db, task.id, { phase: "verify" });
+    repo.recordPrOpened(task.id, url);
+    expect(repo.recordPrConflict(task.id, url)).toBe(true);
+    expect(row()).toMatchObject({ state: "in_progress", subState: "queued", prState: "open" });
+    const conflict = listEvents(db, task.id).find((e) => e.type === DELIVERY_CONFLICT);
+    expect(conflict?.payload).toEqual({
+      runId: verifier.id,
+      reason: "pr_conflict",
+      baseBranch: project.baseBranch,
+      files: [],
+      output: null,
+    });
+    expect(listPendingOutbox(db).map((m) => m.message.topic)).toContain(DELIVERY_CONFLICT);
+  });
+
+  it("repetirlo mientras el PR sigue en conflicto no reabre ni duplica el evento", () => {
+    const { db, repo, task } = setup();
+    insertRun(db, task.id, { phase: "verify" });
+    repo.recordPrOpened(task.id, url);
+    repo.recordPrConflict(task.id, url);
+    expect(repo.recordPrConflict(task.id, url)).toBe(false);
+    expect(listEvents(db, task.id).filter((e) => e.type === DELIVERY_CONFLICT)).toHaveLength(1);
+  });
+
+  it("no toca una tarea que no está completed, ni un PR que no es el abierto de la tarea", () => {
+    const { db, project, repo, task, row } = setup();
+    insertRun(db, task.id, { phase: "verify" });
+    repo.recordPrOpened(task.id, url);
+    expect(repo.recordPrConflict(task.id, otherUrl)).toBe(false);
+    repo.recordPrState(task.id, { url, state: "merged", at: mergedAt });
+    expect(repo.recordPrConflict(task.id, url)).toBe(false);
+    expect(row()?.state).toBe("completed");
+
+    const cancelled = insertTask(db, project.id, { state: "cancelled", subState: null });
+    insertRun(db, cancelled.id, { phase: "verify" });
+    repo.recordPrOpened(cancelled.id, otherUrl);
+    expect(repo.recordPrConflict(cancelled.id, otherUrl)).toBe(false);
   });
 });

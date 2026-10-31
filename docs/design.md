@@ -85,10 +85,11 @@ Cada estado con agente tiene un sub‑estado: `queued` (esperando slot o depende
 | Verification → Completed | submit\_verdict = pass, luego entrega | Veredicto pass del verificador, gate de tests en verde, tests coherentes y todos los criterios en pass; push y PR exitosos | Sistema (entrega), con el veredicto del verificador |
 | Cualquiera no terminal → Needs human | Bloqueo con timeout, reintentos o iteraciones agotadas | — | Sistema |
 | Verification → In progress | Conflictos al integrar la rama base en la entrega | Sin subir la iteración | Sistema |
+| Completed → In progress | El PR abierto queda en conflicto con la rama base (otro PR se mergeó antes) | PR de la tarea abierto y marcado en conflicto por GitHub; sin subir la iteración | Sistema (poller de PRs) |
 | Cualquiera no terminal → Cancelled | Cancelación | Agente vivo se detiene y se limpia | Humano |
 | Needs human → estado previo | Reanudar | Vuelve al estado previo al último escalamiento, con sub‑estado `queued` si lleva agente; opcionalmente reinicia la iteración | Humano |
 
-Completed y Cancelled son terminales. El catálogo de comandos, los guards, los sub‑estados y el Event log están en [ADR 0007](decisions/0007-maquina-de-estados.md).
+Completed y Cancelled son terminales, salvo que el PR de una tarea completada quede en conflicto con la base: entonces vuelve a In progress ([ADR pr-en-conflicto](decisions/pr-en-conflicto.md)). El catálogo de comandos, los guards, los sub‑estados y el Event log están en [ADR 0007](decisions/0007-maquina-de-estados.md).
 
 ## Arquitectura
 
@@ -322,7 +323,7 @@ Las tools validan el run token que el dispatcher inyecta al pane; una sesión vi
 | --- | --- | --- |
 | refine-task | Leer el repo, aclarar el intent, modelar con DDD y escribir criterios verificables en lenguaje del dominio | submit\_spec |
 | implement-task | TDD contra la spec aprobada: test que falla, implementación mínima, refactor; commits pequeños | submit\_for\_verification |
-| verify-task | Lanzar los 4 subagentes revisores, consolidar, refutar hallazgos, verificar cada criterio y la coherencia de los tests, sin editar código | submit\_verdict |
+| verify-task | Elegir según la tarea y el diff qué subagentes revisores lanzar, consolidar, refutar hallazgos, verificar cada criterio y la coherencia de los tests, sin editar código | submit\_verdict |
 | herdr (oficial) | Que el agente sepa operar herdr si necesita panes auxiliares | — |
 
 Regla de diseño: las skills describen el *cómo*; el MCP es el único canal de *salida*. Si un agente termina sin llamar la tool de salida, el dispatcher lo trata como fase incompleta.
@@ -405,13 +406,13 @@ Cada fase sigue una práctica obligatoria y las tres se encadenan: DDD produce c
 
 ## Verificación con subagentes
 
-La fase de verificación es **una sola sesión de Claude Code** (un slot) que lanza 4 subagentes revisores en paralelo y actúa como approver: consolida sus hallazgos y emite pass o reject. Para el scheduler y para herdr sigue siendo un solo agente vivo ([subagentes de Claude Code](https://code.claude.com/docs/en/sub-agents)).
+La fase de verificación es **una sola sesión de Claude Code** (un slot) que lanza en paralelo los subagentes revisores que aplican a la tarea (de 4 posibles) y actúa como approver: consolida sus hallazgos y emite pass o reject. Para el scheduler y para herdr sigue siendo un solo agente vivo ([subagentes de Claude Code](https://code.claude.com/docs/en/sub-agents)).
 
 **Flujo de la fase**
 
 1. El dispatcher levanta una sesión de Claude Code en el worktree con la skill `verify-task`.
 2. La sesión llama `get_task_context`: spec aprobada, criterios, diff del branch, handoff del implementador.
-3. Decide qué revisores aplican según la spec y el diff (p. ej. sin cambios de front end no lanza UX ni UI) y los lanza en paralelo, por nombre explícito.
+3. Decide qué revisores aplican según la spec y el diff y los lanza en paralelo, por nombre explícito. Cada revisor se decide por separado: código si cambia código o tests, seguridad solo si el diff toca una frontera de confianza (entradas externas, procesos, autenticación, secretos, rutas, dependencias), UX si cambia un flujo o sus estados, UI si cambia algo visible. Los que no lanza van omitidos con una justificación que cita el diff.
 4. Cada revisor recibe spec y diff, y devuelve hallazgos en formato fijo y compacto: severidad, archivo, evidencia y criterio afectado.
 5. La sesión principal (approver) deduplica, intenta refutar cada hallazgo serio leyendo código o corriendo tests, verifica cada acceptance criterion y revisa la coherencia de los tests con el checklist, incluida la prueba de reversión.
 6. Llama `submit_verdict` con pass o reject, veredicto por criterio, reporte por revisor, must‑fix consolidados, hallazgos refutados con su motivo y etiqueta de riesgo.
@@ -519,7 +520,7 @@ La tool no espera la respuesta dentro de la llamada MCP: los clientes MCP tienen
 - El verificador corre en un agente nuevo, con la spec aprobada y el diff, sin el contexto del implementador.
 - Rework devuelve la tarea a in progress con los hallazgos como input estructurado; el contador de iteración sube.
 - Al llegar a 3 iteraciones (configurable por proyecto con `limits.maxVerificationIterations`), la tarea pasa a *needs human* en lugar de seguir el loop.
-- La revisión la hacen 4 subagentes especializados y la sesión principal decide como approver (ver Verificación con subagentes).
+- La revisión la hacen los subagentes especializados que aplican al diff y la sesión principal decide como approver (ver Verificación con subagentes).
 
 **Entrega (completed)**
 
@@ -532,6 +533,8 @@ La hace LunasQ, sin agente, dentro del Run del verificador, cuando éste registr
 5. Cerrar el Run del verificador, commit del archivo de evidencia y push del branch de la tarea.
 6. Crear PR con el CLI gh, con el intent, los criterios y su evidencia en la descripción, más la etiqueta de riesgo (bajo / medio / alto) que asignó el approver para priorizar tu revisión. Registrar el PR y correr `after_delivery`; si el hook commiteó cambios, se publican con un segundo push.
 7. `verdict_pass`: la tarea queda en Completed. Conservar o remover el worktree según política; los dependientes se liberan cuando el PR se mergea.
+
+Mientras el PR espera el merge humano, la base sigue avanzando con otros PRs. El poller de PRs lee también si GitHub lo marca en conflicto con la base; si es así, la tarea vuelve de Completed a In progress con `deliveryConflict.reason: pr_conflict`, el implementador integra la base, y verificación y entrega se repiten sobre el mismo PR ([ADR pr-en-conflicto](decisions/pr-en-conflicto.md)).
 
 Cualquier otro fallo (push, `gh`, un hook bloqueado) escala a Needs human. Una entrega que un reinicio dejó a medias se retoma sola al arrancar.
 
@@ -651,7 +654,7 @@ Resumen de lo ya decidido; cada punto está reflejado en su sección.
 | Intervención manual | Permitida en cualquier pane; el dispatcher solo reacciona a señales MCP y de estado de herdr, así que lo escrito a mano no queda en el historial de la tarea |
 | Modelo de factory | Lights‑on: gate humano en la spec y en el merge; sin commits directo a main; el despliegue solo vía hooks del proyecto |
 | Brain | engram como dependencia débil: los agentes lo usan vía su MCP si está instalado; LunasQ solo agrega instrucciones best effort en las skills |
-| Verificación | Una sesión de Claude Code con 4 subagentes revisores (seguridad, UX, UI, código) y la sesión principal como approver; un solo slot |
+| Verificación | Una sesión de Claude Code que lanza los subagentes revisores que aplican (seguridad, UX, UI, código) y actúa como approver; un solo slot |
 | Agentes soportados | Solo Claude Code en v1; Codex y otros en v2 o posteriores |
 | Router de riesgo | Solo etiqueta (bajo / medio / alto) en el PR; todo sigue con merge humano |
 | Roadmap | Intake desde GitHub issues en v2; pruebas ocultas al builder después; carriles por tamaño no por ahora |

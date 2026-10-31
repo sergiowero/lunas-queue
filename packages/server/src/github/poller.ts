@@ -2,7 +2,9 @@
 // ADR uw-14-adapter-github).
 // Cada pasada consulta en GitHub los PR abiertos que la base conoce y registra los que se
 // mergearon o cerraron. El registro deja su evento en el outbox; el scheduler lo recibe y libera
-// a los dependientes o los escala (ADR 0014). Repetir una pasada no duplica efectos.
+// a los dependientes o los escala (ADR 0014). Un PR abierto que GitHub marca en conflicto con la
+// base (otro PR se mergeó antes) regresa su tarea a in_progress para que el implementador integre
+// la base (ADR pr-en-conflicto). Repetir una pasada no duplica efectos.
 import type { GitHubAdapter } from "@lunasq/adapters";
 import { type LunasqDatabase, TaskPrRepository } from "@lunasq/db";
 import type { PrTrackingStore, TrackedPr } from "@lunasq/domain";
@@ -23,7 +25,7 @@ export interface PrPollerOptions {
   onError?: (error: Error, pr: TrackedPr | null) => void;
 }
 
-export type PrPollResult = { merged: string[]; closed: string[] };
+export type PrPollResult = { merged: string[]; closed: string[]; conflicted: string[] };
 
 export class PrPoller {
   private readonly github: GitHubAdapter;
@@ -86,7 +88,7 @@ export class PrPoller {
   }
 
   private async loop(): Promise<PrPollResult> {
-    let result: PrPollResult = { merged: [], closed: [] };
+    let result: PrPollResult = { merged: [], closed: [], conflicted: [] };
     do {
       this.rerun = false;
       if (this.stopped) break;
@@ -96,7 +98,7 @@ export class PrPoller {
   }
 
   private async pass(): Promise<PrPollResult> {
-    const result: PrPollResult = { merged: [], closed: [] };
+    const result: PrPollResult = { merged: [], closed: [], conflicted: [] };
     for (const tracked of this.store.listOpen()) {
       if (this.stopped) break;
       try {
@@ -110,11 +112,20 @@ export class PrPoller {
         });
         if (changed && pr.state === "merged") result.merged.push(tracked.taskId);
         if (changed && pr.state === "closed") result.closed.push(tracked.taskId);
+        if (
+          pr.state === "open" &&
+          pr.mergeable === "conflicting" &&
+          this.store.recordPrConflict(tracked.taskId, tracked.url)
+        ) {
+          result.conflicted.push(tracked.taskId);
+        }
       } catch (error) {
         this.report(toError(error), tracked);
       }
     }
-    if (result.merged.length + result.closed.length > 0) this.publisher?.wake();
+    if (result.merged.length + result.closed.length + result.conflicted.length > 0) {
+      this.publisher?.wake();
+    }
     return result;
   }
 

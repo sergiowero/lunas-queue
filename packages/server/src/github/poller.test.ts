@@ -6,9 +6,10 @@ import {
   taskDependencies,
   transitionTask,
 } from "@lunasq/db";
-import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
+import { insertProject, insertRun, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import type { DispatchDecision } from "@lunasq/domain";
 import {
+  DELIVERY_CONFLICT,
   TASK_PR_STATE_CHANGED,
   TASK_TRANSITIONED,
   TaskPrStateChangedPayload,
@@ -41,6 +42,7 @@ function setup(opts: Partial<PrPollerOptions> = {}) {
   /** Una tarea entregada con su PR abierto en el fake y registrado en la base. */
   async function delivered(head: string) {
     const task = insertTask(db, project.id, { state: "completed", subState: null });
+    insertRun(db, task.id, { phase: "verify" });
     const { pr } = await github.createPr({
       cwd: "/repo",
       head,
@@ -68,7 +70,11 @@ describe("PrPoller", () => {
     github.merge(a.url, at);
     github.close(b.url);
 
-    expect(await poller.poll()).toEqual({ merged: [a.task.id], closed: [b.task.id] });
+    expect(await poller.poll()).toEqual({
+      merged: [a.task.id],
+      closed: [b.task.id],
+      conflicted: [],
+    });
     expect([prState(db, a.task.id), prState(db, b.task.id), prState(db, c.task.id)]).toEqual([
       "merged",
       "closed",
@@ -77,10 +83,29 @@ describe("PrPoller", () => {
     const event = listEvents(db, a.task.id).find((e) => e.type === TASK_PR_STATE_CHANGED);
     expect(TaskPrStateChangedPayload.parse(event?.payload).at).toBe(at.toISOString());
 
-    expect(await poller.poll()).toEqual({ merged: [], closed: [] });
+    expect(await poller.poll()).toEqual({ merged: [], closed: [], conflicted: [] });
     expect(listEvents(db, a.task.id).filter((e) => e.type === TASK_PR_STATE_CHANGED)).toHaveLength(
       1,
     );
+  });
+
+  it("un PR abierto en conflicto con la base regresa su tarea a implementación, una sola vez", async () => {
+    const { db, github, poller, delivered } = setup();
+    const a = await delivered("lunasq/a");
+    const b = await delivered("lunasq/b");
+    github.setMergeable(a.url, "conflicting");
+    github.setMergeable(b.url, "unknown");
+
+    expect(await poller.poll()).toEqual({ merged: [], closed: [], conflicted: [a.task.id] });
+    const state = (id: string) =>
+      db.$client.prepare("select state, sub_state from tasks where id = ?").get(id);
+    expect(state(a.task.id)).toEqual({ state: "in_progress", sub_state: "queued" });
+    expect(state(b.task.id)).toEqual({ state: "completed", sub_state: null });
+    expect(prState(db, a.task.id)).toBe("open");
+
+    // El PR sigue en conflicto mientras el implementador trabaja: no se reabre otra vez.
+    expect((await poller.poll()).conflicted).toEqual([]);
+    expect(listEvents(db, a.task.id).filter((e) => e.type === DELIVERY_CONFLICT)).toHaveLength(1);
   });
 
   it("un PR que falla se reporta y no detiene a los demás", async () => {
@@ -89,7 +114,7 @@ describe("PrPoller", () => {
     const ok = await delivered("lunasq/ok");
     github.failGetPr(roto.url, new GitHubError("timeout", "lento"));
     github.merge(ok.url);
-    expect(await poller.poll()).toEqual({ merged: [ok.task.id], closed: [] });
+    expect(await poller.poll()).toEqual({ merged: [ok.task.id], closed: [], conflicted: [] });
     expect(errors).toEqual([
       { error: expect.objectContaining({ code: "timeout" }), url: roto.url },
     ]);

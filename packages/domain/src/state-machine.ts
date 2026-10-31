@@ -185,7 +185,9 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
       };
     case "delivery_conflict":
       return {
-        from: at("verification", "running"),
+        // Desde completed: el PR abierto quedó en conflicto con la base después de entregarse
+        // (otro PR se mergeó antes). Es la única salida de completed.
+        from: (t) => at("verification", "running")(t) || at("completed", null)(t),
         outcome: () => ({ to: "in_progress" }),
       };
     case "escalate":
