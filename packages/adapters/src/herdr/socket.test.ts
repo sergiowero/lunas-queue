@@ -51,6 +51,19 @@ class FakeSocketServer {
   }
 }
 
+/** Espera a que `pred` sea true; falla a los 2 s, como `recorder().until`. */
+function waitUntil(pred: () => boolean): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const started = Date.now();
+    const tick = () => {
+      if (pred()) resolve();
+      else if (Date.now() - started > 2_000) reject(new Error("waitUntil: tiempo agotado"));
+      else setTimeout(tick, 5);
+    };
+    tick();
+  });
+}
+
 function recorder() {
   const events: HerdrEvent[] = [];
   const until = (pred: (events: HerdrEvent[]) => boolean) =>
@@ -128,14 +141,13 @@ describe("EventStream", () => {
       rejected++;
       return "";
     };
-    // El servidor acepta pero corta antes de confirmar la suscripción, varias veces.
+    // El servidor acepta pero corta antes de confirmar la suscripción, varias veces. Cada vuelta
+    // espera a que el servidor LEA la suscripción del cliente nuevo (no solo que lo acepte): si
+    // se corta antes, la petición nunca llega y `rejected` no sube.
     for (let i = 0; i < 3; i++) {
-      const before = server.clients.length;
+      const before = rejected;
       server.last.destroy();
-      await new Promise<void>((resolve) => {
-        const tick = () => (server.clients.length > before ? resolve() : setTimeout(tick, 5));
-        tick();
-      });
+      await waitUntil(() => rejected > before);
     }
     expect(rejected).toBeGreaterThan(0);
     expect(r.events.filter((e) => e.type === "events_lost")).toHaveLength(1);
