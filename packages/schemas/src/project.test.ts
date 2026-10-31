@@ -17,6 +17,16 @@ const validCreate = {
 };
 
 describe("AgentProfiles", () => {
+  it("acepta effort solo con los niveles de claude --effort", () => {
+    for (const effort of ["low", "medium", "high", "xhigh", "max"]) {
+      expect(AgentProfiles.parse({ implement: { kind: "claude", effort } }).implement.effort).toBe(
+        effort,
+      );
+    }
+    expect(() => AgentProfiles.parse({ implement: { kind: "claude", effort: "turbo" } })).toThrow();
+    expect(() => VerifyAgentProfile.parse({ kind: "claude", effort: "" })).toThrow();
+  });
+
   it("rellena las fases que faltan con claude sin args", () => {
     const profiles = AgentProfiles.parse({ implement: { kind: "claude", model: "opus" } });
     expect(profiles).toEqual({

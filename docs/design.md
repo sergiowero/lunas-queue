@@ -29,7 +29,7 @@ Siete entidades bastan (más UsageRecord, ver Consumo); la clave es separar la *
 
 | Entidad | Propósito | Campos clave |
 | --- | --- | --- |
-| Project | Un repo y su configuración; mapea 1:1 a un workspace de herdr | repo, rama base, perfil de agente por fase (kind, modelo, args), límite de concurrencia, comando de tests, hooks por fase (en lunasq/hooks/ del repo), ruta local, bootstrap del worktree |
+| Project | Un repo y su configuración; mapea 1:1 a un workspace de herdr | repo, rama base, perfil de agente por fase (kind, modelo, esfuerzo, args), límite de concurrencia, comando de tests, hooks por fase (en lunasq/hooks/ del repo), ruta local, bootstrap del worktree |
 | Task | Unidad de trabajo en la cola | intent, título (lo genera el refinador en el primer refinamiento y no vuelve a cambiar; la UI usa el intent mientras no exista), tags, prioridad (entero sin signo), estado, sub‑estado, iteración de verificación, branch, ruta del worktree, URL y estado del PR (abierto / mergeado / cerrado), etiqueta de riesgo (read‑only), caused\_by (tarea que originó este bugfix, opcional), usage (read‑only) |
 | TaskDependency | Arista del DAG | task\_id, depends\_on\_id |
 | Spec | Salida versionada del refinamiento | versión, modelo de dominio (bounded context, glosario, agregados, invariantes, eventos), requerimientos, acceptance criteria, task list, estado de aprobación |

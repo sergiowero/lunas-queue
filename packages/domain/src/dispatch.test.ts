@@ -98,6 +98,51 @@ describe("agentArgs", () => {
     ]);
   });
 
+  it("pone --effort después del modelo y antes de los args del perfil", () => {
+    expect(
+      agentArgs(
+        { kind: "claude", model: "opus", effort: "high", args: ["--permission-mode", "auto"] },
+        base,
+      ),
+    ).toEqual([
+      "--model",
+      "opus",
+      "--effort",
+      "high",
+      "--permission-mode",
+      "auto",
+      "--mcp-config",
+      "/cfg/mcp.json",
+      "--strict-mcp-config",
+      "--settings",
+      "/cfg/settings.json",
+      "--session-id",
+      "sess-1",
+    ]);
+  });
+
+  it("sin effort no agrega --effort, y un --effort en args sigue válido", () => {
+    expect(agentArgs({ kind: "claude", args: ["--effort", "low"] }, base)).toEqual([
+      "--effort",
+      "low",
+      "--mcp-config",
+      "/cfg/mcp.json",
+      "--strict-mcp-config",
+      "--settings",
+      "/cfg/settings.json",
+      "--session-id",
+      "sess-1",
+    ]);
+  });
+
+  it("rechaza effort en el perfil junto a --effort en args, con o sin =", () => {
+    for (const args of [["--effort", "low"], ["--effort=low"]]) {
+      expect(() => agentArgs({ kind: "claude", effort: "high", args }, base)).toThrow(
+        DispatchRuleError,
+      );
+    }
+  });
+
   it("rechaza un perfil que ya trae los flags que fija el dispatcher", () => {
     for (const flag of [
       "--mcp-config",

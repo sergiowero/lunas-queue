@@ -5,8 +5,14 @@ import { AgentKind, Phase } from "./enums.ts";
 
 const nonEmpty = z.string().trim().min(1);
 
+// Niveles de esfuerzo que acepta `claude --effort` (ADR effort-por-fase).
+export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
+export const EffortLevel = z.enum(EFFORT_LEVELS);
+export type EffortLevel = z.infer<typeof EffortLevel>;
+
 const profileFields = {
   model: nonEmpty.optional(),
+  effort: EffortLevel.optional(),
   args: z.array(z.string()).default(() => []),
 };
 

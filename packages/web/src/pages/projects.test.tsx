@@ -70,6 +70,26 @@ describe("alta de proyectos", () => {
     });
   });
 
+  it("envía el esfuerzo por fase solo cuando se elige, y lo muestra al editar", async () => {
+    const fake = new FakeApi();
+    const { user, dialog } = await openDialog(fake);
+    const form = within(dialog);
+
+    await user.type(form.getByLabelText("Nombre"), "esfuerzo");
+    await user.type(form.getByLabelText("Repositorio"), "owner/esfuerzo");
+    await user.type(form.getByLabelText("Ruta local"), "/repos/esfuerzo");
+    await user.selectOptions(form.getByLabelText("Esfuerzo de implement"), "high");
+    await user.click(form.getByRole("button", { name: "Crear proyecto" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
+      agentProfiles: { implement: { kind: "claude", effort: "high", args: [] } },
+    });
+    expect(fake.requests.find((r) => r.method === "POST")?.body).not.toHaveProperty(
+      "agentProfiles.verify",
+    );
+  });
+
   it("muestra el error del servidor y deja el popup abierto", async () => {
     const fake = new FakeApi();
     fake.addProject({ name: "repetido", localPath: "/repos/otro" });

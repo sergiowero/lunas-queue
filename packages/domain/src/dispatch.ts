@@ -84,8 +84,10 @@ export function telemetryRunEnv(run: RunIdentity): Record<string, string> {
 /** Flags que pone siempre el dispatcher: el perfil no puede traerlos. */
 const RESERVED_FLAGS = ["--mcp-config", "--strict-mcp-config", "--settings", "--session-id"];
 
+const isEffortFlag = (arg: string) => arg === "--effort" || arg.startsWith("--effort=");
+
 /**
- * Args de Claude Code después de `--`: modelo del perfil, args del perfil (ahí va el modo Auto),
+ * Args de Claude Code después de `--`: modelo y esfuerzo del perfil, args del perfil (ahí va el modo Auto),
  * el archivo MCP estable en modo estricto (ADR 0002), el archivo de settings con los hooks de
  * subagentes (ADR uw-19-revisores) y el session id nativo del Run.
  */
@@ -100,8 +102,14 @@ export function agentArgs(
   if (clash !== undefined) {
     throw new DispatchRuleError(`el perfil de agente no puede traer ${clash}: lo fija LunasQ`);
   }
+  if (profile.effort !== undefined && profile.args.some(isEffortFlag)) {
+    throw new DispatchRuleError(
+      "el perfil de agente fija el esfuerzo en effort y también trae --effort en args: deja uno",
+    );
+  }
   return [
     ...(profile.model === undefined ? [] : ["--model", profile.model]),
+    ...(profile.effort === undefined ? [] : ["--effort", profile.effort]),
     ...profile.args,
     "--mcp-config",
     opts.mcpConfigPath,

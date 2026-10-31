@@ -2,17 +2,24 @@
 // servidor; aquí solo se muestran sus issues. Al crear, los campos vacíos no se envían para que
 // apliquen los defaults del servidor; al editar se envía todo, porque PATCH reemplaza cada campo
 // presente y `null` borra los comandos opcionales.
-import type { Phase, Project, ProjectCreate, ProjectUpdate } from "@lunasq/schemas";
+import {
+  EFFORT_LEVELS,
+  type EffortLevel,
+  type Phase,
+  type Project,
+  type ProjectCreate,
+  type ProjectUpdate,
+} from "@lunasq/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { ApiError, api, type Json } from "../lib/api.ts";
 import { Button } from "./ui/button.tsx";
 import { Dialog } from "./ui/dialog.tsx";
-import { Input, Label, Textarea } from "./ui/input.tsx";
+import { Input, Label, Select, Textarea } from "./ui/input.tsx";
 
 const PHASES: Phase[] = ["refine", "implement", "verify", "deliver"];
 
-type PhaseFields = { model: string; args: string; timeout: string };
+type PhaseFields = { model: string; effort: string; args: string; timeout: string };
 
 function describe(error: Error): string {
   if (error instanceof ApiError && error.issues.length > 0) {
@@ -49,6 +56,7 @@ function initialPhases(project?: Json<Project>): Record<Phase, PhaseFields> {
     const profile = project?.agentProfiles[phase];
     phases[phase] = {
       model: profile?.model ?? "",
+      effort: profile?.effort ?? "",
       args: profile?.args.join("\n") ?? "",
       timeout: String(project?.limits.phaseTimeoutMinutes?.[phase] ?? ""),
     };
@@ -65,11 +73,12 @@ function buildInput(form: FormValues, editing: boolean): ProjectCreate | Project
   const agentProfiles: NonNullable<ProjectCreate["agentProfiles"]> = {};
   const phaseTimeoutMinutes: Partial<Record<Phase, number>> = {};
   for (const phase of PHASES) {
-    const { model, args, timeout } = form.phases[phase];
-    if (editing || model.trim() !== "" || parseArgs(args).length > 0) {
+    const { model, effort, args, timeout } = form.phases[phase];
+    if (editing || model.trim() !== "" || effort !== "" || parseArgs(args).length > 0) {
       agentProfiles[phase] = {
         kind: "claude",
         ...(model.trim() !== "" && { model: model.trim() }),
+        ...(effort !== "" && { effort: effort as EffortLevel }),
         args: parseArgs(args),
       };
     }
@@ -257,6 +266,21 @@ export function ProjectFormDialog({
                   />
                 </div>
                 <div className="flex w-40 flex-col gap-1">
+                  <Label htmlFor={`project-effort-${phase}`}>Esfuerzo de {phase}</Label>
+                  <Select
+                    id={`project-effort-${phase}`}
+                    value={phases[phase].effort}
+                    onChange={(e) => setPhase(phase, { effort: e.target.value })}
+                  >
+                    <option value="">Predeterminado</option>
+                    {EFFORT_LEVELS.map((level) => (
+                      <option key={level} value={level}>
+                        {level}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="flex w-40 flex-col gap-1">
                   <Label htmlFor={`project-timeout-${phase}`}>Timeout de {phase} (min)</Label>
                   <Input
                     id={`project-timeout-${phase}`}
@@ -275,9 +299,9 @@ export function ProjectFormDialog({
                 </Label>
                 <p id={`project-args-help-${phase}`} className="text-xs text-muted-foreground">
                   Flags que LunasQ pasa al comando <code>claude</code> al arrancar esta fase, p. ej.{" "}
-                  <code>--effort</code> y en la línea siguiente <code>high</code>. No escribas aquí
-                  un prompt ni texto suelto: Claude lo toma como prompt inicial y el arranque falla
-                  por timeout.
+                  <code>--permission-mode</code> y en la línea siguiente <code>auto</code>. El
+                  esfuerzo va en su propio campo, no aquí. No escribas aquí un prompt ni texto
+                  suelto: Claude lo toma como prompt inicial y el arranque falla por timeout.
                 </p>
                 <Textarea
                   id={`project-args-${phase}`}
