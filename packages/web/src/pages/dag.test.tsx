@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
+import { THEME_KEY } from "../lib/theme.ts";
 
 function setup() {
   const fake = new FakeApi();
@@ -89,5 +90,21 @@ describe("vista de DAG", () => {
     fake.edges.push({ taskId: ui.id, dependsOnId: base.id });
     await refresh();
     await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(3));
+  });
+});
+
+describe("vista de DAG con tema", () => {
+  it("en tema oscuro, React Flow usa su colorMode oscuro y cambia al alternar el tema", async () => {
+    localStorage.setItem(THEME_KEY, "dark");
+    const { fake } = setup();
+    const { user } = renderApp("/dag", fake);
+
+    const graph = await screen.findByRole("region", { name: "Grafo de dependencias" });
+    const flow = graph.querySelector(".react-flow");
+    expect(flow?.classList.contains("dark")).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Cambiar a tema claro" }));
+    expect(flow?.classList.contains("dark")).toBe(false);
+    expect(flow?.classList.contains("light")).toBe(true);
   });
 });

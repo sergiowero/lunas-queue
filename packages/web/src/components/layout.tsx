@@ -1,6 +1,7 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { useInbox } from "../lib/inbox.ts";
 import { useLiveUpdates } from "../lib/live.ts";
+import { ThemeToggle } from "./theme-toggle.tsx";
 import { Badge } from "./ui/badge.tsx";
 
 const nav = "rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground";
@@ -51,6 +52,7 @@ export function Layout() {
               Nueva tarea
             </Link>
           </nav>
+          <ThemeToggle className="ml-auto" />
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-6">

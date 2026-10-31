@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* `dark:` se activa con la clase `dark` de <html>, que pone lib/theme.ts (o el script de index.html
+   antes de montar React), no con prefers-color-scheme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Tokens de shadcn/ui (tema neutro). */
 @theme {
   --color-background: oklch(1 0 0);
@@ -12,10 +16,32 @@
   --color-secondary: oklch(0.97 0 0);
   --color-secondary-foreground: oklch(0.205 0 0);
   --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(1 0 0);
   /* Azul de las tareas In progress (ADR uw-21-front-end). */
   --color-info: oklch(0.546 0.245 262.881);
   --color-info-foreground: oklch(0.985 0 0);
   --color-ring: oklch(0.708 0 0);
+}
+
+/* Tema oscuro: los mismos tokens con los valores oscuros de shadcn/ui. */
+.dark {
+  color-scheme: dark;
+  --color-background: oklch(0.145 0 0);
+  --color-foreground: oklch(0.985 0 0);
+  --color-muted: oklch(0.269 0 0);
+  --color-muted-foreground: oklch(0.708 0 0);
+  --color-border: oklch(1 0 0 / 15%);
+  --color-primary: oklch(0.922 0 0);
+  --color-primary-foreground: oklch(0.205 0 0);
+  --color-secondary: oklch(0.269 0 0);
+  --color-secondary-foreground: oklch(0.985 0 0);
+  --color-destructive: oklch(0.704 0.191 22.216);
+  /* El rojo oscuro es claro: el blanco quedaría en 2.9:1, bajo el 4.5:1 de AA. */
+  --color-destructive-foreground: oklch(0.145 0 0);
+  /* Azul más claro con texto oscuro para mantener el contraste AA. */
+  --color-info: oklch(0.707 0.165 254.624);
+  --color-info-foreground: oklch(0.145 0 0);
+  --color-ring: oklch(0.556 0 0);
 }
 
 body {

@@ -15,6 +15,7 @@ import type { Json } from "../lib/api.ts";
 import { layoutGraph, NODE_HEIGHT, NODE_WIDTH } from "../lib/dag-layout.ts";
 import { taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
+import { useTheme } from "../lib/theme.ts";
 
 const route = getRouteApi("/dag");
 
@@ -68,6 +69,7 @@ export function DagPage() {
   const navigate = route.useNavigate();
   const projects = useQuery(queries.projects());
   const graph = useQuery(queries.graph(projectId));
+  const theme = useTheme();
 
   const flow = useMemo(() => {
     if (!graph.data || !projects.data) return null;
@@ -126,6 +128,7 @@ export function DagPage() {
               nodes={flow.nodes}
               edges={flow.edges}
               nodeTypes={nodeTypes}
+              colorMode={theme}
               nodesDraggable={false}
               nodesConnectable={false}
               fitView

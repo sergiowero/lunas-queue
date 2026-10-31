@@ -34,3 +34,12 @@ export function renderApp(path: string, fake = new FakeApi()): RenderedApp {
   const refresh = () => queryClient.refetchQueries({ type: "active" });
   return { fake, router, queryClient, user, refresh, unmount };
 }
+
+/** Simula el esquema de colores que declara el sistema (prefers-color-scheme). */
+export function stubColorScheme(scheme: "light" | "dark") {
+  const base = globalThis.matchMedia;
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    ...base(query),
+    matches: query.includes("prefers-color-scheme: dark") && scheme === "dark",
+  }));
+}

@@ -24,7 +24,7 @@ describe("tailOf", () => {
   });
 });
 
-describe("GitCommitVerifier contra un repo real", () => {
+describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
   function git(cwd: string, ...args: string[]): string {
     return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
   }

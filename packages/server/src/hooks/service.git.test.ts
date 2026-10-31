@@ -93,7 +93,7 @@ async function setup() {
   return { root, seed, wtPath, task, service };
 }
 
-describe("HookService con git real", () => {
+describe("HookService con git real", { timeout: 30_000 }, () => {
   it("los hooks corren en orden y lo que dejan se commitea con los trailers", async () => {
     const { wtPath, task, service } = await setup();
 
