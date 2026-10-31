@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
+import { queries } from "../lib/queries.ts";
 
 /** Las etiquetas de las opciones del selector de dependencias, sin el placeholder. */
 function candidateOptions(): string[] {
@@ -160,14 +161,16 @@ describe("alta de tareas", () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "uno" });
     fake.addTask(project.id, { intent: "Ya cancelada", state: "cancelled", subState: null });
-    const { user } = renderApp("/tasks/new", fake);
+    const { user, queryClient } = renderApp("/tasks/new", fake);
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "uno");
     await screen.findByLabelText("Intent");
+    // Espera a que las candidatas estén cargadas: sin esto la ausencia sería trivial.
     await waitFor(() =>
-      expect(fake.requests.some((r) => r.path.startsWith("/api/tasks"))).toBe(true),
+      expect(queryClient.getQueryState(queries.tasks().queryKey)?.status).toBe("success"),
     );
     expect(screen.queryByText("Depende de")).toBeNull();
+    expect(screen.queryByLabelText("Depende de")).toBeNull();
   });
 
   it("agrupa las candidatas con el proyecto elegido primero", async () => {
