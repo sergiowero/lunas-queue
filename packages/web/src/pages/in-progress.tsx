@@ -1,4 +1,4 @@
-// Pestaña En curso: las tareas en In progress de todos los proyectos, sea cual sea su sub-estado.
+// Pestaña En curso: las tareas en In progress y cualquier tarea con un agente corriendo (sub-estado running), de todos los proyectos.
 // Lee la lista de tareas, así que el stream en vivo la refresca al invalidar ["tasks"].
 import type { Task } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
@@ -25,7 +25,7 @@ export function InProgressPage() {
     [projects.data],
   );
   const inProgress = useMemo(
-    () => tasks.data?.filter((t) => t.state === "in_progress"),
+    () => tasks.data?.filter((t) => t.state === "in_progress" || t.subState === "running"),
     [tasks.data],
   );
 
