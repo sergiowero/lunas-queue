@@ -1,11 +1,12 @@
 // Alta de tareas: intent, tags, prioridad y dependencias iniciales (TaskCreate, ADR 0010). La
-// validación es la del servidor; aquí solo se muestran sus issues. Las dependencias pueden ser de
-// cualquier proyecto; las de otro se marcan como riesgo, igual que en el detalle.
+// validación es la del servidor; aquí solo se muestran sus issues. Las dependencias se agregan una a
+// una con un selector y quedan en una lista de elegidas, en el orden en que se agregaron. Pueden ser
+// de cualquier proyecto; las de otro se marcan como riesgo, igual que en el detalle.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
-import { Muted } from "../components/section.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
+import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input, Label, Select, Textarea } from "../components/ui/input.tsx";
 import { ApiError, api } from "../lib/api.ts";
@@ -62,8 +63,9 @@ export function NewTaskPage() {
     });
   };
 
-  const toggle = (id: string, checked: boolean) =>
-    setDependsOn((current) => (checked ? [...current, id] : current.filter((d) => d !== id)));
+  const add = (id: string) =>
+    setDependsOn((current) => (id === "" || current.includes(id) ? current : [...current, id]));
+  const remove = (id: string) => setDependsOn((current) => current.filter((d) => d !== id));
 
   if (projects.error) return <QueryError error={projects.error} />;
   if (!projects.data) return <Loading />;
@@ -71,8 +73,13 @@ export function NewTaskPage() {
   // El proyecto elegido primero; después los demás en el orden del listado de proyectos.
   const groups = [...projects.data]
     .sort((a, b) => Number(b.id === projectId) - Number(a.id === projectId))
-    .map((project) => ({ project, tasks: live.filter((t) => t.projectId === project.id) }))
+    .map((project) => ({
+      project,
+      tasks: live.filter((t) => t.projectId === project.id && !dependsOn.includes(t.id)),
+    }))
     .filter((group) => group.tasks.length > 0);
+  const projectName = new Map(projects.data.map((p) => [p.id, p.name]));
+  const chosen = dependsOn.flatMap((id) => (candidates.data ?? []).filter((t) => t.id === id));
 
   return (
     <form onSubmit={submit} className="flex max-w-2xl flex-col gap-4">
@@ -132,32 +139,58 @@ export function NewTaskPage() {
           />
         </div>
       </div>
-      <fieldset className="flex flex-col gap-3">
-        <legend className="text-sm font-medium">Depende de</legend>
-        {projectId === "" ? (
-          <Muted>Elige un proyecto para ver las tareas de las que depender.</Muted>
-        ) : groups.length === 0 ? (
-          <Muted>No hay tareas activas de las que depender.</Muted>
-        ) : (
-          groups.map(({ project, tasks }) => (
-            <div key={project.id} className="flex flex-col gap-1">
-              <h2 className="text-xs font-medium text-muted-foreground">
-                {project.id === projectId ? project.name : `${project.name} · otro proyecto`}
-              </h2>
-              {tasks.map((task) => (
-                <label key={task.id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={dependsOn.includes(task.id)}
-                    onChange={(e) => toggle(task.id, e.target.checked)}
-                  />
-                  {taskLabel(task)}
-                </label>
+      {(groups.length > 0 || chosen.length > 0) && (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="task-depends-on">Depende de</Label>
+          {groups.length > 0 && (
+            // Controlado con value="": al elegir una tarea se agrega y el selector vuelve al placeholder.
+            <Select id="task-depends-on" value="" onChange={(e) => add(e.target.value)}>
+              <option value="">Agregar una dependencia…</option>
+              {groups.map(({ project, tasks }) => (
+                <optgroup
+                  key={project.id}
+                  label={
+                    project.id === projectId ? project.name : `${project.name} · otro proyecto`
+                  }
+                >
+                  {tasks.map((task) => (
+                    <option key={task.id} value={task.id}>
+                      {taskLabel(task)}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
-            </div>
-          ))
-        )}
-      </fieldset>
+            </Select>
+          )}
+          {chosen.length > 0 && (
+            <ul aria-label="Dependencias elegidas" className="flex flex-col gap-1 text-sm">
+              {chosen.map((task) => (
+                <li
+                  key={task.id}
+                  className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5"
+                >
+                  <span data-intent className="flex-1">
+                    {taskLabel(task)}
+                  </span>
+                  {task.projectId !== projectId && (
+                    <Badge variant="destructive" title={projectName.get(task.projectId)}>
+                      otro proyecto
+                    </Badge>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Quitar ${task.intent}`}
+                    onClick={() => remove(task.id)}
+                  >
+                    Quitar
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {create.error && (
         <p role="alert" className="text-sm text-destructive">
           No se pudo crear la tarea: {describe(create.error)}
