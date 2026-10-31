@@ -164,4 +164,4 @@ describe("HookService con git real", { timeout: 30_000 }, () => {
     expect(readFileSync(out, "utf8")).toBe("2.0.0\n");
     expect(git(join(root, "checkout"), "worktree", "list").trim().split("\n")).toHaveLength(2);
   });
-}, 20_000);
+});
