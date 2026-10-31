@@ -13706,3 +13706,1732 @@ Resultado
 
 </details>
 <!-- lunasq:run:end 68064c94-5594-426a-a8e3-12ca09df3db0 -->
+
+<!-- lunasq:run:start 7369e439-3bdc-4725-bced-4af9177a9527 -->
+## Run 7369e439-3bdc-4725-bced-4af9177a9527 · verify · iteración 1
+
+| Campo | Valor |
+| --- | --- |
+| Fase | verify |
+| Agente | claude |
+| Modelo | haiku |
+| Iteración | 1 |
+| Inicio | 2026-10-31T14:36:03.699Z |
+| Fin | 2026-10-31T14:40:20.102Z |
+| Resultado | success |
+| failure_reason | — |
+| Sesión | fa5296cd-31ca-4888-82f0-65c3efcf12a8 |
+
+### Veredicto
+
+- Veredicto: **pass**
+- Riesgo: low
+
+#### Criterios
+
+- AC-1 · pass · «Depende de» es un selector de tareas sin checkboxes: pnpm test en verde; con new-task.tsx revertido falla en el test de AC-1
+- AC-2 · pass · el selector no ofrece tareas terminales: en verde; falla al revertir
+- AC-3 · pass · elegir agrega a la lista, quita del selector y vuelve al placeholder: en verde; falla al revertir
+- AC-4 · pass · Quitar devuelve la tarea al selector y conserva las demás: en verde; falla al revertir
+- AC-5 · pass · envía dependsOn en orden de adición: en verde; falla al revertir
+- AC-6 · pass · grupo «<proyecto> · otro proyecto» y marca en la lista: en verde; falla al revertir
+- AC-7 · pass · cambiar de proyecto vacía las elegidas: en verde; falla al revertir
+- AC-8 · pass · espera a la query de tareas en success antes de afirmar la ausencia: en verde; con new-task.tsx revertido falla por aserción (legend presente, new-task.test.tsx:172)
+- AC-9 · pass · grupo del proyecto elegido primero: en verde; falla al revertir
+- AC-10 · pass · pnpm e2e: piloto crea tres tareas con dependencias desde la UI, 6/6 en verde
+
+#### Revisores
+
+- `lunasq-security-reviewer` · omitido · El diff solo cambia new-task.tsx, su test y el e2e del piloto: los ids vienen del listado del servidor y el POST ya existía; no hay entradas externas nuevas, procesos, auth ni permisos
+- `lunasq-ux-reviewer` · 7 hallazgos
+  - [minor] packages/web/src/pages/new-task.tsx:142 · AC-8 · candidates.isLoading y candidates.error no se comprueban: mientras carga o si falla, «Depende de» no aparece y no se avisa
+  - [minor] packages/web/src/pages/new-task.tsx:144 · AC-4 · Con todas las candidatas elegidas el Select se oculta pero el Label htmlFor=task-depends-on sigue visible: etiqueta huérfana
+  - [minor] packages/web/src/pages/new-task.tsx:184 · AC-4 · Al pulsar Quitar el li y su botón se desmontan y el foco vuelve a body
+  - [minor] packages/web/src/pages/new-task.tsx:183 · AC-4 · El aria-label usa task.intent y el texto visible es taskLabel(task) (título si existe)
+  - [minor] packages/web/src/pages/new-task.tsx:147 · AC-3 · El selector agrega en cada onChange; con flechas en un select cerrado cada flecha agrega una tarea
+  - [minor] packages/web/src/pages/new-task.tsx:82 · AC-5 · chosen se arma desde candidates.data: una elegida que desaparece del refetch sigue en dependsOn sin poder quitarse
+  - [minor] packages/web/src/pages/new-task.tsx:176 · AC-6 · El nombre del otro proyecto solo está en title del Badge; no llega a teclado, táctil ni lector de pantalla
+- `lunasq-ui-reviewer` · 3 hallazgos
+  - [major] packages/web/src/pages/new-task.tsx:170 · AC-3 · El li es flex sin flex-wrap y el span de la intent no tiene min-w-0 ni break-words: un token largo desborda la fila en anchos angostos
+  - [minor] packages/web/src/pages/new-task.tsx:144 · AC-4 · Con todas las candidatas elegidas el Label queda huérfano sobre la lista
+  - [minor] packages/web/src/pages/new-task.tsx:143 · AC-3 · gap-2 entre Label y control; los demás campos del formulario usan gap-1
+- `lunasq-code-reviewer` · 1 hallazgos
+  - [minor] packages/web/src/pages/new-task.tsx:183 · AC-4 · El aria-label de Quitar usa task.intent y la fila muestra taskLabel(task); los tests no lo detectan porque sus tareas no tienen título
+
+#### Must-fix
+
+Ninguno.
+
+#### Hallazgos refutados
+
+- [major] packages/web/src/pages/new-task.tsx:170 · AC-3 · El li es flex sin flex-wrap y el span de la intent no tiene min-w-0 ni break-words: un token largo desborda la fila en anchos angostos · origen: lunasq-ui-reviewer
+  - Motivo: El texto sí aparece en la lista y ningún criterio aprobado exige un ajuste de desbordamiento para tokens sin espacios; es un defecto de layout en un caso límite, se registra como riesgo conocido y no como incumplimiento de la spec.
+
+### Gate de tests
+
+#### verdict_pass · verde
+
+- Comando: `pnpm test`
+- Commit probado: 0648249dd1312768e65c6e8f7f5c0a8b915951c0
+- Exit code: 0
+- Duración: 36 s
+
+```
+dow's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m test/flow.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 350[2mms[22m[39m
+   [32m✓[39m flujo de punta a punta desde la UI [2m(1)[22m
+     [33m[2m✓[22m[39m crea una tarea, aprueba su spec y la sigue hasta el PR[33m 350[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/new-task.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 736[2mms[22m[39m
+   [32m✓[39m alta de tareas [2m(12)[22m
+     [33m[2m✓[22m[39m crea la tarea con tags, prioridad y dependencias y abre su detalle[33m 303[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/inbox.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 823[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/task-detail.test.tsx [2m([22m[2m25 tests[22m[2m)[22m[33m 830[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/lib/live.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 216[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m @lunasq/server [49m[39m src/test-gate/gate.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 6827[2mms[22m[39m
+   [32m✓[39m PaneTestGate [2m(11)[22m
+     [33m[2m✓[22m[39m una suite en rojo no pasa y su salida y exit code quedan en el Event log[33m 573[2mms[22m[39m
+     [33m[2m✓[22m[39m una suite en verde pasa, corre en el worktree y registra el disparo[33m 494[2mms[22m[39m
+     [33m[2m✓[22m[39m la suite no ve credenciales del entorno y corre en modo CI con el contexto de la tarea[33m 540[2mms[22m[39m
+     [33m[2m✓[22m[39m pasa la allowlist mínima y el timeout al runner[33m 499[2mms[22m[39m
+     [33m[2m✓[22m[39m sin comando de tests no pasa, no abre pane y queda registrado[33m 428[2mms[22m[39m
+     [33m[2m✓[22m[39m un comando vacío cuenta como sin comando y queda registrado[33m 322[2mms[22m[39m
+     [33m[2m✓[22m[39m si el worktree asegurado no es el del Run, falla cerrado sin correr la suite[33m 378[2mms[22m[39m
+     [33m[2m✓[22m[39m una suite que excede el tiempo límite no pasa[33m 2095[2mms[22m[39m
+     [33m[2m✓[22m[39m si herdr no puede abrir el pane, falla cerrado y lo registra[33m 514[2mms[22m[39m
+     [33m[2m✓[22m[39m si no se puede asegurar el worktree, falla cerrado y lo registra[33m 304[2mms[22m[39m
+     [33m[2m✓[22m[39m recorta la salida: el agente recibe el final y el evento hasta 16 KiB[33m 679[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/projects.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 1466[2mms[22m[39m
+   [32m✓[39m alta de proyectos [2m(6)[22m
+     [33m[2m✓[22m[39m crea el proyecto con los campos básicos y lo muestra en la lista[33m 336[2mms[22m[39m
+     [33m[2m✓[22m[39m envía comandos, límites y perfiles por fase, sin los campos vacíos[33m 395[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/hooks.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 265[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/in-progress.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 244[2mms[22m[39m
+ [32m✓[39m [30m[46m web [49m[39m src/pages/dag.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 345[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/components/status.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/queue.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 172[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/lib/dag-layout.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m [30m[46m web [49m[39m src/lib/format.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 1[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/board.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 139[2mms[22m[39m
+ [32m✓[39m [30m[46m @lunasq/server [49m[39m src/mcp/ports.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 9282[2mms[22m[39m
+   [32m✓[39m GitCommitVerifier contra un repo real [2m(8)[22m
+     [33m[2m✓[22m[39m acepta commits del branch y rechaza los de la base o desconocidos[33m 1133[2mms[22m[39m
+     [33m[2m✓[22m[39m rechaza un commit que ya está en origin/<base> aunque la base local vaya atrasada[33m 2747[2mms[22m[39m
+     [33m[2m✓[22m[39m una rama base inexistente no da los commits por buenos[33m 704[2mms[22m[39m
+     [33m[2m✓[22m[39m uncommitted lista cambios y archivos sin seguimiento; vacío con el worktree limpio[33m 809[2mms[22m[39m
+     [33m[2m✓[22m[39m uncommitted ignora el archivo de evidencia de lunasq/tasks/[33m 1049[2mms[22m[39m
+     [33m[2m✓[22m[39m onlyEvidenceBetween acepta commits que solo tocan lunasq/tasks/[33m 1581[2mms[22m[39m
+     [33m[2m✓[22m[39m onlyEvidenceBetween rechaza un HEAD que no desciende del commit del gate[33m 549[2mms[22m[39m
+     [33m[2m✓[22m[39m una rama base con forma de opción no se interpreta como opción de git[33m 708[2mms[22m[39m
+ [32m✓[39m [30m[45m e2e [49m[39m harness/fixture.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 4680[2mms[22m[39m
+   [32m✓[39m fixture del piloto [2m(3)[22m
+     [33m[2m✓[22m[39m deja main en el origin con los hooks por fase y una suite que corre[33m 1311[2mms[22m[39m
+     [33m[2m✓[22m[39m mergeIntoMain avanza main del origin hasta la rama de la tarea[33m 1752[2mms[22m[39m
+     [33m[2m✓[22m[39m mergeIntoMain rechaza una rama que no descende de main[33m 1616[2mms[22m[39m
+ [32m✓[39m [30m[46m @lunasq/server [49m[39m src/evidence/service.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 9093[2mms[22m[39m
+   [32m✓[39m EvidenceService.recordRun [2m(13)[22m
+     [33m[2m✓[22m[39m escribe lunasq/tasks/{id}.md con la sección del Run al cerrarse[33m 417[2mms[22m[39m
+     [33m[2m✓[22m[39m repetir el cierre del mismo Run deja el archivo igual[33m 338[2mms[22m[39m
+     [33m[2m✓[22m[39m registra failure_reason, handoff, salida del gate y hooks del Run[33m 355[2mms[22m[39m
+     [33m[2m✓[22m[39m no mezcla los eventos de otros Runs ni de otras tareas[33m 387[2mms[22m[39m
+     [33m[2m✓[22m[39m convierte a markdown el transcript de la sesión y de los subagentes[33m 580[2mms[22m[39m
+     [33m[2m✓[22m[39m redacta secretos antes de escribir[33m 314[2mms[22m[39m
+     [33m[2m✓[22m[39m no deja archivos temporales junto al de evidencia[33m 429[2mms[22m[39m
+     [33m[2m✓[22m[39m no escribe nada para un Run que sigue abierto[33m 503[2mms[22m[39m
+     [33m[2m✓[22m[39m no escribe si el Run no existe o la tarea ya no tiene worktree[33m 380[2mms[22m[39m
+     [33m[2m✓[22m[39m cierres concurrentes de varios Runs no pierden secciones[33m 302[2mms[22m[39m
+     [33m[2m✓[22m[39m deja el archivo sin commitear y el worktree limpio para los chequeos de UW-15/23[33m 535[2mms[22m[39m
+   [32m✓[39m EvidenceService.commit [2m(5)[22m
+     [33m[2m✓[22m[39m commitea solo el archivo de evidencia, con los trailers de la tarea y el último Run[33m 1061[2mms[22m[39m
+     [33m[2m✓[22m[39m viaja en el branch: el archivo queda en el árbol de HEAD[33m 792[2mms[22m[39m
+     [33m[2m✓[22m[39m una sección nueva después del commit se commitea como cambio aparte[33m 1037[2mms[22m[39m
+     [33m[2m✓[22m[39m funciona también si el proyecto ignora lunasq/tasks/ en su .gitignore[33m 642[2mms[22m[39m
+ [32m✓[39m [30m[46m @lunasq/server [49m[39m src/hooks/service.git.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 10756[2mms[22m[39m
+   [32m✓[39m HookService con git real [2m(4)[22m
+     [33m[2m✓[22m[39m los hooks corren en orden y lo que dejan se commitea con los trailers[33m 3206[2mms[22m[39m
+     [33m[2m✓[22m[39m un hook modificado o agregado en el branch de la tarea nunca se ejecuta[33m 3235[2mms[22m[39m
+     [33m[2m✓[22m[39m un cambio de hook entra en vigor cuando llega a la rama base[33m 2969[2mms[22m[39m
+     [33m[2m✓[22m[39m after_merge corre en el commit mergeado aunque el checkout del proyecto esté atrasado[33m 1346[2mms[22m[39m
+ [32m✓[39m [30m[45m @lunasq/adapters [49m[39m src/git/real.test.ts [2m([22m[2m27 tests[22m[2m)[22m[33m 33542[2mms[22m[39m
+   [32m✓[39m contrato del adapter de git: git real [2m(19)[22m
+     [32m✓[39m rama base [2m(5)[22m
+       [33m[2m✓[22m[39m fetch trae el commit nuevo del remoto y resolveCommit da su sha[33m 1200[2mms[22m[39m
+       [33m[2m✓[22m[39m fetch de un branch inexistente y resolveCommit de un ref inexistente fallan[33m 676[2mms[22m[39m
+       [33m[2m✓[22m[39m listFiles da los archivos directos del directorio con su bit de ejecución[33m 642[2mms[22m[39m
+       [33m[2m✓[22m[39m readFile lee el commit; undefined si no existe o es un directorio[33m 736[2mms[22m[39m
+       [33m[2m✓[22m[39m los cambios del working tree no se ven en el commit[33m 960[2mms[22m[39m
+     [32m✓[39m worktrees temporales [2m(1)[22m
+       [33m[2m✓[22m[39m addDetachedWorktree abre el commit en otra ruta y removeWorktree lo borra[33m 1580[2mms[22m[39m
+     [32m✓[39m commit de cambios [2m(3)[22m
+       [33m[2m✓[22m[39m isDirty ve archivos nuevos y modificados[33m 1520[2mms[22m[39m
+       [33m[2m✓[22m[39m commitAll commitea todo con los trailers y no crea commits vacíos[33m 1646[2mms[22m[39m
+       [33m[2m✓[22m[39m isDirty y commitAll ignoran lunasq/tasks/, que es de LunasQ[33m 2028[2mms[22m[39m
+     [32m✓[39m integración con la rama base [2m(8)[22m
+       [33m[2m✓[22m[39m rebase sin novedades en la base no toca la rama[33m 1412[2mms[22m[39m
+       [33m[2m✓[22m[39m rebase pone los commits de la rama sobre la base nueva[33m 1378[2mms[22m[39m
+       [33m[2m✓[22m[39m rebase con un conflicto lo aborta y deja el worktree como estaba[33m 1074[2mms[22m[39m
+       [33m[2m✓[22m[39m rebase con el worktree sucio falla sin tocar nada[33m 1387[2mms[22m[39m
+       [33m[2m✓[22m[39m listCommits da los commits de base..HEAD del más viejo al más nuevo[33m 1260[2mms[22m[39m
+       [33m[2m✓[22m[39m addTrailers reescribe los commits indicados y repetirlo no cambia nada[33m 1724[2mms[22m[39m
+       [33m[2m✓[22m[39m push publica el HEAD en la rama del remoto y se repite tras reescribir la historia[33m 2071[2mms[22m[39m
+       [33m[2m✓[22m[39m push a un remoto que no existe falla con git_failed[33m 940[2mms[22m[39m
+     [32m✓[39m commitPaths [2m(2)[22m
+       [33m[2m✓[22m[39m commitea solo esas rutas con los trailers y no crea commits vacíos[33m 1256[2mms[22m[39m
+       [33m[2m✓[22m[39m commitea una nueva versión del archivo ya rastreado[33m 1014[2mms[22m[39m
+   [32m✓[39m RealGit [2m(8)[22m
+     [33m[2m✓[22m[39m listFiles no cuenta symlinks: podrían apuntar al worktree de la tarea[33m 1443[2mms[22m[39m
+     [33m[2m✓[22m[39m git replace desde un worktree no cambia lo que se lee de la base[33m 1431[2mms[22m[39m
+     [33m[2m✓[22m[39m fetch devuelve el sha del remoto aunque otro checkout mueva el ref local[33m 1311[2mms[22m[39m
+     [33m[2m✓[22m[39m fetch repite cuando otro fetch del mismo ref le gana la carrera[33m 1257[2mms[22m[39m
+     [33m[2m✓[22m[39m fetch no repite un fallo que no es la carrera[33m 907[2mms[22m[39m
+     [33m[2m✓[22m[39m commitAll no corre los hooks de git del repo y, si el commit falla, deja el índice limpio[33m 1600[2mms[22m[39m
+     [33m[2m✓[22m[39m un ref con forma de opción no se interpreta como opción[33m 751[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m144 passed[39m[22m[2m | [22m[33m6 skipped[39m[90m (150)[39m
+[2m      Tests [22m [1m[32m1867 passed[39m[22m[2m | [22m[33m39 skipped[39m[90m (1906)[39m
+[2m   Start at [22m 08:39:00
+[2m   Duration [22m 33.76s[2m (tests 77%, import 17%, environment 3%, transform 2%, setup 1%)[22m
+
+[2m    Isolate [22m [33m150 workers spawned[39m[2m · ~142ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~1.80s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+```
+
+#### delivery · verde
+
+- Comando: `pnpm test`
+- Commit probado: 59bb29a3d5cbd60bb042339264ed63a4d9a1447d
+- Exit code: 0
+- Duración: 36 s
+
+```
+w's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m test/flow.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 305[2mms[22m[39m
+   [32m✓[39m flujo de punta a punta desde la UI [2m(1)[22m
+     [33m[2m✓[22m[39m crea una tarea, aprueba su spec y la sigue hasta el PR[33m 304[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/new-task.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 726[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/inbox.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 791[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/task-detail.test.tsx [2m([22m[2m25 tests[22m[2m)[22m[33m 844[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m @lunasq/server [49m[39m src/test-gate/gate.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 6710[2mms[22m[39m
+   [32m✓[39m PaneTestGate [2m(11)[22m
+     [33m[2m✓[22m[39m una suite en rojo no pasa y su salida y exit code quedan en el Event log[33m 562[2mms[22m[39m
+     [33m[2m✓[22m[39m una suite en verde pasa, corre en el worktree y registra el disparo[33m 460[2mms[22m[39m
+     [33m[2m✓[22m[39m la suite no ve credenciales del entorno y corre en modo CI con el contexto de la tarea[33m 552[2mms[22m[39m
+     [33m[2m✓[22m[39m pasa la allowlist mínima y el timeout al runner[33m 371[2mms[22m[39m
+     [33m[2m✓[22m[39m un comando vacío cuenta como sin comando y queda registrado[33m 344[2mms[22m[39m
+     [33m[2m✓[22m[39m si el worktree asegurado no es el del Run, falla cerrado sin correr la suite[33m 452[2mms[22m[39m
+     [33m[2m✓[22m[39m una suite que excede el tiempo límite no pasa[33m 1995[2mms[22m[39m
+     [33m[2m✓[22m[39m si herdr no puede abrir el pane, falla cerrado y lo registra[33m 549[2mms[22m[39m
+     [33m[2m✓[22m[39m si no se puede asegurar el worktree, falla cerrado y lo registra[33m 467[2mms[22m[39m
+     [33m[2m✓[22m[39m recorta la salida: el agente recibe el final y el evento hasta 16 KiB[33m 670[2mms[22m[39m
+ [32m✓[39m [30m[46m web [49m[39m src/pages/dag.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 312[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/projects.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 1526[2mms[22m[39m
+   [32m✓[39m alta de proyectos [2m(6)[22m
+     [33m[2m✓[22m[39m envía comandos, límites y perfiles por fase, sin los campos vacíos[33m 433[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/in-progress.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 183[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/hooks.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 194[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/lib/live.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 229[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/components/status.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/board.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 166[2mms[22m[39m
+Not implemented: Window's scrollTo() method
+ [32m✓[39m [30m[46m web [49m[39m src/pages/queue.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 176[2mms[22m[39m
+ [32m✓[39m [30m[46m web [49m[39m src/lib/dag-layout.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m [30m[46m web [49m[39m src/lib/format.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 1[2mms[22m[39m
+ [32m✓[39m [30m[46m @lunasq/server [49m[39m src/mcp/ports.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 9282[2mms[22m[39m
+   [32m✓[39m GitCommitVerifier contra un repo real [2m(8)[22m
+     [33m[2m✓[22m[39m acepta commits del branch y rechaza los de la base o desconocidos[33m 1237[2mms[22m[39m
+     [33m[2m✓[22m[39m rechaza un commit que ya está en origin/<base> aunque la base local vaya atrasada[33m 2831[2mms[22m[39m
+     [33m[2m✓[22m[39m una rama base inexistente no da los commits por buenos[33m 692[2mms[22m[39m
+     [33m[2m✓[22m[39m uncommitted lista cambios y archivos sin seguimiento; vacío con el worktree limpio[33m 824[2mms[22m[39m
+     [33m[2m✓[22m[39m uncommitted ignora el archivo de evidencia de lunasq/tasks/[33m 1118[2mms[22m[39m
+     [33m[2m✓[22m[39m onlyEvidenceBetween acepta commits que solo tocan lunasq/tasks/[33m 1386[2mms[22m[39m
+     [33m[2m✓[22m[39m onlyEvidenceBetween rechaza un HEAD que no desciende del commit del gate[33m 605[2mms[22m[39m
+     [33m[2m✓[22m[39m una rama base con forma de opción no se interpreta como opción de git[33m 586[2mms[22m[39m
+ [32m✓[39m [30m[46m @lunasq/server [49m[39m src/evidence/service.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 8965[2mms[22m[39m
+   [32m✓[39m EvidenceService.recordRun [2m(13)[22m
+     [33m[2m✓[22m[39m escribe lunasq/tasks/{id}.md con la sección del Run al cerrarse[33m 436[2mms[22m[39m
+     [33m[2m✓[22m[39m repetir el cierre del mismo Run deja el archivo igual[33m 318[2mms[22m[39m
+     [33m[2m✓[22m[39m registra failure_reason, handoff, salida del gate y hooks del Run[33m 390[2mms[22m[39m
+     [33m[2m✓[22m[39m convierte a markdown el transcript de la sesión y de los subagentes[33m 409[2mms[22m[39m
+     [33m[2m✓[22m[39m redacta secretos antes de escribir[33m 329[2mms[22m[39m
+     [33m[2m✓[22m[39m no deja archivos temporales junto al de evidencia[33m 590[2mms[22m[39m
+     [33m[2m✓[22m[39m no escribe nada para un Run que sigue abierto[33m 477[2mms[22m[39m
+     [33m[2m✓[22m[39m no escribe a través de un symlink en lunasq/ ni en lunasq/tasks[33m 357[2mms[22m[39m
+     [33m[2m✓[22m[39m cierres concurrentes de varios Runs no pierden secciones[33m 330[2mms[22m[39m
+     [33m[2m✓[22m[39m deja el archivo sin commitear y el worktree limpio para los chequeos de UW-15/23[33m 402[2mms[22m[39m
+   [32m✓[39m EvidenceService.commit [2m(5)[22m
+     [33m[2m✓[22m[39m commitea solo el archivo de evidencia, con los trailers de la tarea y el último Run[33m 1068[2mms[22m[39m
+     [33m[2m✓[22m[39m viaja en el branch: el archivo queda en el árbol de HEAD[33m 748[2mms[22m[39m
+     [33m[2m✓[22m[39m una sección nueva después del commit se commitea como cambio aparte[33m 1068[2mms[22m[39m
+     [33m[2m✓[22m[39m funciona también si el proyecto ignora lunasq/tasks/ en su .gitignore[33m 665[2mms[22m[39m
+   [32m✓[39m RunRepository sin cambios [2m(1)[22m
+     [33m[2m✓[22m[39m el servicio solo lee: no modifica el Run[33m 301[2mms[22m[39m
+ [32m✓[39m [30m[45m e2e [49m[39m harness/fixture.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 4512[2mms[22m[39m
+   [32m✓[39m fixture del piloto [2m(3)[22m
+     [33m[2m✓[22m[39m deja main en el origin con los hooks por fase y una suite que corre[33m 1165[2mms[22m[39m
+     [33m[2m✓[22m[39m mergeIntoMain avanza main del origin hasta la rama de la tarea[33m 1702[2mms[22m[39m
+     [33m[2m✓[22m[39m mergeIntoMain rechaza una rama que no descende de main[33m 1644[2mms[22m[39m
+ [32m✓[39m [30m[46m @lunasq/server [49m[39m src/hooks/service.git.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 10271[2mms[22m[39m
+   [32m✓[39m HookService con git real [2m(4)[22m
+     [33m[2m✓[22m[39m los hooks corren en orden y lo que dejan se commitea con los trailers[33m 3314[2mms[22m[39m
+     [33m[2m✓[22m[39m un hook modificado o agregado en el branch de la tarea nunca se ejecuta[33m 2690[2mms[22m[39m
+     [33m[2m✓[22m[39m un cambio de hook entra en vigor cuando llega a la rama base[33m 3037[2mms[22m[39m
+     [33m[2m✓[22m[39m after_merge corre en el commit mergeado aunque el checkout del proyecto esté atrasado[33m 1229[2mms[22m[39m
+ [32m✓[39m [30m[45m @lunasq/adapters [49m[39m src/git/real.test.ts [2m([22m[2m27 tests[22m[2m)[22m[33m 34659[2mms[22m[39m
+   [32m✓[39m contrato del adapter de git: git real [2m(19)[22m
+     [32m✓[39m rama base [2m(5)[22m
+       [33m[2m✓[22m[39m fetch trae el commit nuevo del remoto y resolveCommit da su sha[33m 1224[2mms[22m[39m
+       [33m[2m✓[22m[39m fetch de un branch inexistente y resolveCommit de un ref inexistente fallan[33m 657[2mms[22m[39m
+       [33m[2m✓[22m[39m listFiles da los archivos directos del directorio con su bit de ejecución[33m 649[2mms[22m[39m
+       [33m[2m✓[22m[39m readFile lee el commit; undefined si no existe o es un directorio[33m 794[2mms[22m[39m
+       [33m[2m✓[22m[39m los cambios del working tree no se ven en el commit[33m 1125[2mms[22m[39m
+     [32m✓[39m worktrees temporales [2m(1)[22m
+       [33m[2m✓[22m[39m addDetachedWorktree abre el commit en otra ruta y removeWorktree lo borra[33m 1677[2mms[22m[39m
+     [32m✓[39m commit de cambios [2m(3)[22m
+       [33m[2m✓[22m[39m isDirty ve archivos nuevos y modificados[33m 1496[2mms[22m[39m
+       [33m[2m✓[22m[39m commitAll commitea todo con los trailers y no crea commits vacíos[33m 1943[2mms[22m[39m
+       [33m[2m✓[22m[39m isDirty y commitAll ignoran lunasq/tasks/, que es de LunasQ[33m 1615[2mms[22m[39m
+     [32m✓[39m integración con la rama base [2m(8)[22m
+       [33m[2m✓[22m[39m rebase sin novedades en la base no toca la rama[33m 1265[2mms[22m[39m
+       [33m[2m✓[22m[39m rebase pone los commits de la rama sobre la base nueva[33m 1290[2mms[22m[39m
+       [33m[2m✓[22m[39m rebase con un conflicto lo aborta y deja el worktree como estaba[33m 1473[2mms[22m[39m
+       [33m[2m✓[22m[39m rebase con el worktree sucio falla sin tocar nada[33m 1656[2mms[22m[39m
+       [33m[2m✓[22m[39m listCommits da los commits de base..HEAD del más viejo al más nuevo[33m 1319[2mms[22m[39m
+       [33m[2m✓[22m[39m addTrailers reescribe los commits indicados y repetirlo no cambia nada[33m 1942[2mms[22m[39m
+       [33m[2m✓[22m[39m push publica el HEAD en la rama del remoto y se repite tras reescribir la historia[33m 2150[2mms[22m[39m
+       [33m[2m✓[22m[39m push a un remoto que no existe falla con git_failed[33m 932[2mms[22m[39m
+     [32m✓[39m commitPaths [2m(2)[22m
+       [33m[2m✓[22m[39m commitea solo esas rutas con los trailers y no crea commits vacíos[33m 1300[2mms[22m[39m
+       [33m[2m✓[22m[39m commitea una nueva versión del archivo ya rastreado[33m 1235[2mms[22m[39m
+   [32m✓[39m RealGit [2m(8)[22m
+     [33m[2m✓[22m[39m listFiles no cuenta symlinks: podrían apuntar al worktree de la tarea[33m 1532[2mms[22m[39m
+     [33m[2m✓[22m[39m git replace desde un worktree no cambia lo que se lee de la base[33m 1523[2mms[22m[39m
+     [33m[2m✓[22m[39m fetch devuelve el sha del remoto aunque otro checkout mueva el ref local[33m 1060[2mms[22m[39m
+     [33m[2m✓[22m[39m fetch repite cuando otro fetch del mismo ref le gana la carrera[33m 979[2mms[22m[39m
+     [33m[2m✓[22m[39m fetch no repite un fallo que no es la carrera[33m 884[2mms[22m[39m
+     [33m[2m✓[22m[39m commitAll no corre los hooks de git del repo y, si el commit falla, deja el índice limpio[33m 1695[2mms[22m[39m
+     [33m[2m✓[22m[39m un ref con forma de opción no se interpreta como opción[33m 906[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m144 passed[39m[22m[2m | [22m[33m6 skipped[39m[90m (150)[39m
+[2m      Tests [22m [1m[32m1867 passed[39m[22m[2m | [22m[33m39 skipped[39m[90m (1906)[39m
+[2m   Start at [22m 08:39:45
+[2m   Duration [22m 34.87s[2m (tests 78%, import 17%, environment 3%, transform 2%, setup 1%)[22m
+
+[2m    Isolate [22m [33m150 workers spawned[39m[2m · ~139ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~1.76s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+```
+
+### Transcripts
+
+<details>
+<summary>Sesión del agente</summary>
+
+**Usuario** · 14:36:08
+
+Usa la skill verify-task para la tarea d01a07cf-cec3-4833-8cbd-ffcb914bec41 de LunasQ. Empieza llamando get_task_context del MCP lunasq y termina con su tool de salida.
+
+**Agente** · 14:36:12
+
+`Skill`
+```
+{"skill":"verify-task","args":"d01a07cf-cec3-4833-8cbd-ffcb914bec41"}
+```
+
+**Usuario** · 14:36:12
+
+Resultado
+```
+Launching skill: verify-task
+```
+
+**Agente** · 14:36:13
+
+`ToolSearch`
+```
+{"query":"select:mcp__lunasq__get_task_context,mcp__lunasq__submit_verdict","max_results":2}
+```
+
+**Usuario** · 14:36:13
+
+Resultado
+```
+
+```
+
+**Agente** · 14:36:15
+
+`mcp__lunasq__get_task_context`
+```
+{}
+```
+
+**Agente** · 14:36:15
+
+`Bash`
+```
+git rev-parse HEAD && git status --porcelain && git branch --show-current
+```
+
+**Usuario** · 14:36:16
+
+Resultado
+```
+{"task":{"id":"d01a07cf-cec3-4833-8cbd-ffcb914bec41","intent":"Lista de dependencias en la pestña de crear tareas, no debe ser una lisra con checlboxes, debe ser una lista acompañada de un slector de tareas para asi ir agregandolas.","title":null,"tags":[],"state":"verification","subState":"running","verificationIteration":1,"branch":"lunasq/d01a07cf-cec3-4833-8cbd-ffcb914bec41","worktreePath":"/Users/sergio.sanchez/.herdr/worktrees/lunas-queue/lunasq-d01a07cf-cec3-4833-8cbd-ffcb914bec41"},"run":{"id":"7369e439-3bdc-4725-bced-4af9177a9527","phase":"verify","iteration":1},"project":{"name":"LunasQ","repo":"sergiowero/lunas-queue","baseBranch":"main","testCommand":"pnpm test"},"approvedSpec":{"version":1,"content":{"domainModel":{"boundedCont
+… 39106 caracteres omitidos …
+}],"riskLabel":"low"}}},"questions":[],"checklist":[{"taskId":"T-1","title":"Reescribir los tests de new-task.test.tsx para el selector y la lista de elegidas (rojo)","done":true},{"taskId":"T-2","title":"Reemplazar los checkboxes de new-task.tsx por Select con optgroup por proyecto y estado de elegidas","done":true},{"taskId":"T-3","title":"Lista de dependencias elegidas con botón Quitar y marca «otro proyecto»","done":true},{"taskId":"T-4","title":"Vaciar las elegidas al cambiar de proyecto y excluir ya elegidas del selector","done":true},{"taskId":"T-5","title":"Adaptar createTask del e2e del piloto para elegir dependencias con el selector","done":true},{"taskId":"T-6","title":"Correr pnpm typecheck, pnpm lint y pnpm test","done":true}]}
+```
+
+**Usuario** · 14:36:16
+
+Resultado
+```
+0648249dd1312768e65c6e8f7f5c0a8b915951c0
+lunasq/d01a07cf-cec3-4833-8cbd-ffcb914bec41
+```
+
+**Agente** · 14:36:19
+
+`Bash`
+```
+BASE=$(git merge-base origin/main HEAD) && echo "BASE=$BASE" && git log --oneline $BASE..HEAD && git diff --stat $BASE...HEAD && git diff --name-only $BASE...HEAD
+```
+
+**Usuario** · 14:36:20
+
+Resultado
+```
+BASE=0f70aa91517a961a7e54dd26adf6e41b43da67aa
+0648249 chore(lunasq): archivo de evidencia
+48e36e2 Tests: AC-8 espera a que carguen las candidatas antes de afirmar la ausencia de «Depende de»
+b6dd12b mising
+76951f5 Evidencia de la tarea d01a07cf
+facca57 e2e del piloto: elige las dependencias con el selector
+35757b8 Nueva tarea: «Depende de» con selector de tareas y lista de elegidas
+e06808f Nueva tarea: tests del selector de dependencias y la lista de elegidas
+ .../tasks/d01a07cf-cec3-4833-8cbd-ffcb914bec41.md  | 13708 +++++++++++++++++++
+ packages/e2e/tests/pilot.spec.ts                   |     9 +-
+ packages/web/src/pages/new-task.test.tsx           |   151 +-
+ packages/web/src/pages/new-task.tsx                |    95 +-
+ 4 files changed, 13917 insertions(+), 46 deletions(-)
+lunasq/tasks/d01a07cf-cec3-4833-8cbd-ffcb914bec41.md
+packages/e2e/tests/pilot.spec.ts
+packages/web/src/pages/new-task.test.tsx
+packages/web/src/pages/new-task.tsx
+```
+
+**Agente** · 14:36:22
+
+`Bash`
+```
+git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD -- packages/web/src/pages/new-task.tsx packages/e2e/tests/pilot.spec.ts
+```
+
+**Agente** · 14:36:23
+
+`Bash`
+```
+git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD -- packages/web/src/pages/new-task.test.tsx
+```
+
+**Usuario** · 14:36:24
+
+Resultado
+```
+diff --git a/packages/web/src/pages/new-task.test.tsx b/packages/web/src/pages/new-task.test.tsx
+index 53002fb..444ee91 100644
+--- a/packages/web/src/pages/new-task.test.tsx
++++ b/packages/web/src/pages/new-task.test.tsx
+@@ -1,14 +1,28 @@
+-import { screen, waitFor } from "@testing-library/react";
++import { screen, waitFor, within } from "@testing-library/react";
+ import { describe, expect, it } from "vitest";
+ import { FakeApi } from "../../test/fake-api.ts";
+ import { renderApp } from "../../test/render.tsx";
++import { queries } from "../lib/queries.ts";
++
++/** Las etiquetas de las opciones del selector de dependencias, sin el placeholder. */
++function candidateOptions(): string[] {
++  const select = screen.getByLabelText("Depende de") as 
+… 8707 caracteres omitidos …
+rApp("/tasks/new", fake);
+ 
+-    expect(
+-      await screen.findByText("Elige un proyecto para ver las tareas de las que depender."),
+-    ).toBeTruthy();
+-    await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
+-    expect(await screen.findByText("No hay tareas activas de las que depender.")).toBeTruthy();
+-    expect(screen.getByText("Depende de")).toBeTruthy();
++    await user.selectOptions(await screen.findByLabelText("Proyecto"), "elegido");
++    const select = await screen.findByLabelText("Depende de");
++    const groups = [...select.querySelectorAll("optgroup")].map((g) => g.label);
++    expect(groups).toEqual(["elegido", "primero · otro proyecto"]);
+   });
+ 
+   it("preselecciona el proyecto de la URL", async () => {
+```
+
+**Usuario** · 14:36:24
+
+Resultado
+```
+diff --git a/packages/e2e/tests/pilot.spec.ts b/packages/e2e/tests/pilot.spec.ts
+index 7989f75..359cc46 100644
+--- a/packages/e2e/tests/pilot.spec.ts
++++ b/packages/e2e/tests/pilot.spec.ts
+@@ -40,7 +40,14 @@ async function createTask(page: Page, intent: string, dependsOn: string[] = [])
+   await page.goto("/tasks/new");
+   await page.getByLabel("Proyecto").selectOption({ label: "Piloto" });
+   await page.getByLabel("Intent").fill(intent);
+-  for (const dependency of dependsOn) await page.getByLabel(dependency).check();
++  for (const dependency of dependsOn) {
++    await page.getByLabel("Depende de").selectOption({ label: dependency });
++    await expect(
++      page
++        .getByRole("list", { name: "Dependencias elegidas" })
++        .ge
+… 5704 caracteres omitidos …
+task.projectId !== projectId && (
++                    <Badge variant="destructive" title={projectName.get(task.projectId)}>
++                      otro proyecto
++                    </Badge>
++                  )}
++                  <Button
++                    variant="ghost"
++                    size="sm"
++                    aria-label={`Quitar ${task.intent}`}
++                    onClick={() => remove(task.id)}
++                  >
++                    Quitar
++                  </Button>
++                </li>
++              ))}
++            </ul>
++          )}
++        </div>
++      )}
+       {create.error && (
+         <p role="alert" className="text-sm text-destructive">
+           No se pudo crear la tarea: {describe(create.error)}
+```
+
+**Agente** · 14:36:27
+
+`Bash`
+```
+pnpm test 2>&1 | tail -40
+```
+
+**Usuario** · 14:37:03
+
+Resultado
+```
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+No
+… 245 caracteres omitidos …
+crollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+
+ Test Files  144 passed | 6 skipped (150)
+      Tests  1867 passed | 39 skipped (1906)
+   Start at  08:36:29
+   Duration  34.11s (tests 77%, import 17%, environment 3%, transform 2%)
+
+    Isolate  150 workers spawned · ~143ms startup each (spawn + environment, per file)
+             at least ~1.81s faster with isolate: false — reuses workers across files instead of one per file
+```
+
+**Agente** · 14:37:06
+
+`Bash`
+```
+BASE=0f70aa91517a961a7e54dd26adf6e41b43da67aa && git checkout $BASE -- packages/web/src/pages/new-task.tsx && pnpm --filter @lunasq/web exec vitest run src/pages/new-task.test.tsx 2>&1 | grep -E "^\s*(✓|×|✗|FAIL|❯)|Tests |AssertionError|TypeError|ReferenceError|Cannot find" | head -80; git checkout HEAD -- packages/web/src/pages/new-task.tsx && git status --porcelain && git rev-parse HEAD
+```
+
+**Usuario** · 14:37:17
+
+Resultado
+```
+ ❯ |web| src/pages/new-task.test.tsx (12 tests | 10 failed) 9611ms
+   ❯ alta de tareas (12)
+     × crea la tarea con tags, prioridad y dependencias y abre su detalle 1173ms
+     × «Depende de» es un selector de tareas, sin checkboxes 1027ms
+     × el selector no ofrece tareas terminales 1026ms
+     × elegir una tarea la agrega a la lista, la quita del selector y vuelve al placeholder 1038ms
+     × quitar una dependencia la devuelve al selector y conserva las demás 1040ms
+     × envía dependsOn con las elegidas en el orden en que se agregaron 1072ms
+     × permite depender de tareas de otro proyecto y las marca 1042ms
+     × cambiar de proyecto vacía las dependencias elegidas 1042ms
+     × no muestra «Depende de» si no hay tareas vivas 41ms
+
+… 3273 caracteres omitidos …
+m/dist/query-helpers.js:86:33
+ ❯ src/pages/new-task.test.tsx:153:43
+ FAIL  |web| src/pages/new-task.test.tsx > alta de tareas > no muestra «Depende de» si no hay tareas vivas
+AssertionError: expected <legend …(1)></legend> to be null
+ ❯ src/pages/new-task.test.tsx:172:46
+ FAIL  |web| src/pages/new-task.test.tsx > alta de tareas > agrupa las candidatas con el proyecto elegido primero
+ ❯ waitForWrapper ../../node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/new-task.test.tsx:185:33
+      Tests  10 failed | 2 passed (12)
+0648249dd1312768e65c6e8f7f5c0a8b915951c0
+```
+
+**Agente** · 14:37:32
+
+`Agent`
+```
+{"description":"Revisión de código de la tarea","subagent_type":"lunasq-code-reviewer","prompt":"Revisa el diff de la tarea d01a07cf-cec3-4833-8cbd-ffcb914bec41 en el worktree /Users/sergio.sanchez/.h
+… 1373 caracteres omitidos …
+ervable, sin tests triviales ni debilitados). Responde una línea por hallazgo: `[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. Severidades: critical, major, minor."}
+```
+
+**Agente** · 14:37:37
+
+`Agent`
+```
+{"description":"Revisión de UX de la tarea","subagent_type":"lunasq-ux-reviewer","prompt":"Revisa la UX del diff de la tarea d01a07cf-cec3-4833-8cbd-ffcb914bec41 en el worktree /Users/sergio.sanchez/.
+… 901 caracteres omitidos …
+· <evidencia>`, o `SIN HALLAZGOS`. Severidades: critical, major, minor. Ten en cuenta que los riesgos ya conocidos se reportan como minor, no como must-fix, salvo que incumplan un criterio aprobado."}
+```
+
+**Agente** · 14:37:41
+
+`Agent`
+```
+{"description":"Revisión de UI de la tarea","subagent_type":"lunasq-ui-reviewer","prompt":"Revisa la UI (markup, componentes, estilos, layout) del diff de la tarea d01a07cf-cec3-4833-8cbd-ffcb914bec41
+… 661 caracteres omitidos …
+sponsive (anchos angostos, tokens largos).\n\nResponde una línea por hallazgo: `[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. Severidades: critical, major, minor."}
+```
+
+**Agente** · 14:37:42
+
+`Bash`
+```
+pnpm e2e 2>&1 | tail -30
+```
+
+**Usuario** · 14:37:42
+
+Resultado
+```
+Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)
+agentId: afeb253a34f653782 (internal ID - do not mention to user. Use SendMessage with to: 'afeb253a34f653782', summary: '<5-10 word recap>' to continue this agent.)
+The agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.
+Do not duplicate this agent's work — avoid working with the same files or topics it is using.
+output_file: /private/tmp/claude-501/-Users-sergio-sanchez--herdr-worktrees-lunas-queue-lunasq-d01a07cf-cec3-4833-8cbd-ffcb914bec41/fa5296cd-31ca-4888-82f0-65c3efcf12a8/tasks/afeb253a34f653782.output
+Do NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification.
+```
+
+**Usuario** · 14:37:42
+
+Resultado
+```
+Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)
+agentId: a3bf5dfa1302ccb0f (internal ID - do not mention to user. Use SendMessage with to: 'a3bf5dfa1302ccb0f', summary: '<5-10 word recap>' to continue this agent.)
+The agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.
+Do not duplicate this agent's work — avoid working with the same files or topics it is using.
+output_file: /private/tmp/claude-501/-Users-sergio-sanchez--herdr-worktrees-lunas-queue-lunasq-d01a07cf-cec3-4833-8cbd-ffcb914bec41/fa5296cd-31ca-4888-82f0-65c3efcf12a8/tasks/a3bf5dfa1302ccb0f.output
+Do NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification.
+```
+
+**Usuario** · 14:37:42
+
+Resultado
+```
+Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)
+agentId: a7689a7752d19b87c (internal ID - do not mention to user. Use SendMessage with to: 'a7689a7752d19b87c', summary: '<5-10 word recap>' to continue this agent.)
+The agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.
+Do not duplicate this agent's work — avoid working with the same files or topics it is using.
+output_file: /private/tmp/claude-501/-Users-sergio-sanchez--herdr-worktrees-lunas-queue-lunasq-d01a07cf-cec3-4833-8cbd-ffcb914bec41/fa5296cd-31ca-4888-82f0-65c3efcf12a8/tasks/a7689a7752d19b87c.output
+Do NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification.
+```
+
+**Usuario** · 14:38:21
+
+Resultado
+```
+$ vite build
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 625 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/app/index.html                   0.39 kB │ gzip:   0.26 kB
+dist/app/assets/dag-DLioOiRN.css     15.41 kB │ gzip:   2.56 kB
+dist/app/assets/index-C63IWWVn.css   16.21 kB │ gzip:   4.08 kB
+dist/app/assets/dag-CGA7qkRG.js     226.38 kB │ gzip:  73.70 kB
+dist/app/assets/index-Cwy1osiV.js   698.69 kB │ gzip: 211.51 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.co
+… 110 caracteres omitidos …
+ywright test
+
+Running 6 tests using 1 worker
+
+  ✓  1 [chromium] › tests/pilot.spec.ts:101:3 › piloto › crea tres tareas con dependencias desde la UI (556ms)
+  ✓  2 [chromium] › tests/pilot.spec.ts:117:3 › piloto › A: el refinamiento pregunta, el humano responde y aprueba la spec (1.2s)
+  ✓  3 [chromium] › tests/pilot.spec.ts:135:3 › piloto › A: se implementa, verifica y entrega como PR (5.2s)
+  ✓  4 [chromium] › tests/pilot.spec.ts:156:3 › piloto › los hooks por fase de A quedan en la vista de hooks (1.6s)
+  ✓  5 [chromium] › tests/pilot.spec.ts:170:3 › piloto › B espera el merge de A y luego pasa por un rework (13.7s)
+  ✓  6 [chromium] › tests/pilot.spec.ts:188:3 › piloto › C llega al final y todo queda mergeado (12.2s)
+
+  6 passed (36.8s)
+```
+
+**Agente** · 14:38:34
+
+`Bash`
+```
+git status --porcelain && git rev-parse HEAD
+```
+
+**Usuario** · 14:38:35
+
+Resultado
+```
+0648249dd1312768e65c6e8f7f5c0a8b915951c0
+```
+
+**Agente** · 14:38:58
+
+`mcp__lunasq__submit_verdict`
+```
+{"handoff":{"schemaVersion":1,"taskId":"d01a07cf-cec3-4833-8cbd-ffcb914bec41","runId":"7369e439-3bdc-4725-bced-4af9177a9527","phase":"verification","result":"completed","summary":"Pass: los 10 criteri
+… 5738 caracteres omitidos …
+amiento para tokens sin espacios; es un defecto de layout en un caso límite, se registra como riesgo conocido y no como incumplimiento de la spec.","source":"lunasq-ui-reviewer"}],"riskLabel":"low"}}}
+```
+
+**Usuario** · 14:39:37
+
+Resultado
+```
+{"verdict":"pass"}
+```
+
+**Agente** · 14:39:40
+
+Veredicto **pass** registrado en el MCP para la tarea d01a07cf (run 7369e439).
+
+- **Criterios:** los 10 pasan. `pnpm test` 1867 ok y `pnpm e2e` 6/6, incluido el piloto (AC-10).
+- **Prueba de reversión:** con `new-task.tsx` revertido a la base fallan 10 de 12 tests de `new-task`, incluido el de AC-8 por aserción (`new-task.test.tsx:172`). Restauré el archivo: worktree limpio y `HEAD` sin cambios (`0648249`).
+- **Revisores:** lanzados `lunasq-code-reviewer`, `lunasq-ux-reviewer` y `lunasq-ui-reviewer`. `lunasq-security-reviewer` omitido: no hay entradas externas, procesos, auth ni permisos nuevos.
+- **Must-fix:** ninguno.
+- **Refutado:** el major de layout de `lunasq-ui-reviewer` (desbordamiento con tokens largos, `new-task.tsx:170`). Lo registré como riesgo conocido porque ningún criterio aprobado lo exige.
+- **Hallazgos minor** (no bloquean): sin manejo de carga/error de candidatas, etiqueta huérfana cuando no quedan candidatas, pérdida de foco al quitar, `aria-label` con `intent` en vez de `taskLabel`, el selector agrega con las flechas del teclado, `chosen` depende de `candidates.data`, la marca «otro proyecto» solo tiene nombre en `title`.
+- **Riesgo:** `low`.
+
+</details>
+
+<details>
+<summary>Subagente lunasq-code-reviewer (afeb253a34f653782)</summary>
+
+**Usuario** · 14:37:42
+
+Revisa el diff de la tarea d01a07cf-cec3-4833-8cbd-ffcb914bec41 en el worktree /Users/sergio.sanchez/.herdr/worktrees/lunas-queue/lunasq-d01a07cf-cec3-4833-8cbd-ffcb914bec41. Base: `git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD`. Archivos: packages/web/src/pages/new-task.tsx, packages/web/src/pages/new-task.test.tsx, packages/e2e/tests/pilot.spec.ts. No edites nada.
+
+Criterios de la spec aprobada (Dependencias en «Nueva tarea»: selector de tareas + lista de elegidas, no checkboxes):
+- AC-1 «Depende de» ofrece selector con las tareas y ningún checkbox.
+- AC-2 solo aparecen tareas vivas (no terminales).
+- AC-3 elegir agrega a la lista, la quita del selector y el selector vuelve al placeholder.
+- AC-4 «Quitar» saca la dependencia de la lista, vuelve al selector y las demás siguen.
+- AC-5 POST con dependsOn = elegidas, sin repetidos, en orden de adición.
+- AC-6 tareas de otro proyecto agrupadas como «<proyecto> · otro proyecto» y marcadas en la lista.
+- AC-7 cambiar de proyecto vacía las elegidas.
+- AC-8 sin tareas vivas ni elegidas no se muestra «Depende de».
+- AC-9 grupo del proyecto elegido primero.
+- AC-10 e2e del piloto elige con el selector.
+Invariantes: una tarea una sola vez en dependsOn; terminales nunca candidatas; cambiar proyecto vacía elegidas; dependsOn = elegidas en orden de adición.
+
+Revisa calidad, diseño, cumplimiento de la spec y coherencia de los tests (cada criterio con test que lo ejercita, comportamiento observable, sin tests triviales ni debilitados). Responde una línea por hallazgo: `[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. Severidades: critical, major, minor.
+
+**Agente** · 14:37:45
+
+`Bash`
+```
+git diff --stat 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD && git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD -- packages/web/src/pages/new-task.tsx packages/e2e/tests/pilot.spec.ts
+```
+
+**Usuario** · 14:37:46
+
+Resultado
+```
+ .../tasks/d01a07cf-cec3-4833-8cbd-ffcb914bec41.md  | 13708 +++++++++++++++++++
+ packages/e2e/tests/pilot.spec.ts                   |     9 +-
+ packages/web/src/pages/new-task.test.tsx           |   151 +-
+ packages/web/src/pages/new-task.tsx                |    95 +-
+ 4 files changed, 13917 insertions(+), 46 deletions(-)
+diff --git a/packages/e2e/tests/pilot.spec.ts b/packages/e2e/tests/pilot.spec.ts
+index 7989f75..359cc46 100644
+--- a/packages/e2e/tests/pilot.spec.ts
++++ b/packages/e2e/tests/pilot.spec.ts
+@@ -40,7 +40,14 @@ async function createTask(page: Page, intent: string, dependsOn: string[] = [])
+   await page.goto("/tasks/new");
+   await page.getByLabel("Proyecto").selectOption({ label: "Piloto" });
+   await page.getByLabel("Intent
+… 6028 caracteres omitidos …
+task.projectId !== projectId && (
++                    <Badge variant="destructive" title={projectName.get(task.projectId)}>
++                      otro proyecto
++                    </Badge>
++                  )}
++                  <Button
++                    variant="ghost"
++                    size="sm"
++                    aria-label={`Quitar ${task.intent}`}
++                    onClick={() => remove(task.id)}
++                  >
++                    Quitar
++                  </Button>
++                </li>
++              ))}
++            </ul>
++          )}
++        </div>
++      )}
+       {create.error && (
+         <p role="alert" className="text-sm text-destructive">
+           No se pudo crear la tarea: {describe(create.error)}
+```
+
+**Agente** · 14:37:49
+
+`Bash`
+```
+cat -n packages/web/src/pages/new-task.tsx | sed -n 1,75p; cat packages/web/src/components/ui/button.tsx; grep -n "Select\b\|function Select" -A12 packages/web/src/components/ui/input.tsx | head -30
+```
+
+**Usuario** · 14:37:49
+
+Resultado
+```
+     1	// Alta de tareas: intent, tags, prioridad y dependencias iniciales (TaskCreate, ADR 0010). La
+     2	// validación es la del servidor; aquí solo se muestran sus issues. Las dependencias se agregan una a
+     3	// una con un selector y quedan en una lista de elegidas, en el orden en que se agregaron. Pueden ser
+     4	// de cualquier proyecto; las de otro se marcan como riesgo, igual que en el detalle.
+     5	import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+     6	import { getRouteApi, useNavigate } from "@tanstack/react-router";
+     7	import { type FormEvent, useState } from "react";
+     8	import { Loading, QueryError } from "../components/status.tsx";
+     9	import { Badge } from "../components/ui/ba
+… 3825 caracteres omitidos …
+ant: "default", size: "default" },
+  },
+);
+
+export function Button({
+  className,
+  variant,
+  size,
+  type = "button",
+  ...props
+}: ComponentProps<"button"> & VariantProps<typeof buttonVariants>) {
+  return (
+    <button type={type} className={cn(buttonVariants({ variant, size }), className)} {...props} />
+  );
+}
+15:export function Select({ className, ...props }: ComponentProps<"select">) {
+16-  return <select className={cn(field, "h-9", className)} {...props} />;
+17-}
+18-
+19-export function Label({ className, ...props }: ComponentProps<"label">) {
+20-  // biome-ignore lint/a11y/noLabelWithoutControl: el control se asocia con htmlFor desde quien llama.
+21-  return <label className={cn("text-sm font-medium", className)} {...props} />;
+22-}
+```
+
+**Agente** · 14:37:51
+
+`Bash`
+```
+cat -n packages/web/src/pages/new-task.tsx | sed -n 84,140p; cat -n packages/web/src/pages/new-task.test.tsx
+```
+
+**Usuario** · 14:37:52
+
+Resultado
+```
+    84	  return (
+    85	    <form onSubmit={submit} className="flex max-w-2xl flex-col gap-4">
+    86	      <h1 className="text-xl font-semibold">Nueva tarea</h1>
+    87	      <div className="flex flex-col gap-1">
+    88	        <Label htmlFor="task-project">Proyecto</Label>
+    89	        <Select
+    90	          id="task-project"
+    91	          required
+    92	          value={projectId}
+    93	          onChange={(e) => {
+    94	            setProjectId(e.target.value);
+    95	            setDependsOn([]);
+    96	          }}
+    97	        >
+    98	          <option value="" disabled>
+    99	            Elige un proyecto
+   100	          </option>
+   101	          {projects.data.map((p) => (
+   102	            <option key={p.id} valu
+… 12153 caracteres omitidos …
+ );
+   198	  });
+   199	
+   200	  it("muestra los errores de validación del servidor", async () => {
+   201	    const fake = new FakeApi();
+   202	    fake.addProject({ name: "uno" });
+   203	    const { user, router } = renderApp("/tasks/new", fake);
+   204	    await user.selectOptions(await screen.findByLabelText("Proyecto"), "uno");
+   205	    await user.type(screen.getByLabelText("Intent"), "   ");
+   206	    await user.click(screen.getByRole("button", { name: "Crear tarea" }));
+   207	    expect(await screen.findByRole("alert")).toHaveProperty(
+   208	      "textContent",
+   209	      expect.stringContaining("intent: Too small"),
+   210	    );
+   211	    expect(router.state.location.pathname).toBe("/tasks/new");
+   212	  });
+   213	});
+```
+
+**Agente** · 14:37:59
+
+`Bash`
+```
+git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD -- packages/web/src/pages/new-task.test.tsx | grep '^-'; grep -n "taskLabel" -A6 packages/web/src/lib/format.ts | head -12
+```
+
+**Usuario** · 14:37:59
+
+Resultado
+```
+--- a/packages/web/src/pages/new-task.test.tsx
+-import { screen, waitFor } from "@testing-library/react";
+-    fake.addTask(project.id, { intent: "Ya cancelada", state: "cancelled", subState: null });
+-    expect(screen.queryByLabelText("Ya cancelada")).toBeNull();
+-    await user.click(await screen.findByLabelText("Base de datos"));
+-    expect(await screen.findByText("api · otro proyecto")).toBeTruthy();
+-    await user.click(screen.getByLabelText("Endpoint de login"));
+-  it("muestra siempre 'Depende de' y explica por qué no hay candidatas", async () => {
+-    fake.addTask(project.id, { intent: "Vieja", state: "completed", subState: null });
+-    expect(
+-      await screen.findByText("Elige un proyecto para ver las tareas de las que depender."),
+-    ).toBeTruthy();
+-    await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
+-    expect(await screen.findByText("No hay tareas activas de las que depender.")).toBeTruthy();
+-    expect(screen.getByText("Depende de")).toBeTruthy();
+4:export function taskLabel(task: { title: string | null; intent: string }): string {
+5-  return task.title ?? task.intent;
+6-}
+7-
+8-/** Orden de las columnas del tablero: el flujo de la máquina de estados. */
+9-export const BOARD_STATES: TaskState[] = [
+10-  "draft",
+```
+
+**Agente** · 14:38:08
+
+`Bash`
+```
+grep -n 'Quitar \${' packages/web/src/pages/new-task.tsx
+```
+
+**Usuario** · 14:38:08
+
+Resultado
+```
+183:                    aria-label={`Quitar ${task.intent}`}
+```
+
+**Agente** · 14:38:11
+
+`SubagentHandback`
+```
+{"message":"[minor] /Users/sergio.sanchez/.herdr/worktrees/lunas-queue/lunasq-d01a07cf-cec3-4833-8cbd-ffcb914bec41/packages/web/src/pages/new-task.tsx:183 · AC-4 · El nombre accesible del botón es `Qu
+… 116 caracteres omitidos …
+el nombre del botón no coincide con el texto que se ve en la lista. Usar `taskLabel(task)` también en el aria-label lo arregla. Los tests no lo detectan porque sus tareas de prueba no tienen título."}
+```
+
+**Usuario** · 14:38:11
+
+Resultado
+```
+{"success":true,"message":"Report delivered to your caller."}
+```
+
+</details>
+
+<details>
+<summary>Subagente lunasq-ux-reviewer (a3bf5dfa1302ccb0f)</summary>
+
+**Usuario** · 14:37:42
+
+Revisa la UX del diff de la tarea d01a07cf-cec3-4833-8cbd-ffcb914bec41 en el worktree /Users/sergio.sanchez/.herdr/worktrees/lunas-queue/lunasq-d01a07cf-cec3-4833-8cbd-ffcb914bec41. Base: `git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD`. Archivo principal: packages/web/src/pages/new-task.tsx. No edites nada.
+
+Contexto de la spec: en «Nueva tarea», «Depende de» pasa de checkboxes a un selector de tareas (agrupado por proyecto, el del proyecto elegido primero, las de otro proyecto marcadas) más una lista «Dependencias elegidas» con botón «Quitar». Criterios AC-1 a AC-10 (selector sin checkboxes, sin terminales, elegir agrega y vuelve al placeholder, Quitar devuelve al selector, orden de adición, marca «otro proyecto», cambiar de proyecto vacía elegidas, sin selector si no hay candidatas ni elegidas, grupo del proyecto primero).
+
+Revisa flujos, estados vacíos/carga/error, textos visibles y accesibilidad. Responde una línea por hallazgo: `[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. Severidades: critical, major, minor. Ten en cuenta que los riesgos ya conocidos se reportan como minor, no como must-fix, salvo que incumplan un criterio aprobado.
+
+**Agente** · 14:37:45
+
+`Bash`
+```
+git diff --stat 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD && git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD -- packages/web/src/pages/new-task.tsx
+```
+
+**Usuario** · 14:37:45
+
+Resultado
+```
+ .../tasks/d01a07cf-cec3-4833-8cbd-ffcb914bec41.md  | 13708 +++++++++++++++++++
+ packages/e2e/tests/pilot.spec.ts                   |     9 +-
+ packages/web/src/pages/new-task.test.tsx           |   151 +-
+ packages/web/src/pages/new-task.tsx                |    95 +-
+ 4 files changed, 13917 insertions(+), 46 deletions(-)
+diff --git a/packages/web/src/pages/new-task.tsx b/packages/web/src/pages/new-task.tsx
+index 8167c4a..29b5e48 100644
+--- a/packages/web/src/pages/new-task.tsx
++++ b/packages/web/src/pages/new-task.tsx
+@@ -1,11 +1,12 @@
+ // Alta de tareas: intent, tags, prioridad y dependencias iniciales (TaskCreate, ADR 0010). La
+-// validación es la del servidor; aquí solo se muestran sus issues. Las dependencias pueden ser de
+-// cualqui
+… 4999 caracteres omitidos …
+task.projectId !== projectId && (
++                    <Badge variant="destructive" title={projectName.get(task.projectId)}>
++                      otro proyecto
++                    </Badge>
++                  )}
++                  <Button
++                    variant="ghost"
++                    size="sm"
++                    aria-label={`Quitar ${task.intent}`}
++                    onClick={() => remove(task.id)}
++                  >
++                    Quitar
++                  </Button>
++                </li>
++              ))}
++            </ul>
++          )}
++        </div>
++      )}
+       {create.error && (
+         <p role="alert" className="text-sm text-destructive">
+           No se pudo crear la tarea: {describe(create.error)}
+```
+
+**Agente** · 14:37:48
+
+`Bash`
+```
+cat -n packages/web/src/pages/new-task.tsx | sed -n 1,80p; cat packages/web/src/components/ui/button.tsx | head -60; grep -rn "otro proyecto" packages/web/src --include=*.tsx | grep -v test
+```
+
+**Usuario** · 14:37:49
+
+Resultado
+```
+     1	// Alta de tareas: intent, tags, prioridad y dependencias iniciales (TaskCreate, ADR 0010). La
+     2	// validación es la del servidor; aquí solo se muestran sus issues. Las dependencias se agregan una a
+     3	// una con un selector y quedan en una lista de elegidas, en el orden en que se agregaron. Pueden ser
+     4	// de cualquier proyecto; las de otro se marcan como riesgo, igual que en el detalle.
+     5	import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+     6	import { getRouteApi, useNavigate } from "@tanstack/react-router";
+     7	import { type FormEvent, useState } from "react";
+     8	import { Loading, QueryError } from "../components/status.tsx";
+     9	import { Badge } from "../components/ui/ba
+… 3656 caracteres omitidos …
+rimary/90",
+        destructive: "bg-destructive text-white hover:bg-destructive/90",
+        outline: "border border-border bg-background hover:bg-muted",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost: "hover:bg-muted",
+      },
+      size: { default: "h-9 px-4 py-2", sm: "h-8 px-3", lg: "h-10 px-6" },
+    },
+    defaultVariants: { variant: "default", size: "default" },
+  },
+);
+
+export function Button({
+  className,
+  variant,
+  size,
+  type = "button",
+  ...props
+}: ComponentProps<"button"> & VariantProps<typeof buttonVariants>) {
+  return (
+    <button type={type} className={cn(buttonVariants({ variant, size }), className)} {...props} />
+  );
+}
+(eval):1: no matches found: --include=*.tsx
+```
+
+**Agente** · 14:37:51
+
+`Bash`
+```
+cat -n packages/web/src/pages/new-task.tsx | sed -n 84,215p; grep -n "candidates" packages/web/src/pages/new-task.tsx
+```
+
+**Usuario** · 14:37:52
+
+Resultado
+```
+    84	  return (
+    85	    <form onSubmit={submit} className="flex max-w-2xl flex-col gap-4">
+    86	      <h1 className="text-xl font-semibold">Nueva tarea</h1>
+    87	      <div className="flex flex-col gap-1">
+    88	        <Label htmlFor="task-project">Proyecto</Label>
+    89	        <Select
+    90	          id="task-project"
+    91	          required
+    92	          value={projectId}
+    93	          onChange={(e) => {
+    94	            setProjectId(e.target.value);
+    95	            setDependsOn([]);
+    96	          }}
+    97	        >
+    98	          <option value="" disabled>
+    99	            Elige un proyecto
+   100	          </option>
+   101	          {projects.data.map((p) => (
+   102	            <option key={p.id} valu
+… 3767 caracteres omitidos …
+/ul>
+   191	          )}
+   192	        </div>
+   193	      )}
+   194	      {create.error && (
+   195	        <p role="alert" className="text-sm text-destructive">
+   196	          No se pudo crear la tarea: {describe(create.error)}
+   197	        </p>
+   198	      )}
+   199	      <div>
+   200	        <Button type="submit" disabled={create.isPending || projectId === ""}>
+   201	          Crear tarea
+   202	        </Button>
+   203	      </div>
+   204	    </form>
+   205	  );
+   206	}
+44:  const candidates = useQuery({ ...queries.tasks(), enabled: projectId !== "" });
+72:  const live = (candidates.data ?? []).filter((t) => !isTerminal(t.state));
+82:  const chosen = dependsOn.flatMap((id) => (candidates.data ?? []).filter((t) => t.id === id));
+```
+
+**Agente** · 14:38:02
+
+`Bash`
+```
+grep -n "taskLabel" -A6 packages/web/src/lib/format.ts; cat packages/web/src/components/ui/badge.tsx | head -30
+```
+
+**Usuario** · 14:38:02
+
+Resultado
+```
+4:export function taskLabel(task: { title: string | null; intent: string }): string {
+5-  return task.title ?? task.intent;
+6-}
+7-
+8-/** Orden de las columnas del tablero: el flujo de la máquina de estados. */
+9-export const BOARD_STATES: TaskState[] = [
+10-  "draft",
+import { cva, type VariantProps } from "class-variance-authority";
+import type { ComponentProps } from "react";
+import { cn } from "../../lib/utils.ts";
+
+const badgeVariants = cva(
+  "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+  {
+    variants: {
+      variant: {
+        default: "border-transparent bg-primary text-primary-foreground",
+        secondary: "border-transparent bg-secondary text-secondary-foreground",
+        destructive: "border-transparent bg-destructive text-white",
+        info: "border-transparent bg-info text-info-foreground",
+        outline: "border-border text-foreground",
+      },
+    },
+    defaultVariants: { variant: "default" },
+  },
+);
+
+export function Badge({
+  className,
+  variant,
+  ...props
+}: ComponentProps<"span"> & VariantProps<typeof badgeVariants>) {
+  return (
+    <span
+      data-variant={variant ?? "default"}
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+```
+
+**Agente** · 14:38:15
+
+`SubagentHandback`
+```
+{"message":"[minor] /Users/sergio.sanchez/.herdr/worktrees/lunas-queue/lunasq-d01a07cf-cec3-4833-8cbd-ffcb914bec41/packages/web/src/pages/new-task.tsx:142 · AC-8 · `candidates.error` and `candidates.i
+… 2691 caracteres omitidos …
+on mouse hover and is not reliably shown or read on keyboard focus or touch. Those users can't tell which project the dependency belongs to, even though the selector does show it in the group label."}
+```
+
+**Usuario** · 14:38:15
+
+Resultado
+```
+{"success":true,"message":"Report delivered to your caller."}
+```
+
+</details>
+
+<details>
+<summary>Subagente lunasq-ui-reviewer (a7689a7752d19b87c)</summary>
+
+**Usuario** · 14:37:42
+
+Revisa la UI (markup, componentes, estilos, layout) del diff de la tarea d01a07cf-cec3-4833-8cbd-ffcb914bec41 en el worktree /Users/sergio.sanchez/.herdr/worktrees/lunas-queue/lunasq-d01a07cf-cec3-4833-8cbd-ffcb914bec41. Base: `git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD`. Archivo principal: packages/web/src/pages/new-task.tsx. Compara con los componentes de packages/web/src/components/ui/ y con el resto del formulario de esa página para consistencia visual. No edites nada.
+
+Contexto: «Depende de» pasa de checkboxes a un Select (con optgroup por proyecto) más una lista «Dependencias elegidas» (li con texto, Badge «otro proyecto» y botón Quitar). Revisa consistencia de componentes y de espaciado, uso de los componentes de ui/, y comportamiento responsive (anchos angostos, tokens largos).
+
+Responde una línea por hallazgo: `[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. Severidades: critical, major, minor.
+
+**Agente** · 14:37:45
+
+`Bash`
+```
+git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD --stat && git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD -- packages/web/src && ls packages/web/src/components/ui/
+```
+
+**Usuario** · 14:37:45
+
+Resultado
+```
+ .../tasks/d01a07cf-cec3-4833-8cbd-ffcb914bec41.md  | 13708 +++++++++++++++++++
+ packages/e2e/tests/pilot.spec.ts                   |     9 +-
+ packages/web/src/pages/new-task.test.tsx           |   151 +-
+ packages/web/src/pages/new-task.tsx                |    95 +-
+ 4 files changed, 13917 insertions(+), 46 deletions(-)
+diff --git a/packages/web/src/pages/new-task.test.tsx b/packages/web/src/pages/new-task.test.tsx
+index 53002fb..444ee91 100644
+--- a/packages/web/src/pages/new-task.test.tsx
++++ b/packages/web/src/pages/new-task.test.tsx
+@@ -1,14 +1,28 @@
+-import { screen, waitFor } from "@testing-library/react";
++import { screen, waitFor, within } from "@testing-library/react";
+ import { describe, expect, it } from "vitest";
+ import { Fak
+… 15268 caracteres omitidos …
+ variant="destructive" title={projectName.get(task.projectId)}>
++                      otro proyecto
++                    </Badge>
++                  )}
++                  <Button
++                    variant="ghost"
++                    size="sm"
++                    aria-label={`Quitar ${task.intent}`}
++                    onClick={() => remove(task.id)}
++                  >
++                    Quitar
++                  </Button>
++                </li>
++              ))}
++            </ul>
++          )}
++        </div>
++      )}
+       {create.error && (
+         <p role="alert" className="text-sm text-destructive">
+           No se pudo crear la tarea: {describe(create.error)}
+badge.tsx
+button.tsx
+card.tsx
+dialog.tsx
+input.tsx
+table.tsx
+```
+
+**Agente** · 14:37:49
+
+`Bash`
+```
+cat packages/web/src/components/ui/button.tsx packages/web/src/components/ui/badge.tsx && sed -n 80,140p packages/web/src/pages/new-task.tsx && rg -n "otro proyecto|break-|min-w-0" packages/web/src --glob '!*.test.tsx' && rg -n "taskLabel" -A4 packages/web/src/pages/new-task.tsx | head -20
+```
+
+**Usuario** · 14:37:50
+
+Resultado
+```
+import { cva, type VariantProps } from "class-variance-authority";
+import type { ComponentProps } from "react";
+import { cn } from "../../lib/utils.ts";
+
+export const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive: "bg-destructive text-white hover:bg-destructive/90",
+        outline: "border border-border bg-background hover:bg-muted",
+        secondary: "bg-secondary text-secondary-foreground hover:b
+… 4142 caracteres omitidos …
+o proyecto`
+packages/web/src/components/task/event-log.tsx:27:    <code className="break-all text-xs text-muted-foreground">{JSON.stringify(event.payload)}</code>
+13:import { isTerminal, taskLabel } from "../lib/format.ts";
+14-import { queries } from "../lib/queries.ts";
+15-
+16-const route = getRouteApi("/tasks/new");
+17-
+--
+158:                      {taskLabel(task)}
+159-                    </option>
+160-                  ))}
+161-                </optgroup>
+162-              ))}
+--
+173:                    {taskLabel(task)}
+174-                  </span>
+175-                  {task.projectId !== projectId && (
+176-                    <Badge variant="destructive" title={projectName.get(task.projectId)}>
+177-                      otro proyecto
+```
+
+**Agente** · 14:37:52
+
+`Bash`
+```
+sed -n 20,130p packages/web/src/components/task/dependencies.tsx && rg -n "export function taskLabel" -A6 packages/web/src/lib/format.ts
+```
+
+**Usuario** · 14:37:52
+
+Resultado
+```
+}: {
+  title: string;
+  links: Json<DependencyLink>[];
+  onRemove?: ((link: Json<DependencyLink>) => void) | undefined;
+}) {
+  if (links.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="text-sm font-medium">{title}</h3>
+      <ul className="flex flex-col gap-1 text-sm">
+        {links.map((link) => (
+          <li key={link.taskId} className="flex flex-wrap items-center gap-2">
+            <Link to="/tasks/$taskId" params={{ taskId: link.taskId }} className="hover:underline">
+              {taskLabel(link)}
+            </Link>
+            <Badge variant="secondary">{STATE_LABEL[link.state]}</Badge>
+            {link.prState && <Badge variant="outline">PR {link.prState}</Badge>}
+           
+… 2600 caracteres omitidos …
+     <option key={t.id} value={t.id}>
+                    {taskLabel(t)}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </Select>
+          <Button type="submit" size="sm" disabled={selected === "" || add.isPending}>
+            Agregar
+          </Button>
+        </div>
+      )}
+      {add.error && (
+        <p role="alert" className="text-sm text-destructive">
+          {add.error.message}
+        </p>
+      )}
+    </form>
+4:export function taskLabel(task: { title: string | null; intent: string }): string {
+5-  return task.title ?? task.intent;
+6-}
+7-
+8-/** Orden de las columnas del tablero: el flujo de la máquina de estados. */
+9-export const BOARD_STATES: TaskState[] = [
+10-  "draft",
+```
+
+**Agente** · 14:38:01
+
+`Bash`
+```
+grep -n 'task-depends-on\|data-intent\|aria-label=\|gap-2\|<li' packages/web/src/pages/new-task.tsx; rg -n "AC-[0-9]+" lunasq/tasks/d01a07cf-cec3-4833-8cbd-ffcb914bec41.md 2>/dev/null | head -20 || git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD --stat --name-only
+```
+
+**Usuario** · 14:38:01
+
+Resultado
+```
+143:        <div className="flex flex-col gap-2">
+144:          <Label htmlFor="task-depends-on">Depende de</Label>
+147:            <Select id="task-depends-on" value="" onChange={(e) => add(e.target.value)}>
+166:            <ul aria-label="Dependencias elegidas" className="flex flex-col gap-1 text-sm">
+168:                <li
+170:                  className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5"
+172:                  <span data-intent className="flex-1">
+183:                    aria-label={`Quitar ${task.intent}`}
+139:        "id": "AC-1",
+145:        "id": "AC-2",
+151:        "id": "AC-3",
+157:        "id": "AC-4",
+163:        "id": "AC-5",
+169:        "id": "AC-6",
+175:        "id": "AC-7",
+181:        "id": "AC-8",
+187:        "id": "AC-9",
+193:        "id": "AC-10",
+204:          "AC-1",
+205:          "AC-2",
+206:          "AC-3",
+207:          "AC-4",
+208:          "AC-5",
+209:          "AC-6",
+210:          "AC-7",
+211:          "AC-8",
+212:          "AC-9"
+219:          "AC-1",
+```
+
+**Agente** · 14:38:03
+
+`Bash`
+```
+ls lunasq/tasks 2>/dev/null; f=$(git diff 0f70aa91517a961a7e54dd26adf6e41b43da67aa...HEAD --name-only | grep d01a07cf); sed -n 135,200p "$f"
+```
+
+**Usuario** · 14:38:04
+
+Resultado
+```
+2f8a269d-ab1f-4437-8f4c-9a50835427f2.md
+56fae342-4aec-4173-a2d3-f2eea1bd7995.md
+d01a07cf-cec3-4833-8cbd-ffcb914bec41.md
+      "Se actualizan los tests de la página y el e2e del piloto"
+    ],
+    "criteria": [
+      {
+        "id": "AC-1",
+        "given": "un proyecto con tareas vivas",
+        "when": "se abre Nueva tarea",
+        "outcome": "«Depende de» ofrece un selector con las tareas y ningún checkbox"
+      },
+      {
+        "id": "AC-2",
+        "given": "una tarea cancelada y una viva en el proyecto elegido",
+        "when": "se despliega el selector",
+        "outcome": "solo aparece la viva"
+      },
+      {
+        "id": "AC-3",
+        "given": "un selector con tareas candidatas",
+        "when": "el humano elige «Base de da
+… 1094 caracteres omitidos …
+elegidas queda vacía"
+      },
+      {
+        "id": "AC-8",
+        "given": "un proyecto sin tareas vivas y sin dependencias elegidas",
+        "when": "se abre Nueva tarea",
+        "outcome": "no se muestra «Depende de»"
+      },
+      {
+        "id": "AC-9",
+        "given": "proyectos distintos con tareas vivas",
+        "when": "se despliega el selector",
+        "outcome": "el grupo del proyecto elegido va primero, seguido de los demás"
+      },
+      {
+        "id": "AC-10",
+        "given": "el flujo e2e del piloto que crea tareas con dependencias",
+        "when": "se ejecuta con la nueva UI",
+        "outcome": "elige cada dependencia con el selector y las tareas se crean con sus aristas"
+      }
+    ],
+    "taskList": [
+      {
+```
+
+**Agente** · 14:38:08
+
+`Bash`
+```
+sed -n 18,50p packages/web/src/pages/new-task.tsx
+```
+
+**Usuario** · 14:38:08
+
+Resultado
+```
+const DEFAULT_PRIORITY = 100;
+
+function parseTags(text: string): string[] {
+  return text
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter((tag) => tag !== "");
+}
+
+function describe(error: Error): string {
+  if (error instanceof ApiError && error.issues.length > 0) {
+    return error.issues.map((i) => `${i.path.join(".") || "(cuerpo)"}: ${i.message}`).join("; ");
+  }
+  return error.message;
+}
+
+export function NewTaskPage() {
+  const search = route.useSearch();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [projectId, setProjectId] = useState(search.projectId ?? "");
+  const [intent, setIntent] = useState("");
+  const [tags, setTags] = useState("");
+  const [priority, setPriority] = useState(String(DEFAULT_PRIORITY));
+  const [dependsOn, setDependsOn] = useState<string[]>([]);
+  const projects = useQuery(queries.projects());
+  const candidates = useQuery({ ...queries.tasks(), enabled: projectId !== "" });
+
+  const create = useMutation({
+    mutationFn: api.createTask,
+    onSuccess: async (task) => {
+      await queryClient.invalidateQueries({ queryKey: ["queue"] });
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+```
+
+**Agente** · 14:38:17
+
+`SubagentHandback`
+```
+{"message":"[major] /Users/sergio.sanchez/.herdr/worktrees/lunas-queue/lunasq-d01a07cf-cec3-4833-8cbd-ffcb914bec41/packages/web/src/pages/new-task.tsx:170 · AC-3 · El `li` es `flex` sin `flex-wrap`, y
+… 1422 caracteres omitidos …
+l control con `gap-2`. Los demás campos del mismo formulario (Proyecto, Intent, Tags, Prioridad) usan `flex flex-col gap-1`, así que el espaciado etiqueta-control no es el mismo dentro de la página."}
+```
+
+**Usuario** · 14:38:17
+
+Resultado
+```
+{"success":true,"message":"Report delivered to your caller."}
+```
+
+</details>
+<!-- lunasq:run:end 7369e439-3bdc-4725-bced-4af9177a9527 -->
