@@ -5,6 +5,7 @@ const node = (id: string) => ({
   id,
   projectId: "p",
   intent: id,
+  title: null,
   state: "draft" as const,
   subState: "queued" as const,
   prState: null,

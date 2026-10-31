@@ -10,7 +10,7 @@ import { Loading, QueryError } from "../components/status.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { SUB_STATE_LABEL } from "../lib/format.ts";
+import { SUB_STATE_LABEL, taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 type Row = Json<Task>;
@@ -31,7 +31,8 @@ export function InProgressPage() {
 
   const columns = useMemo(
     () => [
-      column.accessor("intent", {
+      column.accessor(taskLabel, {
+        id: "intent",
         header: "Tarea",
         cell: (c) => (
           <Link

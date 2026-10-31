@@ -1,5 +1,10 @@
 import type { Phase, RunResult, SubState, TaskState, UsageTotals } from "@lunasq/schemas";
 
+/** Nombre de una tarea en la UI: su título y, mientras el refinamiento no lo genera, el intent. */
+export function taskLabel(task: { title: string | null; intent: string }): string {
+  return task.title ?? task.intent;
+}
+
 /** Orden de las columnas del tablero: el flujo de la máquina de estados. */
 export const BOARD_STATES: TaskState[] = [
   "draft",

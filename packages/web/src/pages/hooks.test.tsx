@@ -47,6 +47,7 @@ function execution(
     eventId,
     taskId,
     taskIntent: fake.task(taskId).intent,
+    taskTitle: fake.task(taskId).title,
     at: new Date(Date.UTC(2026, 9, 29, 12, eventId)).toISOString(),
     point: "before_delivery",
     script: "10-bump-version",

@@ -6,7 +6,7 @@ import { Loading, QueryError } from "../components/status.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 import type { Json } from "../lib/api.ts";
-import { BOARD_STATES, STATE_LABEL, SUB_STATE_LABEL } from "../lib/format.ts";
+import { BOARD_STATES, STATE_LABEL, SUB_STATE_LABEL, taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/projects/$projectId");
@@ -19,7 +19,7 @@ function TaskCard({ task }: { task: Json<Task> }) {
         params={{ taskId: task.id }}
         className="font-medium hover:underline"
       >
-        {task.intent}
+        {taskLabel(task)}
       </Link>
       <div className="flex flex-wrap gap-1">
         <Badge variant="outline">P{task.priority}</Badge>

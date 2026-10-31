@@ -22,6 +22,7 @@
     ],
     "knownRisks": ["Los pedidos ya facturados requieren reembolso, fuera de alcance"],
     "body": {
+      "title": "Cancelar pedidos antes del envío",
       "requirements": [
         "El cliente puede cancelar un pedido pendiente desde su vista de pedidos",
         "Un pedido enviado no se puede cancelar"

@@ -14,7 +14,7 @@ import { UsagePanel } from "../components/task/usage.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { ApiError, api, type Json } from "../lib/api.ts";
-import { formatDate, isTerminal } from "../lib/format.ts";
+import { formatDate, isTerminal, taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/tasks/$taskId");
@@ -100,7 +100,12 @@ function Header({ task }: { task: Json<Task> }) {
   return (
     <header className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h1 className="text-xl font-semibold whitespace-pre-wrap">{task.intent}</h1>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-semibold whitespace-pre-wrap">{taskLabel(task)}</h1>
+          {task.title && (
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{task.intent}</p>
+          )}
+        </div>
         {!isTerminal(task.state) && (
           <div className="flex flex-wrap items-center gap-2">
             {task.state === "needs_human" && <ResumeTask task={task} />}

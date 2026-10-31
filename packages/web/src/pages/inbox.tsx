@@ -13,7 +13,7 @@ import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Label, Textarea } from "../components/ui/input.tsx";
 import { api, type Json } from "../lib/api.ts";
-import { formatDate, PHASE_LABEL } from "../lib/format.ts";
+import { formatDate, PHASE_LABEL, taskLabel } from "../lib/format.ts";
 import { type Inbox, type TasksById, useInbox } from "../lib/inbox.ts";
 import { invalidateInbox } from "../lib/live.ts";
 import { queries } from "../lib/queries.ts";
@@ -46,7 +46,7 @@ function Item({
     >
       <header className="flex flex-wrap items-baseline gap-2">
         <Link id={id} to="/tasks/$taskId" params={{ taskId }} className="font-medium underline">
-          {task?.intent ?? taskId}
+          {task ? taskLabel(task) : taskId}
         </Link>
         {project && <span className="text-xs text-muted-foreground">{project.name}</span>}
       </header>

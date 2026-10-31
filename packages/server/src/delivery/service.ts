@@ -152,7 +152,15 @@ export class DeliveryService {
     if (!spec) return { status: "skipped", reason: "no_spec" };
 
     try {
-      return await this.#run({ taskId, intent: task.intent, run, project, spec, verification });
+      return await this.#run({
+        taskId,
+        intent: task.intent,
+        title: task.title,
+        run,
+        project,
+        spec,
+        verification,
+      });
     } catch (error) {
       if (error instanceof Stop) return error.result;
       return this.#escalate(taskId, run, "delivery_failed", message(error));
@@ -162,6 +170,7 @@ export class DeliveryService {
   async #run(ctx: {
     taskId: string;
     intent: string;
+    title: string | null;
     run: RunRow;
     project: Project;
     spec: NonNullable<ReturnType<SpecRepository["approved"]>>;
@@ -221,7 +230,7 @@ export class DeliveryService {
       cwd: worktree.path,
       head: worktree.branch,
       base,
-      title: prTitle(ctx.intent),
+      title: prTitle(ctx.intent, ctx.title),
       body: prBody({
         taskId,
         runId: run.id,

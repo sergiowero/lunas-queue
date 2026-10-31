@@ -50,6 +50,13 @@
       "when": 1793382880268,
       "tag": "0006_usage_agent_id",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793420172552,
+      "tag": "0007_task_title",
+      "breakpoints": true
     }
   ]
 }

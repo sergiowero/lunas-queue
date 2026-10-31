@@ -35,6 +35,15 @@ describe("detalle de tarea", () => {
     ).toBeTruthy();
   });
 
+  it("con título lo muestra como encabezado y deja el intent debajo", async () => {
+    const { fake, task } = seeded();
+    task.title = "Login por correo";
+    renderApp(`/tasks/${task.id}`, fake);
+
+    expect(await screen.findByRole("heading", { name: "Login por correo" })).toBeTruthy();
+    expect(screen.getByText("Login con email")).toBeTruthy();
+  });
+
   it("una tarea In progress muestra su etiqueta de estado en azul", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "in_progress", "running");

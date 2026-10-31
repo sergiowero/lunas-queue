@@ -82,6 +82,11 @@
         "body": {
           "type": "object",
           "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 72
+            },
             "domainModel": {
               "type": "object",
               "properties": {
@@ -252,7 +257,14 @@
               }
             }
           },
-          "required": ["domainModel", "requirements", "criteria", "taskList", "assumptions"],
+          "required": [
+            "title",
+            "domainModel",
+            "requirements",
+            "criteria",
+            "taskList",
+            "assumptions"
+          ],
           "additionalProperties": false
         }
       },

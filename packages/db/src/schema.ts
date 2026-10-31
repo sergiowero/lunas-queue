@@ -93,6 +93,8 @@ export const tasks = sqliteTable(
       .notNull()
       .references(() => projects.id, { onDelete: "restrict" }),
     intent: text("intent").notNull(),
+    // Lo fija el primer refinamiento y no vuelve a cambiar.
+    title: text("title"),
     tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default([]),
     // Entero sin signo: mayor número = mayor prioridad.
     priority: integer("priority").notNull(),

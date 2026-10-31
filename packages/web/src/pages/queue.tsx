@@ -9,7 +9,7 @@ import { DataTable } from "../components/data-table.tsx";
 import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { formatCost, formatTokens } from "../lib/format.ts";
+import { formatCost, formatTokens, taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 type Entry = Json<QueueEntry>;
@@ -38,7 +38,7 @@ export function QueuePage() {
   const columns = useMemo(
     () => [
       column.display({ id: "position", header: "#", cell: (c) => c.row.index + 1 }),
-      column.accessor((e) => e.task.intent, {
+      column.accessor((e) => taskLabel(e.task), {
         id: "intent",
         header: "Tarea",
         cell: (c) => (

@@ -16,7 +16,7 @@ Eres el refinador de una tarea de LunasQ. El prompt te da el task id. Todo el co
 ## Pasos
 
 1. **Contexto.** Llama `get_task_context` antes que cualquier otra tool del MCP (si no, responden `context_required`). Usa:
-   - `task.intent`: lo que pidió el humano; `task.id` y `run.id` van en el handoff.
+   - `task.intent`: lo que pidió el humano; `task.title`: el título ya fijado por un refinamiento anterior, o null; `task.id` y `run.id` van en el handoff.
    - `project`: repo, rama base y comando de tests.
    - `changesRequested`: si no es null, es una ronda nueva. Parte de esa versión y atiende cada comentario del humano en `comments`. La versión no guarda los supuestos: vuelve a declararlos en `assumptions`.
    - `previousAttempt`: si el Run anterior de esta fase falló, por qué y qué dejó.
@@ -29,9 +29,10 @@ Eres el refinador de una tarea de LunasQ. El prompt te da el task id. Todo el co
    - `aggregates`: los agregados y sus entidades.
    - `invariants`: las invariantes que el código debe proteger.
    - `events`: los eventos de dominio que el cambio emite o consume.
-5. **Requerimientos y criterios.** `requirements` en frases cortas. Cada criterio en `criteria` tiene id `AC-1`, `AC-2`… y se escribe Given / When / Then en los campos `given`, `when` y `outcome` (no `then`). Cubre las invariantes y los casos borde del modelo.
-6. **Task list.** `taskList` con ids `T-1`, `T-2`…, pasos pequeños en orden de implementación; cada uno apunta en `criterionIds` a criterios de esta misma spec. El implementador los marcará uno por uno.
-7. **Salida.** Llama `submit_spec` con `{ "handoff": <objeto> }`. Si responde sin error, la fase terminó: no llames más tools y termina tu turno.
+5. **Título.** `body.title`: título conciso de la tarea, de hasta 72 caracteres, en una línea y sin punto final (por ejemplo «Cancelar pedidos antes del envío»). Describe qué se logra, no copia el intent. Se usa como nombre de la tarea en la UI y como título del PR. LunasQ lo guarda solo en el primer refinamiento: en una ronda con `changesRequested` la tarea ya tiene título (`task.title` en el contexto) y el que envíes se ignora, pero igual es obligatorio; repite `task.title`.
+6. **Requerimientos y criterios.** `requirements` en frases cortas. Cada criterio en `criteria` tiene id `AC-1`, `AC-2`… y se escribe Given / When / Then en los campos `given`, `when` y `outcome` (no `then`). Cubre las invariantes y los casos borde del modelo.
+7. **Task list.** `taskList` con ids `T-1`, `T-2`…, pasos pequeños en orden de implementación; cada uno apunta en `criterionIds` a criterios de esta misma spec. El implementador los marcará uno por uno.
+8. **Salida.** Llama `submit_spec` con `{ "handoff": <objeto> }`. Si responde sin error, la fase terminó: no llames más tools y termina tu turno.
 
 ## Handoff
 
@@ -55,6 +56,7 @@ Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (
   ],
   "knownRisks": ["El proveedor de pagos puede tardar en confirmar el reembolso"],
   "body": {
+    "title": "Cancelar pedidos antes del envío",
     "domainModel": {
       "boundedContext": "Pedidos",
       "glossary": [

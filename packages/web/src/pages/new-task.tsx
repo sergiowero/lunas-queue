@@ -9,7 +9,7 @@ import { Loading, QueryError } from "../components/status.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input, Label, Select, Textarea } from "../components/ui/input.tsx";
 import { ApiError, api } from "../lib/api.ts";
-import { isTerminal } from "../lib/format.ts";
+import { isTerminal, taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/tasks/new");
@@ -151,7 +151,7 @@ export function NewTaskPage() {
                     checked={dependsOn.includes(task.id)}
                     onChange={(e) => toggle(task.id, e.target.checked)}
                   />
-                  {task.intent}
+                  {taskLabel(task)}
                 </label>
               ))}
             </div>

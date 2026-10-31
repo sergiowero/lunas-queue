@@ -30,7 +30,7 @@ Siete entidades bastan (más UsageRecord, ver Consumo); la clave es separar la *
 | Entidad | Propósito | Campos clave |
 | --- | --- | --- |
 | Project | Un repo y su configuración; mapea 1:1 a un workspace de herdr | repo, rama base, perfil de agente por fase (kind, modelo, args), límite de concurrencia, comando de tests, hooks por fase (en lunasq/hooks/ del repo), ruta local, bootstrap del worktree |
-| Task | Unidad de trabajo en la cola | intent, tags, prioridad (entero sin signo), estado, sub‑estado, iteración de verificación, branch, ruta del worktree, URL y estado del PR (abierto / mergeado / cerrado), etiqueta de riesgo (read‑only), caused\_by (tarea que originó este bugfix, opcional), usage (read‑only) |
+| Task | Unidad de trabajo en la cola | intent, título (lo genera el refinador en el primer refinamiento y no vuelve a cambiar; la UI usa el intent mientras no exista), tags, prioridad (entero sin signo), estado, sub‑estado, iteración de verificación, branch, ruta del worktree, URL y estado del PR (abierto / mergeado / cerrado), etiqueta de riesgo (read‑only), caused\_by (tarea que originó este bugfix, opcional), usage (read‑only) |
 | TaskDependency | Arista del DAG | task\_id, depends\_on\_id |
 | Spec | Salida versionada del refinamiento | versión, modelo de dominio (bounded context, glosario, agregados, invariantes, eventos), requerimientos, acceptance criteria, task list, estado de aprobación |
 | Run | Un intento de un agente en una fase | fase, tipo de agente, workspace/pane/nombre en herdr, identidad de sesión del agente (session id nativo o nombre de sesión), run token, inicio, fin, resultado, failure\_reason (texto), handoff (JSON), usage (read‑only) |
@@ -528,7 +528,7 @@ La hace LunasQ, sin agente, dentro del Run del verificador, cuando éste registr
 3. Trailers `LunasQ-Task` y `LunasQ-Run` en cada commit del branch.
 4. Correr la suite de tests una última vez; en rojo, la tarea regresa a in progress igual que con un conflicto.
 5. Cerrar el Run del verificador, commit del archivo de evidencia y push del branch de la tarea.
-6. Crear PR con el CLI gh, con el intent, los criterios y su evidencia en la descripción, más la etiqueta de riesgo (bajo / medio / alto) que asignó el approver para priorizar tu revisión. Registrar el PR y correr `after_delivery`; si el hook commiteó cambios, se publican con un segundo push.
+6. Crear PR con el CLI gh, titulado con el título de la tarea (o la primera línea del intent si no tiene), con el intent, los criterios y su evidencia en la descripción, más la etiqueta de riesgo (bajo / medio / alto) que asignó el approver para priorizar tu revisión. Registrar el PR y correr `after_delivery`; si el hook commiteó cambios, se publican con un segundo push.
 7. `verdict_pass`: la tarea queda en Completed. Conservar o remover el worktree según política; los dependientes se liberan cuando el PR se mergea.
 
 Cualquier otro fallo (push, `gh`, un hook bloqueado) escala a Needs human. Una entrega que un reinicio dejó a medias se retoma sola al arrancar.

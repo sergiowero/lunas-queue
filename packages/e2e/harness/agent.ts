@@ -135,7 +135,10 @@ export async function runTurn(agent: PromptedAgent, env: AgentEnv): Promise<void
       const summary = answered
         ? `Spec con la respuesta del humano: ${answered.answer}`.slice(0, 280)
         : undefined;
-      await mcp.call("submit_spec", { handoff: handoff("refinement", ids, summary) });
+      // El título es el intent: el piloto busca las tareas por ese texto en la UI.
+      const refinement = handoff("refinement", ids, summary) as Json & { body: Json };
+      refinement.body = { ...refinement.body, title: intent };
+      await mcp.call("submit_spec", { handoff: refinement });
     } else if (phase === "implement") {
       const worktree = context.task.worktreePath ?? agent.cwd;
       const sha = commitWork(worktree, taskId, context.run.iteration);

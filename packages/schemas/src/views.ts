@@ -11,7 +11,7 @@ import {
   SubState,
   TaskState,
 } from "./enums.ts";
-import { Priority, Task } from "./task.ts";
+import { Priority, Task, TaskTitle } from "./task.ts";
 
 /** Un Run como lo ve la UI: sin el run token, que solo vive en el pane del agente. */
 export const RunView = z.strictObject({
@@ -127,6 +127,7 @@ export const TaskGraphNode = z.strictObject({
   id: z.uuid(),
   projectId: z.uuid(),
   intent: z.string(),
+  title: TaskTitle.nullable(),
   state: TaskState,
   subState: SubState.nullable(),
   prState: PrState.nullable(),

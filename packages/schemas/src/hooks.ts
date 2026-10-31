@@ -110,6 +110,7 @@ export const HookExecutionView = z.strictObject({
   eventId: z.int().min(1),
   taskId: z.uuid(),
   taskIntent: z.string(),
+  taskTitle: z.string().nullable(),
   at: z.date(),
   ...HookExecutedPayload.shape,
 });

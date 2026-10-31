@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
 import type { Json } from "../../lib/api.ts";
 import { NODE_HEIGHT, NODE_WIDTH } from "../../lib/dag-layout.ts";
+import { taskLabel } from "../../lib/format.ts";
 import { StateBadges } from "../status.tsx";
 import { Badge } from "../ui/badge.tsx";
 
@@ -23,10 +24,10 @@ export function TaskNode({ data: { task, projectName } }: NodeProps<TaskFlowNode
       <Link
         to="/tasks/$taskId"
         params={{ taskId: task.id }}
-        title={task.intent}
+        title={taskLabel(task)}
         className="line-clamp-2 font-medium hover:underline"
       >
-        {task.intent}
+        {taskLabel(task)}
       </Link>
       <div className="flex flex-wrap items-center gap-1">
         <StateBadges state={task.state} subState={task.subState} />

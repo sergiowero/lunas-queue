@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TaskTitle } from "../task.ts";
 import { CriterionId, checkUnique, list, ShortText, Text } from "./common.ts";
 import { envelopeShape } from "./envelope.ts";
 
@@ -101,7 +102,8 @@ export function checkSpecReferences(
 }
 
 export const RefinementBody = z
-  .strictObject({ ...specContentShape, assumptions: list(Text, 50) })
+  // `title` solo se guarda en el primer refinamiento de la tarea (docs/design.md §Modelo de dominio).
+  .strictObject({ title: TaskTitle, ...specContentShape, assumptions: list(Text, 50) })
   .superRefine(checkSpecReferences);
 
 export const RefinementHandoff = z.strictObject({
