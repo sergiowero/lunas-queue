@@ -8,6 +8,14 @@ const unique = <T>(items: T[]): T[] => [...new Set(items)];
 // Entero sin signo hasta MAX_SAFE_INTEGER, como el CHECK de la columna (ADR 0005).
 export const Priority = z.int().min(0).max(Number.MAX_SAFE_INTEGER);
 
+/** Número de tarea (#N): secuencial global, inmutable y sin reuso; no sustituye al UUID (ADR 0015). */
+export const TaskNumber = z.int().min(1).max(Number.MAX_SAFE_INTEGER);
+
+/** Cómo se identifica una tarea ante personas: en herdr, notificaciones y la UI. */
+export function taskLabel(number: number): string {
+  return `#${number}`;
+}
+
 const Intent = z.string().trim().min(1).max(10_000);
 const Tags = z.array(z.string().trim().min(1).max(64)).max(32).transform(unique);
 
@@ -42,6 +50,7 @@ export type TaskCancel = z.infer<typeof TaskCancel>;
 
 export const Task = z.strictObject({
   id: z.uuid(),
+  number: TaskNumber,
   projectId: z.uuid(),
   intent: z.string().min(1),
   tags: z.array(z.string()),
@@ -63,6 +72,7 @@ export type Task = z.infer<typeof Task>;
 /** La otra tarea de una arista, vista desde una tarea: una de sus dependencias o dependientes. */
 export const DependencyLink = z.strictObject({
   taskId: z.uuid(),
+  number: TaskNumber,
   projectId: z.uuid(),
   intent: z.string(),
   state: TaskState,
@@ -85,6 +95,8 @@ export const TASK_DEPENDENCY_ADDED = "task.dependency_added";
 export const TASK_DEPENDENCY_REMOVED = "task.dependency_removed";
 
 export const TaskCreatedPayload = z.strictObject({
+  // Opcional: los task.created anteriores al número no lo traen.
+  number: TaskNumber.optional(),
   projectId: z.uuid(),
   intent: z.string(),
   tags: z.array(z.string()),

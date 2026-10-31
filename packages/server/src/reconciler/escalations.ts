@@ -9,13 +9,18 @@ import {
   type OutboxMessage,
   TASK_TRANSITIONED,
   TaskTransitionedPayload,
+  taskLabel,
 } from "@lunasq/schemas";
 
-export function escalationNotification(message: OutboxMessage): Notification | null {
+/** `taskNumber` es el número de la tarea del mensaje: el título la identifica con #N. */
+export function escalationNotification(
+  taskNumber: number,
+  message: OutboxMessage,
+): Notification | null {
   if (message.topic !== TASK_TRANSITIONED) return null;
   const payload = TaskTransitionedPayload.safeParse(message.payload);
   if (!payload.success || payload.data.to.state !== "needs_human") return null;
-  const short = message.taskId.slice(0, 8);
+  const short = taskLabel(taskNumber);
   const base = { taskId: message.taskId, createdAt: message.createdAt };
   switch (payload.data.reason) {
     case "retries_exhausted":

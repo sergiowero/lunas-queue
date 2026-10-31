@@ -87,6 +87,7 @@ describe("Task", () => {
   const now = new Date();
   const row = {
     id: otherId,
+    number: 7,
     projectId,
     intent: "Agregar login",
     tags: [],
@@ -108,6 +109,13 @@ describe("Task", () => {
     expect(Task.parse(row)).toEqual(row);
   });
 
+  it("exige un número de tarea entero positivo", () => {
+    const { number: _, ...withoutNumber } = row;
+    expect(Task.safeParse(withoutNumber).success).toBe(false);
+    expect(Task.safeParse({ ...row, number: 0 }).success).toBe(false);
+    expect(Task.safeParse({ ...row, number: 1.5 }).success).toBe(false);
+  });
+
   it("rechaza un estado fuera del enum", () => {
     expect(Task.safeParse({ ...row, state: "new" }).success).toBe(false);
   });
@@ -117,6 +125,7 @@ describe("DependencyLink", () => {
   it("describe la otra tarea de la arista y si cruza proyectos", () => {
     const link = {
       taskId: otherId,
+      number: 3,
       projectId,
       intent: "Base",
       state: "completed",

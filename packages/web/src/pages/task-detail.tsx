@@ -8,9 +8,11 @@ import { Loading, QueryError, StateBadges } from "../components/status.tsx";
 import { DependenciesPanel } from "../components/task/dependencies.tsx";
 import { EventLogPanel } from "../components/task/event-log.tsx";
 import { EvidencePanel } from "../components/task/evidence.tsx";
+import { IntentText } from "../components/task/intent-text.tsx";
 import { RunsPanel } from "../components/task/runs.tsx";
 import { SpecPanel } from "../components/task/spec.tsx";
 import { UsagePanel } from "../components/task/usage.tsx";
+import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { ApiError, api, type Json } from "../lib/api.ts";
@@ -76,7 +78,12 @@ function Header({ task }: { task: Json<Task> }) {
   return (
     <header className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h1 className="text-xl font-semibold whitespace-pre-wrap">{task.intent}</h1>
+        <div className="flex items-baseline gap-2">
+          <TaskNumber number={task.number} className="text-base" />
+          <h1 className="text-xl font-semibold whitespace-pre-wrap">
+            <IntentText intent={task.intent} />
+          </h1>
+        </div>
         {!isTerminal(task.state) && <CancelTask task={task} />}
       </div>
       <div className="flex flex-wrap items-center gap-2">

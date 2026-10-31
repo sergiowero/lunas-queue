@@ -272,6 +272,7 @@ describe("TaskViewRepository.graph", () => {
     expect(graph.nodes.map((n) => n.id).sort()).toEqual([base.id, isolated.id, task.id].sort());
     expect(graph.nodes.find((n) => n.id === base.id)).toEqual({
       id: base.id,
+      number: base.number,
       projectId: project.id,
       intent: "Base",
       state: "draft",

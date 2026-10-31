@@ -9,6 +9,7 @@ import { useMemo } from "react";
 import { type TaskFlowNode, TaskNode } from "../components/dag/task-node.tsx";
 import { Muted, Section } from "../components/section.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
+import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
@@ -38,11 +39,16 @@ function Dependencies({
             const dependsOn = byId.get(edge.dependsOnId);
             if (!task || !dependsOn) return null;
             return (
-              <li key={`${edge.taskId}:${edge.dependsOnId}`} className="flex flex-wrap gap-1">
+              <li
+                key={`${edge.taskId}:${edge.dependsOnId}`}
+                className="flex flex-wrap items-baseline gap-1"
+              >
+                <TaskNumber number={task.number} />
                 <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="hover:underline">
                   {task.intent}
                 </Link>
                 <span>depende de</span>
+                <TaskNumber number={dependsOn.number} />
                 <Link
                   to="/tasks/$taskId"
                   params={{ taskId: dependsOn.id }}

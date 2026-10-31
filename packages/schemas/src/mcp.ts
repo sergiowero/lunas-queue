@@ -12,6 +12,7 @@ import {
   VerificationHandoff,
 } from "./handoff/index.ts";
 import { SpecContent } from "./spec.ts";
+import { TaskNumber } from "./task.ts";
 
 const TaskItemId = z.string().regex(/^T-[1-9]\d*$/, {
   error: "id de tarea inválido: se esperaba T-<n>, por ejemplo T-1",
@@ -91,6 +92,7 @@ export type QuestionCreatedPayload = z.infer<typeof QuestionCreatedPayload>;
 export const TaskContext = z.strictObject({
   task: z.strictObject({
     id: z.uuid(),
+    number: TaskNumber,
     intent: z.string(),
     tags: z.array(z.string()),
     state: TaskState,

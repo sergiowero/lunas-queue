@@ -11,7 +11,7 @@ import {
   SubState,
   TaskState,
 } from "./enums.ts";
-import { Priority, Task } from "./task.ts";
+import { Priority, Task, TaskNumber } from "./task.ts";
 
 /** Un Run como lo ve la UI: sin el run token, que solo vive en el pane del agente. */
 export const RunView = z.strictObject({
@@ -125,6 +125,7 @@ export type QueueQuery = z.infer<typeof QueueQuery>;
 /** Una tarea del DAG: lo justo para dibujar el nodo y llevar a su detalle. */
 export const TaskGraphNode = z.strictObject({
   id: z.uuid(),
+  number: TaskNumber,
   projectId: z.uuid(),
   intent: z.string(),
   state: TaskState,

@@ -61,10 +61,13 @@ export function insertTask(
   const [row] = db
     .insert(tasks)
     .values({ projectId, intent: "Hacer algo", priority: 100, ...overrides })
-    .returning()
+    .returning({ id: tasks.id })
     .all();
   if (!row) throw new Error("insert de task sin fila");
-  return row;
+  // Relee la fila: RETURNING no ve el número que asigna el trigger tasks_assign_number.
+  const task = db.select().from(tasks).where(eq(tasks.id, row.id)).get();
+  if (!task) throw new Error("task insertada sin fila");
+  return task;
 }
 
 export function insertRun(

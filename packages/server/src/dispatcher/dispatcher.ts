@@ -31,6 +31,7 @@ import {
   phasePrompt,
   resolveSession,
   runEnv,
+  type TaskWorktreeRecord,
   telemetryRunEnv,
 } from "@lunasq/domain";
 import {
@@ -39,6 +40,7 @@ import {
   SchedulablePhase as SchedulablePhaseSchema,
   SchedulerConfig,
   type SchedulerConfigInput,
+  taskLabel,
 } from "@lunasq/schemas";
 import { DEFAULT_GATE_TIMEOUT_MS } from "../mcp/ports.ts";
 import type { Dispatcher } from "../scheduler/scheduler.ts";
@@ -316,7 +318,7 @@ export class PhaseDispatcher implements Dispatcher {
   private async launchSteps(initial: RunRow): Promise<RunRow> {
     const phase = SchedulablePhaseSchema.parse(initial.phase);
     const name = requireName(initial);
-    const project = this.projectOf(initial.taskId);
+    const { task, project } = this.taskAndProject(initial.taskId);
     const worktree = await this.worktrees.ensure(initial.taskId);
     let run = this.checkOpen(initial.id);
 
@@ -367,7 +369,7 @@ export class PhaseDispatcher implements Dispatcher {
     }
     await this.herdr.reportMetadata({
       paneId,
-      title: `LunasQ ${phase} ${run.taskId.slice(0, 8)}`,
+      title: `LunasQ ${phase} ${taskLabel(task.number)}`,
       tokens: { task: run.taskId, phase, iter: String(run.iteration), run: run.id },
     });
     run = this.checkOpen(run.id);
@@ -383,11 +385,13 @@ export class PhaseDispatcher implements Dispatcher {
     return launched;
   }
 
-  private projectOf(taskId: string): Project {
+  private taskAndProject(taskId: string): { task: TaskWorktreeRecord; project: Project } {
     const task = this.tasks.get(taskId);
     const project = task ? this.projects.get(task.projectId) : null;
-    if (!project) throw new DispatchError("project_not_found", `sin proyecto para ${taskId}`);
-    return project;
+    if (!task || !project) {
+      throw new DispatchError("project_not_found", `sin proyecto para ${taskId}`);
+    }
+    return { task, project };
   }
 
   /** El agente con el nombre del Run es de este Run: lo dice su metadata o su pane guardado. */

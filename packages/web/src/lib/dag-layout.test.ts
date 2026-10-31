@@ -3,6 +3,7 @@ import { layoutGraph, NODE_HEIGHT, NODE_WIDTH } from "./dag-layout.ts";
 
 const node = (id: string) => ({
   id,
+  number: 1,
   projectId: "p",
   intent: id,
   state: "draft" as const,
