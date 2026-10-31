@@ -227,11 +227,13 @@ Restricciones: dos tareas nunca comparten branch ni worktree, y el reconciliador
 | --- | --- | --- |
 | MCP: fase completada | Salida válida | Transición de estado, cierre del agente |
 | herdr: `blocked` | Prompt de permiso en la TUI del agente | Item en la bandeja; si sigue así 1 minuto, notificación por herdr y UI; se responde en herdr |
-| herdr: `idle`/`done` sin señal MCP | Se detuvo sin reportar | Tras 15 s de gracia, nudge (re‑prompt) 2 veces, luego marcar Run fallido |
+| herdr: `idle`/`done` sin señal MCP | Se detuvo sin reportar | Tras 15 s de gracia se lee la pantalla del agente: si muestra el aviso de límite de uso de Claude (`Usage limit reached · limit resets …`, el menú de `/rate-limit-options` u otros del [ADR 0015](decisions/0015-limite-de-uso-agente.md)), Needs human con razón `usage_limit` y notificación; si no, nudge (re‑prompt) 2 veces, luego marcar Run fallido |
 | Pane cerrado o proceso salió | Crash | Run fallido; hasta 3 reintentos con backoff (30 s·2^(n‑1), tope 10 min), luego Needs human con notificación |
 | Timeout de fase vencido | Agente atorado o fase más larga de lo esperado | Marcar Needs human y notificar; el agente no se detiene |
 
 **Timeout de fase.** Configurable por proyecto y por fase, default 30 minutos. Corre mientras el Run está en running y se pausa en `blocked` o `waiting_human`, porque ese tiempo depende del humano. Al vencer, la tarea pasa a Needs human con notificación; el agente sigue vivo para que decidas si esperar, intervenir o cancelar. Las tools de salida exigen `running`, así que reanudar cierra el Run viejo y redespacha la fase sobre el mismo worktree. El reloj vive en memoria: tras un reinicio arranca con el presupuesto completo ([ADR uw-17-reconciliacion](decisions/uw-17-reconciliacion.md)).
+
+**Límite de uso del agente.** Cuando Claude Code se queda sin uso, lo anuncia en su TUI (`Usage limit reached · limit resets 3:45pm` con espera automática, `usage limit reached · wrapping up`, el menú de `/rate-limit-options`) y herdr no lo detecta: su manifiesto de detección no conoce ese UI. El watcher lo reconoce leyendo la pantalla del agente (`herdr agent read`) en la vía de agente detenido y en la vía `blocked`: nota en el Event log con el texto que dibujó Claude, notificación con esa información y Needs human con razón `usage_limit`, con el Run y el agente intactos — son los mismos pasos del timeout de fase, con reinserción hasta que el humano la reanuda tras el reset del límite ([ADR 0015](decisions/0015-limite-de-uso-agente.md)).
 
 **Sin heartbeat ni lease en v1.** La liveness sale de herdr sin costo de tokens: estado del agente, pane cerrado o proceso terminado. Supuesto: una sola instancia de dispatcher. Si después se escala a varias, se agrega un lease del lado del servidor que renueva el dispatcher, nunca el agente.
 

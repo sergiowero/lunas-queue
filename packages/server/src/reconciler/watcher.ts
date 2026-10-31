@@ -14,6 +14,7 @@ import type {
   HerdrEvent,
   HerdrSubscription,
 } from "@lunasq/adapters";
+import { showsUsageLimit, usageLimitMessage } from "@lunasq/adapters";
 import {
   type LunasqDatabase,
   ProjectRepository,
@@ -48,6 +49,8 @@ export const DEFAULT_MAX_NUDGES = 2;
  * Run justo antes de que el agente termine su turno.
  */
 export const DEFAULT_NUDGE_GRACE_MS = 15_000;
+/** Líneas que se lee del agente para reconocer la pantalla (la TUI dibuja el aviso abajo). */
+const SCREEN_LINES = 40;
 
 export interface RunWatcherOptions {
   db: LunasqDatabase;
@@ -277,6 +280,9 @@ export class RunWatcher implements RunObserver {
           title: `Agente bloqueado en ${w.taskId.slice(0, 8)}`,
           body: `El agente ${w.name} (${w.phase}) espera un permiso en herdr desde hace 1 minuto.`,
         });
+        // El bloqueo puede ser el límite de uso en forma de menú, no un permiso: se lee la
+        // pantalla antes de que el aviso de bloqueado madure (1 minuto).
+        void this.serial(w.runId, (w) => this.checkBlocked(w));
       }
     } else if (status === "idle" || status === "done") {
       if (w.grace === undefined && !w.expired) {
@@ -315,6 +321,7 @@ export class RunWatcher implements RunObserver {
     if (!agent) return this.gone(w, true);
     if (agent.status !== "idle" && agent.status !== "done")
       return this.applyStatus(w, agent.status);
+    if (await this.usageLimit(w)) return;
     if (w.nudges < this.maxNudges) {
       w.nudges += 1;
       const prompted = await this.herdr.promptAgent({
@@ -329,6 +336,61 @@ export class RunWatcher implements RunObserver {
       w.runId,
       `agent_stopped: el agente ${w.name} se detuvo sin la señal de fin de fase tras ${w.nudges} nudges`,
     );
+  }
+
+  /** Al entrar en `blocked`: si la pantalla es el límite de uso (no un permiso), escala ahora. */
+  private async checkBlocked(w: Watch): Promise<void> {
+    if (w.expired || w.status !== "blocked" || this.settled(w)) return;
+    await this.usageLimit(w);
+  }
+
+  /**
+   * El aviso de límite de uso de Claude solo se ve en su pantalla (herdr no lo detecta, ADR 0004):
+   * si está, pausa la tarea en needs_human hasta que alguien la reanude, con el Run y el agente
+   * vivos, como el timeout de fase. Devuelve true si detectó y escaló.
+   */
+  private async usageLimit(w: Watch): Promise<boolean> {
+    let screen: string;
+    try {
+      screen = await this.herdr.readAgent({ name: w.name, lines: SCREEN_LINES });
+    } catch {
+      return false; // el agente ya no responde: la señal siguiente (crash) decide la ruta.
+    }
+    if (!this.current(w) || !showsUsageLimit(screen)) return false;
+    await this.escalateUsageLimit(w, usageLimitMessage(screen));
+    return true;
+  }
+
+  /** needs_human con `usage_limit` y notificación; desde ese momento solo se vigila el pane. */
+  private async escalateUsageLimit(w: Watch, message: string): Promise<void> {
+    const task = this.tasks.get(w.taskId);
+    if (!task || this.settled(w) || !this.inPhase(w, "running")) return;
+    w.expired = true;
+    clearTimeout(w.grace);
+    w.grace = undefined;
+    if (w.blockedId) this.escalator.resolve(w.blockedId);
+    w.blockedId = undefined;
+    w.blockedSince = undefined;
+    const moved = transitionTask(this.db, {
+      taskId: w.taskId,
+      actor: "system",
+      command: {
+        type: "escalate",
+        reason: "usage_limit",
+        note: `El agente ${w.name} (${w.phase}) se quedó sin uso: ${message}`,
+      },
+      expected: { state: task.state, subState: "running" },
+    });
+    if (!moved.ok) return;
+    await this.notifyFn({
+      id: `usage:${w.runId}`,
+      kind: "usage_limit",
+      taskId: w.taskId,
+      runId: w.runId,
+      title: `Límite de uso en ${w.taskId.slice(0, 8)}`,
+      body: `El agente ${w.name} (${w.phase}) llegó a su límite de uso ("${message}"). La tarea espera en needs_human: reanúdala cuando el límite se restablezca.`,
+      createdAt: new Date().toISOString(),
+    });
   }
 
   /**

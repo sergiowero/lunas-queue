@@ -8,6 +8,7 @@ export const NotificationKind = z.enum([
   "question_open",
   "agent_blocked",
   "phase_timeout",
+  "usage_limit",
   "verification_exhausted",
   // Run fallido tras agotar los reintentos de la fase (ADR uw-17-reconciliacion).
   "retries_exhausted",

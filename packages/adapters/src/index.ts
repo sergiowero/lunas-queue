@@ -12,8 +12,11 @@ export { RealGitHub, type RealGitHubOptions } from "./github/real.ts";
 export type * from "./github/types.ts";
 export {
   showsTrustDialog,
+  showsUsageLimit,
   TRUST_ACCEPT_KEYS,
   TRUST_DIALOG_MARKER,
+  USAGE_LIMIT_PATTERN,
+  usageLimitMessage,
 } from "./herdr/claude-tui.ts";
 export type { HerdrContractHarness } from "./herdr/contract.ts";
 export { HerdrError, isHerdrError } from "./herdr/errors.ts";

@@ -14,3 +14,53 @@ export const TRUST_ACCEPT_KEYS = ["down", "enter"] as const;
 export function showsTrustDialog(screen: string): boolean {
   return screen.includes(TRUST_DIALOG_MARKER) && screen.includes("No, exit");
 }
+
+/**
+ * La TUI del agente cuando se agota el uso: el aviso queda en pantalla y reintentar no sirve hasta
+ * que se restablece. Textos vistos del CLI: `Usage limit reached · limit resets 3:45pm`,
+ * `Usage limit reached · wrapping up`, `5-hour limit reached · resets <hora>`, el pie de la
+ * espera `Continuing automatically at 3:45pm · Esc to cancel` y el corte
+ * `Automatic continue stopped after repeated usage-limit hits`. herdr no conoce ese UI (su
+ * manifiesto de detección no tiene regla para él), así que LunasQ lo reconoce aquí.
+ */
+export const USAGE_LIMIT_PATTERN = new RegExp(
+  [
+    "usage limit reached",
+    "hit your usage limit",
+    "usage-limit", // `Automatic continue stopped after repeated usage-limit hits`
+    "(?:5-hour|weekly|session) limit (?:reached|resets)",
+    "reached your (?:5-hour|weekly|session) limit",
+    "limit(?: will)? resets? [^\\n]*?\\d{1,3}:\\d{2}", // `· limit resets 3:45pm`
+    "limit will reset at ", // `Your limit will reset at 5pm (Asia/Tokyo)`
+    "continuing automatically",
+    "automatic continue",
+  ].join("|"),
+  "i",
+);
+
+/** Si la pantalla del agente muestra el aviso de límite de uso. */
+export function showsUsageLimit(screen: string): boolean {
+  return USAGE_LIMIT_PATTERN.test(screen);
+}
+
+/**
+ * El aviso como lo dibuja Claude, para la nota del escalamiento: la última línea que lo menciona
+ * con su tanda contigua de a lo más tres líneas (el aviso y su pie con la hora del reset).
+ */
+export function usageLimitMessage(screen: string): string {
+  const lines = screen.split("\n").map((line) => line.trim());
+  const idx = lines.reduce((last, line, i) => (USAGE_LIMIT_PATTERN.test(line) ? i : last), -1);
+  if (idx === -1) return "usage limit reached";
+  let start = idx;
+  for (
+    let steps = 0;
+    steps < 2 && start > 0 && USAGE_LIMIT_PATTERN.test(lines[start - 1] ?? "");
+    steps += 1
+  )
+    start -= 1;
+  const message = lines
+    .slice(start, idx + 1)
+    .filter(Boolean)
+    .join(" · ");
+  return message.slice(0, 500) || "usage limit reached";
+}

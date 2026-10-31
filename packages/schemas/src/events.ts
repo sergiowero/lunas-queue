@@ -26,6 +26,7 @@ export type TaskCommand = z.infer<typeof TaskCommand>;
 export const EscalationReason = z.enum([
   "blocked",
   "phase_timeout",
+  "usage_limit",
   "retries_exhausted",
   "iterations_exhausted",
   "hook_failed",

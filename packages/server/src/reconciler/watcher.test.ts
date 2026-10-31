@@ -1,6 +1,7 @@
 import { FakeHerdr, type HerdrEvent, type SubscribeInput } from "@lunasq/adapters";
 import { transitionTask } from "@lunasq/db";
 import { nudgePrompt } from "@lunasq/domain";
+import type { Notification } from "@lunasq/schemas";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ESCALATION_DELAY_MS } from "../notifications/escalator.ts";
 import { harness, MIN, SEC, settle } from "./test-helpers.ts";
@@ -266,6 +267,103 @@ describe("RunWatcher: timeout de fase", () => {
     await vi.advanceTimersByTimeAsync(10 * MIN);
     await settle(vi);
     expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human" });
+  });
+});
+
+describe("RunWatcher: límite de uso", () => {
+  const CLAUDE_LIMIT_SCREEN =
+    "trabajo en curso…\nUsage limit reached · limit resets 3:45pm\nContinuing automatically at 3:45pm · Esc to cancel";
+
+  function usageNotification(notifications: Notification[]) {
+    const last = notifications[notifications.length - 1];
+    if (last?.kind !== "usage_limit") throw new Error("no hay notificación de usage_limit");
+    return last;
+  }
+
+  it("agente detenido con el aviso en pantalla: needs_human con usage_limit, sin nudge ni fallo", async () => {
+    const h = setup();
+    const { taskId, run, name } = await h.launched();
+    h.herdr.setAgentScreen(name, CLAUDE_LIMIT_SCREEN);
+    h.herdr.setAgentStatus(name, "idle");
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_NUDGE_GRACE_MS);
+    await settle(vi);
+
+    expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human", subState: null });
+    expect(await h.herdr.readAgent({ name })).not.toContain(nudgePrompt("refine", taskId));
+    expect(usageNotification(h.notifications)).toMatchObject({
+      id: `usage:${run.id}`,
+      kind: "usage_limit",
+      runId: run.id,
+      taskId,
+    });
+    expect(usageNotification(h.notifications).body).toContain("3:45pm");
+    expect(h.runs.get(run.id)?.endedAt).toBeNull();
+    expect(await h.herdr.getAgent(name)).toBeDefined();
+    expect(h.errors).toEqual([]);
+    const event = h.db.$client
+      .prepare("select payload from events where task_id = ? order by id desc limit 1")
+      .get(taskId) as { payload: string };
+    expect(JSON.parse(event.payload)).toEqual({
+      command: "escalate",
+      from: { state: "draft", subState: "running" },
+      to: { state: "needs_human", subState: null },
+      verificationIteration: 0,
+      reason: "usage_limit",
+      note: `El agente ${name} (refine) se quedó sin uso: Usage limit reached · limit resets 3:45pm · Continuing automatically at 3:45pm · Esc to cancel`,
+    });
+  });
+
+  it("el trabajo propio que menciona límites no dispara el escalamiento: sigue la ruta normal", async () => {
+    const h = setup();
+    const { taskId, name } = await h.launched();
+    h.herdr.setAgentScreen(name, "Reviso los rate limits del poller antes de seguir");
+    h.herdr.setAgentStatus(name, "idle");
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_NUDGE_GRACE_MS);
+    await settle(vi);
+
+    expect(h.taskRow(taskId)).toMatchObject({ subState: "running" });
+    expect(h.notifications).toEqual([]);
+    h.herdr.setAgentScreen(name, undefined);
+    expect(await h.herdr.readAgent({ name })).toContain(nudgePrompt("refine", taskId));
+  });
+
+  it("el aviso del límite en forma de menú (blocked) escala en vez de avisar agente bloqueado", async () => {
+    const h = setup();
+    const { taskId, run, name } = await h.launched();
+    h.herdr.setAgentScreen(
+      name,
+      "Usage limit reached · limit resets 3:45pm\n❯ 1. Wait for your limit to reset\n   2. Add usage credits\n Enter to select · Esc to cancel",
+    );
+    h.herdr.setAgentStatus(name, "blocked");
+
+    await settle(vi);
+    expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human", subState: null });
+    expect(h.watcher.blocked()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(10 * MIN);
+    await settle(vi);
+    expect(h.notifications).toEqual([
+      expect.objectContaining({ id: `usage:${run.id}`, kind: "usage_limit" }),
+    ]);
+  });
+
+  it("una vez escalado, más señales del mismo agente no duplican el escalamiento", async () => {
+    const h = setup();
+    const { taskId, run, name } = await h.launched();
+    h.herdr.setAgentScreen(name, CLAUDE_LIMIT_SCREEN);
+    h.herdr.setAgentStatus(name, "idle");
+    await vi.advanceTimersByTimeAsync(DEFAULT_NUDGE_GRACE_MS);
+    await settle(vi);
+    expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human" });
+    expect(h.notifications).toEqual([
+      expect.objectContaining({ id: `usage:${run.id}`, kind: "usage_limit" }),
+    ]);
+
+    h.herdr.setAgentStatus(name, "working");
+    await settle(vi);
+    expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human" });
+    expect(h.notifications).toHaveLength(1);
   });
 });
 

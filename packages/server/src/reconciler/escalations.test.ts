@@ -42,6 +42,7 @@ describe("escalationNotification", () => {
 
   it.each([
     ["phase_timeout: ya la notificó el watcher", escalated("phase_timeout", "escalate")],
+    ["usage_limit: ya la notificó el watcher", escalated("usage_limit", "escalate")],
     ["otra transición", message({ command: "dispatch", from: {}, to: {} })],
     ["otro topic", message({}, "task.pr_opened")],
     ["payload inválido", message({ command: 1 })],

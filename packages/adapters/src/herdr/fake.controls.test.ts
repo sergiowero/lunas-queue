@@ -96,6 +96,19 @@ describe("FakeHerdr: controles de test", () => {
     expect((await fake.getAgent("t1-refine-1"))?.session).toEqual(session);
   });
 
+  it("setAgentScreen fija lo que readAgent devuelve, hasta anularlo con undefined", async () => {
+    const fake = new FakeHerdr();
+    await agentSetup(fake);
+    fake.setAgentScreen("t1-refine-1", "Usage limit reached · limit resets 3:45pm");
+    expect(await fake.readAgent({ name: "t1-refine-1" })).toBe(
+      "Usage limit reached · limit resets 3:45pm",
+    );
+    fake.setAgentScreen("t1-refine-1", undefined);
+    expect(await fake.readAgent({ name: "t1-refine-1", lines: 10 })).not.toContain(
+      "Usage limit reached",
+    );
+  });
+
   it("los workspaces de proyecto no publican checkoutPath, como en herdr", async () => {
     const fake = new FakeHerdr();
     const { workspace } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });

@@ -38,6 +38,7 @@ describe("evento task.transitioned", () => {
     expect(EscalationReason.options).toEqual([
       "blocked",
       "phase_timeout",
+      "usage_limit",
       "retries_exhausted",
       "iterations_exhausted",
       "hook_failed",

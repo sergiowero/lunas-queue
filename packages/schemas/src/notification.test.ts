@@ -17,6 +17,7 @@ describe("Notification", () => {
       "question_open",
       "agent_blocked",
       "phase_timeout",
+      "usage_limit",
       "verification_exhausted",
       "retries_exhausted",
     ]);

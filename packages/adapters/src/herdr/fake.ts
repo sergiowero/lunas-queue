@@ -56,6 +56,8 @@ interface FakeAgent {
   session?: AgentSessionInfo;
   /** Posición del cursor en el diálogo de confianza, mientras se muestra. */
   trustCursor?: number;
+  /** Pantalla fijada por `setAgentScreen`; si no, el transcript actúa de pantalla. */
+  screen?: string;
   keys: string[][];
 }
 
@@ -336,11 +338,13 @@ export class FakeHerdr implements HerdrAdapter {
 
   async readAgent(input: { name: string; lines?: number }) {
     const agent = this.requireAgent(input.name);
-    const screen =
-      agent.trustCursor === undefined
-        ? agent.transcript
-        : [...agent.transcript, trustDialog(agent.trustCursor)];
-    return screen.slice(-(input.lines ?? screen.length)).join("\n");
+    const lines =
+      agent.screen !== undefined
+        ? agent.screen.split("\n")
+        : agent.trustCursor === undefined
+          ? agent.transcript
+          : [...agent.transcript, trustDialog(agent.trustCursor)];
+    return lines.slice(-(input.lines ?? lines.length)).join("\n");
   }
 
   async sendKeys(input: { name: string; keys: string[] }) {
@@ -431,6 +435,13 @@ export class FakeHerdr implements HerdrAdapter {
   /** Publica la identidad de sesión del agente, como la integración oficial (`agent_session`). */
   setAgentSession(name: string, session: AgentSessionInfo) {
     this.requireAgent(name).session = session;
+  }
+
+  /** Fija la pantalla que devuelve `readAgent` (simula la TUI del agente, p. ej. el límite de uso). */
+  setAgentScreen(name: string, screen: string | undefined) {
+    const agent = this.requireAgent(name);
+    if (screen === undefined) delete agent.screen;
+    else agent.screen = screen;
   }
 
   /** Simula que el proceso del agente terminó: el pane queda abierto sin agente. */
