@@ -63,9 +63,12 @@ describe("detalle de tarea", () => {
 
     const deps = await section("Dependencias");
     const select = await deps.findByLabelText("Agregar dependencia");
-    expect(deps.queryByRole("option", { name: dep.intent })).toBeNull();
-    expect(deps.queryByRole("option", { name: "Ya cancelada" })).toBeNull();
-    expect(deps.queryByRole("option", { name: task.intent })).toBeNull();
+    // Las opciones llevan el #N delante («#N · intent»): se busca por el final del nombre.
+    expect(select.querySelectorAll("option")).toHaveLength(2);
+    expect(deps.queryByRole("option", { name: new RegExp(`· ${dep.intent}$`) })).toBeNull();
+    expect(deps.queryByRole("option", { name: /· Ya cancelada$/ })).toBeNull();
+    expect(deps.queryByRole("option", { name: new RegExp(`· ${task.intent}$`) })).toBeNull();
+    expect(deps.getByRole("option", { name: new RegExp(`· ${extra.intent}$`) })).toBeTruthy();
     await user.selectOptions(select, extra.id);
     await user.click(deps.getByRole("button", { name: "Agregar" }));
 
