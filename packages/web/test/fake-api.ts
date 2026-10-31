@@ -150,6 +150,7 @@ export class FakeApi {
     const at = this.now();
     const task: Json<Task> = {
       id: uuid(),
+      number: this.tasks.length + 1,
       projectId,
       intent: "Hacer algo",
       title: null,
