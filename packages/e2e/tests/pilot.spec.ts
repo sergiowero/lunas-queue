@@ -98,15 +98,10 @@ async function waitForState(page: Page, id: string, predicate: (t: TaskView) => 
 test.describe.configure({ mode: "serial" });
 
 test.describe("piloto", () => {
-  test("crea tres tareas con dependencias desde la UI", async ({ page }) => {
+  test("crea tareas con dependencias desde la UI y las muestra en detalle", async ({ page }) => {
     await createTask(page, A);
     await createTask(page, B, [A]);
     await createTask(page, C, [B]);
-
-    await page.goto("/dag");
-    await expect(page.getByRole("heading", { name: "Dependencias entre tareas" })).toBeVisible();
-    const graph = page.getByLabel("Grafo de dependencias");
-    for (const intent of [A, B, C]) await expect(graph.getByText(intent)).toBeVisible();
 
     const b = await taskId(page, B);
     await page.goto(`/tasks/${b}`);

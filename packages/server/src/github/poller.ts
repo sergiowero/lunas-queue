@@ -8,6 +8,7 @@
 import type { GitHubAdapter } from "@lunasq/adapters";
 import { type LunasqDatabase, TaskPrRepository } from "@lunasq/db";
 import type { PrTrackingStore, TrackedPr } from "@lunasq/domain";
+import { DELIVERY_OUTPUT_LIMIT } from "@lunasq/schemas";
 import type { OutboxPublisher } from "../outbox/publisher.ts";
 
 export const DEFAULT_PR_POLL_INTERVAL_MS = 60_000;
@@ -25,7 +26,12 @@ export interface PrPollerOptions {
   onError?: (error: Error, pr: TrackedPr | null) => void;
 }
 
-export type PrPollResult = { merged: string[]; closed: string[]; conflicted: string[] };
+export type PrPollResult = {
+  merged: string[];
+  closed: string[];
+  conflicted: string[];
+  ciFailed: string[];
+};
 
 export class PrPoller {
   private readonly github: GitHubAdapter;
@@ -88,7 +94,7 @@ export class PrPoller {
   }
 
   private async loop(): Promise<PrPollResult> {
-    let result: PrPollResult = { merged: [], closed: [], conflicted: [] };
+    let result: PrPollResult = { merged: [], closed: [], conflicted: [], ciFailed: [] };
     do {
       this.rerun = false;
       if (this.stopped) break;
@@ -98,7 +104,7 @@ export class PrPoller {
   }
 
   private async pass(): Promise<PrPollResult> {
-    const result: PrPollResult = { merged: [], closed: [], conflicted: [] };
+    const result: PrPollResult = { merged: [], closed: [], conflicted: [], ciFailed: [] };
     for (const tracked of this.store.listOpen()) {
       if (this.stopped) break;
       try {
@@ -118,12 +124,28 @@ export class PrPoller {
           this.store.recordPrConflict(tracked.taskId, tracked.url)
         ) {
           result.conflicted.push(tracked.taskId);
+        } else if (pr.state === "open" && pr.checks.status === "failure") {
+          const output =
+            pr.checks.items
+              .filter((check) => check.status === "failure")
+              .map((check) => (check.url ? `${check.name}: ${check.url}` : check.name))
+              .join("\n")
+              .slice(0, DELIVERY_OUTPUT_LIMIT) || "GitHub reportó checks fallidos sin detalles";
+          if (this.store.recordPrCiFailure(tracked.taskId, tracked.url, output)) {
+            result.ciFailed.push(tracked.taskId);
+          }
         }
       } catch (error) {
         this.report(toError(error), tracked);
       }
     }
-    if (result.merged.length + result.closed.length + result.conflicted.length > 0) {
+    if (
+      result.merged.length +
+        result.closed.length +
+        result.conflicted.length +
+        result.ciFailed.length >
+      0
+    ) {
       this.publisher?.wake();
     }
     return result;

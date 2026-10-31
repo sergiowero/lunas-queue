@@ -27,6 +27,17 @@ describe("delivery.conflict", () => {
     expect(DeliveryConflictPayload.parse(payload)).toEqual(payload);
   });
 
+  it("los checks fallidos del PR incluyen el motivo y el detalle", () => {
+    const payload = {
+      runId,
+      reason: "ci_failed",
+      baseBranch: "main",
+      files: [],
+      output: "build: https://github.com/o/r/actions/runs/1",
+    };
+    expect(DeliveryConflictPayload.parse(payload)).toEqual(payload);
+  });
+
   it("rechaza motivos desconocidos, runs inválidos y campos extra", () => {
     const ok = { runId, reason: "rebase_conflict", baseBranch: "main", files: [], output: null };
     expect(() => DeliveryConflictPayload.parse({ ...ok, reason: "otro" })).toThrow();

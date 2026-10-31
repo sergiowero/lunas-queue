@@ -2,7 +2,7 @@
 
 - Estado: aceptada
 - Fecha: 2026-10-30
-- Código: `packages/web/src/index.css`, `packages/web/src/lib/theme.ts`, `packages/web/src/components/theme-toggle.tsx`, `packages/web/src/components/layout.tsx`, `packages/web/src/pages/dag.tsx`, `packages/web/index.html`, `packages/web/src/app.tsx`
+- Código: `packages/web/src/index.css`, `packages/web/src/lib/theme.ts`, `packages/web/src/components/theme-toggle.tsx`, `packages/web/src/components/layout.tsx`, `packages/web/index.html`, `packages/web/src/app.tsx`
 
 ## Contexto
 
@@ -16,7 +16,6 @@ El front end solo tenía el tema claro de shadcn/ui. Se pidió un tema oscuro co
 - **Resolución.** La preferencia guardada en `localStorage` (`lunasq:theme`, `"light"` o `"dark"`) si es válida; si no, `prefers-color-scheme`; si no, claro. Un valor inválido, un `localStorage` que lanza error o un entorno sin `matchMedia` caen al siguiente paso sin romper la UI. Al cargar solo se aplica el tema resuelto; se guarda únicamente cuando la persona usa el selector, así quien sigue al sistema no queda fijado.
 - **Sin destello.** Un script inline en el `<head>` de `index.html` repite la resolución y pone la clase antes de que React monte. `App` vuelve a aplicar el tema en un `useLayoutEffect`, antes de pintar. El script y `lib/theme.ts` comparten regla y clave; un test ejecuta el script y comprueba que coinciden.
 - **Selector.** `ThemeToggle` es un `<button>` al final del header (`ml-auto`), con `aria-label` de la acción («Cambiar a tema oscuro» / «Cambiar a tema claro») y el icono SVG inline con `aria-hidden`: luna en claro y sol en oscuro, es decir, el tema al que se cambiaría.
-- **DAG.** `ReactFlow` recibe `colorMode` con el tema efectivo; React Flow trae sus propios estilos oscuros.
 
 ## Descartado
 

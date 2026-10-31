@@ -24,6 +24,9 @@ export function Layout() {
             <Link to="/in-progress" className={nav} activeProps={active}>
               En curso
             </Link>
+            <Link to="/completed" className={nav} activeProps={active}>
+              Completed
+            </Link>
             <Link
               to="/inbox"
               className={nav}
@@ -44,9 +47,6 @@ export function Layout() {
               activeProps={active}
             >
               Proyectos
-            </Link>
-            <Link to="/dag" className={nav} activeProps={active}>
-              DAG
             </Link>
             <Link to="/tasks/new" className={nav} activeProps={active}>
               Nueva tarea

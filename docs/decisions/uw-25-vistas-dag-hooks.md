@@ -1,8 +1,8 @@
-# UW-25 — Vistas de DAG y de hooks: grafo de aristas reales, hooks de la rama base y ejecuciones del Event log
+# UW-25 — Vista DAG (retirada) y vistas de hooks
 
-- Estado: aceptada
+- Estado: parcial; la vista DAG se retiró el 2026-10-31 y la vista de hooks sigue activa
 - Fecha: 2026-10-30
-- Unidad: UW-25 · Código: `TaskViewRepository.graph` y `hookExecutions` en `packages/db/src/task-views.ts`, `TaskGraph` y `ProjectHooksView` en `packages/schemas/src/{views,hooks}.ts`, `packages/server/src/api/hooks.ts` y `graphRoutes`, `packages/web/src/pages/{dag,hooks}.tsx`
+- Unidad: UW-25 · Registro histórico del DAG y decisiones aún activas de hooks
 
 ## Contexto
 
@@ -20,6 +20,7 @@
 
 ## Consecuencias
 
+- Las decisiones y consecuencias de la vista DAG describen la implementación histórica, no una funcionalidad activa.
 - Abrir la vista de hooks hace un `fetch` al remoto del proyecto, igual que cada punto de hook; con muchos proyectos y sin red la vista responde 502 por proyecto, no globalmente.
 - El grafo global crece con el número de tareas. Con cientos de nodos, el layout de dagre en el navegador será lo primero en notarse; si pasa, se filtra por proyecto (ya soportado) o se oculta lo terminado.
 - React Flow y dagre pesan unos 226 kB (74 kB comprimidos); la página de DAG se carga con `lazyRouteComponent`, así el resto de las vistas no los descarga.

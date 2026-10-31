@@ -1,14 +1,13 @@
 // Archivo de evidencia `lunasq/tasks/{id}.md` (lo escribe UW-24), en markdown: del worktree o,
-// si ya se limpió, de la branch de la tarea o de la rama base tras el merge. El panel nace
-// colapsado y el título es el botón que lo expande.
+// si ya se limpió, de la branch de la tarea o de la rama base tras el merge. Nace colapsado,
+// con el mismo estilo que el Event log.
 import type { EvidenceSource } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import Markdown from "react-markdown";
 import { queries } from "../../lib/queries.ts";
-import { Muted } from "../section.tsx";
+import { Muted, Section } from "../section.tsx";
 import { Loading, QueryError } from "../status.tsx";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card.tsx";
 
 const prose =
   "flex flex-col gap-2 text-sm [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-2 [&_code]:text-xs [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5";
@@ -24,33 +23,24 @@ const useEvidence = (taskId: string) => useQuery(queries.evidence(taskId));
 export function EvidencePanel({ taskId }: { taskId: string }) {
   const evidence = useEvidence(taskId);
   const [expanded, setExpanded] = useState(false);
-  const titleId = useId();
   const contentId = useId();
   return (
-    <Card aria-labelledby={titleId}>
-      <CardHeader>
-        <CardTitle>
-          <button
-            type="button"
-            id={titleId}
-            aria-expanded={expanded}
-            aria-controls={expanded ? contentId : undefined}
-            onClick={() => setExpanded((open) => !open)}
-            className="flex items-center gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <span aria-hidden="true" className="text-muted-foreground text-xs">
-              {expanded ? "▾" : "▸"}
-            </span>
-            Evidencia
-          </button>
-        </CardTitle>
-      </CardHeader>
+    <Section title="Evidencia">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={expanded ? contentId : undefined}
+        onClick={() => setExpanded((open) => !open)}
+        className="cursor-pointer text-left text-sm text-muted-foreground hover:underline"
+      >
+        {expanded ? "Ocultar evidencia" : "Mostrar evidencia"}
+      </button>
       {expanded ? (
-        <CardContent id={contentId}>
+        <div id={contentId} className="mt-3">
           <EvidenceBody evidence={evidence} />
-        </CardContent>
+        </div>
       ) : null}
-    </Card>
+    </Section>
   );
 }
 

@@ -63,6 +63,7 @@ stateDiagram-v2
     InProgress --> Verification: terminada
     Verification --> InProgress: rework, iteración + 1
     Verification --> Completed: pass
+    Completed --> InProgress: PR en conflicto o CI fallido
     Completed --> [*]
     InProgress: In progress
     note right of Completed
@@ -85,11 +86,11 @@ Cada estado con agente tiene un sub‑estado: `queued` (esperando slot o depende
 | Verification → Completed | submit\_verdict = pass, luego entrega | Veredicto pass del verificador, gate de tests en verde, tests coherentes y todos los criterios en pass; push y PR exitosos | Sistema (entrega), con el veredicto del verificador |
 | Cualquiera no terminal → Needs human | Bloqueo con timeout, reintentos o iteraciones agotadas | — | Sistema |
 | Verification → In progress | Conflictos al integrar la rama base en la entrega | Sin subir la iteración | Sistema |
-| Completed → In progress | El PR abierto queda en conflicto con la rama base (otro PR se mergeó antes) | PR de la tarea abierto y marcado en conflicto por GitHub; sin subir la iteración | Sistema (poller de PRs) |
+| Completed → In progress | El PR abierto queda en conflicto con la rama base (otro PR se mergeó antes), o falla uno de sus checks de CI | PR de la tarea abierto; sin subir la iteración | Sistema (poller de PRs) |
 | Cualquiera no terminal → Cancelled | Cancelación | Agente vivo se detiene y se limpia | Humano |
 | Needs human → estado previo | Reanudar | Vuelve al estado previo al último escalamiento, con sub‑estado `queued` si lleva agente; opcionalmente reinicia la iteración | Humano |
 
-Completed y Cancelled son terminales, salvo que el PR de una tarea completada quede en conflicto con la base: entonces vuelve a In progress ([ADR pr-en-conflicto](decisions/pr-en-conflicto.md)). El catálogo de comandos, los guards, los sub‑estados y el Event log están en [ADR 0007](decisions/0007-maquina-de-estados.md).
+Completed y Cancelled son terminales, salvo que el PR abierto de una tarea completada quede en conflicto con la base o falle CI: entonces vuelve a In progress ([ADR pr-en-conflicto](decisions/pr-en-conflicto.md)). El catálogo de comandos, los guards, los sub-estados y el Event log están en [ADR 0007](decisions/0007-maquina-de-estados.md).
 
 ## Arquitectura
 
@@ -102,7 +103,7 @@ Cuatro piezas propias (front end, backend, scheduler, dispatcher) y un MCP propi
 
 ```mermaid
 flowchart TB
-    FE["Front end<br/>tablero, aprobaciones, DAG"]
+    FE["Front end<br/>tablero, aprobaciones"]
     subgraph CP["Control plane"]
         API["Backend API<br/>tareas, specs, aprobaciones, eventos"]
         SCH["Scheduler<br/>ready set, score, límites de WIP"]
@@ -137,7 +138,7 @@ flowchart TB
 </details>
 | Componente | Responsabilidad | Notas |
 | --- | --- | --- |
-| Front end | Crear tareas, aprobar specs, ver cola, DAG, historial y consumo | No habla con herdr; todo pasa por el backend |
+| Front end | Crear tareas, aprobar specs, ver cola, historial y consumo | No habla con herdr; todo pasa por el backend |
 | Backend API | CRUD de tareas, validación de DAG, transiciones de estado, auth | Único escritor de estado de negocio |
 | Base de datos SQL | Tasks, dependencias, specs, runs, usage, event log | Claims atómicos para el scheduler |
 | Eventos / outbox | Publicar cambios de estado de forma confiable | Outbox evita perder eventos entre BD y cola |
@@ -542,7 +543,6 @@ Cualquier otro fallo (push, `gh`, un hook bloqueado) escala a Needs human. Una e
 
 - Tablero por proyecto (columnas por estado) y vista global de la cola ordenada por score.
 - Pestaña «En curso» con las tareas In progress y las que tienen un agente corriendo (sub-estado running) de todos los proyectos; la etiqueta In progress va en azul en todas las vistas. Detalle: [ADR uw-21-front-end](decisions/uw-21-front-end.md).
-- Vista de DAG de dependencias.
 - Bandeja de aprobaciones y preguntas pendientes (todo lo que espera al humano); los bloqueos por permiso incluyen un acceso que enfoca el pane en herdr. Detalle: [ADR uw-27-bandeja](decisions/uw-27-bandeja.md).
 - Detalle de tarea: spec y versiones, Runs, event log, enlace al pane en herdr.
 - Vista de hooks por proyecto: contenido de `lunasq/hooks/` en la rama base y últimas ejecuciones.

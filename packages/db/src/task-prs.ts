@@ -117,6 +117,19 @@ export class TaskPrRepository implements PrTrackingStore {
   }
 
   recordPrConflict(taskId: string, url: string): boolean {
+    return this.#recordPrFailure(taskId, url, "pr_conflict", null);
+  }
+
+  recordPrCiFailure(taskId: string, url: string, output: string): boolean {
+    return this.#recordPrFailure(taskId, url, "ci_failed", output);
+  }
+
+  #recordPrFailure(
+    taskId: string,
+    url: string,
+    reason: "pr_conflict" | "ci_failed",
+    output: string | null,
+  ): boolean {
     return this.#write((tx) => {
       const row = tx
         .select({
@@ -150,10 +163,10 @@ export class TaskPrRepository implements PrTrackingStore {
       if (!moved.ok) return false;
       const payload = DeliveryConflictPayload.parse({
         runId: verifier.id,
-        reason: "pr_conflict",
+        reason,
         baseBranch: row.baseBranch,
         files: [],
-        output: null,
+        output,
       });
       appendEvent(
         tx,

@@ -8,18 +8,22 @@ export const DELIVERY_CONFLICT = "delivery.conflict";
 
 export const DELIVERY_OUTPUT_LIMIT = 4000;
 
-export const DeliveryConflictReason = z.enum(["rebase_conflict", "tests_failed", "pr_conflict"]);
+export const DeliveryConflictReason = z.enum([
+  "rebase_conflict",
+  "tests_failed",
+  "pr_conflict",
+  "ci_failed",
+]);
 export type DeliveryConflictReason = z.infer<typeof DeliveryConflictReason>;
 
 export const DeliveryConflictPayload = z.strictObject({
-  // Run del verificador dentro del cual corrió la entrega (en pr_conflict, el del último pass).
+  // Run del verificador dentro del cual corrió la entrega (en fallos de PR, el del último pass).
   runId: z.uuid(),
   reason: DeliveryConflictReason,
   baseBranch: z.string().min(1),
-  // Archivos con conflicto (rebase_conflict); vacío si falló la suite o en pr_conflict, donde
-  // GitHub no los informa.
+  // Archivos con conflicto (rebase_conflict); vacío si falla la suite o un check de GitHub.
   files: z.array(z.string().min(1)).max(200),
-  // Cola de la salida de la suite (tests_failed); null en un conflicto de rebase.
+  // Salida de la suite (tests_failed) o detalles del CI; null en conflictos de rebase/PR.
   output: z.string().max(DELIVERY_OUTPUT_LIMIT).nullable(),
 });
 export type DeliveryConflictPayload = z.infer<typeof DeliveryConflictPayload>;

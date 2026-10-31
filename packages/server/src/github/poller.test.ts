@@ -74,6 +74,7 @@ describe("PrPoller", () => {
       merged: [a.task.id],
       closed: [b.task.id],
       conflicted: [],
+      ciFailed: [],
     });
     expect([prState(db, a.task.id), prState(db, b.task.id), prState(db, c.task.id)]).toEqual([
       "merged",
@@ -83,7 +84,7 @@ describe("PrPoller", () => {
     const event = listEvents(db, a.task.id).find((e) => e.type === TASK_PR_STATE_CHANGED);
     expect(TaskPrStateChangedPayload.parse(event?.payload).at).toBe(at.toISOString());
 
-    expect(await poller.poll()).toEqual({ merged: [], closed: [], conflicted: [] });
+    expect(await poller.poll()).toEqual({ merged: [], closed: [], conflicted: [], ciFailed: [] });
     expect(listEvents(db, a.task.id).filter((e) => e.type === TASK_PR_STATE_CHANGED)).toHaveLength(
       1,
     );
@@ -96,7 +97,12 @@ describe("PrPoller", () => {
     github.setMergeable(a.url, "conflicting");
     github.setMergeable(b.url, "unknown");
 
-    expect(await poller.poll()).toEqual({ merged: [], closed: [], conflicted: [a.task.id] });
+    expect(await poller.poll()).toEqual({
+      merged: [],
+      closed: [],
+      conflicted: [a.task.id],
+      ciFailed: [],
+    });
     const state = (id: string) =>
       db.$client.prepare("select state, sub_state from tasks where id = ?").get(id);
     expect(state(a.task.id)).toEqual({ state: "in_progress", sub_state: "queued" });
@@ -108,13 +114,47 @@ describe("PrPoller", () => {
     expect(listEvents(db, a.task.id).filter((e) => e.type === DELIVERY_CONFLICT)).toHaveLength(1);
   });
 
+  it("un PR abierto con checks fallidos regresa la tarea a implementación una sola vez", async () => {
+    const { db, github, poller, delivered } = setup();
+    const pr = await delivered("lunasq/ci-failed");
+    const pending = await delivered("lunasq/ci-pending");
+    const success = await delivered("lunasq/ci-success");
+    github.setChecks(pr.url, [{ name: "build", status: "failure", url: "https://ci/build/1" }]);
+    github.setChecks(pending.url, [{ name: "build", status: "pending", url: null }]);
+    github.setChecks(success.url, [{ name: "build", status: "success", url: null }]);
+
+    expect(await poller.poll()).toEqual({
+      merged: [],
+      closed: [],
+      conflicted: [],
+      ciFailed: [pr.task.id],
+    });
+    expect(
+      db.$client.prepare("select state, sub_state from tasks where id = ?").get(pr.task.id),
+    ).toEqual({ state: "in_progress", sub_state: "queued" });
+    expect(
+      db.$client
+        .prepare("select state from tasks where id in (?, ?) order by rowid")
+        .all(pending.task.id, success.task.id),
+    ).toEqual([{ state: "completed" }, { state: "completed" }]);
+    expect((await poller.poll()).ciFailed).toEqual([]);
+    expect(
+      listEvents(db, pr.task.id).filter((event) => event.type === DELIVERY_CONFLICT),
+    ).toHaveLength(1);
+  });
+
   it("un PR que falla se reporta y no detiene a los demás", async () => {
     const { github, poller, errors, delivered } = setup();
     const roto = await delivered("lunasq/roto");
     const ok = await delivered("lunasq/ok");
     github.failGetPr(roto.url, new GitHubError("timeout", "lento"));
     github.merge(ok.url);
-    expect(await poller.poll()).toEqual({ merged: [ok.task.id], closed: [], conflicted: [] });
+    expect(await poller.poll()).toEqual({
+      merged: [ok.task.id],
+      closed: [],
+      conflicted: [],
+      ciFailed: [],
+    });
     expect(errors).toEqual([
       { error: expect.objectContaining({ code: "timeout" }), url: roto.url },
     ]);

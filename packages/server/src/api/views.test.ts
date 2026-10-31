@@ -232,34 +232,3 @@ describe("GET /api/tasks/:id/evidence", () => {
     expect((await get(`/api/tasks/${missing}/evidence`)).body).toEqual({ error: "not_found" });
   });
 });
-
-describe("GET /api/graph", () => {
-  it("devuelve las aristas reales y filtra por proyecto", async () => {
-    const { db, project, get } = setup();
-    const other = insertProject(db);
-    const a = insertTask(db, project.id, { intent: "A" });
-    const b = insertTask(db, project.id, { intent: "B" });
-    const foreign = insertTask(db, other.id, { intent: "Ajena" });
-    db.insert(taskDependencies).values({ taskId: b.id, dependsOnId: a.id }).run();
-    db.insert(taskDependencies).values({ taskId: foreign.id, dependsOnId: b.id }).run();
-
-    const all = (await get("/api/graph")).body as {
-      nodes: { id: string }[];
-      edges: unknown[];
-    };
-    expect(all.nodes).toHaveLength(3);
-    expect(all.edges).toEqual([
-      { taskId: b.id, dependsOnId: a.id },
-      { taskId: foreign.id, dependsOnId: b.id },
-    ]);
-
-    const scoped = (await get(`/api/graph?projectId=${project.id}`)).body as typeof all;
-    expect(scoped.nodes.map((n) => n.id).sort()).toEqual([a.id, b.id, foreign.id].sort());
-    expect(scoped.edges).toHaveLength(2);
-  });
-
-  it("rechaza un projectId inválido", async () => {
-    const { get } = setup();
-    expect((await get("/api/graph?projectId=nope")).status).toBe(400);
-  });
-});

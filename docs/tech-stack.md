@@ -90,7 +90,6 @@ Cada componente del diseño queda resuelto con piezas de la misma base, sin serv
 | Datos del servidor | TanStack Query, con invalidación desde SSE (`GET /api/stream` sigue el Event log, [ADR uw-21-front-end](decisions/uw-21-front-end.md)) |
 | Componentes y estilos | shadcn/ui sobre Tailwind CSS 4 (`class-variance-authority`, `clsx`, `tailwind-merge`) |
 | Tablas (cola, backlog, Runs) | TanStack Table 8.x |
-| DAG de dependencias | React Flow (`@xyflow/react`) con layout automático (`@dagrejs/dagre`, [ADR uw-25-vistas-dag-hooks](decisions/uw-25-vistas-dag-hooks.md)) |
 | Diff de versiones de spec | Visor de diff de texto |
 | Render de handoffs y evidencia | Visor de JSON y render de markdown (`react-markdown`, sin HTML crudo) |
 

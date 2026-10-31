@@ -19,7 +19,6 @@ import type {
   SpecContent,
   SubState,
   Task,
-  TaskGraph,
   TaskState,
   TaskUsage,
   UsageTotals,
@@ -304,7 +303,6 @@ export class FakeApi {
     const [resource, id, sub, version, action] = parts;
     const notFound: [number, unknown] = [404, { error: "not_found" }];
 
-    if (resource === "graph") return [200, this.graph(url.searchParams.get("projectId"))];
     if (resource === "projects" && method === "POST" && !id) return this.createProject(body);
     if (resource === "projects" && id && method === "PATCH") return this.updateProject(id, body);
     if (resource === "projects" && id && method === "DELETE") return this.deleteProject(id);
@@ -383,26 +381,6 @@ export class FakeApi {
       default:
         return notFound;
     }
-  }
-
-  /** Como TaskViewRepository.graph: las del proyecto y el otro extremo de sus aristas. */
-  private graph(projectId: string | null): Json<TaskGraph> {
-    const mine = (id: string) => !projectId || this.task(id).projectId === projectId;
-    const edges = this.edges.filter((e) => mine(e.taskId) || mine(e.dependsOnId));
-    const linked = new Set(edges.flatMap((e) => [e.taskId, e.dependsOnId]));
-    const nodes = this.tasks
-      .filter((t) => !projectId || t.projectId === projectId || linked.has(t.id))
-      .map((t) => ({
-        id: t.id,
-        projectId: t.projectId,
-        intent: t.intent,
-        title: t.title,
-        state: t.state,
-        subState: t.subState,
-        prState: t.prState,
-        priority: t.priority,
-      }));
-    return { nodes, edges: edges.map((e) => ({ ...e })) };
   }
 
   private projectHooks(

@@ -59,9 +59,7 @@ function useDependencyMutation(mutationFn: (dependsOnId: string) => Promise<unkn
     onSuccess: async () => {
       // Cambia también el panel de la otra tarea (sus dependientes), por eso todo ["task"].
       await Promise.all(
-        ["task", "tasks", "queue", "graph"].map((key) =>
-          queryClient.invalidateQueries({ queryKey: [key] }),
-        ),
+        ["task", "tasks", "queue"].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
       );
     },
   });

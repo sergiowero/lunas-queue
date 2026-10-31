@@ -18,8 +18,6 @@ export const queries = {
       queryKey: ["tasks", projectId ?? null],
       queryFn: () => api.tasks(projectId),
     }),
-  graph: (projectId?: string) =>
-    queryOptions({ queryKey: ["graph", projectId ?? null], queryFn: () => api.graph(projectId) }),
   projectHooks: (projectId: string) =>
     queryOptions({
       queryKey: ["project", projectId, "hooks"],

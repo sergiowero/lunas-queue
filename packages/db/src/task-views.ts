@@ -8,15 +8,14 @@ import {
   type HookExecutionView,
   REVIEWER_NAMES,
   RunView,
-  type TaskGraph,
   type TaskUsage,
   type UsagePhase,
   type UsageTotals,
 } from "@lunasq/schemas";
-import { and, asc, eq, getTableColumns, gt, inArray, max, or, sql } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, gt, inArray, max, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
-import { events, runSubagents, runs, taskDependencies, tasks, usageRecords } from "./schema.ts";
+import { events, runSubagents, runs, tasks, usageRecords } from "./schema.ts";
 
 const {
   runToken: _token,
@@ -181,54 +180,6 @@ export class TaskViewRepository {
       lastId: rows.at(-1)?.id ?? afterId,
       taskIds: [...new Set(rows.map((r) => r.taskId))],
     };
-  }
-
-  /**
-   * El DAG de dependencias. Con `projectId`, sus tareas más las de otros proyectos al otro
-   * extremo de una arista suya; sin él, todo. Las aristas son las de task_dependencies, sin
-   * derivar nada. Una sola transacción: nodos y aristas salen del mismo estado.
-   */
-  graph(projectId?: string): TaskGraph {
-    return this.db.transaction((tx) => {
-      const inProject = tx
-        .select({ id: tasks.id })
-        .from(tasks)
-        .where(eq(tasks.projectId, projectId ?? ""));
-      const edges = tx
-        .select({ taskId: taskDependencies.taskId, dependsOnId: taskDependencies.dependsOnId })
-        .from(taskDependencies)
-        .where(
-          projectId === undefined
-            ? undefined
-            : or(
-                inArray(taskDependencies.taskId, inProject),
-                inArray(taskDependencies.dependsOnId, inProject),
-              ),
-        )
-        .orderBy(asc(sql`${taskDependencies}.rowid`))
-        .all();
-      const linked = [...new Set(edges.flatMap((e) => [e.taskId, e.dependsOnId]))];
-      const nodes = tx
-        .select({
-          id: tasks.id,
-          projectId: tasks.projectId,
-          intent: tasks.intent,
-          title: tasks.title,
-          state: tasks.state,
-          subState: tasks.subState,
-          prState: tasks.prState,
-          priority: tasks.priority,
-        })
-        .from(tasks)
-        .where(
-          projectId === undefined
-            ? undefined
-            : or(eq(tasks.projectId, projectId), inArray(tasks.id, linked)),
-        )
-        .orderBy(asc(tasks.createdAt), asc(sql`${tasks}.rowid`))
-        .all();
-      return { nodes, edges };
-    });
   }
 
   /**

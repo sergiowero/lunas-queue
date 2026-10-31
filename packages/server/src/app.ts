@@ -28,7 +28,7 @@ import {
 import { specRoutes } from "./api/specs.ts";
 import { changeStreamRoutes, DEFAULT_CHANGE_STREAM_INTERVAL_MS } from "./api/stream.ts";
 import { taskRoutes } from "./api/tasks.ts";
-import { graphRoutes, queueRoutes, taskViewRoutes } from "./api/views.ts";
+import { queueRoutes, taskViewRoutes } from "./api/views.ts";
 import {
   type CommitVerifier,
   GitCommitVerifier,
@@ -138,7 +138,6 @@ export function createApp({
     .route("/api/blocked", blockedRoutes(blocked ?? (() => []), focus))
     .route("/api/questions", questionRoutes(new QuestionRepository(db), questions))
     .route("/api/queue", queueRoutes(views))
-    .route("/api/graph", graphRoutes(views))
     .route("/api/stream", changeStreamRoutes(taskViews, changeStreamIntervalMs))
     .route("/api/tasks", taskViewRoutes(views))
     .route("/api/tasks", taskRoutes(tasks))

@@ -189,3 +189,42 @@ describe("TaskPrRepository.recordPrConflict", () => {
     expect(repo.recordPrConflict(cancelled.id, otherUrl)).toBe(false);
   });
 });
+
+describe("TaskPrRepository.recordPrCiFailure", () => {
+  it("regresa a implementación una tarea completed cuyo PR abierto tiene CI fallido", () => {
+    const { db, project, repo, task, row } = setup();
+    const verifier = insertRun(db, task.id, { phase: "verify" });
+    repo.recordPrOpened(task.id, url);
+
+    expect(
+      repo.recordPrCiFailure(task.id, url, "build falló: https://github.com/o/r/actions/1"),
+    ).toBe(true);
+    expect(row()).toMatchObject({ state: "in_progress", subState: "queued", prState: "open" });
+    expect(
+      listEvents(db, task.id).find((event) => event.type === DELIVERY_CONFLICT)?.payload,
+    ).toEqual({
+      runId: verifier.id,
+      reason: "ci_failed",
+      baseBranch: project.baseBranch,
+      files: [],
+      output: "build falló: https://github.com/o/r/actions/1",
+    });
+    expect(listPendingOutbox(db).map((message) => message.message.topic)).toContain(
+      DELIVERY_CONFLICT,
+    );
+  });
+
+  it("no repite el rework ni afecta otro PR o tareas fuera de completed", () => {
+    const { db, project, repo, task } = setup();
+    insertRun(db, task.id, { phase: "verify" });
+    repo.recordPrOpened(task.id, url);
+    expect(repo.recordPrCiFailure(task.id, otherUrl, "build falló")).toBe(false);
+    expect(repo.recordPrCiFailure(task.id, url, "build falló")).toBe(true);
+    expect(repo.recordPrCiFailure(task.id, url, "build falló")).toBe(false);
+
+    const inProgress = insertTask(db, project.id, { state: "in_progress", subState: "queued" });
+    insertRun(db, inProgress.id, { phase: "verify" });
+    repo.recordPrOpened(inProgress.id, otherUrl);
+    expect(repo.recordPrCiFailure(inProgress.id, otherUrl, "build falló")).toBe(false);
+  });
+});

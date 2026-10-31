@@ -19,7 +19,6 @@ import type {
   TaskCreate,
   TaskDependencies,
   TaskEvidence,
-  TaskGraph,
   TaskUsage,
 } from "@lunasq/schemas";
 
@@ -78,10 +77,6 @@ export const api = {
   tasks: (projectId?: string) =>
     request<Task[]>(
       projectId ? `/api/tasks?projectId=${encodeURIComponent(projectId)}` : "/api/tasks",
-    ),
-  graph: (projectId?: string) =>
-    request<TaskGraph>(
-      projectId ? `/api/graph?projectId=${encodeURIComponent(projectId)}` : "/api/graph",
     ),
   projectHooks: (projectId: string) =>
     request<ProjectHooksView>(`/api/projects/${encodeURIComponent(projectId)}/hooks`),

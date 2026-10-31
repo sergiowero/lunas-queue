@@ -58,7 +58,7 @@ describe("flujo de punta a punta desde la UI", () => {
       (await section("Event log")).getByText("Verification · en cola → Completed"),
     ).toBeTruthy();
     const evidence = await section("Evidencia");
-    await user.click(evidence.getByRole("button", { name: "Evidencia" }));
+    await user.click(evidence.getByRole("button", { name: "Mostrar evidencia" }));
     expect(await evidence.findByRole("heading", { name: "Run verify" })).toBeTruthy();
 
     // En el tablero del proyecto queda en Completed.

@@ -29,4 +29,6 @@ export interface PrTrackingStore {
    * PR ya no es el suyo, así repetirlo mientras el PR sigue en conflicto no hace nada.
    */
   recordPrConflict(taskId: string, url: string): boolean;
+  /** Un PR abierto de una tarea completed tiene checks fallidos; regresa la tarea a implementación. */
+  recordPrCiFailure(taskId: string, url: string, output: string): boolean;
 }

@@ -62,14 +62,6 @@ export function BoardPage() {
         </div>
         <div className="flex gap-2">
           <Link
-            to="/dag"
-            search={{ projectId }}
-            className={buttonVariants({ size: "sm", variant: "outline" })}
-            aria-label="DAG de este proyecto"
-          >
-            DAG
-          </Link>
-          <Link
             to="/projects/$projectId/hooks"
             params={{ projectId }}
             className={buttonVariants({ size: "sm", variant: "outline" })}

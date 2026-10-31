@@ -14,7 +14,7 @@ function icon() {
 }
 
 describe("selector de tema", () => {
-  it.each(["/queue", "/inbox", "/projects", "/dag", "/tasks/new"])(
+  it.each(["/queue", "/inbox", "/projects", "/tasks/new"])(
     "en %s, sin preferencia y con el sistema en claro, el tema es claro y el selector al final del header muestra la luna",
     async (path) => {
       stubColorScheme("light");

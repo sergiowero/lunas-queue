@@ -165,7 +165,7 @@ describe("detalle de tarea", () => {
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");
     renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Evidencia");
-    const toggle = await block.findByRole("button", { name: "Evidencia" });
+    const toggle = await block.findByRole("button", { name: "Mostrar evidencia" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(block.queryByRole("heading", { name: "Run 1" })).toBeNull();
     expect(block.queryByText(`/w/login/lunasq/tasks/${task.id}.md`)).toBeNull();
@@ -176,9 +176,7 @@ describe("detalle de tarea", () => {
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");
     const { user } = renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Evidencia");
-    const toggle = await block.findByRole("button", { name: "Evidencia" });
-    await user.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    await user.click(await block.findByRole("button", { name: "Mostrar evidencia" }));
     expect(await block.findByRole("heading", { name: "Run 1" })).toBeTruthy();
     expect(block.getByText("verde").tagName).toBe("STRONG");
     expect(block.getByText(/Desde worktree/)).toBeTruthy();
@@ -190,7 +188,7 @@ describe("detalle de tarea", () => {
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");
     const { user } = renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Evidencia");
-    const toggle = await block.findByRole("button", { name: "Evidencia" });
+    const toggle = await block.findByRole("button", { name: "Mostrar evidencia" });
     await user.click(toggle);
     expect(await block.findByRole("heading", { name: "Run 1" })).toBeTruthy();
     await user.click(toggle);
@@ -204,7 +202,7 @@ describe("detalle de tarea", () => {
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1");
     const { user } = renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Evidencia");
-    const toggle = await block.findByRole("button", { name: "Evidencia" });
+    const toggle = await block.findByRole("button", { name: "Mostrar evidencia" });
     toggle.focus();
     await user.keyboard("{Enter}");
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
@@ -217,7 +215,7 @@ describe("detalle de tarea", () => {
     fake.evidence.set(dep.id, "# Evidencia\n\n## Run 2");
     const { user, router } = renderApp(`/tasks/${task.id}`, fake);
     const toggleOf = async () =>
-      (await section("Evidencia")).findByRole("button", { name: "Evidencia" });
+      (await section("Evidencia")).findByRole("button", { name: "Mostrar evidencia" });
 
     await toggleOf();
     await router.navigate({ to: "/tasks/$taskId", params: { taskId: dep.id } });
@@ -242,7 +240,7 @@ describe("detalle de tarea", () => {
     const { fake, task } = seeded();
     const { user } = renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Evidencia");
-    const toggle = await block.findByRole("button", { name: "Evidencia" });
+    const toggle = await block.findByRole("button", { name: "Mostrar evidencia" });
     expect(block.queryByText("Todavía no hay archivo de evidencia.")).toBeNull();
     await user.click(toggle);
     expect(await block.findByText("Todavía no hay archivo de evidencia.")).toBeTruthy();
@@ -256,7 +254,7 @@ describe("detalle de tarea", () => {
     fake.evidenceSource.set(task.id, "branch");
     const { user } = renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Evidencia");
-    await user.click(await block.findByRole("button", { name: "Evidencia" }));
+    await user.click(await block.findByRole("button", { name: "Mostrar evidencia" }));
     expect(await block.findByText(`origin/lunasq/login:lunasq/tasks/${task.id}.md`)).toBeTruthy();
     expect(block.getByText(/Desde branch de la tarea/)).toBeTruthy();
   });
