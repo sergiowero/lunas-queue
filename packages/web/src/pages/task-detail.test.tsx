@@ -45,6 +45,52 @@ describe("detalle de tarea", () => {
     expect(screen.getByText("corriendo")).toBeTruthy();
   });
 
+  it("agrega y quita dependencias mientras la tarea está en draft", async () => {
+    const { fake, project, task, dep } = seeded();
+    const other = fake.addProject({ name: "api" });
+    const extra = fake.addTask(other.id, { intent: "Endpoint de login" });
+    fake.addTask(project.id, { intent: "Ya cancelada", state: "cancelled", subState: null });
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+
+    const deps = await section("Dependencias");
+    const select = await deps.findByLabelText("Agregar dependencia");
+    expect(deps.queryByRole("option", { name: dep.intent })).toBeNull();
+    expect(deps.queryByRole("option", { name: "Ya cancelada" })).toBeNull();
+    expect(deps.queryByRole("option", { name: task.intent })).toBeNull();
+    await user.selectOptions(select, extra.id);
+    await user.click(deps.getByRole("button", { name: "Agregar" }));
+
+    expect(await deps.findByRole("link", { name: extra.intent })).toBeTruthy();
+    expect(deps.getByText("otro proyecto")).toBeTruthy();
+    expect(fake.edges).toContainEqual({ taskId: task.id, dependsOnId: extra.id });
+
+    await user.click(deps.getByRole("button", { name: `Quitar dependencia ${dep.intent}` }));
+    await waitFor(() => expect(deps.queryByRole("link", { name: dep.intent })).toBeNull());
+    expect(fake.edges).toEqual([{ taskId: task.id, dependsOnId: extra.id }]);
+  });
+
+  it("muestra el error del servidor si la dependencia cierra un ciclo", async () => {
+    const { fake, task, dep } = seeded();
+    const { user } = renderApp(`/tasks/${dep.id}`, fake);
+
+    const deps = await section("Dependencias");
+    await user.selectOptions(await deps.findByLabelText("Agregar dependencia"), task.id);
+    await user.click(deps.getByRole("button", { name: "Agregar" }));
+    expect((await deps.findByRole("alert")).textContent).toContain("ciclo");
+    expect(fake.edges).toHaveLength(1);
+  });
+
+  it("no ofrece editar dependencias fuera de draft", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "refined", null);
+    renderApp(`/tasks/${task.id}`, fake);
+
+    const deps = await section("Dependencias");
+    await deps.findByText("Depende de");
+    expect(deps.queryByLabelText("Agregar dependencia")).toBeNull();
+    expect(deps.queryByRole("button", { name: /Quitar dependencia/ })).toBeNull();
+  });
+
   it("lista los Runs con resultado, failure_reason, pane y handoff", async () => {
     const { fake, task } = seeded();
     const failed = fake.startRun(task.id, "refine");
@@ -284,6 +330,25 @@ describe("detalle de tarea", () => {
     await user.click(screen.getByRole("button", { name: "Sí, cancelar" }));
     expect(await screen.findByText("Cancelled")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Cancelar tarea" })).toBeNull();
+  });
+
+  it("reanuda una tarea en needs_human hacia el estado desde el que se escaló", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "needs_human", null);
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    await user.click(await screen.findByRole("button", { name: "Reanudar tarea" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Reanudar tarea" })).toBeNull(),
+    );
+    expect(fake.task(task.id).state).toBe("draft");
+    expect(screen.getByRole("button", { name: "Cancelar tarea" })).toBeTruthy();
+  });
+
+  it("no ofrece reanudar fuera de needs_human", async () => {
+    const { fake, task } = seeded();
+    renderApp(`/tasks/${task.id}`, fake);
+    await screen.findByRole("button", { name: "Cancelar tarea" });
+    expect(screen.queryByRole("button", { name: "Reanudar tarea" })).toBeNull();
   });
 
   it("avisa si la tarea no existe", async () => {

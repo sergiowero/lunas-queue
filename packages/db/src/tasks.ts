@@ -202,6 +202,11 @@ export class TaskRepository implements DependencyGraphReader {
     });
   }
 
+  /** Reanuda una tarea en needs_human hacia el estado desde el que se escaló. */
+  resume(taskId: string): TransitionTaskResult {
+    return transitionTask(this.db, { taskId, actor: "human", command: { type: "resume" } });
+  }
+
   /**
    * `taskId` pasa a depender de `dependsOnId`. Idempotente: si la arista ya existe devuelve
    * `created: false` sin escribir. null si `taskId` no existe.

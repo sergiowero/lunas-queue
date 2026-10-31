@@ -63,6 +63,12 @@ export function taskRoutes(tasks: TaskRepository): Hono {
       const task = tasks.get(result.task.id);
       return task ? c.json(task) : notFound(c);
     })
+    .post("/:id/resume", (c) => {
+      const result = tasks.resume(c.req.param("id"));
+      if (!result.ok) return transitionError(c, result);
+      const task = tasks.get(result.task.id);
+      return task ? c.json(task) : notFound(c);
+    })
     .get("/:id/dependencies", (c) => {
       const dependencies = tasks.dependencies(c.req.param("id"));
       return dependencies ? c.json(dependencies) : notFound(c);

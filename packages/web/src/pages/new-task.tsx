@@ -4,6 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
+import { Muted } from "../components/section.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input, Label, Select, Textarea } from "../components/ui/input.tsx";
@@ -131,10 +132,14 @@ export function NewTaskPage() {
           />
         </div>
       </div>
-      {groups.length > 0 && (
-        <fieldset className="flex flex-col gap-3">
-          <legend className="text-sm font-medium">Depende de</legend>
-          {groups.map(({ project, tasks }) => (
+      <fieldset className="flex flex-col gap-3">
+        <legend className="text-sm font-medium">Depende de</legend>
+        {projectId === "" ? (
+          <Muted>Elige un proyecto para ver las tareas de las que depender.</Muted>
+        ) : groups.length === 0 ? (
+          <Muted>No hay tareas activas de las que depender.</Muted>
+        ) : (
+          groups.map(({ project, tasks }) => (
             <div key={project.id} className="flex flex-col gap-1">
               <h2 className="text-xs font-medium text-muted-foreground">
                 {project.id === projectId ? project.name : `${project.name} · otro proyecto`}
@@ -150,9 +155,9 @@ export function NewTaskPage() {
                 </label>
               ))}
             </div>
-          ))}
-        </fieldset>
-      )}
+          ))
+        )}
+      </fieldset>
       {create.error && (
         <p role="alert" className="text-sm text-destructive">
           No se pudo crear la tarea: {describe(create.error)}

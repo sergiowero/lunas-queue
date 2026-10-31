@@ -343,7 +343,21 @@ export class FakeApi {
         }
         this.transition(id, "cancelled", null);
         return [200, task];
+      case "resume": {
+        if (task.state !== "needs_human") {
+          return conflict("invalid_transition", `la tarea está en ${task.state}`);
+        }
+        const origin = this.events
+          .filter((e) => e.taskId === id && e.type === "task.transitioned")
+          .map((e) => e.payload as { from: { state: TaskState }; to: { state: TaskState } })
+          .findLast((p) => p.to.state === "needs_human")?.from.state;
+        if (!origin) return conflict("no_escalation_found", `la tarea ${id} no tiene escalamiento`);
+        this.transition(id, origin, origin === "refined" ? null : "queued");
+        return [200, task];
+      }
       case "dependencies":
+        if (method === "PUT") return this.addDependency(task, version);
+        if (method === "DELETE") return this.removeDependency(task, version);
         return [
           200,
           { dependsOn: this.links(id, "dependsOn"), dependents: this.links(id, "dependents") },
@@ -627,6 +641,50 @@ export class FakeApi {
       return [200, { spec, task }];
     }
     return [404, { error: "not_found" }];
+  }
+
+  /** Como TaskRepository.addDependency: solo en draft, sin canceladas ni ciclos; idempotente. */
+  private addDependency(task: Json<Task>, dependsOnId = ""): [number, unknown] {
+    if (this.edges.some((e) => e.taskId === task.id && e.dependsOnId === dependsOnId)) {
+      return [200, { created: false }];
+    }
+    if (task.state !== "draft") {
+      return conflict("task_not_draft", `la tarea ${task.id} está en ${task.state}`);
+    }
+    const target = this.tasks.find((t) => t.id === dependsOnId);
+    if (!target) return [422, { error: "dependency_not_found", message: "no existe la tarea" }];
+    if (target.state === "cancelled") {
+      return conflict("dependency_cancelled", `la tarea ${dependsOnId} está cancelada`);
+    }
+    if (dependsOnId === task.id || this.dependsOnTransitively(dependsOnId, task.id)) {
+      return conflict("cycle", "la arista cierra un ciclo", { cycle: [task.id, dependsOnId] });
+    }
+    this.edges.push({ taskId: task.id, dependsOnId });
+    this.event(task.id, "task.dependency_added", "human", {
+      dependsOnId,
+      crossProject: task.projectId !== target.projectId,
+    });
+    return [201, { created: true }];
+  }
+
+  private removeDependency(task: Json<Task>, dependsOnId = ""): [number, unknown] {
+    const index = this.edges.findIndex(
+      (e) => e.taskId === task.id && e.dependsOnId === dependsOnId,
+    );
+    if (index < 0) return [404, { error: "not_found" }];
+    this.edges.splice(index, 1);
+    this.event(task.id, "task.dependency_removed", "human", { dependsOnId });
+    return [204, null];
+  }
+
+  private dependsOnTransitively(from: string, target: string, seen = new Set<string>()): boolean {
+    if (seen.has(from)) return false;
+    seen.add(from);
+    return this.edges
+      .filter((e) => e.taskId === from)
+      .some(
+        (e) => e.dependsOnId === target || this.dependsOnTransitively(e.dependsOnId, target, seen),
+      );
   }
 
   private links(id: string, side: "dependsOn" | "dependents") {

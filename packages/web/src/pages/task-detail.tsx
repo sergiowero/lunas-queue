@@ -70,6 +70,30 @@ function CancelTask({ task }: { task: Json<Task> }) {
   );
 }
 
+function ResumeTask({ task }: { task: Json<Task> }) {
+  const queryClient = useQueryClient();
+  const resume = useMutation({
+    mutationFn: () => api.resumeTask(task.id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["task", task.id] });
+      await queryClient.invalidateQueries({ queryKey: ["queue"] });
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <Button size="sm" disabled={resume.isPending} onClick={() => resume.mutate()}>
+        Reanudar tarea
+      </Button>
+      {resume.error && (
+        <span role="alert" className="text-destructive">
+          {resume.error.message}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function Header({ task }: { task: Json<Task> }) {
   const projects = useQuery(queries.projects());
   const project = projects.data?.find((p) => p.id === task.projectId);
@@ -77,7 +101,12 @@ function Header({ task }: { task: Json<Task> }) {
     <header className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h1 className="text-xl font-semibold whitespace-pre-wrap">{task.intent}</h1>
-        {!isTerminal(task.state) && <CancelTask task={task} />}
+        {!isTerminal(task.state) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {task.state === "needs_human" && <ResumeTask task={task} />}
+            <CancelTask task={task} />
+          </div>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <StateBadges state={task.state} subState={task.subState} />
@@ -143,7 +172,7 @@ export function TaskDetailPage() {
     <div className="flex flex-col gap-4">
       <Header task={task.data} />
       <div className="grid gap-4 lg:grid-cols-2">
-        <DependenciesPanel taskId={taskId} />
+        <DependenciesPanel task={task.data} />
         <UsagePanel taskId={taskId} />
       </div>
       <SpecPanel task={task.data} />

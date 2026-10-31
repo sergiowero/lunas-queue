@@ -50,6 +50,20 @@ describe("alta de tareas", () => {
     });
   });
 
+  it("muestra siempre 'Depende de' y explica por qué no hay candidatas", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "uno" });
+    fake.addTask(project.id, { intent: "Vieja", state: "completed", subState: null });
+    const { user } = renderApp("/tasks/new", fake);
+
+    expect(
+      await screen.findByText("Elige un proyecto para ver las tareas de las que depender."),
+    ).toBeTruthy();
+    await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
+    expect(await screen.findByText("No hay tareas activas de las que depender.")).toBeTruthy();
+    expect(screen.getByText("Depende de")).toBeTruthy();
+  });
+
   it("preselecciona el proyecto de la URL", async () => {
     const fake = new FakeApi();
     fake.addProject({ name: "uno" });

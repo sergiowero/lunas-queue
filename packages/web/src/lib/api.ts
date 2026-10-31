@@ -113,6 +113,15 @@ export const api = {
     request<void>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
   createTask: (input: TaskCreate) => post<Task>("/api/tasks", input),
   cancelTask: (id: string) => post<Task>(`${task(id)}/cancel`),
+  resumeTask: (id: string) => post<Task>(`${task(id)}/resume`),
+  addDependency: (id: string, dependsOnId: string) =>
+    request<{ created: boolean }>(`${task(id)}/dependencies/${encodeURIComponent(dependsOnId)}`, {
+      method: "PUT",
+    }),
+  removeDependency: (id: string, dependsOnId: string) =>
+    request<void>(`${task(id)}/dependencies/${encodeURIComponent(dependsOnId)}`, {
+      method: "DELETE",
+    }),
   approveSpec: (id: string, version: number) =>
     post<SpecResponse>(`${task(id)}/specs/${version}/approve`),
   requestChanges: (id: string, version: number, comments: string) =>

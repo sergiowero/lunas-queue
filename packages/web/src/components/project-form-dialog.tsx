@@ -270,9 +270,18 @@ export function ProjectFormDialog({
                 </div>
               </div>
               <div className="flex flex-col gap-1">
-                <Label htmlFor={`project-args-${phase}`}>Args de {phase} (uno por línea)</Label>
+                <Label htmlFor={`project-args-${phase}`}>
+                  Argumentos de CLI para Claude en {phase} (uno por línea)
+                </Label>
+                <p id={`project-args-help-${phase}`} className="text-xs text-muted-foreground">
+                  Flags que LunasQ pasa al comando <code>claude</code> al arrancar esta fase, p. ej.{" "}
+                  <code>--effort</code> y en la línea siguiente <code>high</code>. No escribas aquí
+                  un prompt ni texto suelto: Claude lo toma como prompt inicial y el arranque falla
+                  por timeout.
+                </p>
                 <Textarea
                   id={`project-args-${phase}`}
+                  aria-describedby={`project-args-help-${phase}`}
                   rows={2}
                   value={phases[phase].args}
                   onChange={(e) => setPhase(phase, { args: e.target.value })}

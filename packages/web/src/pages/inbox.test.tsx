@@ -24,6 +24,11 @@ describe("bandeja", () => {
       await (await section("Specs por aprobar")).findByText("Ninguna spec espera aprobación."),
     ).toBeTruthy();
     expect(
+      await (await section("Tareas que necesitan atención")).findByText(
+        "Ninguna tarea necesita atención.",
+      ),
+    ).toBeTruthy();
+    expect(
       await (await section("Preguntas abiertas")).findByText("Ningún agente espera una respuesta."),
     ).toBeTruthy();
     expect(
@@ -47,6 +52,19 @@ describe("bandeja", () => {
 
     expect(await screen.findByText("Ninguna spec espera aprobación.")).toBeTruthy();
     expect(fake.task(task.id).state).toBe("in_progress");
+  });
+
+  it("lista la tarea en needs_human y la cuenta en el menú", async () => {
+    const { fake, project } = seeded();
+    const task = fake.addTask(project.id, { intent: "Migrar a Postgres" });
+    fake.transition(task.id, "needs_human", null);
+    renderApp("/inbox", fake);
+
+    const escalated = await item("Tareas que necesitan atención", "Migrar a Postgres");
+    expect(escalated.getByRole("link", { name: "Migrar a Postgres" })).toBeTruthy();
+    expect(await escalated.findByText("Needs human")).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Bandeja, 1 pendientes" })).toBeTruthy();
+    expect(screen.queryByText("Nada espera por ti.")).toBeNull();
   });
 
   it("pide cambios a la spec desde la bandeja", async () => {

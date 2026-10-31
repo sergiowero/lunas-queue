@@ -45,7 +45,7 @@ describe("alta de proyectos", () => {
     await user.type(form.getByLabelText("Iteraciones de verificación"), "5");
     await user.type(form.getByLabelText("Modelo de verify"), "sonnet");
     await user.type(
-      form.getByLabelText("Args de verify (uno por línea)"),
+      form.getByLabelText("Argumentos de CLI para Claude en verify (uno por línea)"),
       "--permission-mode\nauto",
     );
     await user.type(form.getByLabelText("Timeout de implement (min)"), "60");
@@ -149,7 +149,11 @@ describe("edición de proyectos", () => {
     expect((form.getByLabelText("Concurrencia") as HTMLInputElement).value).toBe("2");
     expect((form.getByLabelText("Modelo de implement") as HTMLInputElement).value).toBe("opus");
     expect(
-      (form.getByLabelText("Args de implement (uno por línea)") as HTMLTextAreaElement).value,
+      (
+        form.getByLabelText(
+          "Argumentos de CLI para Claude en implement (uno por línea)",
+        ) as HTMLTextAreaElement
+      ).value,
     ).toBe("--permission-mode\nauto");
     expect((form.getByLabelText("Timeout de implement (min)") as HTMLInputElement).value).toBe(
       "60",

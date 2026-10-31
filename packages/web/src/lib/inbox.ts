@@ -1,5 +1,6 @@
-// Lo que espera al humano (ADR uw-27-bandeja): specs por aprobar (tareas en refined), preguntas
-// abiertas y agentes bloqueados. La bandeja lo muestra y el menú cuenta el total.
+// Lo que espera al humano (ADR uw-27-bandeja): specs por aprobar (tareas en refined), tareas
+// escaladas (needs_human), preguntas abiertas y agentes bloqueados. La bandeja lo muestra y el
+// menú cuenta el total.
 import type { Task } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -20,12 +21,20 @@ export function useInbox() {
         .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)),
     [tasks.data],
   );
+  const escalated = useMemo(
+    () =>
+      (tasks.data ?? [])
+        .filter((t) => t.state === "needs_human")
+        .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)),
+    [tasks.data],
+  );
   const byId: TasksById = useMemo(
     () => new Map((tasks.data ?? []).map((t) => [t.id, t])),
     [tasks.data],
   );
-  const count = refined.length + (questions.data?.length ?? 0) + (blocked.data?.length ?? 0);
-  return { tasks, questions, blocked, refined, byId, count };
+  const count =
+    refined.length + escalated.length + (questions.data?.length ?? 0) + (blocked.data?.length ?? 0);
+  return { tasks, questions, blocked, refined, escalated, byId, count };
 }
 
 export type Inbox = ReturnType<typeof useInbox>;

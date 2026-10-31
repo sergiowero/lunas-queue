@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useId, useState } from "react";
 import { Muted, Section } from "../components/section.tsx";
-import { Loading, MutationError, QueryError } from "../components/status.tsx";
+import { Loading, MutationError, QueryError, StateBadges } from "../components/status.tsx";
 import { SpecVersions } from "../components/task/spec.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
@@ -69,6 +69,37 @@ function SpecsSection({ refined, tasks }: { refined: Json<Task>[]; tasks: Inbox[
           {refined.map((task) => (
             <Item key={task.id} task={task} taskId={task.id}>
               <SpecVersions task={task} />
+            </Item>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function EscalatedSection({
+  escalated,
+  tasks,
+}: {
+  escalated: Json<Task>[];
+  tasks: Inbox["tasks"];
+}) {
+  return (
+    <Section title="Tareas que necesitan atención">
+      {tasks.error ? (
+        <QueryError error={tasks.error} />
+      ) : tasks.isPending ? (
+        <Loading />
+      ) : escalated.length === 0 ? (
+        <Muted>Ninguna tarea necesita atención.</Muted>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {escalated.map((task) => (
+            <Item key={task.id} task={task} taskId={task.id}>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <StateBadges state={task.state} subState={task.subState} />
+                <span>{`desde: ${formatDate(task.updatedAt)}`}</span>
+              </div>
             </Item>
           ))}
         </div>
@@ -226,6 +257,7 @@ export function InboxPage() {
         {loaded && inbox.count === 0 && <Muted>Nada espera por ti.</Muted>}
       </div>
       <SpecsSection refined={inbox.refined} tasks={inbox.tasks} />
+      <EscalatedSection escalated={inbox.escalated} tasks={inbox.tasks} />
       <QuestionsSection questions={inbox.questions} tasks={inbox.byId} />
       <BlockedSection blocked={inbox.blocked} tasks={inbox.byId} />
     </div>

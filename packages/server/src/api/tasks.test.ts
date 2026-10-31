@@ -1,4 +1,4 @@
-import { listEvents } from "@lunasq/db";
+import { listEvents, transitionTask } from "@lunasq/db";
 import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.ts";
@@ -127,6 +127,33 @@ describe("GET y PATCH /api/tasks/:id", () => {
     const res = await send("PATCH", `/api/tasks/${task.id}`, { priority: 1 });
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ error: "task_terminal" });
+  });
+});
+
+describe("POST /api/tasks/:id/resume", () => {
+  it("reanuda una tarea escalada hacia su estado previo y registra el evento", async () => {
+    const { db, send, create } = setup();
+    const task = await create();
+    transitionTask(db, {
+      taskId: task.id,
+      actor: "system",
+      command: { type: "escalate", reason: "retries_exhausted" },
+    });
+    const res = await send("POST", `/api/tasks/${task.id}/resume`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ state: "draft", subState: "queued" });
+    expect(listEvents(db, task.id).at(-1)).toMatchObject({
+      type: "task.transitioned",
+      actor: "human",
+      payload: { command: "resume" },
+    });
+  });
+
+  it("responde 409 fuera de needs_human y 404 si no existe", async () => {
+    const { send, create } = setup();
+    const task = await create();
+    expect((await send("POST", `/api/tasks/${task.id}/resume`)).status).toBe(409);
+    expect((await send("POST", `/api/tasks/${missing}/resume`)).status).toBe(404);
   });
 });
 
