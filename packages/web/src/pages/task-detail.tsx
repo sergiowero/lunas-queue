@@ -8,13 +8,15 @@ import { Loading, QueryError, StateBadges } from "../components/status.tsx";
 import { DependenciesPanel } from "../components/task/dependencies.tsx";
 import { EventLogPanel } from "../components/task/event-log.tsx";
 import { EvidencePanel } from "../components/task/evidence.tsx";
+import { IntentText } from "../components/task/intent-text.tsx";
 import { RunsPanel } from "../components/task/runs.tsx";
 import { SpecPanel } from "../components/task/spec.tsx";
 import { UsagePanel } from "../components/task/usage.tsx";
+import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { ApiError, api, type Json } from "../lib/api.ts";
-import { formatDate, isTerminal, taskLabel } from "../lib/format.ts";
+import { formatDate, isTerminal } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/tasks/$taskId");
@@ -101,9 +103,16 @@ function Header({ task }: { task: Json<Task> }) {
     <header className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold whitespace-pre-wrap">{taskLabel(task)}</h1>
+          <div className="flex items-baseline gap-2">
+            <TaskNumber number={task.number} className="text-base" />
+            <h1 className="text-xl font-semibold whitespace-pre-wrap">
+              {task.title ?? <IntentText intent={task.intent} />}
+            </h1>
+          </div>
           {task.title && (
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{task.intent}</p>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+              <IntentText intent={task.intent} />
+            </p>
           )}
         </div>
         {!isTerminal(task.state) && (

@@ -89,6 +89,9 @@ export const tasks = sqliteTable(
   "tasks",
   {
     id: id(),
+    // Número de tarea (#N): secuencial y global, inmutable y sin reuso; lo asigna el trigger
+    // tasks_assign_number de la migración 0008 si el insert no lo trae (ADR 0015).
+    number: integer("number"),
     projectId: text("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "restrict" }),
@@ -126,6 +129,11 @@ export const tasks = sqliteTable(
     inEnum("tasks_sub_state_enum", t.subState, values(SubState)),
     inEnum("tasks_pr_state_enum", t.prState, values(PrState)),
     inEnum("tasks_risk_label_enum", t.riskLabel, values(RiskLabel)),
+    check(
+      "tasks_number_positive",
+      sql`${t.number} is null or (${isInteger(t.number)} and ${t.number} > 0)`,
+    ),
+    uniqueIndex("tasks_number_unique").on(t.number),
     index("tasks_project_idx").on(t.projectId),
     index("tasks_state_idx").on(t.state, t.subState),
   ],

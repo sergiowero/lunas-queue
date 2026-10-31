@@ -162,7 +162,7 @@ describe("RunWatcher: blocked", () => {
 
   it("notifica una vez si sigue bloqueado 1 minuto y no antes", async () => {
     const h = setup();
-    const { run, name } = await h.launched();
+    const { taskId, run, name } = await h.launched();
     h.herdr.setAgentStatus(name, "blocked");
     await settle(vi);
     await vi.advanceTimersByTimeAsync(ESCALATION_DELAY_MS - 1);
@@ -170,7 +170,12 @@ describe("RunWatcher: blocked", () => {
     await vi.advanceTimersByTimeAsync(1);
     await vi.advanceTimersByTimeAsync(10 * MIN);
     expect(h.notifications).toEqual([
-      expect.objectContaining({ id: `blocked:${run.id}:1`, kind: "agent_blocked", runId: run.id }),
+      expect.objectContaining({
+        id: `blocked:${run.id}:1`,
+        kind: "agent_blocked",
+        runId: run.id,
+        title: `Agente bloqueado en #${h.taskRow(taskId)?.number}`,
+      }),
     ]);
   });
 
@@ -211,7 +216,12 @@ describe("RunWatcher: timeout de fase", () => {
 
     expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human", subState: null });
     expect(h.notifications).toEqual([
-      expect.objectContaining({ id: `timeout:${run.id}`, kind: "phase_timeout", taskId }),
+      expect.objectContaining({
+        id: `timeout:${run.id}`,
+        kind: "phase_timeout",
+        taskId,
+        title: `Timeout de fase en #${h.taskRow(taskId)?.number}`,
+      }),
     ]);
     expect(await h.herdr.getAgent(name)).toBeDefined();
     expect(h.runs.get(run.id)?.endedAt).toBeNull();

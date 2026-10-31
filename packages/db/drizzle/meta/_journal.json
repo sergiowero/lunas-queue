@@ -57,6 +57,13 @@
       "when": 1793420172552,
       "tag": "0007_task_title",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793478841000,
+      "tag": "0008_task_number",
+      "breakpoints": true
     }
   ]
 }

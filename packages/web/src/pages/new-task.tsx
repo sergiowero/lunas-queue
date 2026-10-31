@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { Loading, QueryError } from "../components/status.tsx";
+import { TaskNumber, taskLabel as taskNumberLabel } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input, Label, Select, Textarea } from "../components/ui/input.tsx";
@@ -155,7 +156,7 @@ export function NewTaskPage() {
                 >
                   {tasks.map((task) => (
                     <option key={task.id} value={task.id}>
-                      {taskLabel(task)}
+                      {`${taskNumberLabel(task.number)} · ${taskLabel(task)}`}
                     </option>
                   ))}
                 </optgroup>
@@ -169,6 +170,7 @@ export function NewTaskPage() {
                   key={task.id}
                   className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5"
                 >
+                  <TaskNumber number={task.number} />
                   <span data-intent className="flex-1">
                     {taskLabel(task)}
                   </span>
