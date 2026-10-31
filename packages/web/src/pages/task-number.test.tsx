@@ -58,8 +58,8 @@ describe("número de tarea en las vistas", () => {
     fake.transition(task.id, "refined", null);
     renderApp("/inbox", fake);
     const specs = within(await screen.findByRole("region", { name: "Specs por aprobar" }));
-    const item = within(await specs.findByRole("article", { name: "Login con email" }));
-    nextToIntent(item, 42, "Login con email");
+    await specs.findByRole("link", { name: "Login con email" });
+    nextToIntent(specs, 42, "Login con email");
   });
 
   it("detalle: la cabecera y las dependencias muestran el #N", async () => {
