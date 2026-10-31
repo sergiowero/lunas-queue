@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { api, type Json } from "../../lib/api.ts";
-import { isTerminal, STATE_LABEL } from "../../lib/format.ts";
+import { isTerminal, STATE_LABEL, taskLabel } from "../../lib/format.ts";
 import { queries } from "../../lib/queries.ts";
 import { Muted, Section } from "../section.tsx";
 import { QueryError } from "../status.tsx";
@@ -30,7 +30,7 @@ function Links({
         {links.map((link) => (
           <li key={link.taskId} className="flex flex-wrap items-center gap-2">
             <Link to="/tasks/$taskId" params={{ taskId: link.taskId }} className="hover:underline">
-              {link.intent}
+              {taskLabel(link)}
             </Link>
             <Badge variant="secondary">{STATE_LABEL[link.state]}</Badge>
             {link.prState && <Badge variant="outline">PR {link.prState}</Badge>}
@@ -39,7 +39,7 @@ function Links({
               <Button
                 variant="ghost"
                 size="sm"
-                aria-label={`Quitar dependencia ${link.intent}`}
+                aria-label={`Quitar dependencia ${taskLabel(link)}`}
                 onClick={() => onRemove(link)}
               >
                 Quitar
@@ -111,7 +111,7 @@ function AddDependency({ task, taken }: { task: Json<Task>; taken: Set<string> }
               >
                 {tasks.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.intent}
+                    {taskLabel(t)}
                   </option>
                 ))}
               </optgroup>

@@ -85,10 +85,12 @@ export function commitTrailers(input: {
 
 const MAX_TITLE_CHARS = 72;
 
-/** Primera línea del intent, en una línea y de hasta 72 caracteres. */
-export function prTitle(intent: string): string {
-  const line = intent
-    .split("\n")
+/**
+ * Título del PR: el de la tarea y, mientras no tenga, la primera línea del intent, en una línea
+ * y de hasta 72 caracteres.
+ */
+export function prTitle(intent: string, title?: string | null): string {
+  const line = [title ?? "", ...intent.split("\n")]
     .map((l) => l.replace(/\s+/g, " ").trim())
     .find((l) => l !== "");
   if (!line) return "Tarea de LunasQ";

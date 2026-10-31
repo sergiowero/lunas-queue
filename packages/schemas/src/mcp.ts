@@ -92,6 +92,7 @@ export const TaskContext = z.strictObject({
   task: z.strictObject({
     id: z.uuid(),
     intent: z.string(),
+    title: z.string().nullable(),
     tags: z.array(z.string()),
     state: TaskState,
     subState: SubState.nullable(),

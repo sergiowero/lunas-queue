@@ -36,6 +36,18 @@ describe("tablero por proyecto", () => {
     expect(screen.queryByText("Ajena")).toBeNull();
   });
 
+  it("muestra el título de la tarea y, mientras no hay, su intent", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "lunas-queue" });
+    fake.addTask(project.id, { intent: "Intent largo de la primera", title: "Título corto" });
+    fake.addTask(project.id, { intent: "Sin refinar todavía" });
+    renderApp(`/projects/${project.id}`, fake);
+
+    expect(await screen.findByRole("link", { name: "Título corto" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sin refinar todavía" })).toBeTruthy();
+    expect(screen.queryByText("Intent largo de la primera")).toBeNull();
+  });
+
   it("enlaza al alta de tareas con el proyecto elegido", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });

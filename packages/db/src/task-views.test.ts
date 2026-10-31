@@ -274,6 +274,7 @@ describe("TaskViewRepository.graph", () => {
       id: base.id,
       projectId: project.id,
       intent: "Base",
+      title: null,
       state: "draft",
       subState: "queued",
       prState: null,

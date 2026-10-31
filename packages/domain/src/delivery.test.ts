@@ -138,6 +138,17 @@ describe("prTitle", () => {
     expect(title.endsWith("…")).toBe(true);
   });
 
+  it("prefiere el título de la tarea al intent", () => {
+    expect(prTitle("Permitir cancelar pedidos\n\ncon motivo", "  Cancelar   pedidos ")).toBe(
+      "Cancelar pedidos",
+    );
+  });
+
+  it("sin título (null o vacío) cae al intent", () => {
+    expect(prTitle("Permitir cancelar pedidos", null)).toBe("Permitir cancelar pedidos");
+    expect(prTitle("Permitir cancelar pedidos", " ")).toBe("Permitir cancelar pedidos");
+  });
+
   it("un intent vacío da un título genérico", () => {
     expect(prTitle("  \n ")).toBe("Tarea de LunasQ");
   });

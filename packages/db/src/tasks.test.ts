@@ -3,6 +3,7 @@ import {
   TASK_CREATED,
   TASK_DEPENDENCY_ADDED,
   TASK_DEPENDENCY_REMOVED,
+  TASK_TITLED,
   TASK_TRANSITIONED,
   TASK_UPDATED,
   type TaskCreate,
@@ -15,7 +16,7 @@ import { migrateDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
 import * as schema from "./schema.ts";
 import { taskDependencies, tasks } from "./schema.ts";
-import { TaskRepository, TaskRepositoryError } from "./tasks.ts";
+import { applyTaskTitle, TaskRepository, TaskRepositoryError } from "./tasks.ts";
 import { freshDatabase, insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
 
 const missing = "00000000-0000-4000-8000-000000000999";
@@ -299,6 +300,7 @@ describe("TaskRepository aristas", () => {
         taskId: a.id,
         projectId: a.projectId,
         intent: "Base",
+        title: null,
         state: "draft",
         prState: null,
         crossProject: false,
@@ -354,4 +356,27 @@ dependencyGraphReaderContract("TaskRepository", (edges) => {
   };
   for (const { taskId, dependsOnId } of edges) repo.addDependency(idOf(taskId), idOf(dependsOnId));
   return { reader: repo, idOf };
+});
+
+describe("applyTaskTitle", () => {
+  it("fija el título una sola vez y registra task.titled", () => {
+    const { db, repo, create } = repository();
+    const task = create();
+    expect(task.title).toBeNull();
+
+    expect(db.transaction((tx) => applyTaskTitle(tx, task.id, "  Primer título "))).toBe(true);
+    expect(db.transaction((tx) => applyTaskTitle(tx, task.id, "Otro título"))).toBe(false);
+
+    expect(repo.get(task.id)?.title).toBe("Primer título");
+    const titled = listEvents(db, task.id).filter((e) => e.type === TASK_TITLED);
+    expect(titled).toHaveLength(1);
+    expect(titled[0]).toMatchObject({ actor: "agent", payload: { title: "Primer título" } });
+  });
+
+  it("rechaza un título vacío o de más de 72 caracteres", () => {
+    const { db, create } = repository();
+    const task = create();
+    expect(() => db.transaction((tx) => applyTaskTitle(tx, task.id, "  "))).toThrow();
+    expect(() => db.transaction((tx) => applyTaskTitle(tx, task.id, "x".repeat(73)))).toThrow();
+  });
 });

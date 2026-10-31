@@ -6,6 +6,7 @@
 // revisores, el tope de iteraciones del proyecto y la etiqueta de riesgo.
 import {
   appendChecklist,
+  applyTaskTitle,
   applyTransition,
   closeRun,
   consecutiveFailures,
@@ -195,6 +196,7 @@ export class LunasqMcpService {
       task: {
         id: task.id,
         intent: task.intent,
+        title: task.title,
         tags: task.tags,
         state: task.state,
         subState: task.subState,
@@ -249,11 +251,12 @@ export class LunasqMcpService {
   submitSpec(run: RunRow, input: unknown): Outcome<{ specVersion: number }> {
     const parsed = this.#parse(run, input, "refinement");
     if (!parsed.ok) return parsed;
-    const { assumptions: _assumptions, ...content } = parsed.data.body;
+    const { assumptions: _assumptions, title, ...content } = parsed.data.body;
     return this.#write((tx) => {
       this.#close(tx, run, { result: "success", handoff: parsed.data });
       const result = this.#specs.applySubmit(tx, run.taskId, content);
       if (!result.ok) throw new Rejected(fail("transition_rejected", result.error.message));
+      applyTaskTitle(tx, run.taskId, title);
       return { ok: true, data: { specVersion: result.spec.version } };
     });
   }

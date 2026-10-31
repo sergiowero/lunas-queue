@@ -68,7 +68,7 @@ const PHASES = [
     skill: "refine-task",
     exit: "submit_spec",
     handoffPhase: "refinement",
-    body: ["domainModel", "requirements", "criteria", "taskList", "assumptions"],
+    body: ["title", "domainModel", "requirements", "criteria", "taskList", "assumptions"],
   },
   {
     skill: "implement-task",

@@ -186,6 +186,54 @@ describe("submit_spec", () => {
     expect(runOf(h, run.id)?.endedAt).toBeInstanceOf(Date);
   });
 
+  it("guarda el título del handoff en la tarea, sin ponerlo en la spec", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("refine", refining, { approved: false });
+    expect(h.taskOf(task.id)?.title).toBeNull();
+    const handoff = handoffFor("refinement", run);
+    handoff.body = { ...handoff.body, title: "Cancelar pedidos" };
+    await call("submit_spec", { handoff });
+    expect(h.taskOf(task.id)?.title).toBe("Cancelar pedidos");
+    expect(new SpecRepository(h.db).get(task.id, 1)?.content).not.toHaveProperty("title");
+    expect(listEvents(h.db, task.id).filter((e) => e.type === "task.titled")).toHaveLength(1);
+  });
+
+  it("un refinamiento posterior no cambia el título", async () => {
+    const h = mcpHarness();
+    const task = h.task(refining, { approved: false });
+    const first = insertRun(h.db, task.id, { phase: "refine" });
+    const one = await h.connect(first.runToken);
+    await one.call("get_task_context");
+    const firstHandoff = handoffFor("refinement", first);
+    firstHandoff.body = { ...firstHandoff.body, title: "Primer título" };
+    await one.call("submit_spec", { handoff: firstHandoff });
+    expect(new SpecRepository(h.db).requestChanges(task.id, 1, "Falta algo").ok).toBe(true);
+    setTaskPosition(h.db, task.id, refining);
+
+    const second = insertRun(h.db, task.id, { phase: "refine", iteration: 1 });
+    const two = await h.connect(second.runToken);
+    await two.call("get_task_context");
+    const secondHandoff = handoffFor("refinement", second);
+    secondHandoff.body = { ...secondHandoff.body, title: "Otro título" };
+    const result = await two.call("submit_spec", { handoff: secondHandoff });
+    expect(result.isError).toBe(false);
+    expect(h.taskOf(task.id)?.title).toBe("Primer título");
+    expect(listEvents(h.db, task.id).filter((e) => e.type === "task.titled")).toHaveLength(1);
+  });
+
+  it("un handoff sin título se rechaza", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("refine", refining, { approved: false });
+    const handoff = handoffFor("refinement", run);
+    const { title: _title, ...body } = handoff.body as Record<string, unknown>;
+    handoff.body = body;
+    const result = await call("submit_spec", { handoff });
+    expect(result.body).toMatchObject({
+      error: "invalid_handoff",
+      issues: expect.arrayContaining([expect.objectContaining({ path: "body.title" })]),
+    });
+  });
+
   it("un handoff inválido se rechaza con errores por ruta y no escribe nada", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("refine", refining, { approved: false });

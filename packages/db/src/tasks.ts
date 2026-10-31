@@ -12,6 +12,7 @@ import {
   TASK_CREATED,
   TASK_DEPENDENCY_ADDED,
   TASK_DEPENDENCY_REMOVED,
+  TASK_TITLED,
   TASK_UPDATED,
   Task,
   TaskCreate,
@@ -19,6 +20,8 @@ import {
   type TaskDependencies,
   type TaskDependencyPayload,
   type TaskListQuery,
+  TaskTitle,
+  type TaskTitledPayload,
   TaskUpdate,
   type TaskUpdatedPayload,
 } from "@lunasq/schemas";
@@ -284,12 +287,13 @@ export class TaskRepository implements DependencyGraphReader {
     const task = findRow(db, taskId);
     if (!task) return null;
     const link = (
-      other: Pick<Row, "id" | "projectId" | "intent" | "state" | "prState">,
+      other: Pick<Row, "id" | "projectId" | "intent" | "title" | "state" | "prState">,
       createdAt: Date,
     ): DependencyLink => ({
       taskId: other.id,
       projectId: other.projectId,
       intent: other.intent,
+      title: other.title,
       state: other.state,
       prState: other.prState,
       crossProject: other.projectId !== task.projectId,
@@ -299,6 +303,7 @@ export class TaskRepository implements DependencyGraphReader {
       id: tasks.id,
       projectId: tasks.projectId,
       intent: tasks.intent,
+      title: tasks.title,
       state: tasks.state,
       prState: tasks.prState,
       createdAt: taskDependencies.createdAt,
@@ -334,6 +339,24 @@ export class TaskRepository implements DependencyGraphReader {
   #write<T>(fn: (tx: Tx) => T): T {
     return this.db.transaction(fn, { behavior: "immediate" });
   }
+}
+
+/**
+ * Fija el título de la tarea si aún no tiene, dentro de la transacción de quien llama. Los
+ * refinamientos siguientes no lo cambian. Devuelve si lo escribió.
+ */
+export function applyTaskTitle(tx: Tx, taskId: string, title: string): boolean {
+  const parsed = TaskTitle.parse(title);
+  const [row] = tx
+    .update(tasks)
+    .set({ title: parsed })
+    .where(and(eq(tasks.id, taskId), sql`${tasks.title} is null`))
+    .returning({ id: tasks.id })
+    .all();
+  if (!row) return false;
+  const payload: TaskTitledPayload = { title: parsed };
+  appendEvent(tx, { taskId, type: TASK_TITLED, actor: "agent", payload });
+  return true;
 }
 
 function assertNotTerminal(task: Row): void {

@@ -72,6 +72,7 @@ describe("QueueEntry", () => {
       id: taskId,
       projectId,
       intent: "x",
+      title: null,
       tags: [],
       priority: 1,
       state: "draft",

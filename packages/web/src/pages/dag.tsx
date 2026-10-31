@@ -13,6 +13,7 @@ import { Badge } from "../components/ui/badge.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
 import { layoutGraph, NODE_HEIGHT, NODE_WIDTH } from "../lib/dag-layout.ts";
+import { taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/dag");
@@ -40,7 +41,7 @@ function Dependencies({
             return (
               <li key={`${edge.taskId}:${edge.dependsOnId}`} className="flex flex-wrap gap-1">
                 <Link to="/tasks/$taskId" params={{ taskId: task.id }} className="hover:underline">
-                  {task.intent}
+                  {taskLabel(task)}
                 </Link>
                 <span>depende de</span>
                 <Link
@@ -48,7 +49,7 @@ function Dependencies({
                   params={{ taskId: dependsOn.id }}
                   className="hover:underline"
                 >
-                  {dependsOn.intent}
+                  {taskLabel(dependsOn)}
                 </Link>
                 {task.projectId !== dependsOn.projectId && (
                   <Badge variant="destructive">otro proyecto</Badge>

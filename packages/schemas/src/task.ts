@@ -8,6 +8,10 @@ const unique = <T>(items: T[]): T[] => [...new Set(items)];
 // Entero sin signo hasta MAX_SAFE_INTEGER, como el CHECK de la columna (ADR 0005).
 export const Priority = z.int().min(0).max(Number.MAX_SAFE_INTEGER);
 
+/** Título corto que genera el refinador; se muestra en la UI y titula el PR. */
+export const TASK_TITLE_MAX = 72;
+export const TaskTitle = z.string().trim().min(1).max(TASK_TITLE_MAX);
+
 const Intent = z.string().trim().min(1).max(10_000);
 const Tags = z.array(z.string().trim().min(1).max(64)).max(32).transform(unique);
 
@@ -44,6 +48,8 @@ export const Task = z.strictObject({
   id: z.uuid(),
   projectId: z.uuid(),
   intent: z.string().min(1),
+  // null hasta el primer refinamiento; después no cambia.
+  title: TaskTitle.nullable(),
   tags: z.array(z.string()),
   priority: Priority,
   state: TaskState,
@@ -65,6 +71,7 @@ export const DependencyLink = z.strictObject({
   taskId: z.uuid(),
   projectId: z.uuid(),
   intent: z.string(),
+  title: TaskTitle.nullable(),
   state: TaskState,
   prState: PrState.nullable(),
   // Las dependencias entre proyectos se permiten, pero la UI las muestra como riesgo.
@@ -81,6 +88,7 @@ export type TaskDependencies = z.infer<typeof TaskDependencies>;
 
 export const TASK_CREATED = "task.created";
 export const TASK_UPDATED = "task.updated";
+export const TASK_TITLED = "task.titled";
 export const TASK_DEPENDENCY_ADDED = "task.dependency_added";
 export const TASK_DEPENDENCY_REMOVED = "task.dependency_removed";
 
@@ -105,6 +113,10 @@ export const TaskUpdatedPayload = z
   .strictObject({ from: EditableFields, to: EditableFields })
   .refine((p) => Object.keys(p.to).length > 0, "task.updated sin cambios");
 export type TaskUpdatedPayload = z.infer<typeof TaskUpdatedPayload>;
+
+/** El refinador fijó el título de la tarea (solo la primera vez). */
+export const TaskTitledPayload = z.strictObject({ title: TaskTitle });
+export type TaskTitledPayload = z.infer<typeof TaskTitledPayload>;
 
 /** Payload de task.dependency_added y task.dependency_removed; el evento va en la dependiente. */
 export const TaskDependencyPayload = z.strictObject({

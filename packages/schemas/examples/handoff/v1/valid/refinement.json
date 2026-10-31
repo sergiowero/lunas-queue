@@ -15,6 +15,7 @@
   ],
   "knownRisks": ["Los pedidos ya facturados requieren reembolso, fuera de alcance"],
   "body": {
+    "title": "Cancelar pedidos antes del envío",
     "domainModel": {
       "boundedContext": "Pedidos",
       "glossary": [
