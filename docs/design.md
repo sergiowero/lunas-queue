@@ -4,13 +4,13 @@ Oct 28, 2026 · @Sergio Sanchez
 
 ## Objetivo y principios
 
-LunasQ (repositorio `lunas-queue`) es una cola de tareas multi‑proyecto donde un humano define el intent y agentes de codificación (Claude Code en v1) la refinan, implementan, verifican y entregan como PR; herdr es la capa de ejecución y observación, no la fuente de verdad.
+LunasQ (repositorio `lunas-queue`) es una cola de tareas multi‑proyecto donde un humano define el intent y agentes de codificación la refinan, implementan, verifican y entregan como PR; herdr es la capa de ejecución y observación, no la fuente de verdad.
 
 **Modelo de factory:** LunasQ es una AI software factory *lights‑on*: agentes especializados refinan, implementan y verifican con memoria opcional del proyecto (engram), y el humano conserva dos gates, aprobar la spec y mergear cada PR.
 
 **Alcance:** crear tareas con intent, prioridad y dependencias; despacho automático a agentes en herdr; gates humanos en refinamiento; loop implementación ↔ verificación; commit, push y PR.
 
-**Agentes soportados:** v1 solo soporta Claude Code, en todas las fases. Codex y otros agentes se integran en v2 o posteriores; el LunasQ MCP, las skills, el perfil de agente y el adapter de herdr se mantienen agnósticos para que sumarlos no cambie la arquitectura.
+**Agentes soportados:** Claude Code y GitHub Copilot CLI se seleccionan por fase en cada proyecto. Cada CLI tiene un adapter propio; el dispatcher usa el registry para construir argumentos, configuración MCP y orden de fallback. Si un CLI falla antes de quedar listo, se intenta el siguiente una vez; si ninguno queda listo, la tarea pasa a `needs_human` con el diagnóstico de cada proveedor. Tokens de uso/costo no disponibles se muestran como tales, no como cero. La integración de revisores por subagentes sigue siendo específica de Claude Code; no declarar paridad de verificación para Copilot hasta que sus revisores y evidencia estén conectados a los mismos gates.
 
 **Fuera de alcance (v1):** merge automático, commits directo a main, despliegue a producción hecho por LunasQ (se puede configurar con hooks del proyecto), carriles por tamaño de tarea, pruebas de aceptación ocultas al builder (posible versión futura) e intake automático desde GitHub issues (planeado para v2).
 

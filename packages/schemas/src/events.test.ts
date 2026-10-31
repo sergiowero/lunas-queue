@@ -44,6 +44,7 @@ describe("evento task.transitioned", () => {
       "hook_failed",
       "dependency_pr_closed",
       "delivery_failed",
+      "providers_unavailable",
     ]);
   });
 

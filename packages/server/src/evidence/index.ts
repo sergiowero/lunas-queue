@@ -15,6 +15,7 @@ export {
 export {
   ClaudeTranscriptSource,
   type ClaudeTranscriptSourceOptions,
+  CopilotReviewerTranscriptSource,
   DEFAULT_TRANSCRIPT_MAX_BYTES,
   NoTranscripts,
   projectDirName,

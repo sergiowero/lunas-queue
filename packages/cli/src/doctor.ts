@@ -7,6 +7,7 @@ import { hookSettings, mcpConfig, runtimeUrls } from "@lunasq/server";
 import { assetTargets, drift, isForeign, readManifest, retired } from "./assets.ts";
 import { baseUrl, ConfigError, type LunasqConfig, readConfig } from "./config.ts";
 import { type MachineContext, NOT_FOUND_EXIT_CODE, run } from "./context.ts";
+import { hasCopilotMcpConfig } from "./copilot-mcp.ts";
 import { tomlString } from "./toml.ts";
 import { compareVersions, parseVersion } from "./versions.ts";
 
@@ -26,6 +27,7 @@ export const MINIMUM = {
   herdr: "0.9.5",
   herdrProtocol: 22,
   claude: "2.1.312",
+  copilot: "1.0.0",
 } as const;
 
 const INSTALL_FIX = "corre `lunasq install`";
@@ -141,6 +143,12 @@ export async function claudeIntegrationState(ctx: MachineContext): Promise<strin
 }
 
 export async function checkHerdrIntegration(ctx: MachineContext): Promise<CheckResult> {
+  if ((await checkClaude(ctx)).status !== "ok" && (await checkCopilot(ctx)).status === "ok") {
+    return warn(
+      "herdr-integration",
+      "integración de herdr para Claude Code omitida: GitHub Copilot CLI está disponible",
+    );
+  }
   const state = await claudeIntegrationState(ctx);
   if (state?.startsWith("current"))
     return ok("herdr-integration", `integración de herdr para Claude Code: ${state}`);
@@ -184,6 +192,28 @@ export async function checkClaude(ctx: MachineContext): Promise<CheckResult> {
   return ok("claude", `Claude Code ${version}`);
 }
 
+export async function checkCopilot(ctx: MachineContext): Promise<CheckResult> {
+  const res = await run(ctx, "copilot --version");
+  if (res.exitCode === NOT_FOUND_EXIT_CODE) {
+    return fail("copilot", "GitHub Copilot CLI no está instalado", "instala GitHub Copilot CLI");
+  }
+  const version = parseVersion(res.stdout);
+  if (res.exitCode !== 0 || !version) {
+    return fail(
+      "copilot",
+      `\`copilot --version\` falló: ${res.stderr.trim() || res.stdout.trim()}`,
+    );
+  }
+  if (compareVersions(version, MINIMUM.copilot) < 0) {
+    return fail(
+      "copilot",
+      `GitHub Copilot CLI ${version}; LunasQ necesita ${MINIMUM.copilot} o más`,
+      "actualiza GitHub Copilot CLI",
+    );
+  }
+  return ok("copilot", `GitHub Copilot CLI ${version}`);
+}
+
 export async function checkGh(ctx: MachineContext): Promise<CheckResult> {
   const res = await run(ctx, "gh auth status");
   if (res.exitCode === NOT_FOUND_EXIT_CODE)
@@ -195,8 +225,15 @@ export async function checkGh(ctx: MachineContext): Promise<CheckResult> {
 
 /** Herramientas que LunasQ no instala: sin ellas `install` no sigue. */
 export async function checkPrerequisites(ctx: MachineContext): Promise<CheckResult[]> {
-  const [herdr, claude, gh] = await Promise.all([checkHerdr(ctx), checkClaude(ctx), checkGh(ctx)]);
-  return [...herdr, claude, gh];
+  const [herdr, claude, copilot, gh] = await Promise.all([
+    checkHerdr(ctx),
+    checkClaude(ctx),
+    checkCopilot(ctx),
+    checkGh(ctx),
+  ]);
+  if (claude.status === "ok" && copilot.status !== "ok") copilot.status = "warn";
+  if (copilot.status === "ok" && claude.status !== "ok") claude.status = "warn";
+  return [...herdr, claude, copilot, gh];
 }
 
 /** Fix para un destino ajeno: LunasQ no lo sobrescribe (ADR uw-28-instalador). */
@@ -208,8 +245,18 @@ export async function checkAssets(ctx: MachineContext): Promise<CheckResult[]> {
   const manifest = await readManifest(ctx.paths.manifest);
   const current = await Promise.all(
     targets.map(async (t) => {
-      const id = t.kind === "skill" ? `skill:${t.name}` : "agents";
-      const label = t.kind === "skill" ? `skill ${t.name}` : "subagentes revisores";
+      const id =
+        t.kind === "agents"
+          ? "agents"
+          : t.kind === "copilot-agents"
+            ? "copilot-agents"
+            : `${t.kind === "copilot-skill" ? "copilot-skill" : "skill"}:${t.name}`;
+      const label =
+        t.kind === "agents"
+          ? "subagentes revisores"
+          : t.kind === "copilot-agents"
+            ? "subagentes revisores de Copilot CLI"
+            : `skill ${t.name}${t.kind === "copilot-skill" ? " de Copilot" : ""}`;
       if (await isForeign(t, manifest)) {
         return fail(id, `${label}: ${t.dest} ya existe y no es de LunasQ`, foreignFix(t.dest));
       }
@@ -267,9 +314,17 @@ export async function checkLunasqFiles(ctx: MachineContext): Promise<CheckResult
         "telemetría apagada: no habrá usage por tarea",
         `pon \`telemetry: true\` en ${ctx.paths.config}`,
       );
+  const copilotMcp = (await hasCopilotMcpConfig(ctx.paths.copilotMcpConfig, urls.mcp))
+    ? ok("copilot-mcp", `LunasQ MCP registrado en ${ctx.paths.copilotMcpConfig}`)
+    : fail(
+        "copilot-mcp",
+        "LunasQ MCP no está registrado en la configuración de Copilot",
+        INSTALL_FIX,
+      );
   return [
     ok("config", `configuración en ${ctx.paths.config} (puerto ${config.port})`),
     mcp,
+    copilotMcp,
     hooks,
     telemetry,
   ];

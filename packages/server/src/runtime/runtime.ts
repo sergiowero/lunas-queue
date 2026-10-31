@@ -2,6 +2,8 @@
 // localhost y los módulos en proceso (outbox, orquestador, polling de PRs). `lunasq start` lo
 // arranca; los tests pasan fakes en `adapters`.
 import type { AddressInfo } from "node:net";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { type ServerType, serve } from "@hono/node-server";
 import {
   type GitAdapter,
@@ -26,10 +28,11 @@ import { DeliveryService } from "../delivery/service.ts";
 import { subscribeDelivery } from "../delivery/subscribe.ts";
 import { Orchestrator } from "../dispatcher/orchestrator.ts";
 import { EvidenceService } from "../evidence/service.ts";
-import { ClaudeTranscriptSource } from "../evidence/sources.ts";
+import { ClaudeTranscriptSource, CopilotReviewerTranscriptSource } from "../evidence/sources.ts";
 import { PrPoller } from "../github/poller.ts";
 import { subscribeAfterMergeHooks } from "../hooks/after-merge.ts";
 import { HookService } from "../hooks/service.ts";
+import { CopilotCliReviewerExecutor } from "../mcp/copilot-reviewer.ts";
 import { OutboxPublisher } from "../outbox/publisher.ts";
 import { SUBAGENT_HOOK_PATH } from "../subagents/routes.ts";
 import { PaneTestGate } from "../test-gate/gate.ts";
@@ -45,6 +48,7 @@ export interface RuntimeOptions {
   /** Archivo MCP estable (ADR 0002) y settings con los hooks de subagentes (ADR uw-19-revisores). */
   mcpConfigPath: string;
   hookSettingsPath: string;
+  copilotAgentsPath?: string;
   /**
    * Feature flag del usage collector (ADR uw-20-usage-collector): telemetría de Claude Code hacia
    * los endpoints OTLP locales; activa por defecto. `false` quita las variables OTEL de los panes
@@ -134,6 +138,14 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const github = opts.adapters?.github ?? new RealGitHub();
   const git = opts.adapters?.git ?? new RealGit();
   const processes = opts.adapters?.processes ?? new ShellProcessRunner();
+  const copilotEvidencePath = join(dirname(opts.dbPath), "copilot-reviewers");
+  const copilotReviewers = new CopilotCliReviewerExecutor({
+    processes,
+    agentsPath:
+      opts.copilotAgentsPath ??
+      join(process.env.COPILOT_HOME ?? join(homedir(), ".copilot"), "agents", "lunasq"),
+    evidencePath: copilotEvidencePath,
+  });
   const urls = runtimeUrls(url);
   const paneEnv = opts.telemetry === false ? {} : telemetryEnv(url);
 
@@ -141,7 +153,14 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     db,
     onError: (error) => log(`outbox: ${error.message}`),
   });
-  const evidence = new EvidenceService({ db, git, transcripts: new ClaudeTranscriptSource() });
+  const evidence = new EvidenceService({
+    db,
+    git,
+    transcripts: new CopilotReviewerTranscriptSource({
+      claude: new ClaudeTranscriptSource(),
+      evidencePath: copilotEvidencePath,
+    }),
+  });
   const orchestrator = new Orchestrator({
     db,
     herdr,
@@ -168,6 +187,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const testGate = new PaneTestGate({ db, git, herdr, worktrees: orchestrator.worktrees });
   const app = createApp({
     db,
+    copilotReviewers,
     telemetry: opts.telemetry !== false,
     ...(opts.scheduler && { scheduler: opts.scheduler }),
     ...(opts.webRoot && { webRoot: opts.webRoot }),

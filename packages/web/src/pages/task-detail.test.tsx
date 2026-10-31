@@ -139,9 +139,11 @@ describe("detalle de tarea", () => {
     expect(details?.open).toBe(false);
   });
 
-  it("muestra el usage total y por Run", async () => {
+  it("muestra consumo registrado y explica que el usage de Copilot no está disponible", async () => {
     const { fake, task } = seeded();
     const run = fake.startRun(task.id, "implement");
+    const copilotRun = fake.startRun(task.id, "verify");
+    copilotRun.agentKind = "copilot";
     const usage = {
       inputTokens: 300,
       outputTokens: 50,
@@ -159,8 +161,12 @@ describe("detalle de tarea", () => {
     });
     renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Usage");
-    expect(await block.findByText("360 tokens · $0.25")).toBeTruthy();
+    expect(
+      await block.findByText(/Consumo registrado \(parcial: Copilot CLI no informa usage\)/),
+    ).toBeTruthy();
+    expect(block.getByText(/360 tokens · \$0\.25/)).toBeTruthy();
     expect(block.getByText("Implementación")).toBeTruthy();
+    expect(block.getAllByText("No disponible")).toHaveLength(4);
   });
 
   it("el panel Evidencia nace colapsado y no muestra la evidencia", async () => {

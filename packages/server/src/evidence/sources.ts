@@ -2,9 +2,9 @@
 // uw-24-archivo-evidencia). Claude Code guarda cada sesión en
 // `~/.claude/projects/<cwd con no-alfanuméricos → "-">/<session-id>.jsonl` y borra los
 // transcripts al vencer su retención; LunasQ los copia al cerrar el Run.
-import { readFile, realpath, stat } from "node:fs/promises";
+import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, sep } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import type { RunRow, RunSubagentRow } from "@lunasq/db";
 
 export type TranscriptRequest = {
@@ -110,5 +110,81 @@ export class ClaudeTranscriptSource implements TranscriptSource {
       return { jsonl: null, note: `demasiado grande (${info.size} bytes): no se incluye` };
     }
     return { jsonl: await readFile(path, "utf8") };
+  }
+}
+
+export class CopilotReviewerTranscriptSource implements TranscriptSource {
+  readonly #claude: TranscriptSource;
+  readonly #evidencePath: string;
+  readonly #maxBytes: number;
+
+  constructor(options: { claude: TranscriptSource; evidencePath: string; maxBytes?: number }) {
+    this.#claude = options.claude;
+    this.#evidencePath = options.evidencePath;
+    this.#maxBytes = options.maxBytes ?? DEFAULT_TRANSCRIPT_MAX_BYTES;
+  }
+
+  async forRun(request: TranscriptRequest): Promise<RawTranscript[]> {
+    if (request.run.agentKind !== "copilot") return this.#claude.forRun(request);
+
+    const out: RawTranscript[] = [
+      {
+        title: "Sesión Copilot CLI",
+        jsonl: null,
+        note: "LunasQ captura por separado las ejecuciones y respuestas de cada revisor",
+      },
+    ];
+    for (const subagent of request.subagents) {
+      const title = `Subagente ${subagent.agentType} (${subagent.agentId})`;
+      if (!subagent.agentId.startsWith("copilot-") || !subagent.transcriptPath) {
+        out.push({
+          title,
+          jsonl: null,
+          note: "sin transcript de una ejecución Copilot completada",
+        });
+        continue;
+      }
+      out.push({
+        title,
+        ...(await this.#readReviewer(subagent.transcriptPath, request.run.id, subagent.agentId)),
+      });
+    }
+    return out;
+  }
+
+  async #readReviewer(path: string, runId: string, agentId: string): Promise<Read> {
+    const expectedDir = join(this.#evidencePath, runId);
+    const root = await realpath(this.#evidencePath).catch(() => null);
+    const [dirInfo, fileInfo] = await Promise.all([
+      lstat(expectedDir).catch(() => null),
+      lstat(path).catch(() => null),
+    ]);
+    const realDir = await realpath(expectedDir).catch(() => null);
+    const realFile = await realpath(path).catch(() => null);
+    if (
+      !root ||
+      !dirInfo?.isDirectory() ||
+      dirInfo.isSymbolicLink() ||
+      !fileInfo?.isFile() ||
+      fileInfo.isSymbolicLink() ||
+      realDir === null ||
+      !realDir.startsWith(`${root}${sep}`) ||
+      realFile === null ||
+      dirname(realFile) !== realDir
+    ) {
+      return {
+        jsonl: null,
+        note: "el transcript Copilot está fuera del directorio privado del Run",
+      };
+    }
+    if (basename(realFile) !== `${agentId}.jsonl`) {
+      return { jsonl: null, note: "el nombre del transcript Copilot no coincide con el revisor" };
+    }
+    const info = await stat(realFile).catch(() => null);
+    if (!info?.isFile()) return { jsonl: null, note: `no se encontró ${path}` };
+    if (info.size > this.#maxBytes) {
+      return { jsonl: null, note: `demasiado grande (${info.size} bytes): no se incluye` };
+    }
+    return { jsonl: await readFile(realFile, "utf8") };
   }
 }

@@ -17,13 +17,17 @@ function tmp() {
 }
 
 describe("assetTargets", () => {
-  it("instala las 3 skills de fase y los revisores en ~/.claude", async () => {
+  it("instala skills y revisores para Claude y Copilot", async () => {
     const targets = await assetTargets(repoAssetsRoot(), resolvePaths({}, "/h"));
     expect(targets.map((t) => [t.kind, t.name, t.dest])).toEqual([
       ["skill", "implement-task", "/h/.claude/skills/implement-task"],
       ["skill", "refine-task", "/h/.claude/skills/refine-task"],
       ["skill", "verify-task", "/h/.claude/skills/verify-task"],
+      ["copilot-skill", "implement-task", "/h/.copilot/skills/implement-task"],
+      ["copilot-skill", "refine-task", "/h/.copilot/skills/refine-task"],
+      ["copilot-skill", "verify-task", "/h/.copilot/skills/verify-task"],
       ["agents", "lunasq", "/h/.claude/agents/lunasq"],
+      ["copilot-agents", "lunasq", "/h/.copilot/agents/lunasq"],
     ]);
   });
 

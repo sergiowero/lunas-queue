@@ -5,7 +5,7 @@ description: Fase de verificación de LunasQ. Actúa como approver - elige segú
 
 # verify-task
 
-Eres el approver de la verificación de una tarea de LunasQ. El prompt te da el task id. Todo el contexto llega por el MCP `lunasq` (en Claude Code, las tools `mcp__lunasq__*`), y ese MCP es el único canal de salida: lo que escribas en el chat no cuenta. La fase termina cuando `submit_verdict` acepta tu veredicto.
+Eres el approver de la verificación de una tarea de LunasQ. El prompt te da el task id. Todo el contexto llega por el MCP `lunasq` (las tools `mcp__lunasq__*` en Claude Code; `run_reviewer` y las demás tools MCP en Copilot CLI), y ese MCP es el único canal de salida: lo que escribas en el chat no cuenta. La fase termina cuando `submit_verdict` acepta tu veredicto.
 
 ## Reglas
 
@@ -34,7 +34,7 @@ Eres el approver de la verificación de una tarea de LunasQ. El prompt te da el 
    - Cada fila se decide por separado: un cambio de back end suele necesitar solo el de código; uno visual sin flujo nuevo, código y UI; no lances uno «por si acaso» si el diff no toca su área.
    - Ante una duda real sobre seguridad (no sabes si un dato llega de fuera), lánzalo.
    - El handoff lleva siempre los 4 nombres, pero reportarlos no es lanzarlos: los que no lanzas van como `skipped` con una `justification` que cite el diff (p. ej. «El diff solo cambia `src/orders/order.ts`, lógica de dominio sin entradas externas»), no una frase genérica.
-4. **Lanzar.** Lanza los que elegiste en paralelo, en un solo mensaje, con la tool Agent y por nombre (`subagent_type`). No los pongas en segundo plano: espera sus reportes. A cada uno pásale los criterios de la spec, el comando del diff y los archivos relevantes. Responden una línea por hallazgo, `[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. LunasQ registra cada ejecución por hooks: reporta como `ran` solo a los que lanzaste de verdad, y como `skipped` solo a los que no lanzaste.
+4. **Lanzar.** Claude Code: lanza los elegidos en paralelo con la tool Agent y su nombre (`subagent_type`), espera sus reportes y pasa los criterios, el diff y los archivos relevantes. Copilot CLI: llama una vez `run_reviewer` por cada revisor elegido, pasando el nombre exacto y en `instructions` la spec aprobada, criterios, diff y contexto relevante; espera el resultado de cada llamada. LunasQ ejecuta el perfil Copilot aislado, captura su prompt y respuesta, y registra inicio/fin; no reemplaces esta tool por una afirmación de que un agente corrió. Ambos proveedores deben devolver una línea por hallazgo, `[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. Reporta como `ran` solo a quienes tengan ejecución completada y respuesta recibida. Si un lanzamiento falla, no lo marques `ran`: anota en `skipped.justification` el error concreto de ejecución. Los revisores que no lanzaste van como `skipped` con una justificación del diff.
 5. **Consolidar.** Deduplica los hallazgos. Intenta refutar cada `critical` y `major` leyendo el código o corriendo tests:
    - si lo refutas, va a `refuted` con el hallazgo, `reason` y `source` (el revisor que lo hizo);
    - si se sostiene, va a `mustFix` con su `source`;

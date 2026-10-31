@@ -2,6 +2,7 @@
 // §Verificación con subagentes, ADR uw-19-revisores). Claude Code agrega campos entre versiones,
 // así que solo se exige lo que LunasQ registra y el resto se tolera.
 import { z } from "zod";
+import { REVIEWER_NAMES } from "./handoff/index.ts";
 
 const subagentShape = {
   session_id: z.string().min(1),
@@ -25,3 +26,9 @@ export const SubagentHookInput = z.discriminatedUnion("hook_event_name", [
   SubagentStopInput,
 ]);
 export type SubagentHookInput = z.infer<typeof SubagentHookInput>;
+
+export const RunReviewerInput = z.strictObject({
+  reviewer: z.enum(REVIEWER_NAMES),
+  instructions: z.string().trim().min(1).max(64_000),
+});
+export type RunReviewerInput = z.infer<typeof RunReviewerInput>;

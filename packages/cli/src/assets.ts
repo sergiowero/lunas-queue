@@ -38,7 +38,7 @@ export function findWebRoot(): string | undefined {
 }
 
 export interface AssetTarget {
-  kind: "skill" | "agents";
+  kind: "skill" | "agents" | "copilot-skill" | "copilot-agents";
   name: string;
   src: string;
   dest: string;
@@ -59,7 +59,19 @@ export async function assetTargets(root: string, paths: Paths): Promise<AssetTar
       src: join(skillsRoot, name),
       dest: join(paths.skills, name),
     })),
+    ...skills.map((name) => ({
+      kind: "copilot-skill" as const,
+      name,
+      src: join(skillsRoot, name),
+      dest: join(paths.copilotSkills, name),
+    })),
     { kind: "agents", name: "lunasq", src: join(root, "agents", "lunasq"), dest: paths.agents },
+    {
+      kind: "copilot-agents",
+      name: "lunasq",
+      src: join(root, "agents", "copilot"),
+      dest: paths.copilotAgents,
+    },
   ];
 }
 

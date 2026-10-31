@@ -1,5 +1,7 @@
 export const packageName = "@lunasq/adapters";
 
+export type { AgentProvider, AgentProviderContext } from "./agents/providers.ts";
+export { AgentProviderError, AgentProviderRegistry, agentProviders } from "./agents/providers.ts";
 export type { GitContractHarness } from "./git/contract.ts";
 export { GitError, type GitErrorCode, isGitError } from "./git/errors.ts";
 export { FakeGit, type FakeTree } from "./git/fake.ts";

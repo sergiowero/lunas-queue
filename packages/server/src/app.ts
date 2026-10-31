@@ -29,6 +29,7 @@ import { specRoutes } from "./api/specs.ts";
 import { changeStreamRoutes, DEFAULT_CHANGE_STREAM_INTERVAL_MS } from "./api/stream.ts";
 import { taskRoutes } from "./api/tasks.ts";
 import { queueRoutes, taskViewRoutes } from "./api/views.ts";
+import type { CopilotReviewerExecutor } from "./mcp/copilot-reviewer.ts";
 import {
   type CommitVerifier,
   GitCommitVerifier,
@@ -82,6 +83,7 @@ export interface AppDeps {
    * recibe 404; es el feature flag `telemetry` de `~/.lunasq/config.json` (ADR uw-20-usage-collector).
    */
   telemetry?: boolean;
+  copilotReviewers?: CopilotReviewerExecutor;
   /** Configuración del scheduler: la cola muestra el mismo score con el que despacha. */
   scheduler?: SchedulerConfigInput;
   /** Lectura de la evidencia en el repo cuando el worktree ya no existe; por defecto git real. */
@@ -98,6 +100,7 @@ export function createApp({
   testGate,
   commitVerifier,
   phaseHooks,
+  copilotReviewers,
   hooks,
   questions,
   blocked,
@@ -115,6 +118,7 @@ export function createApp({
     testGate: testGate ?? new UnavailableTestGate(),
     commitVerifier: commitVerifier ?? new GitCommitVerifier(runner),
     phaseHooks: phaseHooks ?? new NoPhaseHooks(),
+    ...(copilotReviewers && { copilotReviewers }),
   });
   const tasks = new TaskRepository(db);
   const projects = new ProjectRepository(db);

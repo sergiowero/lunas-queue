@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { FakeHerdr, FakeProcessRunner, TRUST_ACCEPT_KEYS } from "@lunasq/adapters";
 import {
   claimRun,
@@ -9,7 +12,7 @@ import {
 } from "@lunasq/db";
 import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { agentName, type DispatchDecision, phasePrompt } from "@lunasq/domain";
-import { SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
+import { type Project, SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Scheduler } from "../scheduler/scheduler.ts";
 import { WorktreeService } from "../worktrees/service.ts";
@@ -33,6 +36,7 @@ function setup(
     herdr?: FakeHerdr;
     config?: SchedulerConfigInput;
     concurrency?: number;
+    agentProfiles?: Partial<Project["agentProfiles"]>;
     dispatcher?: Partial<PhaseDispatcherOptions>;
   } = {},
 ) {
@@ -42,6 +46,7 @@ function setup(
     limits: opts.concurrency === undefined ? {} : { concurrency: opts.concurrency },
     agentProfiles: {
       refine: { kind: "claude", model: "sonnet", args: ["--permission-mode", "auto"] },
+      ...opts.agentProfiles,
     },
   });
   const herdr = opts.herdr ?? new FakeHerdr();
@@ -65,6 +70,7 @@ function setup(
       projects,
       ...(opts.config && { config: opts.config }),
       mcpConfigPath: MCP_CONFIG,
+      mcpUrl: "http://127.0.0.1:8123/mcp",
       hookSettingsPath: HOOK_SETTINGS,
       paneEnv: { EXTRA: "1" },
       newSessionId: () => `sess-${++sessions}`,
@@ -114,6 +120,65 @@ async function rejection(promise: Promise<unknown>) {
 }
 
 describe("PhaseDispatcher: despacho de punta a punta", () => {
+  it("lanza Copilot con MCP tokenizado por Run y sin entorno de telemetría de Claude", async () => {
+    const configDir = mkdtempSync(join(tmpdir(), "lunasq-copilot-mcp-"));
+    stoppables.push({ stop: async () => rmSync(configDir, { recursive: true, force: true }) });
+    const { db, project, herdr, runs, make } = setup({
+      agentProfiles: {
+        refine: { kind: "copilot", model: "gpt-5", effort: "medium", args: [] },
+      },
+      dispatcher: {
+        mcpConfigPath: join(configDir, "stable-mcp.json"),
+        paneEnv: { CLAUDE_CODE_ENABLE_TELEMETRY: "1", OTEL_METRICS_EXPORTER: "otlp" },
+      },
+    });
+    const dispatcher = make({ mcpUrl: "http://127.0.0.1:8123/mcp" });
+    const task = insertTask(db, project.id);
+    let mcpDuringStart: unknown;
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementationOnce(async (input) => {
+      const args = input.args ?? [];
+      const mcpFlag = args.indexOf("--additional-mcp-config");
+      const configArg = args[mcpFlag + 1];
+      if (configArg?.startsWith("@")) {
+        mcpDuringStart = JSON.parse(readFileSync(configArg.slice(1), "utf8"));
+      }
+      return start(input);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    const name = run?.herdrName ?? "";
+    expect(run?.agentKind).toBe("copilot");
+    expect(herdr.agentArgs(name)).toEqual([
+      "--model",
+      "gpt-5",
+      "--reasoning-effort",
+      "medium",
+      "--allow-all-tools",
+      "--trust-folder",
+      "--session-id",
+      run?.agentSession,
+      "--additional-mcp-config",
+      expect.stringMatching(/^@/),
+    ]);
+    expect(mcpDuringStart).toEqual({
+      mcpServers: {
+        lunasq: {
+          type: "http",
+          url: "http://127.0.0.1:8123/mcp",
+          headers: { "X-LunasQ-Run-Token": run?.runToken },
+        },
+      },
+    });
+    expect(herdr.paneEnv(run?.herdrPane ?? "")).not.toHaveProperty("CLAUDE_CODE_ENABLE_TELEMETRY");
+    expect(herdr.paneEnv(run?.herdrPane ?? "")).not.toHaveProperty("OTEL_METRICS_EXPORTER");
+    expect(herdr.paneEnv(run?.herdrPane ?? "")).not.toHaveProperty("MCP_TOOL_TIMEOUT");
+    expect(herdr.paneEnv(run?.herdrPane ?? "")).toMatchObject({ LUNASQ_RUN_TOKEN: run?.runToken });
+  });
+
   it("reclama, prepara el worktree, levanta el agente con su entorno y le manda la fase", async () => {
     const { db, project, herdr, dispatcher, runs, taskRow, errors, workspaces } = setup();
     const task = insertTask(db, project.id);
@@ -299,7 +364,7 @@ describe("PhaseDispatcher: retomar un despacho a medias", () => {
     );
   });
 
-  it("si cayó después de abrir el pane, arranca el agente en ese mismo pane", async () => {
+  it("si la inicialización de un proveedor quedó interrumpida, continúa con el siguiente", async () => {
     const ctx = setup();
     const task = insertTask(ctx.db, ctx.project.id);
     vi.spyOn(ctx.herdr, "startAgent").mockImplementationOnce(() => new Promise(() => {}));
@@ -314,7 +379,10 @@ describe("PhaseDispatcher: retomar un despacho a medias", () => {
 
     const snap = await ctx.herdr.snapshot();
     expect(snap.panes).toHaveLength(panes);
-    expect(snap.agents.map((a) => a.paneId)).toEqual([pane]);
+    expect(snap.agents).toHaveLength(1);
+    expect(snap.agents[0]?.kind).toBe("copilot");
+    expect(snap.agents[0]?.paneId).not.toBe(pane);
+    expect(ctx.runs.forTask(task.id)[0]?.agentKind).toBe("copilot");
   });
 
   it("si cayó después del prompt, no lo repite: el agente ya no está idle", async () => {
@@ -378,6 +446,83 @@ describe("PhaseDispatcher: confianza de carpeta", () => {
 });
 
 describe("PhaseDispatcher: fallos al lanzar", () => {
+  it("cambia al siguiente proveedor cuando el CLI primario no inicia", async () => {
+    const { db, project, herdr, dispatcher, runs } = setup();
+    const task = insertTask(db, project.id);
+    const kinds: string[] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      if (input.kind === "claude") throw new Error("claude executable not found");
+      return start(input);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(kinds).toEqual(["claude", "copilot"]);
+    expect(run?.agentKind).toBe("copilot");
+    expect(runs.providerAttempts(run?.id ?? "")).toEqual([
+      { provider: "claude", status: "started" },
+      {
+        provider: "claude",
+        status: "failed",
+        reason: "claude executable not found",
+      },
+      { provider: "copilot", status: "started" },
+    ]);
+  });
+
+  it("aplica fallback simétrico cuando Copilot es el proveedor primario", async () => {
+    const { db, project, herdr, runs, make } = setup({
+      agentProfiles: { refine: { kind: "copilot", args: [] } },
+    });
+    const dispatcher = make();
+    const task = insertTask(db, project.id);
+    const kinds: string[] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      if (input.kind === "copilot") throw new Error("copilot command unavailable");
+      return start(input);
+    });
+
+    await dispatcher.dispatch({
+      ...refine(task),
+      agentKind: "copilot",
+    });
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(kinds).toEqual(["copilot", "claude"]);
+    expect(run?.agentKind).toBe("claude");
+    expect(run?.launchedAt).toBeInstanceOf(Date);
+  });
+
+  it("pasa a needs_human y conserva ambos diagnósticos si ningún CLI responde", async () => {
+    const { db, project, herdr, dispatcher, runs, taskRow } = setup();
+    const task = insertTask(db, project.id);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      throw new Error(`${input.kind} service unavailable`);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(run).toMatchObject({
+      result: "failure",
+      failureReason: expect.stringContaining(
+        "ningún proveedor respondió al arrancar: claude: claude service unavailable; copilot: copilot service unavailable",
+      ),
+    });
+    expect(taskRow(task.id)).toMatchObject({ state: "needs_human", subState: null });
+    expect(
+      runs.providerAttempts(run?.id ?? "").filter((attempt) => attempt.status === "failed"),
+    ).toHaveLength(2);
+  });
+
   it("un bootstrap que falla cierra el Run como failure y devuelve la tarea a queued", async () => {
     const { db, project, processes, dispatcher, runs, errors, taskRow, herdr } = setup();
     processes.respond((c) => (c.command === "pnpm install" ? { exitCode: 1, stderr: "boom" } : {}));

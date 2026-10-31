@@ -19,6 +19,10 @@ export interface Paths {
   skills: string;
   /** Subagentes revisores (docs/design.md §Verificación con subagentes). */
   agents: string;
+  copilotHome: string;
+  copilotMcpConfig: string;
+  copilotSkills: string;
+  copilotAgents: string;
   herdrConfig: string;
 }
 
@@ -28,6 +32,7 @@ export function resolvePaths(
 ): Paths {
   const lunasqHome = env.LUNASQ_HOME ?? join(home, ".lunasq");
   const claudeHome = env.CLAUDE_CONFIG_DIR ?? join(home, ".claude");
+  const copilotHome = env.COPILOT_HOME ?? join(home, ".copilot");
   return {
     home: lunasqHome,
     config: join(lunasqHome, "config.json"),
@@ -38,6 +43,10 @@ export function resolvePaths(
     claudeHome,
     skills: join(claudeHome, "skills"),
     agents: join(claudeHome, "agents", "lunasq"),
+    copilotHome,
+    copilotMcpConfig: join(copilotHome, "mcp-config.json"),
+    copilotSkills: join(copilotHome, "skills"),
+    copilotAgents: join(copilotHome, "agents", "lunasq"),
     herdrConfig: env.HERDR_CONFIG_PATH ?? join(home, ".config", "herdr", "config.toml"),
   };
 }

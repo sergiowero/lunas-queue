@@ -1,6 +1,7 @@
 // Lecturas que alimentan el detalle de tarea y la cola del front end (UW-21, ADR uw-21-front-end):
 // Runs sin su token, Event log y usage agregado. Solo lee; nada aquí cambia estado.
 import {
+  AgentKind,
   EMPTY_USAGE,
   EventView,
   HOOK_EXECUTED,
@@ -133,7 +134,7 @@ export class TaskViewRepository {
         .map(({ key, ...usage }) => ({ phase: key as UsagePhase, usage: toTotals(usage) }))
         .sort((a, b) => PHASE_ORDER.indexOf(a.phase) - PHASE_ORDER.indexOf(b.phase)),
       byAgent: byAgent.map(({ key, ...usage }) => ({
-        agentKind: key as "claude",
+        agentKind: AgentKind.parse(key),
         usage: toTotals(usage),
       })),
       byModel: byModel.map(({ key, ...usage }) => ({ model: key, usage: toTotals(usage) })),

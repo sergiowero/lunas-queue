@@ -5,7 +5,7 @@ import { AgentKind, Phase } from "./enums.ts";
 
 const nonEmpty = z.string().trim().min(1);
 
-// Niveles de esfuerzo que acepta `claude --effort` (ADR effort-por-fase).
+// Niveles de esfuerzo compartidos por `claude --effort` y `copilot --reasoning-effort`.
 export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export const EffortLevel = z.enum(EFFORT_LEVELS);
 export type EffortLevel = z.infer<typeof EffortLevel>;
@@ -21,7 +21,7 @@ export type AgentProfile = z.infer<typeof AgentProfile>;
 
 // La verificación depende de los subagentes de Claude Code (§Verificación con subagentes):
 // su perfil se ata a "claude" y no a AgentKind, para que siga así cuando v2 sume otros kinds.
-export const VerifyAgentProfile = z.strictObject({ kind: z.literal("claude"), ...profileFields });
+export const VerifyAgentProfile = AgentProfile;
 
 const defaultProfile = (): AgentProfile => ({ kind: "claude", args: [] });
 

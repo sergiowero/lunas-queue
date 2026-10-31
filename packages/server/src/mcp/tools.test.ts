@@ -6,6 +6,7 @@ import {
   listEvents,
   ProjectRepository,
   RunRepository,
+  RunSubagentRepository,
   SpecRepository,
 } from "@lunasq/db";
 import { insertRun, setTaskPosition } from "@lunasq/db/test-helpers";
@@ -842,6 +843,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     const result = await call("submit_verdict", {
       handoff: handoffFor("verification-reject", run),
     });
+
     expect(result).toMatchObject({
       isError: true,
       body: {
@@ -1022,5 +1024,69 @@ describe("report_failure", () => {
     const result = await call("report_failure", { reason: "otra vez" });
     expect(result.body).toEqual({ attempt: 4 });
     expect(h.taskOf(task.id)).toMatchObject({ state: "needs_human" });
+  });
+});
+
+describe("run_reviewer: ejecuciones verificables de Copilot CLI", () => {
+  it("lanza el perfil Copilot y persiste el prompt, respuesta y estado de ejecución", async () => {
+    const reviewer = {
+      run: vi.fn(async () => ({
+        transcriptPath: "/lunasq/copilot-reviewers/run/copilot-session.jsonl",
+        output: "SIN HALLAZGOS",
+      })),
+    };
+    const h = mcpHarness({ copilotReviewers: reviewer });
+    const { task, run, call } = await h.ready("verify", verifying, { agentKind: "copilot" });
+    const result = await call("run_reviewer", {
+      reviewer: "lunasq-security-reviewer",
+      instructions: "Revisa AC-1 y el diff de src/auth.ts",
+    });
+
+    expect(result).toEqual({ isError: false, body: { output: "SIN HALLAZGOS" } });
+    expect(reviewer.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreePath: task.worktreePath,
+        reviewer: "lunasq-security-reviewer",
+        instructions: "Revisa AC-1 y el diff de src/auth.ts",
+      }),
+    );
+    const [evidence] = new RunSubagentRepository(h.db).forRun(run.id);
+    expect(evidence).toMatchObject({
+      agentType: "lunasq-security-reviewer",
+      agentId: expect.stringMatching(/^copilot-/),
+      transcriptPath: "/lunasq/copilot-reviewers/run/copilot-session.jsonl",
+    });
+    expect(evidence?.startedAt).toBeInstanceOf(Date);
+    expect(evidence?.stoppedAt).toBeInstanceOf(Date);
+  });
+
+  it("no permite que Claude declare por sí mismo evidencia de revisores", async () => {
+    const reviewer = { run: vi.fn() };
+    const h = mcpHarness({ copilotReviewers: reviewer });
+    const { run, call } = await h.ready("verify", verifying);
+    const result = await call("run_reviewer", {
+      reviewer: "lunasq-code-reviewer",
+      instructions: "Revisa el diff",
+    });
+    expect(result.body).toMatchObject({ error: "reviewer_execution_unavailable" });
+    expect(reviewer.run).not.toHaveBeenCalled();
+    expect(new RunSubagentRepository(h.db).forRun(run.id)).toEqual([]);
+  });
+
+  it("un fallo de Copilot queda como intento sin SubagentStop y no puede contarse como ran", async () => {
+    const reviewer = { run: vi.fn(async () => Promise.reject(new Error("auth required"))) };
+    const h = mcpHarness({ copilotReviewers: reviewer });
+    const { run, call } = await h.ready("verify", verifying, { agentKind: "copilot" });
+    const result = await call("run_reviewer", {
+      reviewer: "lunasq-code-reviewer",
+      instructions: "Revisa el diff",
+    });
+    expect(result.body).toMatchObject({
+      error: "reviewer_execution_failed",
+      message: "auth required",
+    });
+    expect(new RunSubagentRepository(h.db).forRun(run.id)).toMatchObject([
+      { agentType: "lunasq-code-reviewer", stoppedAt: null, transcriptPath: null },
+    ]);
   });
 });

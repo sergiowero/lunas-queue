@@ -32,6 +32,7 @@ export const EscalationReason = z.enum([
   "hook_failed",
   "dependency_pr_closed",
   "delivery_failed",
+  "providers_unavailable",
 ]);
 export type EscalationReason = z.infer<typeof EscalationReason>;
 
