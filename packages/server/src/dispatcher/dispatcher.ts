@@ -4,7 +4,12 @@
 // después, en segundo plano, guardando cada paso en el Run. Así un despacho que se cae a medias se
 // retoma sin duplicar panes ni agentes, y repetir una decisión ya aplicada da `stale_state`.
 import { randomUUID } from "node:crypto";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
+  AgentProviderError,
+  agentProviders,
   type HerdrAdapter,
   type HerdrAgent,
   isHerdrError,
@@ -23,7 +28,6 @@ import {
   TaskWorktreeRepository,
 } from "@lunasq/db";
 import {
-  agentArgs,
   type DispatchDecision,
   DispatchRuleError,
   type ProjectConfigReader,
@@ -34,6 +38,7 @@ import {
   telemetryRunEnv,
 } from "@lunasq/domain";
 import {
+  type AgentKind,
   type Project,
   type SchedulablePhase,
   SchedulablePhase as SchedulablePhaseSchema,
@@ -105,6 +110,8 @@ export interface PhaseDispatcherOptions {
   worktrees: WorktreeService;
   /** Archivo MCP estable con `${LUNASQ_RUN_TOKEN}` (ADR 0002); ver `ensureMcpConfig`. */
   mcpConfigPath: string;
+  /** URL local del LunasQ MCP para generar la configuración Copilot de cada Run. */
+  mcpUrl?: string;
   /** Settings estable con los hooks de subagentes (ADR uw-19-revisores); ver `ensureHookSettings`. */
   hookSettingsPath: string;
   projects?: ProjectConfigReader;
@@ -126,6 +133,8 @@ export class PhaseDispatcher implements Dispatcher {
   private readonly herdr: HerdrAdapter;
   private readonly worktrees: WorktreeService;
   private readonly mcpConfigPath: string;
+  private readonly mcpUrl: string | undefined;
+  private readonly copilotMcpDirs = new Map<string, string>();
   private readonly hookSettingsPath: string;
   private readonly projects: ProjectConfigReader;
   private readonly config: SchedulerConfig;
@@ -151,14 +160,11 @@ export class PhaseDispatcher implements Dispatcher {
     this.herdr = opts.herdr;
     this.worktrees = opts.worktrees;
     this.mcpConfigPath = opts.mcpConfigPath;
+    this.mcpUrl = opts.mcpUrl;
     this.hookSettingsPath = opts.hookSettingsPath;
     this.projects = opts.projects ?? new ProjectRepository(opts.db);
     this.config = SchedulerConfig.parse(opts.config ?? {});
     this.paneEnv = {
-      MCP_TOOL_TIMEOUT: String(DEFAULT_MCP_TOOL_TIMEOUT_MS),
-      // El approver espera a los revisores en vez de lanzarlos en segundo plano (docs/design.md
-      // §Verificación con subagentes).
-      CLAUDE_CODE_FORK_SUBAGENT: "0",
       ...opts.paneEnv,
     };
     this.observer = opts.observer;
@@ -263,11 +269,15 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   /** Run fallido: lo cierra, aplica `run_failed` si la tarea sigue en su fase y cierra el pane. */
-  failRun(runId: string, reason: string): Promise<FailRunResult> {
+  failRun(
+    runId: string,
+    reason: string,
+    opts: { maxRetries?: number; providersUnavailable?: boolean } = {},
+  ): Promise<FailRunResult> {
     return this.closeLocks.run(runId, async () => {
       if (!this.runs.get(runId))
         throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
-      const res = this.runs.fail(runId, reason);
+      const res = this.runs.fail(runId, reason, opts);
       // También con closed false: un lanzamiento que falla tras un cierre deja su pane abierto.
       await this.releaseAndRecord(runId);
       return res;
@@ -327,20 +337,12 @@ export class PhaseDispatcher implements Dispatcher {
         `el agente ${name} de herdr pertenece a otro Run (pane ${agent.paneId})`,
       );
     }
-    const fresh = !agent;
+    let fresh = !agent;
     if (!agent) {
-      const args = this.args(project, phase, run);
-      const paneId = await this.ensurePane(run, worktree, phase);
-      run = this.checkOpen(run.id);
-      agent = (
-        await this.herdr.startAgent({
-          name,
-          kind: run.agentKind,
-          paneId,
-          args,
-          timeoutMs: this.startTimeoutMs,
-        })
-      ).agent;
+      const started = await this.startAgentWithFallback(project, phase, run, name, worktree);
+      if (!started) return this.runs.get(run.id) ?? run;
+      agent = started;
+      fresh = true;
       run = this.checkOpen(run.id);
     }
     // Recién arrancado y aún cargando (herdr devuelve `agent_not_ready` con el estado del
@@ -397,19 +399,143 @@ export class PhaseDispatcher implements Dispatcher {
     return run.herdrPane !== null && agent.paneId === run.herdrPane;
   }
 
-  private args(project: Project, phase: SchedulablePhase, run: RunRow) {
+  private async startAgentWithFallback(
+    project: Project,
+    phase: SchedulablePhase,
+    initial: RunRow,
+    name: string,
+    worktree: { workspaceId: string; rootPaneId: string; path: string },
+  ): Promise<HerdrAgent | null> {
+    const primary = phaseProfile(project, phase);
+    const order = agentProviders.fallbackOrder(primary.kind);
+    const attempts = this.runs.providerAttempts(initial.id);
+    const latest = new Map<AgentKind, (typeof attempts)[number]["status"]>();
+    for (const attempt of attempts) latest.set(attempt.provider, attempt.status);
+    const diagnostics = attempts.flatMap((attempt) =>
+      attempt.status === "failed" && attempt.reason
+        ? [`${attempt.provider}: ${attempt.reason}`]
+        : [],
+    );
+
+    if ([...latest.values()].includes("started")) {
+      for (const [kind, status] of latest) {
+        if (status !== "started") continue;
+        const reason = "el proceso se interrumpió antes de confirmar el arranque";
+        this.runs.recordProviderAttempt(initial.id, kind, "failed", reason);
+        diagnostics.push(`${kind}: ${reason}`);
+        latest.set(kind, "failed");
+      }
+      if (initial.herdrPane) {
+        await this.herdr.closePane(initial.herdrPane);
+        this.runs.clearPane(initial.id);
+      }
+    }
+
+    const attempted = new Set(latest.keys());
+    for (const provider of order) {
+      if (attempted.has(provider.kind)) continue;
+      let run = this.runs.setAgentKind(
+        initial.id,
+        provider.kind,
+        provider.kind === primary.kind ? (primary.model ?? null) : null,
+      );
+      if (!run) throw new DispatchError("run_not_found", `no existe el Run ${initial.id}`);
+      run = this.checkOpen(run.id);
+      const args = await this.args(project, phase, run);
+      const paneId = await this.ensurePane(run, worktree, phase);
+      run = this.checkOpen(run.id);
+      this.runs.recordProviderAttempt(run.id, provider.kind, "started");
+      try {
+        const started = await this.herdr.startAgent({
+          name,
+          kind: provider.kind,
+          paneId,
+          args,
+          timeoutMs: this.startTimeoutMs,
+        });
+        const agent = started.agent;
+        if (agent.status !== "idle" && agent.status !== "blocked") {
+          return await this.herdr.waitAgent({
+            name,
+            until: ["idle", "blocked"],
+            timeoutMs: this.startTimeoutMs,
+          });
+        }
+        return agent;
+      } catch (error) {
+        if (isHerdrError(error, "agent_name_taken")) throw error;
+        const reason = asError(error).message.replaceAll(run.runToken, "[redacted]");
+        diagnostics.push(`${provider.kind}: ${reason}`);
+        this.runs.recordProviderAttempt(run.id, provider.kind, "failed", reason);
+        await this.herdr.closePane(paneId);
+        this.runs.clearPane(run.id);
+      } finally {
+        if (provider.kind === "copilot") await this.removeCopilotMcpConfig(run.id);
+      }
+    }
+
+    const reason = `ningún proveedor respondió al arrancar: ${diagnostics.join("; ") || "sin diagnóstico"}`;
+    await this.failRun(initial.id, reason, { providersUnavailable: true });
+    return null;
+  }
+
+  private async args(project: Project, phase: SchedulablePhase, run: RunRow): Promise<string[]> {
+    const profile = phaseProfile(project, phase);
+    const selected = profile.kind === run.agentKind ? profile : { kind: run.agentKind, args: [] };
     try {
-      return agentArgs(phaseProfile(project, phase), {
-        mcpConfigPath: this.mcpConfigPath,
+      const mcpConfigPath =
+        selected.kind === "copilot" ? await this.writeCopilotMcpConfig(run) : this.mcpConfigPath;
+      return agentProviders.get(selected.kind).args(selected, {
+        mcpConfigPath,
         settingsPath: this.hookSettingsPath,
         sessionId: run.agentSession ?? run.id,
       });
     } catch (error) {
-      if (error instanceof DispatchRuleError) {
+      if (error instanceof AgentProviderError || error instanceof DispatchRuleError) {
         throw new DispatchError("profile_conflict", error.message, { cause: error });
       }
       throw error;
     }
+  }
+
+  private async writeCopilotMcpConfig(run: RunRow): Promise<string> {
+    if (!this.mcpUrl) {
+      throw new DispatchError(
+        "profile_conflict",
+        "falta la URL del MCP de LunasQ para configurar Copilot CLI",
+      );
+    }
+    const dir = await mkdtemp(join(tmpdir(), "lunasq-copilot-"));
+    this.copilotMcpDirs.set(run.id, dir);
+    const path = join(dir, "mcp.json");
+    try {
+      await writeFile(
+        path,
+        `${JSON.stringify({
+          mcpServers: {
+            lunasq: {
+              type: "http",
+              url: this.mcpUrl,
+              headers: { "X-LunasQ-Run-Token": run.runToken },
+            },
+          },
+        })}\n`,
+        { mode: 0o600 },
+      );
+      await chmod(path, 0o600);
+    } catch (error) {
+      this.copilotMcpDirs.delete(run.id);
+      await rm(dir, { recursive: true, force: true });
+      throw error;
+    }
+    return path;
+  }
+
+  private async removeCopilotMcpConfig(runId: string): Promise<void> {
+    const dir = this.copilotMcpDirs.get(runId);
+    if (!dir) return;
+    this.copilotMcpDirs.delete(runId);
+    await rm(dir, { recursive: true, force: true });
   }
 
   /**
@@ -435,14 +561,34 @@ export class PhaseDispatcher implements Dispatcher {
       }
     }
     const identity = { runToken: run.runToken, taskId: run.taskId, runId: run.id, phase };
+    const env = {
+      ...this.paneEnv,
+      ...runEnv(identity),
+    };
+    if (run.agentKind === "copilot") {
+      delete env.CLAUDE_CODE_ENABLE_TELEMETRY;
+      delete env.OTEL_METRICS_EXPORTER;
+      delete env.OTEL_LOGS_EXPORTER;
+      delete env.OTEL_EXPORTER_OTLP_PROTOCOL;
+      delete env.OTEL_EXPORTER_OTLP_ENDPOINT;
+      delete env.OTEL_LOG_TOOL_DETAILS;
+      delete env.OTEL_RESOURCE_ATTRIBUTES;
+      delete env.OTEL_EXPORTER_OTLP_HEADERS;
+      delete env.CLAUDE_CODE_FORK_SUBAGENT;
+      delete env.MCP_TOOL_TIMEOUT;
+    } else {
+      env.MCP_TOOL_TIMEOUT ??= String(DEFAULT_MCP_TOOL_TIMEOUT_MS);
+      // El approver espera a los revisores en vez de lanzarlos en segundo plano.
+      env.CLAUDE_CODE_FORK_SUBAGENT ??= "0";
+    }
     const pane = await this.herdr.splitPane({
       paneId: worktree.rootPaneId,
       cwd: worktree.path,
       env: {
-        ...this.paneEnv,
-        ...runEnv(identity),
-        // Con la telemetría apagada (`paneEnv` sin CLAUDE_CODE_ENABLE_TELEMETRY) no se atribuye nada.
-        ...(this.paneEnv.CLAUDE_CODE_ENABLE_TELEMETRY === "1" && telemetryRunEnv(identity)),
+        ...env,
+        ...(run.agentKind === "claude" && this.paneEnv.CLAUDE_CODE_ENABLE_TELEMETRY === "1"
+          ? telemetryRunEnv(identity)
+          : {}),
       },
     });
     this.runs.recordPane(run.id, { workspaceId: pane.workspaceId, paneId: pane.paneId });
@@ -481,6 +627,9 @@ export class PhaseDispatcher implements Dispatcher {
    */
   private async release(runId: string): Promise<void> {
     this.observer?.unwatch(runId);
+    await this.removeCopilotMcpConfig(runId).catch((error: unknown) =>
+      this.onError(asError(error), runId),
+    );
     const run = this.runs.get(runId);
     if (!run?.herdrPane) return;
     const snap = await this.herdr.snapshot();

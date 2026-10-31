@@ -129,6 +129,7 @@ async function start(
     port: config.port,
     mcpConfigPath: ctx.paths.mcpConfig,
     hookSettingsPath: ctx.paths.hookSettings,
+    copilotAgentsPath: ctx.paths.copilotAgents,
     telemetry: config.telemetry,
     ...(ctx.webRoot && { webRoot: ctx.webRoot }),
     log: err,

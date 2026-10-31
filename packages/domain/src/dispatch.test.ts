@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   AGENT_NAME_PATTERN,
-  agentArgs,
   agentName,
   answerPrompt,
   DispatchRuleError,
@@ -58,107 +57,6 @@ describe("telemetryRunEnv", () => {
       OTEL_RESOURCE_ATTRIBUTES: `lunasq.task_id=${TASK},lunasq.run_id=run-1,lunasq.phase=verify`,
       OTEL_EXPORTER_OTLP_HEADERS: "X-LunasQ-Run-Token=tok",
     });
-  });
-});
-
-describe("agentArgs", () => {
-  const base = {
-    mcpConfigPath: "/cfg/mcp.json",
-    settingsPath: "/cfg/settings.json",
-    sessionId: "sess-1",
-  };
-
-  it("antepone el modelo, conserva los args del perfil y agrega MCP estricto, hooks y session id", () => {
-    expect(
-      agentArgs({ kind: "claude", model: "opus", args: ["--permission-mode", "auto"] }, base),
-    ).toEqual([
-      "--model",
-      "opus",
-      "--permission-mode",
-      "auto",
-      "--mcp-config",
-      "/cfg/mcp.json",
-      "--strict-mcp-config",
-      "--settings",
-      "/cfg/settings.json",
-      "--session-id",
-      "sess-1",
-    ]);
-  });
-
-  it("sin modelo no agrega --model", () => {
-    expect(agentArgs({ kind: "claude", args: [] }, base)).toEqual([
-      "--mcp-config",
-      "/cfg/mcp.json",
-      "--strict-mcp-config",
-      "--settings",
-      "/cfg/settings.json",
-      "--session-id",
-      "sess-1",
-    ]);
-  });
-
-  it("pone --effort después del modelo y antes de los args del perfil", () => {
-    expect(
-      agentArgs(
-        { kind: "claude", model: "opus", effort: "high", args: ["--permission-mode", "auto"] },
-        base,
-      ),
-    ).toEqual([
-      "--model",
-      "opus",
-      "--effort",
-      "high",
-      "--permission-mode",
-      "auto",
-      "--mcp-config",
-      "/cfg/mcp.json",
-      "--strict-mcp-config",
-      "--settings",
-      "/cfg/settings.json",
-      "--session-id",
-      "sess-1",
-    ]);
-  });
-
-  it("sin effort no agrega --effort, y un --effort en args sigue válido", () => {
-    expect(agentArgs({ kind: "claude", args: ["--effort", "low"] }, base)).toEqual([
-      "--effort",
-      "low",
-      "--mcp-config",
-      "/cfg/mcp.json",
-      "--strict-mcp-config",
-      "--settings",
-      "/cfg/settings.json",
-      "--session-id",
-      "sess-1",
-    ]);
-  });
-
-  it("rechaza effort en el perfil junto a --effort en args, con o sin =", () => {
-    for (const args of [["--effort", "low"], ["--effort=low"]]) {
-      expect(() => agentArgs({ kind: "claude", effort: "high", args }, base)).toThrow(
-        DispatchRuleError,
-      );
-    }
-  });
-
-  it("rechaza un perfil que ya trae los flags que fija el dispatcher", () => {
-    for (const flag of [
-      "--mcp-config",
-      "--mcp-config=/x",
-      "--strict-mcp-config",
-      "--session-id",
-      "--settings",
-      "--settings=/x",
-      "--model",
-    ]) {
-      expect(() => agentArgs({ kind: "claude", model: "opus", args: [flag, "x"] }, base)).toThrow(
-        DispatchRuleError,
-      );
-    }
-    // --model en los args sin `model` en el perfil es válido: no se duplica.
-    expect(agentArgs({ kind: "claude", args: ["--model", "haiku"] }, base)).toContain("haiku");
   });
 });
 

@@ -16,7 +16,7 @@ export const DEFAULT_VERIFY_MODEL = "sonnet";
 
 export function phaseProfile(config: Project, phase: Phase): AgentProfile {
   const profile = config.agentProfiles[phase];
-  if (phase === "verify" && profile.model === undefined) {
+  if (phase === "verify" && profile.kind === "claude" && profile.model === undefined) {
     return { ...profile, model: DEFAULT_VERIFY_MODEL };
   }
   return profile;

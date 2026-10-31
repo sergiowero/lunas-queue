@@ -19,7 +19,7 @@ export type SubState = z.infer<typeof SubState>;
 export const Phase = z.enum(["refine", "implement", "verify", "deliver"]);
 export type Phase = z.infer<typeof Phase>;
 
-export const AgentKind = z.enum(["claude"]);
+export const AgentKind = z.enum(["claude", "copilot"]);
 export type AgentKind = z.infer<typeof AgentKind>;
 
 export const Actor = z.enum(["human", "agent", "system"]);

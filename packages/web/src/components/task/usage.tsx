@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 
 export function UsagePanel({ taskId }: { taskId: string }) {
   const usage = useQuery(queries.usage(taskId));
+  const runs = useQuery(queries.runs(taskId));
   if (usage.error) {
     return (
       <Section title="Usage">
@@ -15,15 +16,35 @@ export function UsagePanel({ taskId }: { taskId: string }) {
       </Section>
     );
   }
+  if (runs.error) {
+    return (
+      <Section title="Usage">
+        <QueryError error={runs.error} />
+      </Section>
+    );
+  }
   const data = usage.data;
+  const recorded = new Map(data?.byRun.map((entry) => [entry.runId, entry]));
+  const runRows =
+    runs.data?.map((run) => ({
+      runId: run.id,
+      phase: run.phase,
+      agentKind: run.agentKind,
+      usage: recorded.get(run.id)?.usage,
+    })) ?? data?.byRun.map((entry) => ({ ...entry, agentKind: undefined }));
+  const unavailableCopilot = runRows?.some(
+    (run) => run.agentKind === "copilot" && run.usage === undefined,
+  );
   return (
     <Section title="Usage">
       {!data ? (
         <Loading />
       ) : (
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium">{`${formatTokens(data.total)} tokens · ${formatCost(data.total.costUsd)}`}</p>
-          {data.byRun.length === 0 ? (
+          <p className="text-sm font-medium">
+            {`${unavailableCopilot ? "Consumo registrado (parcial: Copilot CLI no informa usage): " : ""}${formatTokens(data.total)} tokens · ${formatCost(data.total.costUsd)}`}
+          </p>
+          {runRows?.length === 0 ? (
             <Muted>Sin consumo registrado todavía.</Muted>
           ) : (
             <Table>
@@ -37,13 +58,15 @@ export function UsagePanel({ taskId }: { taskId: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.byRun.map(({ runId, phase, usage: u }) => (
+                {runRows?.map(({ runId, phase, usage: u }) => (
                   <TableRow key={runId}>
                     <TableCell>{PHASE_LABEL[phase]}</TableCell>
-                    <TableCell>{u.inputTokens}</TableCell>
-                    <TableCell>{u.outputTokens}</TableCell>
-                    <TableCell>{`${u.cacheReadTokens} / ${u.cacheWriteTokens}`}</TableCell>
-                    <TableCell>{formatCost(u.costUsd)}</TableCell>
+                    <TableCell>{u?.inputTokens ?? "No disponible"}</TableCell>
+                    <TableCell>{u?.outputTokens ?? "No disponible"}</TableCell>
+                    <TableCell>
+                      {u ? `${u.cacheReadTokens} / ${u.cacheWriteTokens}` : "No disponible"}
+                    </TableCell>
+                    <TableCell>{u ? formatCost(u.costUsd) : "No disponible"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

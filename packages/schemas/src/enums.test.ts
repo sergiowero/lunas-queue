@@ -34,8 +34,8 @@ describe("enums del dominio", () => {
     expect(Phase.options).toEqual(["refine", "implement", "verify", "deliver"]);
   });
 
-  it("v1 solo soporta Claude Code como tipo de agente", () => {
-    expect(AgentKind.options).toEqual(["claude"]);
+  it("enumera los proveedores de agente soportados", () => {
+    expect(AgentKind.options).toEqual(["claude", "copilot"]);
   });
 
   it("los demás enums tienen los valores del diseño", () => {

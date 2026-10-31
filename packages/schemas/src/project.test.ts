@@ -48,6 +48,21 @@ describe("AgentProfiles", () => {
     });
   });
 
+  it("acepta Copilot CLI como proveedor en cualquier fase", () => {
+    const profiles = AgentProfiles.parse({
+      refine: { kind: "copilot", effort: "medium" },
+      implement: { kind: "copilot", model: "gpt-5" },
+      verify: { kind: "copilot" },
+      deliver: { kind: "copilot" },
+    });
+    expect(Object.values(profiles).map((profile) => profile.kind)).toEqual([
+      "copilot",
+      "copilot",
+      "copilot",
+      "copilot",
+    ]);
+  });
+
   it.each(["refine", "implement", "verify", "deliver"])(
     "rechaza un kind desconocido en %s",
     (phase) => {
@@ -57,16 +72,13 @@ describe("AgentProfiles", () => {
     },
   );
 
-  it("el perfil de verify solo acepta kind = claude", () => {
+  it("verify usa el mismo esquema de perfil por proveedor que las otras fases", () => {
     expect(AgentProfiles.shape.verify.safeParse({ kind: "claude" }).success).toBe(true);
-    expect(AgentProfiles.shape.verify.safeParse({ kind: "codex" }).success).toBe(false);
+    expect(AgentProfiles.shape.verify.safeParse({ kind: "copilot" }).success).toBe(true);
   });
 
-  it("verify se ata al literal claude, no a AgentKind", () => {
-    // Hoy AgentKind solo tiene claude; esto sigue fallando si verify pasa a aceptar AgentKind.
+  it("verify comparte el esquema de perfil de agente", () => {
     expect(AgentProfiles.shape.verify.unwrap()).toBe(VerifyAgentProfile);
-    expect(VerifyAgentProfile.shape.kind.def.type).toBe("literal");
-    expect(VerifyAgentProfile.shape.kind.value).toBe("claude");
     expect(ProjectUpdate.shape.agentProfiles.unwrap().shape.verify.unwrap()).toBe(
       VerifyAgentProfile,
     );

@@ -57,6 +57,13 @@
       "when": 1793420172552,
       "tag": "0007_task_title",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793483327972,
+      "tag": "0008_legal_eddie_brock",
+      "breakpoints": true
     }
   ]
 }

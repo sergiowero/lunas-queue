@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RunRow, RunSubagentRow } from "@lunasq/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ClaudeTranscriptSource, projectDirName } from "./sources.ts";
+import {
+  ClaudeTranscriptSource,
+  CopilotReviewerTranscriptSource,
+  projectDirName,
+} from "./sources.ts";
 
 let root: string;
 let claudeDir: string;
@@ -52,6 +56,65 @@ describe("ClaudeTranscriptSource", () => {
     const source = new ClaudeTranscriptSource({ claudeDir });
     const [main] = await source.forRun({ run: run(), worktreePath: worktree, subagents: [] });
     expect(main).toEqual({ title: "Sesión del agente", jsonl: '{"type":"user"}\n' });
+  });
+
+  describe("CopilotReviewerTranscriptSource", () => {
+    it("lee el transcript real que LunasQ guardó para una ejecución completada", async () => {
+      const evidencePath = join(root, "copilot-reviewers");
+      const runDir = join(evidencePath, "run-1");
+      mkdirSync(runDir, { recursive: true });
+      const agentId = "copilot-session-1";
+      const transcript = join(runDir, `${agentId}.jsonl`);
+      writeFileSync(
+        transcript,
+        `${JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "SIN HALLAZGOS" }] } })}\n`,
+      );
+      const source = new CopilotReviewerTranscriptSource({
+        claude: new ClaudeTranscriptSource({ claudeDir }),
+        evidencePath,
+      });
+      const out = await source.forRun({
+        run: run({ agentKind: "copilot" }),
+        worktreePath: worktree,
+        subagents: [
+          subagent({
+            agentId,
+            stoppedAt: new Date(),
+            transcriptPath: transcript,
+          }),
+        ],
+      });
+
+      expect(out[1]).toMatchObject({
+        title: `Subagente lunasq-code-reviewer (${agentId})`,
+        jsonl: expect.stringContaining("SIN HALLAZGOS"),
+      });
+    });
+
+    it("no lee un transcript Copilot que sale del directorio privado del Run", async () => {
+      const evidencePath = join(root, "copilot-reviewers");
+      mkdirSync(evidencePath);
+      const secret = join(root, "secret.jsonl");
+      writeFileSync(secret, "no incluir");
+      const source = new CopilotReviewerTranscriptSource({
+        claude: new ClaudeTranscriptSource({ claudeDir }),
+        evidencePath,
+      });
+      const out = await source.forRun({
+        run: run({ agentKind: "copilot" }),
+        worktreePath: worktree,
+        subagents: [
+          subagent({
+            agentId: "copilot-session-2",
+            stoppedAt: new Date(),
+            transcriptPath: secret,
+          }),
+        ],
+      });
+
+      expect(out[1]?.jsonl).toBeNull();
+      expect(out[1]?.note).toMatch(/fuera del directorio privado/);
+    });
   });
 
   it("avisa si no encuentra el transcript de la sesión", async () => {

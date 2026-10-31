@@ -52,6 +52,25 @@ describe("install", () => {
       "lunasq-ui-reviewer.md",
       "lunasq-ux-reviewer.md",
     ]);
+    expect(readdirSync(ctx.paths.copilotSkills).sort()).toEqual([
+      "implement-task",
+      "refine-task",
+      "verify-task",
+    ]);
+    expect(readdirSync(ctx.paths.copilotAgents).sort()).toEqual([
+      "code-reviewer.agent.md",
+      "security-reviewer.agent.md",
+      "ui-reviewer.agent.md",
+      "ux-reviewer.agent.md",
+    ]);
+    expect(
+      readFileSync(join(ctx.paths.copilotAgents, "security-reviewer.agent.md"), "utf8"),
+    ).toContain("name: lunasq-security-reviewer");
+    expect(JSON.parse(readFileSync(ctx.paths.copilotMcpConfig, "utf8"))).toEqual({
+      mcpServers: {
+        lunasq: { type: "http", url: `http://127.0.0.1:${DEFAULT_PORT}/mcp` },
+      },
+    });
     expect(await readConfig(ctx.paths.config)).toEqual({ port: DEFAULT_PORT, telemetry: true });
     expect(JSON.parse(readFileSync(ctx.paths.mcpConfig, "utf8"))).toEqual(
       mcpConfig(`http://127.0.0.1:${DEFAULT_PORT}/mcp`),
@@ -84,6 +103,28 @@ describe("install", () => {
     expect(again.changes).toEqual([]);
     expect(again.ok).toBe(true);
     expect(commands().slice(before)).not.toContain("herdr integration install claude");
+  });
+
+  it("registra MCP en Copilot preservando otras opciones y servidores", async () => {
+    const { ctx } = cleanMachine();
+    mkdirSync(ctx.paths.copilotHome, { recursive: true });
+    writeFileSync(
+      ctx.paths.copilotMcpConfig,
+      JSON.stringify({
+        customOption: true,
+        mcpServers: { other: { type: "stdio", command: "other-mcp" } },
+      }),
+    );
+
+    await install(ctx);
+
+    expect(JSON.parse(readFileSync(ctx.paths.copilotMcpConfig, "utf8"))).toEqual({
+      customOption: true,
+      mcpServers: {
+        other: { type: "stdio", command: "other-mcp" },
+        lunasq: { type: "http", url: `http://127.0.0.1:${DEFAULT_PORT}/mcp` },
+      },
+    });
   });
 
   it("restaura un asset editado y borra los que ya no existen", async () => {
@@ -166,10 +207,14 @@ describe("install", () => {
 
   it.each([
     ["herdr", "herdr status --json"],
-    ["Claude Code", "claude --version"],
+    ["ambos proveedores", "claude --version"],
     ["gh", "gh auth status"],
   ])("sin %s no instala nada", async (_, command) => {
-    const { ctx, commands } = cleanMachine({ ...healthyResponses(), [command]: { exitCode: 127 } });
+    const { ctx, commands } = cleanMachine({
+      ...healthyResponses(),
+      [command]: { exitCode: 127 },
+      ...(command === "claude --version" ? { "copilot --version": { exitCode: 127 } } : {}),
+    });
     const result = await install(ctx);
 
     expect(result).toMatchObject({ stage: "prerequisites", ok: false, changes: [] });

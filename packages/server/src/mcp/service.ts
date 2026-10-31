@@ -4,6 +4,8 @@
 // handoff, el cierre del Run y la transición de la tarea en una sola transacción IMMEDIATE. La
 // fase de verificación (ADR uw-23-verificacion) agrega los hooks de fase, la evidencia de los
 // revisores, el tope de iteraciones del proyecto y la etiqueta de riesgo.
+
+import { randomUUID } from "node:crypto";
 import {
   appendChecklist,
   applyTaskTitle,
@@ -40,6 +42,7 @@ import {
   parseHandoff,
   REVIEWER_NAMES,
   type ReportFailureInput,
+  type RunReviewerInput,
   type Spec,
   type TaskContext,
   TEST_GATE_EXECUTED,
@@ -48,6 +51,7 @@ import {
   type UpdateChecklistInput,
   VERDICT_RECORDED,
 } from "@lunasq/schemas";
+import type { CopilotReviewerExecutor } from "./copilot-reviewer.ts";
 import type { CommitVerifier, PhaseHooks, TestGate } from "./ports.ts";
 
 export const TOOL_NAMES = [
@@ -56,6 +60,7 @@ export const TOOL_NAMES = [
   "ask_human",
   "update_checklist",
   "submit_for_verification",
+  "run_reviewer",
   "submit_verdict",
   "report_failure",
 ] as const;
@@ -94,6 +99,7 @@ export const TOOL_PHASES: Readonly<Record<ToolName, readonly Phase[]>> = {
   submit_spec: ["refine"],
   update_checklist: ["implement"],
   submit_for_verification: ["implement"],
+  run_reviewer: ["verify"],
   submit_verdict: ["verify"],
 };
 
@@ -118,6 +124,9 @@ export type McpErrorCode =
   | "verdict_already_recorded"
   // Un revisor reportado que no aparece en los hooks del Run, u omitido que sí corrió.
   | "reviewer_evidence_mismatch"
+  | "reviewer_execution_unavailable"
+  | "reviewer_execution_failed"
+  | "reviewer_already_running"
   // Un hook de fase con política block falló: la tarea pasó a needs_human.
   | "hook_blocked"
   | "no_worktree"
@@ -160,6 +169,7 @@ export interface McpServiceDeps {
   testGate: TestGate;
   commitVerifier: CommitVerifier;
   phaseHooks: PhaseHooks;
+  copilotReviewers?: CopilotReviewerExecutor;
 }
 
 export class LunasqMcpService {
@@ -172,6 +182,8 @@ export class LunasqMcpService {
   readonly #commits: CommitVerifier;
   readonly #hooks: PhaseHooks;
   readonly #subagents: RunSubagentRepository;
+  readonly #copilotReviewers: CopilotReviewerExecutor | undefined;
+  readonly #reviewersInFlight = new Set<string>();
   // Runs con un gate de tests en curso: un reintento no lanza una segunda suite en paralelo.
   readonly #gating = new Set<string>();
 
@@ -185,6 +197,7 @@ export class LunasqMcpService {
     this.#commits = deps.commitVerifier;
     this.#hooks = deps.phaseHooks;
     this.#subagents = new RunSubagentRepository(deps.db);
+    this.#copilotReviewers = deps.copilotReviewers;
   }
 
   /** Guardas comunes: Run activo, tool de su fase y contexto leído (salvo get_task_context). */
@@ -314,6 +327,7 @@ export class LunasqMcpService {
         })),
       });
     }
+
     return this.#write((tx) => {
       const current = latestChecklist(tx, run.taskId);
       const done = new Map((current ?? []).map((i) => [i.taskId, i.done]));
@@ -329,6 +343,47 @@ export class LunasqMcpService {
       }
       return { ok: true, data: { checklist } };
     });
+  }
+
+  async runReviewer(run: RunRow, input: RunReviewerInput): Promise<Outcome<{ output: string }>> {
+    if (run.agentKind !== "copilot" || !this.#copilotReviewers) {
+      return fail(
+        "reviewer_execution_unavailable",
+        "run_reviewer solo está disponible cuando Copilot CLI es el proveedor de verificación",
+      );
+    }
+    const key = `${run.id}:${input.reviewer}`;
+    if (this.#reviewersInFlight.has(key)) {
+      return fail("reviewer_already_running", `${input.reviewer} ya está ejecutándose en este Run`);
+    }
+    const task = this.#tasks.get(run.taskId);
+    if (!task?.worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
+
+    this.#reviewersInFlight.add(key);
+    const agentId = `copilot-${randomUUID()}`;
+    this.#subagents.recordStart(run.id, { agentId, agentType: input.reviewer });
+    try {
+      const result = await this.#copilotReviewers.run({
+        run,
+        worktreePath: task.worktreePath,
+        agentId,
+        reviewer: input.reviewer,
+        instructions: input.instructions,
+      });
+      this.#subagents.recordStop(run.id, {
+        agentId,
+        agentType: input.reviewer,
+        transcriptPath: result.transcriptPath,
+      });
+      return { ok: true, data: { output: result.output } };
+    } catch (error) {
+      return fail(
+        "reviewer_execution_failed",
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      this.#reviewersInFlight.delete(key);
+    }
   }
 
   async submitForVerification(

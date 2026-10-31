@@ -2,7 +2,6 @@
 // sesión por Run, ADR 0002, ADR uw-16-dispatcher): nombre del agente en herdr, entorno del pane,
 // args de arranque, prompt de fase y qué identidad de sesión guarda el Run.
 import {
-  type AgentProfile,
   RESOURCE_ATTRIBUTES,
   RUN_ENV,
   RUN_TOKEN_HEADER,
@@ -79,46 +78,6 @@ export function telemetryRunEnv(run: RunIdentity): Record<string, string> {
     ].join(","),
     OTEL_EXPORTER_OTLP_HEADERS: `${RUN_TOKEN_HEADER}=${run.runToken}`,
   };
-}
-
-/** Flags que pone siempre el dispatcher: el perfil no puede traerlos. */
-const RESERVED_FLAGS = ["--mcp-config", "--strict-mcp-config", "--settings", "--session-id"];
-
-const isEffortFlag = (arg: string) => arg === "--effort" || arg.startsWith("--effort=");
-
-/**
- * Args de Claude Code después de `--`: modelo y esfuerzo del perfil, args del perfil (ahí va el modo Auto),
- * el archivo MCP estable en modo estricto (ADR 0002), el archivo de settings con los hooks de
- * subagentes (ADR uw-19-revisores) y el session id nativo del Run.
- */
-export function agentArgs(
-  profile: AgentProfile,
-  opts: { mcpConfigPath: string; settingsPath: string; sessionId: string },
-): string[] {
-  const reserved = profile.model === undefined ? RESERVED_FLAGS : [...RESERVED_FLAGS, "--model"];
-  const clash = profile.args.find((arg) =>
-    reserved.some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
-  );
-  if (clash !== undefined) {
-    throw new DispatchRuleError(`el perfil de agente no puede traer ${clash}: lo fija LunasQ`);
-  }
-  if (profile.effort !== undefined && profile.args.some(isEffortFlag)) {
-    throw new DispatchRuleError(
-      "el perfil de agente fija el esfuerzo en effort y también trae --effort en args: deja uno",
-    );
-  }
-  return [
-    ...(profile.model === undefined ? [] : ["--model", profile.model]),
-    ...(profile.effort === undefined ? [] : ["--effort", profile.effort]),
-    ...profile.args,
-    "--mcp-config",
-    opts.mcpConfigPath,
-    "--strict-mcp-config",
-    "--settings",
-    opts.settingsPath,
-    "--session-id",
-    opts.sessionId,
-  ];
 }
 
 const PHASE_SKILL: Record<SchedulablePhase, string> = {

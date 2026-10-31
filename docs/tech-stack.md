@@ -79,7 +79,7 @@ Cada componente del diseño queda resuelto con piezas de la misma base, sin serv
 | Adapter de GitHub | CLI `gh` con salida `--json` vía `child_process` | Usa la sesión autenticada de `gh` de la máquina |
 | Archivo de evidencia | Generador de markdown propio; redacción de secretos con patrones al estilo gitleaks | Escribe en `lunasq/tasks/{id}.md` del worktree |
 | Logs del propio LunasQ | pino | JSON estructurado, rotación por archivo |
-| CLI e instalador | Binario `lunasq` publicado como paquete npm `lunasq` (`lunasq start`, `lunasq install`, `lunasq doctor`), armado con esbuild en un solo bundle ([ADR uw-28-instalador](decisions/uw-28-instalador.md)) | `install` verifica herdr, Claude Code y `gh`, e instala skills, subagentes y configuración en `~/.lunasq/` |
+| CLI e instalador | Binario `lunasq` publicado como paquete npm `lunasq` (`lunasq start`, `lunasq install`, `lunasq doctor`), armado con esbuild en un solo bundle ([ADR uw-28-instalador](decisions/uw-28-instalador.md)) | `install` verifica herdr, Claude Code, Copilot CLI y `gh`; instala skills en `~/.claude/` y `~/.copilot/`, y registra el MCP de LunasQ en la configuración de Copilot |
 
 **Front end**
 
@@ -110,7 +110,7 @@ Monorepo con pnpm workspaces; la regla es que el dominio no depende de nada exte
 | `assets/skills` | Skills de fase: `refine-task`, `implement-task`, `verify-task` ([ADR uw-18-skills-fase](decisions/uw-18-skills-fase.md)) | — |
 | `assets/agents` | Definiciones de los 4 subagentes revisores | — |
 
-Los assets se versionan con el código y `lunasq install` los copia a `~/.claude/` (skills y `agents/lunasq/`). Las pruebas de integración contra herdr y `gh` reales viven en `packages/adapters` y corren aparte de la suite unitaria.
+Los assets se versionan con el código. `lunasq install` copia skills a `~/.claude/` y `~/.copilot/`; los cuatro revisores y sus hooks están instalados solo para Claude Code. La paridad de verificación de Copilot sigue pendiente. Las pruebas de integración contra herdr y `gh` reales viven en `packages/adapters` y corren aparte de la suite unitaria.
 
 ## Integraciones externas
 
@@ -119,7 +119,8 @@ LunasQ no embebe ninguna de estas herramientas: las invoca como procesos o las c
 | Herramienta | Cómo se integra | Qué configura `lunasq install` |
 | --- | --- | --- |
 | herdr | CLI con salida JSON y socket Unix (NDJSON) para eventos; versión mínima 0.9.5, protocol 22 ([ADR 0004](decisions/0004-herdr-version-y-cli.md)) | Verifica versión; instala la integración oficial de herdr para Claude Code |
-| Claude Code | Lo arranca herdr con `agent start --kind claude`; modelo, modo Auto y demás flags van en los args del perfil de fase; el dispatcher agrega el archivo MCP y un `--settings` estable con los hooks de subagentes ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) | Escribe el archivo MCP estable y el settings de hooks en `~/.lunasq/` (no registra el MCP a nivel usuario, [ADR uw-28-instalador](decisions/uw-28-instalador.md)); copia skills y subagentes a `~/.claude/` |
+| Claude Code | Lo arranca herdr con `agent start --kind claude`; el dispatcher agrega el archivo MCP y un `--settings` estable con hooks HTTP de subagentes | Escribe MCP/settings en `~/.lunasq/`; copia skills y revisores a `~/.claude/` |
+| GitHub Copilot CLI | Lo arranca herdr con `agent start --kind copilot`; usa `--additional-mcp-config` por Run con su token MCP y `--trust-folder` | Registra el MCP en `~/.copilot/mcp-config.json` de forma idempotente y preservando otras entradas; copia skills a `~/.copilot/`. La captura automática de revisores aún no está implementada |
 | GitHub | CLI `gh` con `--json` | Verifica que `gh` esté autenticado |
 | git | Worktrees vía herdr; trailers `LunasQ-Task` y `LunasQ-Run` en los mensajes de commit | — |
 | OpenTelemetry | Claude Code exporta métricas y eventos por OTLP/HTTP JSON a `localhost` | Variables de telemetría en el entorno de cada pane |

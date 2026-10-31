@@ -12,6 +12,7 @@ import {
   type SessionIdentity,
 } from "@lunasq/domain";
 import {
+  AgentKind,
   CHECKLIST_UPDATED,
   type ChecklistItem,
   ChecklistUpdatedPayload,
@@ -297,6 +298,72 @@ export class RunRepository {
       .run();
   }
 
+  clearPane(runId: string): void {
+    this.db
+      .update(runs)
+      .set({ herdrWorkspace: null, herdrPane: null })
+      .where(eq(runs.id, runId))
+      .run();
+  }
+
+  setAgentKind(runId: string, kind: AgentKind, model: string | null): RunRow | null {
+    this.db.update(runs).set({ agentKind: kind, model }).where(eq(runs.id, runId)).run();
+    return this.get(runId);
+  }
+
+  providerAttempts(runId: string): {
+    provider: AgentKind;
+    status: "started" | "failed";
+    reason?: string;
+  }[] {
+    const run = this.get(runId);
+    if (!run) return [];
+    return this.db
+      .select({ payload: events.payload })
+      .from(events)
+      .where(and(eq(events.taskId, run.taskId), eq(events.type, "run.provider_attempt")))
+      .orderBy(asc(events.id))
+      .all()
+      .flatMap(({ payload }) => {
+        if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return [];
+        const event = payload as Record<string, unknown>;
+        if (event.runId !== runId || typeof event.provider !== "string") return [];
+        const provider = AgentKind.safeParse(event.provider);
+        const status =
+          event.status === "started" || event.status === "failed" ? event.status : null;
+        if (!provider.success || status === null) return [];
+        return [
+          {
+            provider: provider.data,
+            status,
+            ...(typeof event.reason === "string" && { reason: event.reason }),
+          },
+        ];
+      });
+  }
+
+  recordProviderAttempt(
+    runId: string,
+    provider: AgentKind,
+    status: "started" | "failed",
+    reason?: string,
+  ): void {
+    this.db.transaction((tx) => {
+      const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
+      if (!run) throw new Error(`no existe el Run ${runId}`);
+      appendEvent(
+        tx,
+        {
+          taskId: run.taskId,
+          type: "run.provider_attempt",
+          actor: "system",
+          payload: { runId, provider, status, ...(reason && { reason }) },
+        },
+        { publish: true },
+      );
+    });
+  }
+
   /** Marca que el prompt de fase salió; conserva la primera marca. */
   markLaunched(runId: string): RunRow | null {
     this.db
@@ -318,7 +385,11 @@ export class RunRepository {
    * failure y, si la tarea sigue en running en la fase del Run, aplica `run_failed` con el mismo
    * conteo que `report_failure`. Al agotar los reintentos la tarea pasa a needs_human (ADR 0007).
    */
-  fail(runId: string, reason: string, opts: { maxRetries?: number } = {}): FailRunResult {
+  fail(
+    runId: string,
+    reason: string,
+    opts: { maxRetries?: number; providersUnavailable?: boolean } = {},
+  ): FailRunResult {
     return this.db.transaction(
       (tx) => {
         const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
@@ -332,16 +403,26 @@ export class RunRepository {
         if (task?.subState !== "running" || pendingPhase(task.state) !== run.phase) {
           return { closed: true, transitioned: false };
         }
-        const moved = applyTransition(tx, {
-          taskId: task.id,
-          actor: "system",
-          command: {
-            type: "run_failed",
-            attempt,
-            ...(opts.maxRetries !== undefined && { maxRetries: opts.maxRetries }),
-          },
-          expected: { state: task.state, subState: "running" },
-        });
+        const moved = applyTransition(
+          tx,
+          opts.providersUnavailable
+            ? {
+                taskId: task.id,
+                actor: "system",
+                command: { type: "escalate", reason: "providers_unavailable" },
+                expected: { state: task.state, subState: "running" },
+              }
+            : {
+                taskId: task.id,
+                actor: "system",
+                command: {
+                  type: "run_failed",
+                  attempt,
+                  ...(opts.maxRetries !== undefined && { maxRetries: opts.maxRetries }),
+                },
+                expected: { state: task.state, subState: "running" },
+              },
+        );
         if (!moved.ok) throw new Error(`run_failed de ${task.id}: ${moved.error.message}`);
         return { closed: true, transitioned: true, task: moved.task };
       },

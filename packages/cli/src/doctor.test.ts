@@ -37,15 +37,21 @@ describe("doctor", () => {
       "herdr",
       "herdr-server",
       "claude",
+      "copilot",
       "gh",
       "herdr-integration",
       "herdr-toast",
       "skill:implement-task",
       "skill:refine-task",
       "skill:verify-task",
+      "copilot-skill:implement-task",
+      "copilot-skill:refine-task",
+      "copilot-skill:verify-task",
       "agents",
+      "copilot-agents",
       "config",
       "mcp",
+      "copilot-mcp",
       "hooks",
       "telemetry",
       "engram",
@@ -64,7 +70,11 @@ describe("doctor", () => {
       "skill:implement-task",
       "skill:refine-task",
       "skill:verify-task",
+      "copilot-skill:implement-task",
+      "copilot-skill:refine-task",
+      "copilot-skill:verify-task",
       "agents",
+      "copilot-agents",
       "config",
     ]);
     expect(
@@ -153,7 +163,11 @@ describe("doctor", () => {
     ["no instalado", { exitCode: 127 }, /no está instalado/],
     ["viejo", { stdout: "2.1.200 (Claude Code)" }, /2\.1\.312/],
   ])("Claude Code %s falla", async (_, response, summary) => {
-    const { ctx } = machine({ ...healthyResponses(), "claude --version": response });
+    const { ctx } = machine({
+      ...healthyResponses(),
+      "claude --version": response,
+      "copilot --version": { exitCode: 127 },
+    });
     expect(byId(await runDoctor(ctx), "claude")).toMatchObject({
       status: "fail",
       summary: expect.stringMatching(summary),

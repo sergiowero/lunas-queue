@@ -85,9 +85,27 @@ describe("alta de proyectos", () => {
     expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
       agentProfiles: { implement: { kind: "claude", effort: "high", args: [] } },
     });
+
     expect(fake.requests.find((r) => r.method === "POST")?.body).not.toHaveProperty(
       "agentProfiles.verify",
     );
+  });
+
+  it("permite elegir Copilot como proveedor de una fase", async () => {
+    const fake = new FakeApi();
+    const { user, dialog } = await openDialog(fake);
+    const form = within(dialog);
+
+    await user.type(form.getByLabelText("Nombre"), "copilot-project");
+    await user.type(form.getByLabelText("Repositorio"), "owner/copilot-project");
+    await user.type(form.getByLabelText("Ruta local"), "/repos/copilot-project");
+    await user.selectOptions(form.getByLabelText("Proveedor de implement"), "copilot");
+    await user.click(form.getByRole("button", { name: "Crear proyecto" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
+      agentProfiles: { implement: { kind: "copilot", args: [] } },
+    });
   });
 
   it("muestra el error del servidor y deja el popup abierto", async () => {

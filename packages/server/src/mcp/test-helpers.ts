@@ -16,6 +16,7 @@ import {
   setTaskPosition,
 } from "@lunasq/db/test-helpers";
 import { type Phase, type StatePosition, TEST_GATE_EXECUTED } from "@lunasq/schemas";
+import type { CopilotReviewerExecutor } from "./copilot-reviewer.ts";
 
 type Position = StatePosition & { verificationIteration?: number };
 
@@ -124,6 +125,7 @@ export interface McpHarnessOptions {
   testGate?: (db: LunasqDatabase) => TestGate;
   testCommand?: string;
   worktreePath?: string;
+  copilotReviewers?: CopilotReviewerExecutor;
 }
 
 export function mcpHarness(options: McpHarnessOptions = {}) {
@@ -140,6 +142,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
     testGate: options.testGate?.(db) ?? testGate,
     commitVerifier,
     phaseHooks,
+    ...(options.copilotReviewers && { copilotReviewers: options.copilotReviewers }),
   });
 
   async function connect(token?: string) {
@@ -189,9 +192,13 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
   }
 
   /** Run activo de la fase con su sesión MCP; `ready` ya llamó get_task_context. */
-  async function session(phase: Phase, position: Position, opts: { approved?: boolean } = {}) {
+  async function session(
+    phase: Phase,
+    position: Position,
+    opts: { approved?: boolean; agentKind?: "claude" | "copilot" } = {},
+  ) {
     const t = task(position, opts);
-    const run = insertRun(db, t.id, { phase });
+    const run = insertRun(db, t.id, { phase, agentKind: opts.agentKind ?? "claude" });
     // En verificación, la tarea llega con el gate de submit_for_verification en verde en su HEAD.
     if (phase === "verify") gated(t.id, commitVerifier.headSha);
     const { call } = await connect(run.runToken);
@@ -219,7 +226,11 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
     });
   }
 
-  async function ready(phase: Phase, position: Position, opts: { approved?: boolean } = {}) {
+  async function ready(
+    phase: Phase,
+    position: Position,
+    opts: { approved?: boolean; agentKind?: "claude" | "copilot" } = {},
+  ) {
     const s = await session(phase, position, opts);
     const context = await s.call("get_task_context");
     if (context.isError) throw new Error(JSON.stringify(context.body));

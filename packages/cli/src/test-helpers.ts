@@ -23,6 +23,7 @@ export const healthyResponses = (): Responses => ({
   },
   "herdr integration install claude": { stdout: "installed" },
   "claude --version": { stdout: "2.1.314 (Claude Code)\n" },
+  "copilot --version": { stdout: "GitHub Copilot CLI 1.0.105\n" },
   "gh auth status": { stdout: "✓ Logged in to github.com" },
   "command -v engram": { stdout: "/usr/local/bin/engram\n" },
 });

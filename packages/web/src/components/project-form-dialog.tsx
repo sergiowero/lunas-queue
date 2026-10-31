@@ -3,6 +3,7 @@
 // apliquen los defaults del servidor; al editar se envía todo, porque PATCH reemplaza cada campo
 // presente y `null` borra los comandos opcionales.
 import {
+  type AgentKind,
   EFFORT_LEVELS,
   type EffortLevel,
   type Phase,
@@ -19,7 +20,13 @@ import { Input, Label, Select, Textarea } from "./ui/input.tsx";
 
 const PHASES: Phase[] = ["refine", "implement", "verify", "deliver"];
 
-type PhaseFields = { model: string; effort: string; args: string; timeout: string };
+type PhaseFields = {
+  kind: AgentKind;
+  model: string;
+  effort: string;
+  args: string;
+  timeout: string;
+};
 
 function describe(error: Error): string {
   if (error instanceof ApiError && error.issues.length > 0) {
@@ -55,6 +62,7 @@ function initialPhases(project?: Json<Project>): Record<Phase, PhaseFields> {
   for (const phase of PHASES) {
     const profile = project?.agentProfiles[phase];
     phases[phase] = {
+      kind: profile?.kind ?? "claude",
       model: profile?.model ?? "",
       effort: profile?.effort ?? "",
       args: profile?.args.join("\n") ?? "",
@@ -73,10 +81,16 @@ function buildInput(form: FormValues, editing: boolean): ProjectCreate | Project
   const agentProfiles: NonNullable<ProjectCreate["agentProfiles"]> = {};
   const phaseTimeoutMinutes: Partial<Record<Phase, number>> = {};
   for (const phase of PHASES) {
-    const { model, effort, args, timeout } = form.phases[phase];
-    if (editing || model.trim() !== "" || effort !== "" || parseArgs(args).length > 0) {
+    const { kind, model, effort, args, timeout } = form.phases[phase];
+    if (
+      editing ||
+      kind !== "claude" ||
+      model.trim() !== "" ||
+      effort !== "" ||
+      parseArgs(args).length > 0
+    ) {
       agentProfiles[phase] = {
-        kind: "claude",
+        kind,
         ...(model.trim() !== "" && { model: model.trim() }),
         ...(effort !== "" && { effort: effort as EffortLevel }),
         args: parseArgs(args),
@@ -252,10 +266,23 @@ export function ProjectFormDialog({
         </fieldset>
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="text-sm font-medium">Agente por fase (Claude Code)</legend>
+          <legend className="text-sm font-medium">Agente por fase</legend>
           {PHASES.map((phase) => (
             <div key={phase} className="flex flex-col gap-2 rounded-md border border-border p-3">
               <h3 className="text-xs font-medium uppercase text-muted-foreground">{phase}</h3>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor={`project-agent-${phase}`}>Proveedor de {phase}</Label>
+                <Select
+                  id={`project-agent-${phase}`}
+                  value={phases[phase].kind}
+                  onChange={(e) =>
+                    setPhase(phase, { kind: e.target.value === "copilot" ? "copilot" : "claude" })
+                  }
+                >
+                  <option value="claude">Claude Code</option>
+                  <option value="copilot">GitHub Copilot CLI</option>
+                </Select>
+              </div>
               <div className="flex gap-4">
                 <div className="flex flex-1 flex-col gap-1">
                   <Label htmlFor={`project-model-${phase}`}>Modelo de {phase}</Label>
@@ -295,13 +322,14 @@ export function ProjectFormDialog({
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor={`project-args-${phase}`}>
-                  Argumentos de CLI para Claude en {phase} (uno por línea)
+                  Argumentos de CLI para {phases[phase].kind === "claude" ? "Claude" : "Copilot"} en{" "}
+                  {phase} (uno por línea)
                 </Label>
                 <p id={`project-args-help-${phase}`} className="text-xs text-muted-foreground">
-                  Flags que LunasQ pasa al comando <code>claude</code> al arrancar esta fase, p. ej.{" "}
-                  <code>--permission-mode</code> y en la línea siguiente <code>auto</code>. El
-                  esfuerzo va en su propio campo, no aquí. No escribas aquí un prompt ni texto
-                  suelto: Claude lo toma como prompt inicial y el arranque falla por timeout.
+                  Flags que LunasQ pasa al comando{" "}
+                  <code>{phases[phase].kind === "claude" ? "claude" : "copilot"}</code> al arrancar
+                  esta fase. El esfuerzo va en su propio campo, no aquí. No escribas aquí un prompt
+                  ni texto suelto: el CLI lo toma como prompt inicial.
                 </p>
                 <Textarea
                   id={`project-args-${phase}`}

@@ -8,7 +8,7 @@ import { handoffFor, mcpHarness } from "./test-helpers.ts";
 const running = { state: "in_progress", subState: "running" } as const;
 
 describe("LunasQ MCP: transporte", () => {
-  it("lista las 7 tools con su inputSchema", async () => {
+  it("lista las 8 tools con su inputSchema", async () => {
     const h = mcpHarness();
     const { client } = await h.connect("cualquiera");
     const { tools } = await client.listTools();
@@ -42,6 +42,10 @@ describe("LunasQ MCP: run token", () => {
     ask_human: { question: "¿Sigo?" },
     update_checklist: { items: [{ taskId: "T-1", done: true }] },
     submit_for_verification: { handoff: handoffFor("implementation", run) },
+    run_reviewer: {
+      reviewer: "lunasq-code-reviewer",
+      instructions: "revisa el diff",
+    },
     submit_verdict: { handoff: handoffFor("verification-reject", run) },
     report_failure: { reason: "no puedo" },
   });
@@ -124,5 +128,25 @@ describe("LunasQ MCP: fase y contexto", () => {
       handoff: handoffFor("implementation", run),
     });
     expect(after.isError).toBe(false);
+  });
+
+  it("run_reviewer requiere contexto antes de lanzar un perfil", async () => {
+    const h = mcpHarness({
+      copilotReviewers: {
+        run: async () => {
+          throw new Error("no ejecutar");
+        },
+      },
+    });
+    const { call } = await h.session(
+      "verify",
+      { state: "verification", subState: "running" },
+      { agentKind: "copilot" },
+    );
+    const result = await call("run_reviewer", {
+      reviewer: "lunasq-code-reviewer",
+      instructions: "revisa el diff",
+    });
+    expect(result.body).toEqual({ error: "context_required", message: expect.any(String) });
   });
 });

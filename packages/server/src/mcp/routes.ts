@@ -8,6 +8,7 @@ import {
   GetTaskContextInput,
   HandoffInput,
   ReportFailureInput,
+  RunReviewerInput,
   UpdateChecklistInput,
 } from "@lunasq/schemas";
 import { createMcpHonoApp } from "@modelcontextprotocol/hono";
@@ -87,6 +88,15 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
     },
     ({ handoff }) =>
       guarded("submit_for_verification", (run) => service.submitForVerification(run, handoff)),
+  );
+  server.registerTool(
+    "run_reviewer",
+    {
+      description:
+        "Copilot CLI en verificación: lanza de verdad el revisor especializado indicado, guarda su prompt y respuesta como evidencia y devuelve el reporte. Incluye la spec, el diff y los criterios relevantes en instructions.",
+      inputSchema: RunReviewerInput,
+    },
+    (input) => guarded("run_reviewer", (run) => service.runReviewer(run, input)),
   );
   server.registerTool(
     "submit_verdict",

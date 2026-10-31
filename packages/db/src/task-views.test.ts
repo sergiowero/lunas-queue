@@ -150,7 +150,11 @@ describe("TaskViewRepository.usage: desgloses", () => {
       iteration: 1,
       endedAt: new Date(),
     });
-    const verify = insertRun(db, task.id, { phase: "verify", iteration: 1 });
+    const verify = insertRun(db, task.id, {
+      phase: "verify",
+      iteration: 1,
+      agentKind: "copilot",
+    });
     usage(db, refine.id, rec(10, { model: "opus" }));
     usage(db, first.id, rec(20, { model: "sonnet" }));
     usage(db, first.id, rec(30, { model: "opus" }));
@@ -164,7 +168,10 @@ describe("TaskViewRepository.usage: desgloses", () => {
       { phase: "rework", usage: tokens(40) },
       { phase: "verify", usage: tokens(50) },
     ]);
-    expect(result?.byAgent).toEqual([{ agentKind: "claude", usage: tokens(150) }]);
+    expect(result?.byAgent).toEqual([
+      { agentKind: "claude", usage: tokens(100) },
+      { agentKind: "copilot", usage: tokens(50) },
+    ]);
     expect(result?.byModel).toEqual([
       { model: "opus", usage: tokens(130) },
       { model: "sonnet", usage: tokens(20) },

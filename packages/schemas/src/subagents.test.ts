@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SubagentHookInput } from "./subagents.ts";
+import { RunReviewerInput, SubagentHookInput } from "./subagents.ts";
 
 // Inputs reales de Claude Code 2.1.312 (spike de ADR uw-19-revisores), recortados.
 const start = {
@@ -36,6 +36,32 @@ describe("SubagentHookInput", () => {
     expect(SubagentHookInput.parse({ ...stop, campo_futuro: 1 })).toMatchObject({
       hook_event_name: "SubagentStop",
       agent_transcript_path: stop.agent_transcript_path,
+    });
+  });
+
+  describe("RunReviewerInput", () => {
+    it("valida un revisor conocido y acota el contexto que se enviará al CLI", () => {
+      expect(
+        RunReviewerInput.parse({
+          reviewer: "lunasq-code-reviewer",
+          instructions: "Revisa AC-1 y el diff",
+        }),
+      ).toEqual({
+        reviewer: "lunasq-code-reviewer",
+        instructions: "Revisa AC-1 y el diff",
+      });
+      expect(
+        RunReviewerInput.safeParse({
+          reviewer: "otro-agente",
+          instructions: "Revisa",
+        }).success,
+      ).toBe(false);
+      expect(
+        RunReviewerInput.safeParse({
+          reviewer: "lunasq-code-reviewer",
+          instructions: " ",
+        }).success,
+      ).toBe(false);
     });
   });
 

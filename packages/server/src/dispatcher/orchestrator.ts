@@ -126,6 +126,7 @@ export class Orchestrator {
       worktrees: this.worktrees,
       projects,
       mcpConfigPath: opts.mcp.configPath,
+      mcpUrl: opts.mcp.url,
       hookSettingsPath: opts.hooks.settingsPath,
       observer: opts.observer ?? this.watcher,
       ...(opts.evidence && { evidence: opts.evidence }),

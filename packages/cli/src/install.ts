@@ -14,6 +14,7 @@ import {
   writeConfig,
 } from "./config.ts";
 import { type MachineContext, run } from "./context.ts";
+import { ensureCopilotMcpConfig } from "./copilot-mcp.ts";
 import {
   type CheckResult,
   checkPrerequisites,
@@ -53,7 +54,8 @@ export async function install(
 
   const changes: string[] = [];
 
-  if (!(await claudeIntegrationState(ctx))?.startsWith("current")) {
+  const claudeCheck = prereqs.find((check) => check.id === "claude");
+  if (claudeCheck?.status === "ok" && !(await claudeIntegrationState(ctx))?.startsWith("current")) {
     // herdr instala en `CLAUDE_CONFIG_DIR` (o ~/.claude) y falla si el directorio no existe.
     await mkdir(ctx.paths.claudeHome, { recursive: true });
     const res = await run(ctx, "herdr integration install claude");
@@ -74,7 +76,12 @@ export async function install(
     const changed = await mirror(target.src, target.dest);
     installed.add(target.dest);
     if (changed.length > 0) {
-      const label = target.kind === "skill" ? `skill ${target.name}` : "subagentes revisores";
+      const label =
+        target.kind === "agents"
+          ? "subagentes revisores"
+          : target.kind === "copilot-agents"
+            ? "subagentes revisores de Copilot CLI"
+            : `skill ${target.name}${target.kind === "copilot-skill" ? " de Copilot" : ""}`;
       changes.push(`${label} → ${target.dest}`);
     }
   }
@@ -100,6 +107,9 @@ export async function install(
   const urls = runtimeUrls(baseUrl(config));
   if ((await ensureMcpConfig(ctx.paths.mcpConfig, urls.mcp)).written) {
     changes.push(`LunasQ MCP → ${ctx.paths.mcpConfig}`);
+  }
+  if ((await ensureCopilotMcpConfig(ctx.paths.copilotMcpConfig, urls.mcp)).written) {
+    changes.push(`LunasQ MCP → ${ctx.paths.copilotMcpConfig}`);
   }
   if ((await ensureHookSettings(ctx.paths.hookSettings, urls.hooks)).written) {
     changes.push(`hooks de subagentes → ${ctx.paths.hookSettings}`);

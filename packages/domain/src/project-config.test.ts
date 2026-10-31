@@ -37,6 +37,8 @@ describe("phaseProfile", () => {
     const opus = project({ agentProfiles: { verify: { kind: "claude", model: "opus" } } });
     expect(phaseProfile(opus, "verify").model).toBe("opus");
     expect(phaseProfile(project(), "implement").model).toBeUndefined();
+    const copilot = project({ agentProfiles: { verify: { kind: "copilot" } } });
+    expect(phaseProfile(copilot, "verify")).toEqual({ kind: "copilot", args: [] });
   });
 });
 

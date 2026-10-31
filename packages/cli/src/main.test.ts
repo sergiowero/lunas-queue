@@ -51,7 +51,7 @@ describe("lunasq", () => {
   it("install sin requisitos sale con 1 y explica qué falta", async () => {
     const { deps, err } = setup({ ...healthyResponses(), "gh auth status": { exitCode: 127 } });
     expect(await main(["install"], deps)).toBe(1);
-    expect(err.join("\n")).toContain("✗ gh no está instalado");
+    expect(err.join("\n")).toContain("gh no está instalado");
   });
 
   it("doctor sale con 1 si algo falla y --json da los resultados", async () => {
@@ -88,6 +88,7 @@ describe("lunasq", () => {
       port: 8125,
       mcpConfigPath: ctx.paths.mcpConfig,
       hookSettingsPath: ctx.paths.hookSettings,
+      copilotAgentsPath: ctx.paths.copilotAgents,
       telemetry: false,
     });
     expect(out).toContain("LunasQ en http://127.0.0.1:8125");
