@@ -645,22 +645,37 @@ describe("submit_verdict", () => {
     expect((await call("submit_verdict", { handoff: reject })).body).toEqual({ verdict: "reject" });
   });
 
-  it("un pass con el worktree sucio se rechaza antes del gate", async () => {
+  it("un pass con el worktree sucio vuelve a implementación con un must-fix de git", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     h.commitVerifier.dirty = ["src/order.ts"];
     const result = await call("submit_verdict", {
       handoff: h.verdictFor("verification-pass", run),
     });
-    expect(result.body).toMatchObject({
-      error: "dirty_worktree",
-      issues: [{ path: "src/order.ts" }],
-    });
+    expect(result.body).toEqual({ verdict: "reject" });
     expect(h.testGate.calls).toHaveLength(0);
-    expect(runOf(h, run.id)?.handoff).toBeNull();
+    expect(h.taskOf(run.taskId)).toMatchObject({ state: "in_progress", subState: "queued" });
+    expect(runOf(h, run.id)?.handoff).toMatchObject({
+      body: {
+        verdict: "reject",
+        mustFix: [{ source: "approver", file: "src/order.ts" }],
+      },
+    });
   });
 
-  it("un pass sobre un HEAD distinto del que pasó el gate de submit_for_verification se rechaza", async () => {
+  it("el implementador recibe el must-fix de git tras un pass refusado", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("verify", verifying);
+    h.commitVerifier.dirty = ["src/order.ts"];
+    await call("submit_verdict", { handoff: h.verdictFor("verification-pass", run) });
+    const next = insertRun(h.db, run.taskId, { phase: "implement", iteration: 1 });
+    const implementer = await h.connect(next.runToken);
+    expect((await implementer.call("get_task_context")).body).toMatchObject({
+      rework: { mustFix: [{ source: "approver", file: "src/order.ts" }] },
+    });
+  });
+
+  it("un pass sobre un HEAD distinto del que pasó el gate de submit_for_verification vuelve a implementación", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     // El verificador commiteó algo propio, p. ej. borrar los tests en rojo.
@@ -668,15 +683,25 @@ describe("submit_verdict", () => {
     const result = await call("submit_verdict", {
       handoff: h.verdictFor("verification-pass", run),
     });
-    expect(result.body).toMatchObject({ error: "head_changed" });
+    expect(result.body).toEqual({ verdict: "reject" });
     expect(h.testGate.calls).toHaveLength(0);
-    expect(runOf(h, run.id)?.handoff).toBeNull();
+    expect(h.taskOf(run.taskId)).toMatchObject({ state: "in_progress", subState: "queued" });
+    expect(runOf(h, run.id)?.handoff).toMatchObject({
+      body: { verdict: "reject", mustFix: [{ source: "approver" }] },
+    });
+  });
 
-    // Vale el último gate en verde: tras un rework, el HEAD nuevo.
-    h.gated(run.taskId, "b".repeat(40));
+  it("un pass acepta commits posteriores al gate que solo tocan la evidencia", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("verify", verifying);
+    // LunasQ o un agente commitearon lunasq/tasks/ después del gate del implementador: no es código.
+    h.commitVerifier.headSha = "b".repeat(40);
+    h.commitVerifier.evidenceOnly = true;
     expect(
       (await call("submit_verdict", { handoff: h.verdictFor("verification-pass", run) })).body,
     ).toEqual({ verdict: "pass" });
+    // El gate del pass corrió sobre el HEAD actual, no sobre el del implementador.
+    expect(h.testGate.calls).toHaveLength(1);
   });
 
   it("sin gate en verde previo un pass se rechaza", async () => {
@@ -688,10 +713,13 @@ describe("submit_verdict", () => {
     const result = await call("submit_verdict", {
       handoff: h.verdictFor("verification-pass", run),
     });
-    expect(result.body).toMatchObject({ error: "head_changed" });
+    expect(result.body).toEqual({ verdict: "reject" });
+    expect(runOf(h, run.id)?.handoff).toMatchObject({
+      body: { verdict: "reject", mustFix: [{ source: "approver" }] },
+    });
   });
 
-  it("si el HEAD se movió mientras corría el gate del pass, se rechaza", async () => {
+  it("si el HEAD se movió mientras corría el gate del pass, vuelve a implementación", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     h.testGate.run = async () => {
@@ -701,8 +729,8 @@ describe("submit_verdict", () => {
     const result = await call("submit_verdict", {
       handoff: h.verdictFor("verification-pass", run),
     });
-    expect(result.body).toMatchObject({ error: "head_changed" });
-    expect(runOf(h, run.id)?.handoff).toBeNull();
+    expect(result.body).toEqual({ verdict: "reject" });
+    expect(h.taskOf(run.taskId)).toMatchObject({ state: "in_progress", subState: "queued" });
   });
 
   it("un reject no corre el gate", async () => {

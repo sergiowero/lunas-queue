@@ -84,7 +84,8 @@ Un rechazo deja el Run abierto: corrige y vuelve a llamar en el mismo Run. Las r
 | `invalid_handoff` | `issues` trae `{ path, message }` por cada campo inválido; corrige esos campos y reintenta. |
 | `handoff_mismatch` | `taskId`, `runId` y `phase` deben ser `task.id`, `run.id` y `implementation`. |
 | `spec_mismatch` | `criterionTests` debe nombrar exactamente los criterios de la spec aprobada, ni más ni menos; en `update_checklist`, un id que no está en la task list. |
-| `dirty_worktree` | `issues` lista los archivos sin commitear: commitéalos o ignóralos y reintenta. |
+| `dirty_worktree` | `issues` lista los archivos sin commitear: commitéalos o ignóralos y reintenta. No borres archivos que no creaste. |
+| Must-fix de git (`source: "approver"`, en `rework` de `get_task_context`) | La verificación no aceptó el pass por el estado de git. Si el archivo es parte del cambio, commitéalo; si lo genera una herramienta del proyecto, agrégalo a `.gitignore`; si es ajeno a la tarea (no lo creaste tú), agrégalo a `.git/info/exclude` (local, no se commitea) sin tocar el archivo. Si el `HEAD` cambió por un commit ajeno al código, vuelve a correr la suite y `submit_for_verification` desde el `HEAD` actual. Luego reenvía `submit_for_verification`. |
 | `commits_missing` | Un SHA no está en el `HEAD` del worktree o ya está en la rama base; recalcula la lista. |
 | `test_gate_failed` | La suite de LunasQ está en rojo; `output` trae el final de la salida. Corrige, commitea y reintenta. |
 | `gate_in_progress` | Ya corre un gate de este Run: espera su respuesta, no lances otro. |

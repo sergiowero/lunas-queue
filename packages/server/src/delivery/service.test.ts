@@ -25,10 +25,11 @@ describe("DeliveryService.deliver", () => {
     const result = await h.service.deliver(h.task.id);
 
     expect(result).toMatchObject({ status: "delivered", created: true });
-    // Orden de la entrega: hook, rebase, trailers, suite final, cierre del Run y evidencia, push,
-    // PR con su etiqueta y after_delivery.
+    // Orden de la entrega: hook, evidencia pendiente, rebase, trailers, suite final, cierre del
+    // Run y evidencia, push, PR con su etiqueta y after_delivery.
     expect(h.calls).toEqual([
       "hook:before_delivery",
+      "evidence",
       "rebase",
       "addTrailers",
       "gate",
@@ -73,7 +74,8 @@ describe("DeliveryService.deliver", () => {
     expect(eventsOf(h, TASK_PR_OPENED)).toHaveLength(1);
     expect(h.closedRuns).toEqual([h.verify.id]);
     expect(new RunRepository(h.db).get(h.verify.id)).toMatchObject({ result: "success" });
-    expect(h.evidenceCommits).toEqual([h.task.id]);
+    // Se commitea antes del rebase y otra vez tras cerrar el Run del verificador (idempotente).
+    expect(h.evidenceCommits).toEqual([h.task.id, h.task.id]);
     expect(h.hooks.calls.at(-1)).toMatchObject({
       point: "after_delivery",
       runId: h.verify.id,
@@ -142,7 +144,13 @@ describe("DeliveryService.deliver", () => {
       output: null,
     });
     // Sin suite, push ni PR; el Run del verificador se cerró con éxito para dejar su evidencia.
-    expect(h.calls).toEqual(["hook:before_delivery", "rebase", "close_run"]);
+    expect(h.calls).toEqual([
+      "hook:before_delivery",
+      "evidence",
+      "rebase",
+      "close_run",
+      "evidence",
+    ]);
     expect(h.github.created).toEqual([]);
     expect(new RunRepository(h.db).get(h.verify.id)).toMatchObject({ result: "success" });
     const transitioned = eventsOf(h, TASK_TRANSITIONED).at(-1)?.payload as { command: string };

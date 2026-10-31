@@ -584,7 +584,7 @@ Cada sección de Run contiene:
 
 Esto evita perder evidencia cuando herdr cierra el pane o cuando Claude Code borra sus transcripts al vencer su periodo de retención ([30 días por defecto](https://code.claude.com/docs/en/sub-agents)). Antes de escribir, LunasQ redacta secretos detectados en toda la sección ([ADR uw-24-archivo-evidencia](decisions/uw-24-archivo-evidencia.md)).
 
-Durante el loop de implementación y verificación el archivo queda sin commitear y los chequeos de worktree limpio y de `HEAD` lo ignoran; la entrega lo commitea con los trailers de la tarea antes del push.
+Durante el loop de implementación y verificación el archivo queda sin commitear; los chequeos de worktree limpio ignoran sus cambios y la comparación de `HEAD` del pass tolera los commits que solo lo tocan, porque el gate del pass corre sobre el `HEAD` actual. Antes de integrar la base, la entrega commitea la evidencia pendiente (así el rebase no falla si el proyecto la trackea) y la vuelve a commitear tras cerrar el Run del verificador, antes del push.
 
 **Hallazgos refutados**
 

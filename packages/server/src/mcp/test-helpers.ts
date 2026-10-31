@@ -99,6 +99,17 @@ export class FakeCommitVerifier implements CommitVerifier {
   async head(_worktreePath: string): Promise<string | null> {
     return this.headSha;
   }
+
+  /** Respuesta de `onlyEvidenceBetween`: true simula commits intermedios de solo evidencia. */
+  evidenceOnly = false;
+
+  async onlyEvidenceBetween(_input: {
+    worktreePath: string;
+    from: string;
+    to: string;
+  }): Promise<boolean> {
+    return this.evidenceOnly;
+  }
 }
 
 export type CallResult = { isError: boolean; body: Record<string, unknown> };

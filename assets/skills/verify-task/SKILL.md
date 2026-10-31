@@ -168,7 +168,9 @@ Un rechazo deja el Run abierto: corrige y vuelve a llamar en el mismo Run. Las r
 | `handoff_mismatch` | `taskId`, `runId` y `phase` deben ser `task.id`, `run.id` y `verification`. |
 | `spec_mismatch` | `criteriaVerdicts` debe nombrar exactamente los criterios de la spec aprobada. |
 | `dirty_worktree` | Quedó algo de la prueba de reversión, o la suite dejó artefactos sin ignorar: restaura los archivos que `issues` lista y reintenta. Si la propia suite los genera, es un must-fix (falta en `.gitignore`). |
-| `head_changed` | El `HEAD` no es el commit que pasó el gate del implementador: vuelve al `HEAD` que guardaste al empezar. Si el mensaje dice que no hay gate en verde con el que comparar, no puedes dar pass: llama `report_failure` con ese motivo. |
+| `head_changed` | El `HEAD` no es el commit que pasó el gate del implementador: vuelve al `HEAD` que guardaste al empezar y reintenta. |
+
+Un pass que falla por `dirty_worktree` o `head_changed` que no puedes arreglar tú (un archivo ajeno sin commitear, un commit del implementador que no toca solo la evidencia, o la falta de gate en verde) no se queda en el verificador: LunasQ lo convierte en un reject con un must-fix `source: "approver"` y la tarea vuelve a implementación, donde el agente commitea, ignora o reconstruye su HEAD. No reportes ese caso con `report_failure`. Antes de emitir el pass, restaura todo lo que tocó la prueba de reversión.
 | `test_gate_failed` | En un pass, la suite de LunasQ está en rojo. Si `output` muestra un fallo del código o de los tests, emite un reject con ese must-fix (`source: "approver"`) y la evidencia de `output`. Si es del entorno (falta una herramienta, un servicio caído), llama `report_failure`. |
 | `gate_in_progress` | Ya corre un gate de este Run: espera su respuesta, no lances otro. |
 | `verdict_already_recorded` | Este Run ya registró un veredicto distinto; no lo cambies, la fase ya terminó. |

@@ -112,6 +112,38 @@ describe("GitCommitVerifier contra un repo real", () => {
     expect(await verifier.uncommitted(dir)).toEqual(["work.txt"]);
   });
 
+  it("onlyEvidenceBetween acepta commits que solo tocan lunasq/tasks/", async () => {
+    const { dir, work } = repo();
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    expect(await verifier.onlyEvidenceBetween({ worktreePath: dir, from: work, to: work })).toBe(
+      true,
+    );
+
+    mkdirSync(join(dir, "lunasq/tasks"), { recursive: true });
+    writeFileSync(join(dir, "lunasq/tasks/t1.md"), "# evidencia\n");
+    git(dir, "add", "lunasq/tasks/t1.md");
+    git(dir, "commit", "-q", "-m", "evidencia");
+    const evidence = git(dir, "rev-parse", "HEAD");
+    expect(
+      await verifier.onlyEvidenceBetween({ worktreePath: dir, from: work, to: evidence }),
+    ).toBe(true);
+
+    writeFileSync(join(dir, "work.txt"), "cambio");
+    git(dir, "commit", "-q", "-am", "código");
+    const code = git(dir, "rev-parse", "HEAD");
+    expect(await verifier.onlyEvidenceBetween({ worktreePath: dir, from: work, to: code })).toBe(
+      false,
+    );
+  });
+
+  it("onlyEvidenceBetween rechaza un HEAD que no desciende del commit del gate", async () => {
+    const { dir, base, work } = repo();
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    expect(await verifier.onlyEvidenceBetween({ worktreePath: dir, from: work, to: base })).toBe(
+      false,
+    );
+  });
+
   it("una rama base con forma de opción no se interpreta como opción de git", async () => {
     const { dir, work } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());

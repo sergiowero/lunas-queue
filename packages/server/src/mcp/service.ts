@@ -35,6 +35,7 @@ import {
   type HandoffError,
   type HandoffPhase,
   type HookPoint,
+  type MustFixFinding,
   type Phase,
   parseHandoff,
   REVIEWER_NAMES,
@@ -61,6 +62,29 @@ export const TOOL_NAMES = [
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 const ALL_PHASES: readonly Phase[] = ["refine", "implement", "verify", "deliver"];
+
+/**
+ * Rechazos del pass que el implementador puede corregir (worktree sucio, HEAD movido). En vez de
+ * dejar al verificador sin salida, el pass se convierte en reject con un must-fix que vuelve la
+ * tarea a implementación, donde el agente commitea, ignora o reconstruye su HEAD.
+ */
+const GIT_REWORK_CODES: ReadonlySet<McpErrorCode> = new Set(["dirty_worktree", "head_changed"]);
+
+/** Reject con un must-fix de git que reemplaza un pass refusado por el estado del worktree. */
+function gitReworkHandoff(handoff: VerificationHandoff, error: McpError): VerificationHandoff {
+  const paths = (error.issues ?? []).map((issue) => issue.path);
+  const finding: MustFixFinding = {
+    severity: "major",
+    file: paths[0] ?? ".",
+    evidence: [
+      `LunasQ no aceptó el pass: ${error.message}.`,
+      ...(paths.length > 0 ? [`Archivos: ${paths.join(", ")}.`] : []),
+      "Corrige el estado de git: commitea lo que sea del cambio, ignora lo generado por herramientas y no toques archivos ajenos. Luego vuelve a submit_for_verification.",
+    ].join(" "),
+    source: "approver",
+  };
+  return { ...handoff, body: { ...handoff.body, verdict: "reject", mustFix: [finding] } };
+}
 
 /** Fases del Run en las que cada tool se acepta. */
 export const TOOL_PHASES: Readonly<Record<ToolName, readonly Phase[]>> = {
@@ -359,7 +383,7 @@ export class LunasqMcpService {
   ): Promise<Outcome<{ verdict: "pass" | "reject" }>> {
     const parsed = this.#parse(run, input, "verification");
     if (!parsed.ok) return parsed;
-    const handoff = parsed.data;
+    let handoff = parsed.data;
     const spec = this.#specs.approved(run.taskId);
     if (!spec) return fail("no_approved_spec", "la tarea no tiene spec aprobada");
     const coverage = checkCriteria(
@@ -387,7 +411,13 @@ export class LunasqMcpService {
       const rejected = await this.#gated(run, async () => {
         // Antes de aceptar un pass, LunasQ vuelve a correr la suite.
         const pass = handoff.body.verdict === "pass" ? await this.#checkPass(run) : null;
-        return pass ?? (await this.#runHooks(run, "after_verification", handoff.body.verdict));
+        if (pass && GIT_REWORK_CODES.has(pass.error.code)) {
+          // El estado de git lo arregla el implementador: el Run cierra como reject con must-fix.
+          handoff = gitReworkHandoff(handoff, pass.error);
+        } else if (pass) {
+          return pass;
+        }
+        return this.#runHooks(run, "after_verification", handoff.body.verdict);
       });
       if (rejected) return rejected;
     }
@@ -539,7 +569,22 @@ export class LunasqMcpService {
     expected: string | null,
   ): Promise<Extract<Outcome<never>, { ok: false }> | null> {
     const head = await this.#commits.head(worktreePath);
-    if (expected !== null && head === expected) return null;
+    if (expected !== null) {
+      if (head === expected) return null;
+      // Cerrar un Run escribe y a veces commitea la evidencia después del gate del implementador.
+      // Si los commits intermedios solo tocan `lunasq/tasks/` no cambian el código, y el gate del
+      // pass corre sobre el HEAD actual: el veredicto sigue juzgando exactamente lo que se prueba.
+      if (
+        head !== null &&
+        (await this.#commits.onlyEvidenceBetween({
+          worktreePath,
+          from: expected,
+          to: head,
+        }))
+      ) {
+        return null;
+      }
+    }
     return fail(
       "head_changed",
       expected === null

@@ -183,6 +183,13 @@ export class DeliveryService {
 
     await this.#hook(taskId, run, "before_delivery");
 
+    // Los cierres de Runs anteriores (p. ej. el de implementación) dejan secciones nuevas en el
+    // archivo de evidencia. Si el proyecto lo trackea, esas ediciones ensucian el worktree y el
+    // rebase falla con «You have unstaged changes»: se commitean antes de integrar la base. La
+    // entrega vuelve a llamarlo tras cerrar el Run del verificador, para que su sección también
+    // viaje en el PR.
+    await this.#deps.evidence?.commit(taskId);
+
     // Integrar la base: un conflicto no se resuelve aquí, lo resuelve el implementador.
     await git.fetch({ cwd: worktree.path, remote: this.#remote, branch: base });
     const onto = `${this.#remote}/${base}`;
@@ -326,6 +333,10 @@ export class DeliveryService {
       );
     }
     await this.#closeRun(run, "success");
+    // Su sección de evidencia acaba de escribirse: commitearla deja el worktree limpio para que
+    // el implementador pueda integrar la base sin que un `git rebase` falle por cambios sin
+    // commitear del archivo trackeado.
+    await this.#deps.evidence?.commit(taskId).catch(() => undefined);
     const payload: DeliveryConflictPayload = {
       runId: run.id,
       reason: detail.reason,
@@ -379,6 +390,7 @@ export class DeliveryService {
     // El Run no queda abierto con la tarea en needs_human; "cancelled" no cuenta como fallo.
     if (!this.#runs.get(run.id)?.endedAt) {
       await this.#closeRun(run, "cancelled", `delivery_failed: ${note}`).catch(() => undefined);
+      await this.#deps.evidence?.commit(taskId).catch(() => undefined);
     }
     this.#escalateTask(taskId, reason, note);
     return { status: "escalated", error: note };

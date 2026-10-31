@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,8 +12,11 @@ let outdir: string;
 let home: string;
 
 beforeAll(async () => {
-  // Dentro de packages/cli: el bundle resuelve better-sqlite3 desde su node_modules.
-  outdir = await buildPackage(join(import.meta.dirname, "..", "dist-test"));
+  // Dentro de packages/cli: el bundle resuelve better-sqlite3 desde su node_modules. El nombre es
+  // único: dos corridas en el mismo checkout no comparten directorio (.gitignore lo cubre).
+  outdir = await buildPackage(
+    join(import.meta.dirname, "..", `dist-test-${process.pid}-${randomUUID().slice(0, 8)}`),
+  );
   home = mkdtempSync(join(tmpdir(), "lunasq-bundle-"));
 }, 120_000);
 

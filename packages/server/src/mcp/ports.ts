@@ -43,6 +43,12 @@ export interface CommitVerifier {
   uncommitted(worktreePath: string): Promise<string[]>;
   /** Sha del HEAD del worktree; null si no se puede leer. */
   head(worktreePath: string): Promise<string | null>;
+  /**
+   * true si `to` desciende de `from` y los commits intermedios solo tocan el archivo de evidencia
+   * (`lunasq/tasks/`). El pass lo usa para tolerar los commits que LunasQ o un agente hacen de la
+   * evidencia después del gate de `submit_for_verification`.
+   */
+  onlyEvidenceBetween(input: { worktreePath: string; from: string; to: string }): Promise<boolean>;
 }
 
 export type PhaseHookInput = {
@@ -135,5 +141,26 @@ export class GitCommitVerifier implements CommitVerifier {
       .split("\n")
       .filter((line) => line.trim() !== "")
       .map((line) => line.slice(3));
+  }
+
+  async onlyEvidenceBetween(input: {
+    worktreePath: string;
+    from: string;
+    to: string;
+  }): Promise<boolean> {
+    const result = await this.#runner.run({
+      // `--name-only -z` separa las rutas con NUL: un nombre con saltos de línea no se confunde
+      // con dos rutas.
+      command: [
+        `git merge-base --is-ancestor --end-of-options ${quote(input.from)} ${quote(input.to)}`,
+        `git diff --name-only --no-renames -z --end-of-options ${quote(input.from)} ${quote(input.to)} --`,
+      ].join(" && "),
+      cwd: input.worktreePath,
+    });
+    if (result.exitCode !== 0) return false;
+    return result.stdout
+      .split("\0")
+      .filter((path) => path !== "")
+      .every((path) => path.startsWith(`${EVIDENCE_DIR}/`));
   }
 }
