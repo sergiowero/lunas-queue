@@ -68,8 +68,11 @@ export function createFixture(root: string): Fixture {
 export function mergeIntoMain(fixture: Fixture, branch: string): void {
   try {
     git(fixture.origin, "merge-base", "--is-ancestor", "refs/heads/main", `refs/heads/${branch}`);
-  } catch {
-    throw new Error(`${branch} no es un avance directo de main: el PR no es mergeable`);
+  } catch (error) {
+    if (error instanceof Error && "status" in error && error.status === 1) {
+      throw new Error(`${branch} no es un avance directo de main: el PR no es mergeable`);
+    }
+    throw error;
   }
   git(fixture.origin, "update-ref", "refs/heads/main", `refs/heads/${branch}`);
 }
