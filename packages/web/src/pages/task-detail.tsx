@@ -16,7 +16,7 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { ApiError, api, type Json } from "../lib/api.ts";
-import { formatDate, isTerminal, taskLabel } from "../lib/format.ts";
+import { formatDate, isTerminal } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/tasks/$taskId");
