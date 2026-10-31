@@ -41,7 +41,7 @@ async function createTask(page: Page, intent: string, dependsOn: string[] = []) 
   await page.getByLabel("Proyecto").selectOption({ label: "Piloto" });
   await page.getByLabel("Intent").fill(intent);
   for (const dependency of dependsOn) {
-    await page.getByLabel("Depende de").selectOption({ label: dependency });
+    await page.getByLabel("Depende de").selectOption({ value: await taskId(page, dependency) });
     await expect(
       page
         .getByRole("list", { name: "Dependencias elegidas" })
