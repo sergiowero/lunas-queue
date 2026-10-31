@@ -83,4 +83,14 @@ describe("número de tarea en las vistas", () => {
     await deps.findByRole("link", { name: "Esquema base" });
     nextToIntent(deps, 41, "Esquema base");
   });
+
+  it("detalle: el selector para agregar dependencia muestra el #N de cada candidata", async () => {
+    const { fake, project, task } = seeded();
+    fake.addTask(project.id, { intent: "Endpoint de login", number: 43 });
+    renderApp(`/tasks/${task.id}`, fake);
+    const deps = within(await screen.findByRole("region", { name: "Dependencias" }));
+    const select = await deps.findByLabelText("Agregar dependencia");
+    const option = within(select).getByRole("option", { name: /Endpoint de login/ });
+    expect(option.textContent).toContain("#43");
+  });
 });

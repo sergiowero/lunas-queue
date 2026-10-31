@@ -9,7 +9,7 @@ import { isTerminal, STATE_LABEL, taskLabel } from "../../lib/format.ts";
 import { queries } from "../../lib/queries.ts";
 import { Muted, Section } from "../section.tsx";
 import { QueryError } from "../status.tsx";
-import { TaskNumber } from "../task-number.tsx";
+import { TaskNumber, taskLabel as taskNumberLabel } from "../task-number.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { Label, Select } from "../ui/input.tsx";
@@ -111,7 +111,7 @@ function AddDependency({ task, taken }: { task: Json<Task>; taken: Set<string> }
               >
                 {tasks.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {taskLabel(t)}
+                    {`${taskNumberLabel(t.number)} · ${taskLabel(t)}`}
                   </option>
                 ))}
               </optgroup>
