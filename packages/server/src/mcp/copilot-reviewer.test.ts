@@ -58,7 +58,7 @@ describe("CopilotCliReviewerExecutor", () => {
       timeoutMs: 300_000,
     });
     expect(processes.calls[0]?.command).toContain("--agent 'lunasq-security-reviewer'");
-    expect(processes.calls[0]?.command).toContain("--available-tools read search");
+    expect(processes.calls[0]?.command).toContain("--available-tools view grep glob");
     expect(processes.calls[0]?.command).not.toContain("--trust-folder");
     expect(processes.calls[0]?.command).not.toContain("Revisa este diff");
     const runDir = join(root, "evidence", run.id);

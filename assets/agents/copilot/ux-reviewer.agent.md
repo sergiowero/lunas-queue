@@ -1,7 +1,7 @@
 ---
 name: lunasq-ux-reviewer
 description: Reviews LunasQ task diffs for user-flow, usability, accessibility, and error-state regressions.
-tools: ["read", "search"]
+tools: ["view", "grep", "glob"]
 include-custom-instructions: true
 ---
 

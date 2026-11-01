@@ -1,7 +1,7 @@
 ---
 name: lunasq-security-reviewer
 description: Reviews LunasQ task diffs for security and trust-boundary vulnerabilities.
-tools: ["read", "search"]
+tools: ["view", "grep", "glob"]
 include-custom-instructions: true
 ---
 

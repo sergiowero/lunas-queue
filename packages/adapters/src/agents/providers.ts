@@ -113,7 +113,7 @@ const copilotProvider: AgentProvider = {
       ...(profile.effort === undefined ? [] : ["--reasoning-effort", profile.effort]),
       ...profile.args,
       "--allow-all-tools",
-      "--trust-folder",
+      // Copilot rejects --trust-folder together with --session-id; LunasQ supplies MCP explicitly.
       "--session-id",
       context.sessionId,
       "--additional-mcp-config",

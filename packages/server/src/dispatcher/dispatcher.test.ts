@@ -158,7 +158,6 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
       "--reasoning-effort",
       "medium",
       "--allow-all-tools",
-      "--trust-folder",
       "--session-id",
       run?.agentSession,
       "--additional-mcp-config",
@@ -424,6 +423,25 @@ describe("PhaseDispatcher: confianza de carpeta", () => {
     expect(errors).toEqual([]);
     const name = runs.forTask(task.id)[0]?.herdrName ?? "";
     expect(herdr.sentKeys(name)).toEqual([[...TRUST_ACCEPT_KEYS]]);
+    expect(await herdr.readAgent({ name })).toBe(phasePrompt("refine", task.id));
+  });
+
+  it("acepta el diálogo de confianza de Copilot sin activar fallback a Claude", async () => {
+    const herdr = new FakeHerdr({ startStatus: "blocked" });
+    const { db, project, dispatcher, runs, errors } = setup({
+      herdr,
+      agentProfiles: { refine: { kind: "copilot", args: [] } },
+    });
+    const task = insertTask(db, project.id);
+
+    await dispatcher.dispatch({ ...refine(task), agentKind: "copilot" });
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    const name = run?.herdrName ?? "";
+    expect(errors).toEqual([]);
+    expect(run).toMatchObject({ agentKind: "copilot", launchedAt: expect.any(Date) });
+    expect(herdr.sentKeys(name)).toEqual([["enter"]]);
     expect(await herdr.readAgent({ name })).toBe(phasePrompt("refine", task.id));
   });
 

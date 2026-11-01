@@ -1,7 +1,7 @@
 ---
 name: lunasq-code-reviewer
 description: Reviews a LunasQ implementation diff against its approved specification and test-quality criteria.
-tools: ["read", "search"]
+tools: ["view", "grep", "glob"]
 include-custom-instructions: true
 ---
 

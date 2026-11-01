@@ -13,6 +13,8 @@ export { FakeGitHub, type FakeGitHubOptions } from "./github/fake.ts";
 export { RealGitHub, type RealGitHubOptions } from "./github/real.ts";
 export type * from "./github/types.ts";
 export {
+  COPILOT_TRUST_ACCEPT_KEYS,
+  showsCopilotTrustDialog,
   showsTrustDialog,
   showsUsageLimit,
   TRUST_ACCEPT_KEYS,
