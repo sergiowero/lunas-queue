@@ -9,6 +9,7 @@ import {
   QuestionRepository,
   RunRepository,
   SchedulerStateRepository,
+  SettingsRepository,
   SpecRepository,
   SpecRepositoryError,
   TaskRepository,
@@ -27,6 +28,7 @@ import {
   questionRoutes,
 } from "./api/questions.ts";
 import { runRoutes } from "./api/runs.ts";
+import { settingsRoutes } from "./api/settings.ts";
 import { specRoutes } from "./api/specs.ts";
 import { changeStreamRoutes, DEFAULT_CHANGE_STREAM_INTERVAL_MS } from "./api/stream.ts";
 import { taskRoutes } from "./api/tasks.ts";
@@ -141,6 +143,7 @@ export function createApp({
     .route(SUBAGENT_HOOK_PATH, subagentHookRoutes(db))
     .route("/api/projects/:id/hooks", hookRoutes({ projects, views: taskViews, hooks }))
     .route("/api/projects", projectRoutes(projects))
+    .route("/api/settings", settingsRoutes(new SettingsRepository(db)))
     .route("/api/tasks/:id/specs", specRoutes(new SpecRepository(db)))
     .route("/api/blocked", blockedRoutes(blocked ?? (() => []), focus))
     .route("/api/runs", runRoutes(runs, focus))
