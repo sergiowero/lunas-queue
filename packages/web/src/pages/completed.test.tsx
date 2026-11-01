@@ -59,6 +59,108 @@ describe("pestaña Completed", () => {
     expect(screen.getByText("De dos")).toBeTruthy();
   });
 
+  describe("filtro Estado del PR", () => {
+    const completed = { state: "completed", subState: null } as const;
+
+    function seedAllStates() {
+      const fake = new FakeApi();
+      const project = fake.addProject({ name: "uno" });
+      fake.addTask(project.id, { ...completed, intent: "Con merged", prState: "merged" });
+      fake.addTask(project.id, { ...completed, intent: "Con open", prState: "open" });
+      fake.addTask(project.id, { ...completed, intent: "Con closed", prState: "closed" });
+      fake.addTask(project.id, { ...completed, intent: "Sin ningún PR", prState: null });
+      return fake;
+    }
+
+    it("arranca en Todos y ofrece Todos, open, merged, closed y Sin PR", async () => {
+      renderApp("/completed", seedAllStates());
+
+      const select = (await screen.findByLabelText("Estado del PR")) as HTMLSelectElement;
+      expect(select.value).toBe("");
+      expect(Array.from(select.options).map((option) => option.textContent)).toEqual([
+        "Todos",
+        "open",
+        "merged",
+        "closed",
+        "Sin PR",
+      ]);
+    });
+
+    it("muestra solo las tareas con el estado de PR elegido", async () => {
+      const { user } = renderApp("/completed", seedAllStates());
+
+      await screen.findByText("Con open");
+      await user.selectOptions(screen.getByLabelText("Estado del PR"), "merged");
+
+      await waitFor(() => expect(screen.queryByText("Con open")).toBeNull());
+      expect(screen.getByText("Con merged")).toBeTruthy();
+      expect(screen.queryByText("Con closed")).toBeNull();
+      expect(screen.queryByText("Sin ningún PR")).toBeNull();
+    });
+
+    it("Sin PR muestra solo las tareas completadas sin estado de PR", async () => {
+      const { user } = renderApp("/completed", seedAllStates());
+
+      await screen.findByText("Con merged");
+      await user.selectOptions(screen.getByLabelText("Estado del PR"), "Sin PR");
+
+      await waitFor(() => expect(screen.queryByText("Con merged")).toBeNull());
+      expect(screen.getByText("Sin ningún PR")).toBeTruthy();
+      expect(screen.queryByText("Con open")).toBeNull();
+    });
+
+    it("volver a Todos muestra de nuevo todas las tareas completadas", async () => {
+      const { user } = renderApp("/completed", seedAllStates());
+
+      await screen.findByText("Con merged");
+      await user.selectOptions(screen.getByLabelText("Estado del PR"), "closed");
+      await waitFor(() => expect(screen.queryByText("Con merged")).toBeNull());
+      await user.selectOptions(screen.getByLabelText("Estado del PR"), "Todos");
+
+      await waitFor(() => expect(screen.getByText("Con merged")).toBeTruthy());
+      for (const intent of ["Con open", "Con closed", "Sin ningún PR"]) {
+        expect(screen.getByText(intent)).toBeTruthy();
+      }
+    });
+
+    it("se combina con el filtro de proyecto", async () => {
+      const fake = new FakeApi();
+      const one = fake.addProject({ name: "uno" });
+      const two = fake.addProject({ name: "dos" });
+      fake.addTask(one.id, { ...completed, intent: "Merged de uno", prState: "merged" });
+      fake.addTask(two.id, { ...completed, intent: "Merged de dos", prState: "merged" });
+      fake.addTask(one.id, { ...completed, intent: "Open de uno", prState: "open" });
+      const { user } = renderApp("/completed", fake);
+
+      await screen.findByText("Merged de dos");
+      await user.selectOptions(screen.getByLabelText("Proyecto"), one.id);
+      await user.selectOptions(screen.getByLabelText("Estado del PR"), "merged");
+
+      await waitFor(() => expect(screen.queryByText("Merged de dos")).toBeNull());
+      expect(screen.getByText("Merged de uno")).toBeTruthy();
+      expect(screen.queryByText("Open de uno")).toBeNull();
+    });
+
+    it("nunca muestra tareas que no están completadas y cae al estado vacío", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject({ name: "uno" });
+      fake.addTask(project.id, {
+        intent: "En curso con PR",
+        state: "in_progress",
+        subState: "running",
+        prState: "open",
+      });
+      fake.addTask(project.id, { ...completed, intent: "Ya mergeada", prState: "merged" });
+      const { user } = renderApp("/completed", fake);
+
+      await screen.findByText("Ya mergeada");
+      await user.selectOptions(screen.getByLabelText("Estado del PR"), "open");
+
+      expect(await screen.findByText("No hay tareas completadas.")).toBeTruthy();
+      expect(screen.queryByText("En curso con PR")).toBeNull();
+    });
+  });
+
   it("explica cuando no hay tareas completadas", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, {
