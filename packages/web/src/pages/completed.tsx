@@ -6,6 +6,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
+import { TaskNumber } from "../components/task-number.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
 import { taskLabel } from "../lib/format.ts";
@@ -33,13 +34,16 @@ export function CompletedPage() {
         id: "intent",
         header: "Tarea",
         cell: (cell) => (
-          <Link
-            to="/tasks/$taskId"
-            params={{ taskId: cell.row.original.id }}
-            className="font-medium hover:underline"
-          >
-            {cell.getValue()}
-          </Link>
+          <span className="flex items-baseline gap-2">
+            <TaskNumber number={cell.row.original.number} />
+            <Link
+              to="/tasks/$taskId"
+              params={{ taskId: cell.row.original.id }}
+              className="font-medium hover:underline"
+            >
+              {cell.getValue()}
+            </Link>
+          </span>
         ),
       }),
       column.accessor((task) => names.get(task.projectId) ?? "…", {

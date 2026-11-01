@@ -7,6 +7,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
+import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
@@ -35,13 +36,16 @@ export function InProgressPage() {
         id: "intent",
         header: "Tarea",
         cell: (c) => (
-          <Link
-            to="/tasks/$taskId"
-            params={{ taskId: c.row.original.id }}
-            className="font-medium hover:underline"
-          >
-            {c.getValue()}
-          </Link>
+          <span className="flex items-baseline gap-2">
+            <TaskNumber number={c.row.original.number} />
+            <Link
+              to="/tasks/$taskId"
+              params={{ taskId: c.row.original.id }}
+              className="font-medium hover:underline"
+            >
+              {c.getValue()}
+            </Link>
+          </span>
         ),
       }),
       column.accessor((t) => names.get(t.projectId) ?? "…", { id: "project", header: "Proyecto" }),

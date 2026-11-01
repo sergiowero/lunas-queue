@@ -22,7 +22,11 @@ describe("pestaña En curso", () => {
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
     fake.addTask(one.id, { intent: "Borrador" });
-    fake.addTask(one.id, { intent: "Verificando", state: "verification", subState: "running" });
+    const verifying = fake.addTask(one.id, {
+      intent: "Verificando",
+      state: "verification",
+      subState: "running",
+    });
     fake.addTask(two.id, {
       intent: "Verificando en espera",
       state: "verification",
@@ -35,7 +39,7 @@ describe("pestaña En curso", () => {
       subState: "running",
       priority: 300,
     });
-    fake.addTask(two.id, {
+    const waiting = fake.addTask(two.id, {
       intent: "Esperando en dos",
       state: "in_progress",
       subState: "waiting_human",
@@ -51,9 +55,14 @@ describe("pestaña En curso", () => {
         .getAllByRole("cell")
         .map((c) => c.textContent),
     );
-    expect(cells).toContainEqual(["Corriendo en uno", "uno", "corriendo", "300"]);
-    expect(cells).toContainEqual(["Esperando en dos", "dos", "esperando humano", "50"]);
-    expect(cells.map((c) => c[0])).toContain("Verificando");
+    expect(cells).toContainEqual([`#${running.number}Corriendo en uno`, "uno", "corriendo", "300"]);
+    expect(cells).toContainEqual([
+      `#${waiting.number}Esperando en dos`,
+      "dos",
+      "esperando humano",
+      "50",
+    ]);
+    expect(cells.map((c) => c[0])).toContain(`#${verifying.number}Verificando`);
     expect(cells).toHaveLength(3);
     expect(screen.queryByText("Borrador")).toBeNull();
     expect(screen.queryByText("Verificando en espera")).toBeNull();
