@@ -84,11 +84,16 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
     }
     // Iteraciones agotadas en verificación: hay un must-fix sin corregir. Reanudar a verificación
     // volvería a verificar el mismo diff sin cambios y volvería a escalar; el destino es implementar.
-    const resumeTo =
-      origin && origin.from === "verification" && origin.reason === "iterations_exhausted"
-        ? "in_progress"
-        : origin?.from ?? current.state;
-    command = { ...input.command, resumeTo };
+    // Y como el humano reanuda para que el agente corrija, se concede un ciclo nuevo de
+    // iteraciones (resetIteration); si no, el primer reject volvería a escalar de inmediato.
+    const exhausted =
+      origin !== undefined &&
+      origin.from === "verification" &&
+      origin.reason === "iterations_exhausted";
+    const resumeTo = exhausted ? "in_progress" : (origin?.from ?? current.state);
+    command = exhausted
+      ? { ...input.command, resumeTo, resetIteration: true }
+      : { ...input.command, resumeTo };
   } else {
     command = input.command;
   }

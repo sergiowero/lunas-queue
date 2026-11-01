@@ -226,10 +226,10 @@ describe("transitionTask", () => {
       apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } }).task.state,
     ).toBe("needs_human");
     // Reanudar tras iteraciones agotadas vuelve a implementación (hay must-fix pendientes), no a
-    // verificación, y conserva la cuenta: el siguiente reject vuelve a escalar.
+    // verificación, y concede un ciclo nuevo de tres reworks.
     expect(
       apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } }).task,
-    ).toMatchObject({ state: "in_progress", subState: "queued", verificationIteration: 3 });
+    ).toMatchObject({ state: "in_progress", subState: "queued", verificationIteration: 0 });
   });
 
   it("un payload fuera de esquema no llega al log y la tarea sigue reanudable", () => {
