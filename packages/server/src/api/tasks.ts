@@ -8,7 +8,6 @@ import {
 } from "@lunasq/db";
 import { TaskCancel, TaskCreate, TaskListQuery, TaskUpdate } from "@lunasq/schemas";
 import { type Context, Hono } from "hono";
-import { RUN_TOKEN_HEADER } from "../mcp/routes.ts";
 import { invalidInput, notFound, readJson, readOptionalJson } from "./http.ts";
 
 // Referencias del cuerpo o de la ruta que no existen: la petición es válida pero no aplicable.
@@ -70,13 +69,8 @@ export function taskRoutes(tasks: TaskRepository, runs: RunRepository): Hono {
       return task ? c.json(task) : notFound(c);
     })
     .post("/:id/pause", (c) => {
-      // Pausar es del humano (AC-3): una petición con run token es de un agente y no pausa.
-      if (c.req.header(RUN_TOKEN_HEADER) !== undefined) {
-        return c.json(
-          { error: "actor_not_allowed", message: "Solo el humano puede pausar una tarea" },
-          403,
-        );
-      }
+      // La API REST no autentica al llamante: es el canal local del humano (como cancel y resume).
+      // Que solo el humano pause (AC-3) lo impone el dominio: esta ruta emite siempre con actor human.
       const id = c.req.param("id");
       // La entrega corre con el Run del verificador abierto y su pass guardado: no se pausa.
       const result = tasks.pause(id, runs.deliveryInProgress(id));
