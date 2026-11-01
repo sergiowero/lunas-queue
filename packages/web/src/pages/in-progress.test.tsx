@@ -52,9 +52,11 @@ describe("pestaña En curso", () => {
     expect(link.getAttribute("href")).toBe(`/tasks/${running.id}`);
     await waitFor(() => expect(screen.queryAllByText("…")).toHaveLength(0));
     const rows = screen.getAllByRole("row").slice(1);
+    // Sin la columna Acciones, que se prueba aparte.
     const cells = rows.map((r) =>
       within(r)
         .getAllByRole("cell")
+        .slice(0, -1)
         .map((c) => c.textContent),
     );
     expect(cells).toContainEqual([
@@ -80,6 +82,71 @@ describe("pestaña En curso", () => {
     expect(screen.queryByText("Borrador")).toBeNull();
     expect(screen.queryByText("Verificando en espera")).toBeNull();
     expect(screen.queryByText("Terminada")).toBeNull();
+  });
+
+  describe("botón de pausa por fila", () => {
+    it("cada fila tiene un botón con icono de pausa y nombre accesible con la tarea, sin texto visible", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      fake.addTask(project.id, { intent: "Una", state: "in_progress", subState: "running" });
+      fake.addTask(project.id, { intent: "Otra", state: "verification", subState: "running" });
+      renderApp("/in-progress", fake);
+
+      // Las filas se vuelven a montar al llegar los Runs: se espera a que dejen de cargar.
+      await screen.findByRole("link", { name: "Una" });
+      await waitFor(() => expect(screen.queryAllByText("…")).toHaveLength(0));
+      for (const name of ["Una", "Otra"]) {
+        const row = within(screen.getByRole("link", { name }).closest("tr") as HTMLElement);
+        const button = row.getByRole("button", { name: `Pausar tarea ${name}` });
+        expect(button.textContent).toBe("");
+        expect(button.querySelector('svg[data-icon="pause"]')).not.toBeNull();
+      }
+    });
+
+    it("al pulsarlo la tarea se pausa y deja de aparecer tras refrescar", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      const task = fake.addTask(project.id, {
+        intent: "Se pausa",
+        state: "in_progress",
+        subState: "running",
+      });
+      fake.addTask(project.id, { intent: "Sigue", state: "in_progress", subState: "queued" });
+      const { user } = renderApp("/in-progress", fake);
+
+      await user.click(await screen.findByRole("button", { name: "Pausar tarea Se pausa" }));
+
+      await waitFor(() => expect(screen.queryByRole("link", { name: "Se pausa" })).toBeNull());
+      expect(fake.task(task.id).state).toBe("paused");
+      expect(fake.requests.some((r) => r.path === `/api/tasks/${task.id}/pause`)).toBe(true);
+      expect(screen.getByRole("link", { name: "Sigue" })).toBeTruthy();
+    });
+
+    it("si la API rechaza la pausa muestra el error con role alert en esa fila y la tarea sigue", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      const task = fake.addTask(project.id, {
+        intent: "Rechazada",
+        state: "in_progress",
+        subState: "running",
+      });
+      fake.addTask(project.id, { intent: "Intacta", state: "in_progress", subState: "queued" });
+      const { user } = renderApp("/in-progress", fake);
+      const button = await screen.findByRole("button", { name: "Pausar tarea Rechazada" });
+      // Salió de los estados pausables mientras la lista seguía abierta.
+      fake.task(task.id).state = "needs_human";
+
+      await user.click(button);
+
+      const row = (text: string) =>
+        within(screen.getByRole("link", { name: text }).closest("tr") as HTMLElement);
+      expect((await row("Rechazada").findByRole("alert")).textContent).toMatch(/pause no aplica/);
+      expect(row("Intacta").queryByRole("alert")).toBeNull();
+      expect(
+        (screen.getByRole("button", { name: "Pausar tarea Rechazada" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+    });
   });
 
   it("filtra por proyecto y Todos vuelve a mostrar ambos", async () => {
@@ -116,12 +183,13 @@ describe("pestaña En curso", () => {
       const read = () =>
         within(screen.getByRole("link", { name: text }).closest("tr") as HTMLElement)
           .getAllByRole("cell")
+          .slice(0, -1)
           .map((c) => c.textContent);
       await waitFor(() => expect(read()).not.toContain("…"));
       return read();
     };
 
-    it("encabezados de la tabla: las existentes y las tres nuevas al final", async () => {
+    it("encabezados de la tabla: las existentes, las tres de Run y Acciones al final", async () => {
       const fake = new FakeApi();
       fake.addTask(fake.addProject().id, { intent: "Una", state: "in_progress" });
       renderApp("/in-progress", fake);
@@ -136,6 +204,7 @@ describe("pestaña En curso", () => {
         "Iteración",
         "Agente",
         "Pane",
+        "Acciones",
       ]);
     });
 
@@ -353,6 +422,7 @@ describe("pestaña En curso", () => {
       const read = () =>
         within(screen.getByRole("link", { name: "Pendiente" }).closest("tr") as HTMLElement)
           .getAllByRole("cell")
+          .slice(0, -1)
           .map((c) => c.textContent);
       await waitFor(() => expect(read().slice(4)).toEqual(["…", "…", "…"]));
       const cells = read();
