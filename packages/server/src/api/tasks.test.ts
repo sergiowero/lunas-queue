@@ -11,10 +11,10 @@ function setup() {
   const db = migratedDatabase();
   const project = insertProject(db);
   const app = createApp({ db });
-  const send = (method: string, path: string, body?: unknown) =>
+  const send = (method: string, path: string, body?: unknown, headers: HeadersInit = {}) =>
     app.request(path, {
       method,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       ...(body === undefined
         ? {}
         : { body: typeof body === "string" ? body : JSON.stringify(body) }),
@@ -143,6 +143,21 @@ describe("POST /api/tasks/:id/pause", () => {
       type: "task.transitioned",
       actor: "human",
       payload: { command: "pause", from: { state: "draft", subState: "queued" } },
+    });
+  });
+
+  it("rechaza con 403 actor_not_allowed una petición que lleva el run token de un agente", async () => {
+    const { db, send, create } = setup();
+    const task = await create();
+    const before = listEvents(db, task.id).length;
+    const res = await send("POST", `/api/tasks/${task.id}/pause`, undefined, {
+      "x-lunasq-run-token": "token-de-un-agente",
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "actor_not_allowed" });
+    expect(listEvents(db, task.id)).toHaveLength(before);
+    expect(await (await send("GET", `/api/tasks/${task.id}`)).json()).toMatchObject({
+      state: "draft",
     });
   });
 
