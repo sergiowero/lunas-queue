@@ -77,11 +77,17 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
   let command: CommandInput;
   if (input.command.type === "resume") {
     // Fuera de needs_human resume se rechaza en el dominio; el destino no importa.
-    const resumeTo =
-      current.state === "needs_human" ? lastEscalationOrigin(tx, current.id) : current.state;
-    if (!resumeTo) {
+    const origin =
+      current.state === "needs_human" ? lastEscalationOrigin(tx, current.id) : undefined;
+    if (current.state === "needs_human" && !origin) {
       return fail("no_escalation_found", `la tarea ${current.id} no tiene escalamiento`);
     }
+    // Iteraciones agotadas en verificación: hay un must-fix sin corregir. Reanudar a verificación
+    // volvería a verificar el mismo diff sin cambios y volvería a escalar; el destino es implementar.
+    const resumeTo =
+      origin && origin.from === "verification" && origin.reason === "iterations_exhausted"
+        ? "in_progress"
+        : origin?.from ?? current.state;
     command = { ...input.command, resumeTo };
   } else {
     command = input.command;
@@ -121,7 +127,7 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
   return { ok: true, task, event };
 }
 
-/** Estado desde el que la tarea pasó a needs_human por última vez. */
+/** Estado desde el que la tarea pasó a needs_human por última vez, y el motivo del escalamiento. */
 function lastEscalationOrigin(tx: Pick<LunasqDatabase, "select">, taskId: string) {
   const row = tx
     .select({ payload: events.payload })
@@ -136,5 +142,7 @@ function lastEscalationOrigin(tx: Pick<LunasqDatabase, "select">, taskId: string
     .orderBy(desc(events.id))
     .limit(1)
     .get();
-  return row ? TaskTransitionedPayload.parse(row.payload).from.state : undefined;
+  if (!row) return undefined;
+  const payload = TaskTransitionedPayload.parse(row.payload);
+  return { from: payload.from.state, reason: payload.reason };
 }
