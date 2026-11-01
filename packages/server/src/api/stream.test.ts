@@ -51,6 +51,17 @@ describe("GET /api/stream", () => {
     expect(text).not.toContain(before.id);
   });
 
+  it("emite un change con settings al cambiar la configuración, aunque ninguna tarea cambie", async () => {
+    const { db, app } = setup();
+    const abort = new AbortController();
+    const res = await app.request("/api/stream", { signal: abort.signal });
+    const event = appendEvent(db, { taskId: null, type: "settings.updated", actor: "human" });
+    const text = await readUntil(res.body as ReadableStream<Uint8Array>, "event: change");
+    abort.abort();
+    expect(text).toContain(`id: ${event.id}`);
+    expect(text).toContain(JSON.stringify({ taskIds: [], settings: true }));
+  });
+
   it("al reconectar con Last-Event-ID manda lo que se perdió", async () => {
     const { db, project, app } = setup();
     const task = insertTask(db, project.id);

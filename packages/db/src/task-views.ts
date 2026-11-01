@@ -9,6 +9,7 @@ import {
   type HookExecutionView,
   REVIEWER_NAMES,
   RunView,
+  SETTINGS_UPDATED,
   type TaskUsage,
   type UsagePhase,
   type UsageTotals,
@@ -169,10 +170,15 @@ export class TaskViewRepository {
   /**
    * Tareas con eventos después de `afterId`, en orden de su primer evento nuevo, y el id del
    * último. Todo cambio de una tarea deja evento (ADR 0007), así que basta para invalidar la UI.
+   * `settingsChanged` avisa de un settings.updated, que es global y no aparece en `taskIds`.
    */
-  changesSince(afterId: number): { lastId: number; taskIds: string[] } {
+  changesSince(afterId: number): {
+    lastId: number;
+    taskIds: string[];
+    settingsChanged: boolean;
+  } {
     const rows = this.db
-      .select({ id: events.id, taskId: events.taskId })
+      .select({ id: events.id, taskId: events.taskId, type: events.type })
       .from(events)
       .where(gt(events.id, afterId))
       .orderBy(asc(events.id))
@@ -181,6 +187,7 @@ export class TaskViewRepository {
       lastId: rows.at(-1)?.id ?? afterId,
       // Los eventos globales (settings.updated) no pertenecen a ninguna tarea.
       taskIds: [...new Set(rows.flatMap((r) => (r.taskId === null ? [] : [r.taskId])))],
+      settingsChanged: rows.some((r) => r.type === SETTINGS_UPDATED),
     };
   }
 
