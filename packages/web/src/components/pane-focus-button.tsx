@@ -1,8 +1,9 @@
 // Pane id de un Run como botón que lo enfoca en herdr (ADR runs-foco-pane). Lo comparten el panel
 // de Runs y la pestaña En curso. Un Run sin pane o sin nombre de agente no se puede enfocar y la
 // celda sigue mostrando «—» como texto.
-import { useMutation } from "@tanstack/react-query";
+
 import type { RunView } from "@lunasq/schemas";
+import { useMutation } from "@tanstack/react-query";
 import { api, type Json } from "../lib/api.ts";
 import { MutationError } from "./status.tsx";
 import { Button } from "./ui/button.tsx";

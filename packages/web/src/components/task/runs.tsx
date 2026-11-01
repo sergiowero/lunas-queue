@@ -9,6 +9,7 @@ import { formatAgent, formatDate, PHASE_LABEL, RESULT_LABEL } from "../../lib/fo
 import { queries } from "../../lib/queries.ts";
 import { DataTable } from "../data-table.tsx";
 import { PAGE_SIZE, Pagination } from "../pagination.tsx";
+import { PaneFocusButton } from "../pane-focus-button.tsx";
 import { Section } from "../section.tsx";
 import { Loading, QueryError } from "../status.tsx";
 import { Badge } from "../ui/badge.tsx";
@@ -35,7 +36,11 @@ const columns = [
   column.accessor((r) => PHASE_LABEL[r.phase], { id: "phase", header: "Fase" }),
   column.accessor("iteration", { header: "Iteración" }),
   column.accessor(formatAgent, { id: "agent", header: "Agente" }),
-  column.accessor((r) => r.herdrPane ?? "—", { id: "pane", header: "Pane" }),
+  column.display({
+    id: "pane",
+    header: "Pane",
+    cell: (c) => <PaneFocusButton run={c.row.original} />,
+  }),
   column.accessor((r) => formatDate(r.startedAt), { id: "started", header: "Inicio" }),
   column.accessor((r) => formatDate(r.endedAt), { id: "ended", header: "Fin" }),
   column.accessor("result", {

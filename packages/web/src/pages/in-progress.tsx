@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
+import { PaneFocusButton } from "../components/pane-focus-button.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
@@ -109,7 +110,14 @@ export function InProgressPage() {
       column.display({
         id: "pane",
         header: "Pane",
-        cell: (c) => runCell(latestRuns.get(c.row.original.id), (r) => r.herdrPane ?? "—"),
+        cell: (c) => {
+          const run = latestRuns.get(c.row.original.id);
+          return typeof run === "object" && run ? (
+            <PaneFocusButton run={run} />
+          ) : (
+            runCell(run, () => "—")
+          );
+        },
       }),
     ],
     [names, latestRuns],

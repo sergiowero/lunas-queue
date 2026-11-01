@@ -18,7 +18,13 @@ function setup(overrides: { herdrPane?: string | null; herdrName?: string | null
       <PaneFocusButton run={run} />
     </QueryClientProvider>
   );
-  return { fake, run, user: userEvent.setup(), ...render(view), stub: (f = fake.fetch) => vi.stubGlobal("fetch", f) };
+  return {
+    fake,
+    run,
+    user: userEvent.setup(),
+    ...render(view),
+    stub: (f = fake.fetch) => vi.stubGlobal("fetch", f),
+  };
 }
 
 describe("PaneFocusButton", () => {
@@ -66,14 +72,17 @@ describe("PaneFocusButton", () => {
     [409, "agent_gone", "t1 ya no está en herdr"],
     [502, "herdr_error", "herdr no responde"],
     [503, "focus_unavailable", "focus_unavailable"],
-  ])("si el foco responde %i %s muestra el error junto al pane y el botón sigue", async (status, error, message) => {
-    const { fake, user, stub } = setup();
-    fake.focusError = { status, error, message };
-    stub();
-    await user.click(screen.getByRole("button"));
-    expect((await screen.findByRole("alert")).textContent).toContain(message);
-    expect(screen.getByRole("button").hasAttribute("disabled")).toBe(false);
-  });
+  ])(
+    "si el foco responde %i %s muestra el error junto al pane y el botón sigue",
+    async (status, error, message) => {
+      const { fake, user, stub } = setup();
+      fake.focusError = { status, error, message };
+      stub();
+      await user.click(screen.getByRole("button"));
+      expect((await screen.findByRole("alert")).textContent).toContain(message);
+      expect(screen.getByRole("button").hasAttribute("disabled")).toBe(false);
+    },
+  );
 
   it("un Run sin herdrPane muestra «—» como texto, sin botón", () => {
     setup({ herdrPane: null });

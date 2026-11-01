@@ -294,6 +294,68 @@ describe("pestaña En curso", () => {
       expect((await rowOf("Sana")).slice(4)).toEqual(["0", "claude · opus", "p-ok"]);
     });
 
+    it("el pane id del último Run de la tarea enfoca su agente en herdr", async () => {
+      const fake = new FakeApi();
+      const task = fake.addTask(fake.addProject().id, { intent: "Con foco", state: "in_progress" });
+      const older = fake.startRun(task.id, "implement");
+      fake.endRun(older.id, {});
+      const latest = fake.startRun(task.id, "verify");
+      const { user } = renderApp("/in-progress", fake);
+
+      await rowOf("Con foco");
+      await user.click(
+        await screen.findByRole("button", { name: `Enfocar pane ${latest.herdrPane} en herdr` }),
+      );
+
+      await waitFor(() => expect(fake.focused).toEqual([latest.herdrName]));
+      expect(fake.requests.at(-1)).toMatchObject({
+        method: "POST",
+        path: `/api/runs/${latest.id}/focus`,
+      });
+      expect(
+        screen.queryByRole("button", { name: `Enfocar pane ${older.herdrPane} en herdr` }),
+      ).toBeNull();
+    });
+
+    it("cargando, con error o sin Runs la celda Pane es texto, sin botón de foco", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      fake.addTask(project.id, { intent: "Sin runs", state: "in_progress" });
+      const broken = fake.addTask(project.id, { intent: "Rota", state: "in_progress" });
+      fake.startRun(broken.id, "implement");
+      fake.runsFail.add(broken.id);
+      const noPane = fake.addTask(project.id, { intent: "Sin pane", state: "in_progress" });
+      fake.startRun(noPane.id, "implement").herdrPane = null;
+      renderApp("/in-progress", fake);
+
+      expect((await rowOf("Sin runs")).at(-1)).toBe("—");
+      expect((await rowOf("Rota")).at(-1)).toBe("error");
+      expect((await rowOf("Sin pane")).at(-1)).toBe("—");
+      expect(screen.queryByRole("button", { name: /Enfocar pane/ })).toBeNull();
+    });
+
+    it("si el foco falla muestra el error junto a ese pane sin tocar las demás filas", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      const a = fake.addTask(project.id, { intent: "Falla", state: "in_progress" });
+      const b = fake.addTask(project.id, { intent: "Intacta", state: "in_progress" });
+      const runA = fake.startRun(a.id, "implement");
+      const runB = fake.startRun(b.id, "implement");
+      fake.focusError = { status: 502, error: "herdr_error", message: "herdr no responde" };
+      const { user } = renderApp("/in-progress", fake);
+
+      await rowOf("Falla");
+      await user.click(
+        await screen.findByRole("button", { name: `Enfocar pane ${runA.herdrPane} en herdr` }),
+      );
+
+      const row = (text: string) =>
+        within(screen.getByRole("link", { name: text }).closest("tr") as HTMLElement);
+      expect((await row("Falla").findByRole("alert")).textContent).toBe("herdr no responde");
+      expect(row("Intacta").queryByRole("alert")).toBeNull();
+      expect(row("Intacta").getByText(runB.herdrPane as string)).toBeTruthy();
+    });
+
     it("al filtrar por proyecto cada fila conserva los valores de su propia tarea", async () => {
       const fake = new FakeApi();
       const one = fake.addProject({ name: "uno" });
