@@ -26,3 +26,7 @@ Cuando se agota el límite de uso de Claude Code o de Copilot CLI, el scheduler 
 - Una tarea cuyo perfil usa un proveedor deshabilitado corre con el otro: los flags de perfil (`args`) del primario no se trasladan, como en cualquier fallback. La verificación con revisores sigue siendo Claude-only (ADR 0016), así que una verificación despachada a Copilot por un deshabilitado hereda esa limitación.
 - Añadir un `AgentKind` nuevo lo hace aparecer en la configuración con default habilitado y en la página Settings sin cambios de esquema.
 - No hay habilitado automático al renovarse el límite de uso: el humano reactiva el proveedor desde Settings.
+
+## Origen de las peticiones
+
+`/api/settings/*` no tiene autenticación y muta estado que pausa el despacho, así que rechaza con 403 `forbidden_origin` cualquier `Host` u `Origin` que no sea `localhost`, `127.0.0.1` o `[::1]` (defensa contra DNS rebinding, igual que el MCP).

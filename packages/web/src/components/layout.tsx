@@ -6,7 +6,7 @@ import { ThemeToggle } from "./theme-toggle.tsx";
 import { Badge } from "./ui/badge.tsx";
 
 const nav =
-  "rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text";
+  "shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text";
 const active = { className: "bg-primary/10 text-primary-text hover:bg-primary/10" };
 
 /** Marca de LunasQ: tile con degradado índigo-violeta y tres fases lunares en cola (nueva, cuarto, llena). */
@@ -45,7 +45,7 @@ export function Layout() {
             <BrandMark />
             LunasQ
           </Link>
-          <nav className="flex gap-1">
+          <nav className="flex min-w-0 gap-1 overflow-x-auto">
             <Link to="/queue" className={nav} activeProps={active}>
               Cola
             </Link>
@@ -83,7 +83,7 @@ export function Layout() {
               Settings
             </Link>
           </nav>
-          <ThemeToggle className="ml-auto" />
+          <ThemeToggle className="ml-auto shrink-0" />
         </div>
       </header>
       <DispatchPausedBanner />

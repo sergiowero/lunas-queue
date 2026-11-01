@@ -76,3 +76,14 @@ describe("aviso de despacho en pausa", () => {
     await waitFor(() => expect(screen.queryByText(/Despacho en pausa/)).toBeNull());
   });
 });
+
+describe("navegación con Settings", () => {
+  it("enlaza Settings y permite desplazar el nav en anchos estrechos", async () => {
+    renderApp("/queue", new FakeApi());
+    const link = await screen.findByRole("link", { name: "Settings" });
+    const nav = link.closest("nav");
+    expect(nav?.className).toContain("overflow-x-auto");
+    expect(nav?.className).toContain("min-w-0");
+    expect(link.className).toContain("shrink-0");
+  });
+});

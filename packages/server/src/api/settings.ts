@@ -3,10 +3,11 @@
 import type { SettingsRepository } from "@lunasq/db";
 import { AgentProviderSettings } from "@lunasq/schemas";
 import { Hono } from "hono";
-import { invalidInput, readJson } from "./http.ts";
+import { invalidInput, localOriginOnly, readJson } from "./http.ts";
 
 export function settingsRoutes(settings: SettingsRepository): Hono {
   return new Hono()
+    .use(localOriginOnly)
     .get("/providers", (c) => c.json(settings.providers()))
     .put("/providers", async (c) => {
       const json = await readJson(c);

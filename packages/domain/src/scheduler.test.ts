@@ -458,6 +458,16 @@ describe("proveedores habilitados", () => {
     expect(plan([task("c")], [], {}, projects).dispatch[0]?.agentKind).toBe("claude");
   });
 
+  it("el primario solo cede al deshabilitarse: la misma tarea cambia de proveedor con la configuración", () => {
+    const tasks = [task("a")];
+    const provider = (providers: AgentProviderSettings) =>
+      plan(tasks, [], {}, projects, providers).dispatch.map((d) => d.agentKind);
+    expect(provider({ claude: true, copilot: true })).toEqual(["claude"]);
+    expect(provider({ claude: true, copilot: false })).toEqual(["claude"]);
+    expect(provider({ claude: false, copilot: true })).toEqual(["copilot"]);
+    expect(provider({ claude: false, copilot: false })).toEqual([]);
+  });
+
   it("los agentes vivos siguen ocupando el slot de su proveedor primario", () => {
     const viva = task("viva", { subState: "running" });
     const result = plan([viva, task("a")], [], { agentKindConcurrency: { claude: 1 } }, projects, {

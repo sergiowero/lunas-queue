@@ -7,10 +7,10 @@ import { createApp } from "../app.ts";
 function setup() {
   const db = migratedDatabase();
   const app = createApp({ db });
-  const send = (method: string, body?: unknown) =>
+  const send = (method: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.request("/api/settings/providers", {
       method,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headers },
       ...(body === undefined
         ? {}
         : { body: typeof body === "string" ? body : JSON.stringify(body) }),
@@ -67,5 +67,34 @@ describe("PUT /api/settings/providers", () => {
     const res = await send("PUT", "{no json");
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: "invalid_json" });
+  });
+});
+
+describe("origen de las peticiones a /api/settings", () => {
+  it.each([
+    ["un Host que no es localhost (DNS rebinding)", { host: "evil.example.com" }],
+    ["un Origin que no es localhost", { origin: "https://evil.example.com" }],
+  ])("rechaza el PUT con %s y no cambia lo guardado", async (_name, headers) => {
+    const { db, send } = setup();
+    const res = await send("PUT", { claude: false, copilot: false }, headers);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "forbidden_origin" });
+    expect(new SettingsRepository(db).providers()).toEqual({ claude: true, copilot: true });
+    expect(listPendingOutbox(db)).toEqual([]);
+  });
+
+  it("rechaza también el GET con un Host ajeno", async () => {
+    const { send } = setup();
+    expect((await send("GET", undefined, { host: "evil.example.com:8123" })).status).toBe(403);
+  });
+
+  it("acepta Host y Origin de localhost con puerto", async () => {
+    const { send } = setup();
+    const res = await send(
+      "PUT",
+      { claude: false, copilot: true },
+      { host: "127.0.0.1:8123", origin: "http://localhost:5173" },
+    );
+    expect(res.status).toBe(200);
   });
 });

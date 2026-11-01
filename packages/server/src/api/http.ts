@@ -1,5 +1,5 @@
 // Ayudas compartidas por las rutas: lectura del cuerpo y respuestas de error comunes.
-import type { Context } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 
 interface ValidationError {
   issues: readonly { path: readonly PropertyKey[]; message: string }[];
@@ -32,3 +32,33 @@ export async function readOptionalJson(
 }
 
 export const notFound = (c: Context) => c.json({ error: "not_found" }, 404);
+
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+function hostnameOf(value: string): string | null {
+  try {
+    return new URL(value.includes("://") ? value : `http://${value}`).hostname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Defensa contra DNS rebinding y peticiones cruzadas del navegador: la API local no tiene
+ * autenticación, así que rechaza (403 forbidden_origin) cualquier Host u Origin que no sea localhost.
+ */
+export const localOriginOnly: MiddlewareHandler = async (c, next) => {
+  const host = c.req.header("host");
+  const origin = c.req.header("origin");
+  const hostname = host === undefined ? hostnameOf(c.req.url) : hostnameOf(host);
+  const originHostname = origin === undefined ? "localhost" : hostnameOf(origin);
+  if (
+    hostname === null ||
+    originHostname === null ||
+    !LOCAL_HOSTNAMES.has(hostname) ||
+    !LOCAL_HOSTNAMES.has(originHostname)
+  ) {
+    return c.json({ error: "forbidden_origin" }, 403);
+  }
+  await next();
+};

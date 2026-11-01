@@ -532,10 +532,15 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
     await dispatcher.recover();
     await dispatcher.idle();
+    const other = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(other));
+    await dispatcher.idle();
 
     expect(runs.get(run?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
     expect(taskRow(task.id)).toMatchObject({ subState: "running" });
-    expect((await herdr.snapshot()).agents).toHaveLength(1);
+    // el nuevo despacho ya usa el proveedor efectivo; el agente vivo de claude sigue intacto
+    expect(runs.forTask(other.id)[0]).toMatchObject({ agentKind: "copilot", endedAt: null });
+    expect((await herdr.snapshot()).agents).toHaveLength(2);
   });
 });
 
