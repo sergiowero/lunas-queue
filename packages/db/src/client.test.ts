@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { migrateDatabase, migrationsFolder, openDatabase } from "./client.ts";
 import { freshDatabase } from "./test-helpers.ts";
 
@@ -64,6 +65,47 @@ describe("migraciones", () => {
     } finally {
       reopened.$client.close();
     }
+  });
+
+  it("la migración de settings conserva las filas del outbox y de events de una base ya en uso", () => {
+    const { db } = freshDatabase();
+    // Base en el estado anterior a la migración 0010: el journal se recorta a las nueve primeras.
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-migrations-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8")) as { entries: unknown[] };
+      journal.entries = journal.entries.slice(0, 10);
+      writeFileSync(journalFile, JSON.stringify(journal));
+      migrate(db, { migrationsFolder: previous });
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
+    const sqlite = db.$client;
+    sqlite
+      .prepare(
+        "insert into projects (id, name, repo, base_branch, local_path) values ('p', 'p', 'o/p', 'main', '/tmp/p')",
+      )
+      .run();
+    sqlite
+      .prepare(
+        "insert into tasks (id, project_id, number, intent, state, sub_state, priority) values ('t', 'p', 1, 'i', 'draft', 'queued', 0)",
+      )
+      .run();
+    sqlite
+      .prepare("insert into events (task_id, type, actor) values ('t', 'task.created', 'system')")
+      .run();
+    sqlite
+      .prepare("insert into outbox (event_id, topic, published_at) values (1, 'task.created', 5)")
+      .run();
+
+    migrateDatabase(db);
+
+    expect(sqlite.prepare("select count(*) from events").pluck().get()).toBe(1);
+    expect(
+      sqlite.prepare("select event_id, topic, published_at from outbox").all(),
+    ).toEqual([{ event_id: 1, topic: "task.created", published_at: 5 }]);
+    expect(sqlite.pragma("foreign_key_check")).toEqual([]);
   });
 
   it("están sincronizadas con el esquema de Drizzle", () => {
