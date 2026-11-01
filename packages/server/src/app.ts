@@ -123,6 +123,7 @@ export function createApp({
     ...(copilotReviewers && { copilotReviewers }),
   });
   const tasks = new TaskRepository(db);
+  const runs = new RunRepository(db);
   const projects = new ProjectRepository(db);
   const taskViews = new TaskViewRepository(db);
   const views = {
@@ -142,12 +143,12 @@ export function createApp({
     .route("/api/projects", projectRoutes(projects))
     .route("/api/tasks/:id/specs", specRoutes(new SpecRepository(db)))
     .route("/api/blocked", blockedRoutes(blocked ?? (() => []), focus))
-    .route("/api/runs", runRoutes(new RunRepository(db), focus))
+    .route("/api/runs", runRoutes(runs, focus))
     .route("/api/questions", questionRoutes(new QuestionRepository(db), questions))
     .route("/api/queue", queueRoutes(views))
     .route("/api/stream", changeStreamRoutes(taskViews, changeStreamIntervalMs))
     .route("/api/tasks", taskViewRoutes(views))
-    .route("/api/tasks", taskRoutes(tasks))
+    .route("/api/tasks", taskRoutes(tasks, runs))
     .onError((error, c) => {
       if (
         error instanceof ProjectRepositoryError ||

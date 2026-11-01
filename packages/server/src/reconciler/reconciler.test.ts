@@ -1,7 +1,7 @@
 import { claimRun, transitionTask } from "@lunasq/db";
 import { insertTask } from "@lunasq/db/test-helpers";
 import { SchedulerConfig } from "@lunasq/schemas";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Reconciler, type ReconcilerOptions } from "./reconciler.ts";
 import { harness } from "./test-helpers.ts";
 
@@ -33,6 +33,15 @@ function setup(opts: Partial<ReconcilerOptions> = {}) {
 
 function cancel(db: ReturnType<typeof setup>["db"], taskId: string) {
   const res = transitionTask(db, { taskId, actor: "human", command: { type: "cancel" } });
+  if (!res.ok) throw new Error(res.error.message);
+}
+
+function pause(db: ReturnType<typeof setup>["db"], taskId: string) {
+  const res = transitionTask(db, {
+    taskId,
+    actor: "human",
+    command: { type: "pause", deliveryInProgress: false },
+  });
   if (!res.ok) throw new Error(res.error.message);
 }
 
@@ -114,6 +123,46 @@ describe("Reconciler", () => {
     expect(await h.herdr.getAgent(name)).toBeUndefined();
     expect(h.taskRow(taskId)).toMatchObject({ state: "cancelled", worktreePath: null });
     expect(await h.reconciler.run()).toMatchObject({ closed: [], removedWorktrees: [] });
+  });
+
+  it("tarea pausada: cierra el Run como cancelled, detiene el agente y conserva el worktree", async () => {
+    const h = setup();
+    const { taskId, run, name } = await h.launched();
+    const worktreePath = h.taskRow(taskId).worktreePath;
+    expect(worktreePath).not.toBeNull();
+    pause(h.db, taskId);
+
+    const result = await h.reconciler.run();
+
+    expect(result.closed).toEqual([run.id]);
+    expect(result.removedWorktrees).toEqual([]);
+    expect(h.runs.get(run.id)).toMatchObject({ result: "cancelled" });
+    expect(h.runs.get(run.id)?.failureReason).toMatch(/^task_left_phase:/);
+    expect(await h.herdr.getAgent(name)).toBeUndefined();
+    expect(h.taskRow(taskId)).toMatchObject({ state: "paused", worktreePath });
+    expect(await h.reconciler.run()).toMatchObject({ closed: [], removedWorktrees: [] });
+    expect(h.reconcileErrors).toEqual([]);
+  });
+
+  it("onMessage pide pasada al pausar", async () => {
+    const h = setup();
+    const { taskId, run } = await h.launched();
+    pause(h.db, taskId);
+    h.reconciler.onMessage({
+      id: 1,
+      eventId: 1,
+      topic: "task.transitioned",
+      taskId,
+      actor: "human",
+      payload: {
+        command: "pause",
+        from: { state: "draft", subState: "running" },
+        to: { state: "paused", subState: null },
+        verificationIteration: 0,
+      },
+      createdAt: new Date().toISOString(),
+    });
+    await vi.waitFor(() => expect(h.runs.get(run.id)?.result).toBe("cancelled"));
   });
 
   it("un worktree con cambios no se fuerza y el fallo se reporta una sola vez", async () => {

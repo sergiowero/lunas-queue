@@ -89,6 +89,17 @@ describe("RunRepository: lo que usa el LunasQ MCP", () => {
     expect(repo.get(run.id)).toMatchObject({ handoff: { phase: "verification" }, endedAt: null });
   });
 
+  it("deliveryInProgress: solo con el Run del verificador abierto y su handoff guardado", () => {
+    const { db, task, repo } = mcpSetup();
+    expect(repo.deliveryInProgress(task.id)).toBe(false);
+    const run = insertRun(db, task.id, { phase: "verify" });
+    expect(repo.deliveryInProgress(task.id)).toBe(false);
+    repo.recordHandoff(run.id, { phase: "verification" });
+    expect(repo.deliveryInProgress(task.id)).toBe(true);
+    closeRun(db, run.id, { result: "success", handoff: { phase: "verification" } });
+    expect(repo.deliveryInProgress(task.id)).toBe(false);
+  });
+
   it("latestHandoffs devuelve los handoffs de la fase, del más viejo al más nuevo", () => {
     const { db, task, repo } = mcpSetup();
     const first = insertRun(db, task.id, { phase: "verify", startedAt: new Date(1000) });

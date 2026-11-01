@@ -220,6 +220,28 @@ export class RunRepository {
     this.db.update(runs).set({ handoff }).where(eq(runs.id, runId)).run();
   }
 
+  /**
+   * La entrega corre: el Run del verificador sigue abierto con su pass guardado (ADR 0007). Pausar
+   * ahí dejaría el PR a medias.
+   */
+  deliveryInProgress(taskId: string): boolean {
+    return (
+      this.db
+        .select({ id: runs.id })
+        .from(runs)
+        .where(
+          and(
+            eq(runs.taskId, taskId),
+            eq(runs.phase, "verify"),
+            isNull(runs.endedAt),
+            isNotNull(runs.handoff),
+          ),
+        )
+        .limit(1)
+        .get() !== undefined
+    );
+  }
+
   /** Handoffs guardados de la fase, del Run más viejo al más nuevo. */
   handoffs(taskId: string, phase: Phase): unknown[] {
     return this.db

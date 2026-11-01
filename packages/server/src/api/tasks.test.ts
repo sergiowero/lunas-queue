@@ -1,5 +1,5 @@
-import { listEvents, transitionTask } from "@lunasq/db";
-import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
+import { listEvents, RunRepository, transitionTask } from "@lunasq/db";
+import { insertProject, insertRun, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.ts";
 
@@ -132,6 +132,53 @@ describe("GET y PATCH /api/tasks/:id", () => {
   });
 });
 
+describe("POST /api/tasks/:id/pause", () => {
+  it("pausa una tarea pausable, responde 200 y registra el evento", async () => {
+    const { db, send, create } = setup();
+    const task = await create();
+    const res = await send("POST", `/api/tasks/${task.id}/pause`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: task.id, state: "paused", subState: null });
+    expect(listEvents(db, task.id).at(-1)).toMatchObject({
+      type: "task.transitioned",
+      actor: "human",
+      payload: { command: "pause", from: { state: "draft", subState: "queued" } },
+    });
+  });
+
+  it("responde 404 si no existe y 409 con el código si no es pausable", async () => {
+    const { send, create } = setup();
+    const task = await create();
+    await send("POST", `/api/tasks/${task.id}/cancel`);
+    const res = await send("POST", `/api/tasks/${task.id}/pause`);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: "invalid_transition" });
+    expect((await send("POST", `/api/tasks/${missing}/pause`)).status).toBe(404);
+  });
+
+  it("responde 409 guard_failed si la entrega está en curso y no cambia la tarea", async () => {
+    const { db, project, send } = setup();
+    const task = insertTask(db, project.id, { state: "verification", subState: "running" });
+    const run = insertRun(db, task.id, { phase: "verify" });
+    new RunRepository(db).recordHandoff(run.id, { phase: "verification" });
+    const res = await send("POST", `/api/tasks/${task.id}/pause`);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: "guard_failed" });
+    expect(await (await send("GET", `/api/tasks/${task.id}`)).json()).toMatchObject({
+      state: "verification",
+      subState: "running",
+    });
+    expect(listEvents(db, task.id)).toEqual([]);
+  });
+
+  it("pausa una verificación en curso sin pass guardado", async () => {
+    const { db, project, send } = setup();
+    const task = insertTask(db, project.id, { state: "verification", subState: "running" });
+    insertRun(db, task.id, { phase: "verify" });
+    expect((await send("POST", `/api/tasks/${task.id}/pause`)).status).toBe(200);
+  });
+});
+
 describe("POST /api/tasks/:id/resume", () => {
   it("reanuda una tarea escalada hacia su estado previo y registra el evento", async () => {
     const { db, send, create } = setup();
@@ -151,7 +198,17 @@ describe("POST /api/tasks/:id/resume", () => {
     });
   });
 
-  it("responde 409 fuera de needs_human y 404 si no existe", async () => {
+  it("reanuda una tarea pausada hacia su estado previo", async () => {
+    const { db, send, create } = setup();
+    const task = await create();
+    await send("POST", `/api/tasks/${task.id}/pause`);
+    const res = await send("POST", `/api/tasks/${task.id}/resume`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ state: "draft", subState: "queued" });
+    expect(listEvents(db, task.id).at(-1)).toMatchObject({ payload: { command: "resume" } });
+  });
+
+  it("responde 409 fuera de needs_human y paused, y 404 si no existe", async () => {
     const { send, create } = setup();
     const task = await create();
     expect((await send("POST", `/api/tasks/${task.id}/resume`)).status).toBe(409);

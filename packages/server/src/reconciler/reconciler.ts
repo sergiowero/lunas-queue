@@ -4,7 +4,7 @@
 // corrección es idempotente: repetir una pasada no duplica efectos.
 // - Run lanzado sin su agente en herdr → Run fallido (reintento con backoff o needs_human).
 // - Run reclamado sin lanzar → el dispatcher lo retoma.
-// - Run abierto de una tarea que salió de su fase (cancelada, reanudada tras un timeout) → se
+// - Run abierto de una tarea que salió de su fase (cancelada, pausada, reanudada tras un timeout) → se
 //   cierra como cancelled y se libera su pane.
 // - Run vivo que nadie observa (tras un reinicio) → se vuelve a observar.
 // - Agente con nombre de LunasQ sin Run abierto → se cierra su pane (huérfano).
@@ -133,15 +133,15 @@ export class Reconciler {
   }
 
   /**
-   * Outbox: una cancelación, una reanudación o un merge piden pasada ya, sin esperar al tick
-   * (detener el agente de una tarea cancelada, ADR 0010; remover su worktree, ADR 0012).
+   * Outbox: una cancelación, una pausa, una reanudación o un merge piden pasada ya, sin esperar
+   * al tick (detener el agente de una tarea cancelada o pausada, ADR 0010; remover su worktree, ADR 0012).
    */
   onMessage(message: OutboxMessage): void {
     if (message.topic === TASK_TRANSITIONED) {
       const payload = TaskTransitionedPayload.safeParse(message.payload);
       if (!payload.success) return;
       const { command } = payload.data;
-      if (command === "cancel" || command === "resume") this.wake();
+      if (command === "cancel" || command === "pause" || command === "resume") this.wake();
     } else if (message.topic === TASK_PR_STATE_CHANGED) {
       const payload = TaskPrStateChangedPayload.safeParse(message.payload);
       if (payload.success && payload.data.to === "merged") this.wake();
