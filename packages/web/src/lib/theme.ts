@@ -2,6 +2,7 @@
 // script inline de index.html la pone antes de montar React y aquí solo se lee y se cambia. Fuera
 // del navegador normal (localStorage bloqueado, sin matchMedia) se cae al tema claro sin fallar.
 import { useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 
 export type Theme = "light" | "dark";
 
@@ -47,9 +48,69 @@ export function initTheme() {
   apply(resolveTheme());
 }
 
-/** La elección de la persona: se aplica y se recuerda entre recargas. */
-export function setTheme(theme: Theme) {
-  apply(theme);
+/** Punto de la pantalla desde el que crece el revelado circular (normalmente el botón pulsado). */
+export interface RevealOrigin {
+  x: number;
+  y: number;
+}
+
+function prefersReducedMotion() {
+  try {
+    return globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Cambia el tema con animación: un revelado circular desde `origin` donde hay View Transitions y un
+ * fundido corto de colores si no. Sin cambio real o con movimiento reducido se aplica directo.
+ * `flushSync` deja el DOM actualizado (icono incluido) dentro del callback de la transición.
+ */
+function transition(theme: Theme, origin?: RevealOrigin) {
+  const root = document.documentElement;
+  const update = () => flushSync(() => apply(theme));
+  if (currentTheme() === theme || prefersReducedMotion()) {
+    update();
+    return;
+  }
+
+  if (typeof document.startViewTransition === "function") {
+    // En porcentajes del viewport: Brave no respeta los px en el clip-path del pseudo-elemento y el
+    // círculo salía desde arriba al centro. Un radio en % se mide sobre hypot(w, h) / √2.
+    const width = root.clientWidth || window.innerWidth;
+    const height = root.clientHeight || window.innerHeight;
+    const x = origin?.x ?? width / 2;
+    const y = origin?.y ?? height / 2;
+    const at = `at ${(x / width) * 100}% ${(y / height) * 100}%`;
+    const radius =
+      (Math.hypot(Math.max(x, width - x), Math.max(y, height - y)) /
+        (Math.hypot(width, height) / Math.SQRT2)) *
+      100;
+    document
+      .startViewTransition(update)
+      .ready.then(() => {
+        root.animate(
+          { clipPath: [`circle(0% ${at})`, `circle(${radius}% ${at})`] },
+          {
+            duration: 480,
+            easing: "cubic-bezier(0.65, 0, 0.35, 1)",
+            pseudoElement: "::view-transition-new(root)",
+          },
+        );
+      })
+      .catch(() => {});
+    return;
+  }
+
+  root.classList.add("theme-transition");
+  update();
+  window.setTimeout(() => root.classList.remove("theme-transition"), 320);
+}
+
+/** La elección de la persona: se aplica (animada) y se recuerda entre recargas. */
+export function setTheme(theme: Theme, origin?: RevealOrigin) {
+  transition(theme, origin);
   try {
     globalThis.localStorage?.setItem(THEME_KEY, theme);
   } catch {

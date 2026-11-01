@@ -177,6 +177,26 @@
   }
 }
 
+/* Cambio de tema: revelado circular con View Transitions (lib/theme.ts anima el clip-path). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* Sin View Transitions: fundido corto de colores mientras dura la clase. */
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  /* biome-ignore lint/complexity/noImportantStyles: el fundido debe ganar a las transiciones de cada componente. */
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow !important;
+  /* biome-ignore lint/complexity/noImportantStyles: el fundido debe ganar a las transiciones de cada componente. */
+  transition-duration: 300ms !important;
+  /* biome-ignore lint/complexity/noImportantStyles: el fundido debe ganar a las transiciones de cada componente. */
+  transition-timing-function: ease !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
