@@ -35,8 +35,9 @@ function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors disabled:opacity-60",
-        checked ? "bg-primary" : "bg-surface-secondary",
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60",
+        // El apagado usa un gris con contraste suficiente contra la tarjeta (≥3:1) para localizarlo.
+        checked ? "border-primary bg-primary" : "border-text-muted bg-text-muted",
       )}
     >
       <span
@@ -55,7 +56,11 @@ export function SettingsPage() {
   const queryClient = useQueryClient();
   const update = useMutation({
     mutationFn: (input: AgentProviderPatch) => api.updateProviderSettings(input),
-    onSuccess: (saved) => queryClient.setQueryData(queries.providerSettings().queryKey, saved),
+    // Se vuelve a leer en vez de pisar la caché con la respuesta: un PUT lento no debe restaurar una
+    // vista anterior a un cambio posterior (de otra pestaña). La mutación sigue pendiente hasta
+    // que llega la lectura fresca, así los interruptores no se mueven con datos viejos.
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queries.providerSettings().queryKey }),
   });
   if (settings.error) return <QueryError error={settings.error} />;
   if (!settings.data) return <Loading />;

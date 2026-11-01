@@ -121,6 +121,8 @@ export class FakeApi {
   providers: AgentProviderSettingsValue = { claude: true, copilot: true };
   /** Si se fija, PUT /api/settings/providers responde este error. */
   providersError: { status: number; error: string; message: string } | null = null;
+  /** Se ejecuta tras guardar un PUT y antes de responderlo: simula un cambio de otra pestaña. */
+  afterProvidersPut: (() => void) | null = null;
   /** Si el agente que preguntó sigue vivo: la respuesta va al pane; si no, a un Run nuevo. */
   agentAlive = false;
   /** Si se fija, GET /api/queue responde esto tal cual. */
@@ -340,7 +342,9 @@ export class FakeApi {
       ...this.providers,
       ...Object.fromEntries(Object.entries(input.data).filter(([, v]) => v !== undefined)),
     });
-    return [200, this.providers];
+    const saved = { ...this.providers };
+    this.afterProvidersPut?.();
+    return [200, saved];
   }
 
   private route(method: string, url: URL, body: unknown): [number, unknown] {

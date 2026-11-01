@@ -46,6 +46,21 @@ describe("página Settings", () => {
     expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false);
   });
 
+  it("la respuesta de un PUT viejo no restaura una vista anterior a un cambio posterior", async () => {
+    const fake = new FakeApi();
+    const { user } = renderApp("/settings", fake);
+    await screen.findByRole("switch", { name: "Claude" });
+    // Otra pestaña apaga Claude justo después de que este PUT se guarda y antes de que responda.
+    fake.afterProvidersPut = () => {
+      fake.providers = { ...fake.providers, claude: false };
+    };
+
+    await user.click(screen.getByRole("switch", { name: "Copilot" }));
+
+    await waitFor(() => expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(false));
+    await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
+  });
+
   it("muestra el error si el servidor rechaza el cambio y conserva el estado guardado", async () => {
     const fake = new FakeApi();
     fake.providersError = { status: 400, error: "invalid_input", message: "entrada inválida" };
