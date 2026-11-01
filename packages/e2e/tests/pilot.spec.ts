@@ -53,13 +53,16 @@ async function createTask(page: Page, intent: string, dependsOn: string[] = []) 
   await expect(page.getByRole("heading", { level: 1, name: intent })).toBeVisible();
 }
 
-/** Aprueba desde la bandeja la spec que entregó el refinamiento de la tarea. */
+/** Aprueba desde el detalle de la tarea la spec que entregó el refinamiento; la bandeja solo enlaza. */
 async function approveSpec(page: Page, intent: string) {
+  const id = await taskId(page, intent);
   await page.goto("/inbox");
-  const item = page.getByRole("article", { name: intent });
-  await expect(item).toBeVisible();
-  await item.getByRole("button", { name: /^Aprobar v\d+$/ }).click();
-  await expect(item).toBeHidden();
+  await expect(page.getByRole("link", { name: intent })).toBeVisible();
+  await page.goto(`/tasks/${id}`);
+  await page.getByRole("button", { name: /^Aprobar v\d+$/ }).click();
+  await waitForState(page, id, (t) => t.state !== "refined");
+  await page.goto("/inbox");
+  await expect(page.getByRole("link", { name: intent })).toBeHidden();
 }
 
 /** La tarea espera su dependencia: tras varios ticks del scheduler sigue en draft y sin Runs. */
