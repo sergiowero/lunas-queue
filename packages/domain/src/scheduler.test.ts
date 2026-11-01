@@ -461,6 +461,11 @@ describe("proveedores habilitados", () => {
     ]);
     // Sin configuración explícita, todos habilitados.
     expect(plan([task("g")], [], {}, projects).dispatch[0]?.agentKind).toBe("claude");
+    // El primario manda porque está habilitado: la misma tarea cambia al deshabilitarlo.
+    const solo = (providers: AgentProviderSettings) =>
+      plan([task("h")], [], {}, projects, providers).dispatch.map((d) => d.agentKind);
+    expect(solo(both)).toEqual(["claude"]);
+    expect(solo({ claude: false, copilot: true })).toEqual(["copilot"]);
   });
 
   it("la misma tarea cambia de proveedor solo cuando su primario se deshabilita", () => {

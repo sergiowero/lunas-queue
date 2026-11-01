@@ -31,4 +31,8 @@ Cuando se agota el límite de uso de Claude Code o de Copilot CLI, el scheduler 
 
 `/api/settings/*` no tiene autenticación y muta estado que pausa el despacho, así que rechaza con 403 `forbidden_origin` cualquier `Host` u `Origin` que no sea `localhost`, `127.0.0.1` o `[::1]` (defensa contra DNS rebinding, igual que el MCP). Como `Host` y `Origin` los fija el cliente, también exige que la conexión venga de loopback (dirección del socket): con el servidor ligado a otra interfaz, un cliente remoto no puede saltarse la guarda falsificando `Host: localhost`.
 
-Si la lectura de la configuración falla, el aviso global lo dice («Estado del despacho desconocido») en vez de desaparecer.
+Si la lectura de la configuración falla, el aviso global lo dice («Estado del despacho desconocido») en vez de desaparecer, también cuando hay datos en caché que indican un proveedor habilitado (lo último visto pudo cambiar). La página Settings conserva los interruptores con el último estado leído y avisa del error de lectura.
+
+## Fallback y concurrencia
+
+El claim reserva el slot del proveedor efectivo de ese momento. Si el lanzamiento pasa a otro proveedor (un fallback tras fallar el arranque, o porque Settings cambió), `RunRepository.switchAgentKind` revalida en una transacción inmediata los límites global, de proyecto, de fase y de tipo de agente contra los demás agentes vivos; un proveedor cuyo slot está lleno se salta y, si no queda ninguno, el Run falla como cualquier otro caso sin proveedor disponible.

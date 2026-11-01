@@ -449,12 +449,19 @@ export class PhaseDispatcher implements Dispatcher {
     const attempted = new Set(latest.keys());
     for (const provider of order) {
       if (attempted.has(provider.kind) || !isEnabled(provider.kind)) continue;
-      let run = this.runs.setAgentKind(
+      const switched = this.runs.switchAgentKind(
         initial.id,
         provider.kind,
         provider.kind === primary.kind ? (primary.model ?? null) : null,
+        { projects: this.projects, config: this.config },
       );
-      if (!run) throw new DispatchError("run_not_found", `no existe el Run ${initial.id}`);
+      if (!switched) throw new DispatchError("run_not_found", `no existe el Run ${initial.id}`);
+      if (switched === "no_slot") {
+        // El claim reservó otro proveedor: pasar a este rebasaría su límite de concurrencia.
+        diagnostics.push(`${provider.kind}: sin slot de concurrencia`);
+        continue;
+      }
+      let run: RunRow = switched;
       run = this.checkOpen(run.id);
       const args = await this.args(project, phase, run);
       const paneId = await this.ensurePane(run, worktree, phase);

@@ -565,7 +565,9 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
   });
 
   it("deshabilitar claude no interrumpe a un agente vivo ni cierra su Run", async () => {
-    const { db, project, herdr, dispatcher, runs, taskRow } = setup();
+    const { db, project, herdr, dispatcher, runs, taskRow } = setup({
+      config: { agentKindConcurrency: { claude: 1, copilot: 1 } },
+    });
     const viva = insertTask(db, project.id);
     await dispatcher.dispatch(refine(viva));
     await dispatcher.idle();
@@ -591,6 +593,13 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     const snapshot = await herdr.snapshot();
     expect(snapshot.panes.some((p) => p.paneId === vivaRun?.herdrPane)).toBe(true);
     expect(snapshot.agents.some((a) => a.paneId === vivaRun?.herdrPane)).toBe(true);
+
+    // Sigue ocupando su slot de claude y la tarea nueva va al proveedor habilitado.
+    const nueva = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(nueva));
+    await dispatcher.idle();
+    expect(runs.forTask(nueva.id)[0]).toMatchObject({ agentKind: "copilot", endedAt: null });
+    expect(runs.get(vivaRun?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
   });
 });
 
@@ -621,6 +630,37 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
       },
       { provider: "copilot", status: "started" },
     ]);
+  });
+
+  it("no pasa a un fallback cuyo límite de concurrencia ya está lleno: el claim reservó otro slot", async () => {
+    const { db, project, herdr, dispatcher, runs, taskRow } = setup({
+      config: { agentKindConcurrency: { copilot: 1 } },
+    });
+    const settings = new SettingsRepository(db);
+    // Un agente vivo de copilot llena su único slot (claude estaba apagado al despacharlo).
+    settings.saveProviders({ claude: false, copilot: true });
+    const live = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(live));
+    await dispatcher.idle();
+    settings.saveProviders({ claude: true, copilot: true });
+    const kinds: string[] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      if (input.kind === "claude") throw new Error("claude executable not found");
+      return start(input);
+    });
+    const task = insertTask(db, project.id);
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(kinds).toEqual(["claude"]);
+    expect(run?.agentKind).toBe("claude");
+    expect(run?.failureReason).toContain("copilot: sin slot de concurrencia");
+    expect(taskRow(task.id).state).not.toBe("running");
+    expect(runs.forTask(live.id)[0]?.agentKind).toBe("copilot");
   });
 
   it("aplica fallback simétrico cuando Copilot es el proveedor primario", async () => {

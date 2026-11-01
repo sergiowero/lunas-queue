@@ -21,7 +21,7 @@ import {
   QUESTION_CREATED,
   QuestionCreatedPayload,
   type RunResult,
-  type SchedulablePhase,
+  SchedulablePhase,
   type SchedulerConfig,
   type StatePosition,
   TASK_TRANSITIONED,
@@ -345,9 +345,40 @@ export class RunRepository {
       .run();
   }
 
-  setAgentKind(runId: string, kind: AgentKind, model: string | null): RunRow | null {
-    this.db.update(runs).set({ agentKind: kind, model }).where(eq(runs.id, runId)).run();
-    return this.get(runId);
+  /**
+   * Cambia el proveedor del Run. El claim reservó el slot del proveedor efectivo de entonces; pasar
+   * a otro (un fallback tras fallar el arranque, o porque el humano cambió Settings) lo revalida en
+   * la misma transacción contra los agentes vivos de los demás Runs, con los mismos límites del
+   * claim. Devuelve `no_slot` sin escribir nada si el proveedor nuevo no cabe; null si no hay Run.
+   */
+  switchAgentKind(
+    runId: string,
+    kind: AgentKind,
+    model: string | null,
+    limits: { projects: ProjectConfigReader; config: SchedulerConfig },
+  ): RunRow | "no_slot" | null {
+    return this.db.transaction(
+      (tx) => {
+        const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
+        if (!run) return null;
+        if (run.agentKind !== kind) {
+          const task = tx.select().from(tasks).where(eq(tasks.id, run.taskId)).get();
+          const snapshot = new SchedulerStateRepository(tx).snapshot();
+          // Sin el propio Run: se vuelve a colocar, no se suma a su slot actual.
+          const others = { ...snapshot, tasks: snapshot.tasks.filter((t) => t.id !== run.taskId) };
+          const occupancy = Occupancy.of(others, limits.projects, readProviderSettings(tx));
+          const slot = {
+            projectId: task?.projectId ?? "",
+            phase: SchedulablePhase.parse(run.phase),
+            agentKind: kind,
+          };
+          if (!occupancy.fits(slot, limits.config)) return "no_slot" as const;
+        }
+        tx.update(runs).set({ agentKind: kind, model }).where(eq(runs.id, runId)).run();
+        return tx.select().from(runs).where(eq(runs.id, runId)).get() ?? null;
+      },
+      { behavior: "immediate" },
+    );
   }
 
   providerAttempts(runId: string): {

@@ -61,6 +61,24 @@ describe("página Settings", () => {
     await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
   });
 
+  it("un error al volver a leer conserva los interruptores con el último estado y avisa", async () => {
+    const fake = new FakeApi();
+    const { user } = renderApp("/settings", fake);
+    await screen.findByRole("switch", { name: "Claude" });
+    fake.providersReadFails = true;
+
+    await user.click(screen.getByRole("switch", { name: "Copilot" }));
+
+    const alert = await screen.findByText(
+      /se muestra el último estado leído/,
+      {},
+      { timeout: 5000 },
+    );
+    expect(alert).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Claude" })).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Copilot" })).toBeTruthy();
+  });
+
   it("muestra el error si el servidor rechaza el cambio y conserva el estado guardado", async () => {
     const fake = new FakeApi();
     fake.providersError = { status: 400, error: "invalid_input", message: "entrada inválida" };
@@ -103,6 +121,25 @@ describe("aviso de despacho en pausa", () => {
     const banner = await screen.findByRole("status", {}, { timeout: 5000 });
     expect(banner.textContent).toMatch(/Estado del despacho desconocido/);
     expect(banner.querySelector('a[href="/settings"]')).not.toBeNull();
+  });
+
+  it("con datos en caché, un error al volver a leer no oculta el aviso de estado desconocido", async () => {
+    const fake = new FakeApi();
+    const { user } = renderApp("/settings", fake);
+    await screen.findByRole("switch", { name: "Claude" });
+    expect(screen.queryByText(/Estado del despacho desconocido/)).toBeNull();
+    // La lectura falla después de haber visto ambos proveedores habilitados; el PUT los deshabilita.
+    fake.providersReadFails = true;
+
+    await user.click(screen.getByRole("switch", { name: "Claude" }));
+    await user.click(screen.getByRole("switch", { name: "Copilot" }));
+
+    await waitFor(() => expect(fake.providers).toEqual({ claude: false, copilot: false }), {
+      timeout: 5000,
+    });
+    expect(
+      await screen.findByText(/Estado del despacho desconocido/, {}, { timeout: 5000 }),
+    ).toBeTruthy();
   });
 
   it("desaparece al habilitar un proveedor desde Settings", async () => {

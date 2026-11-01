@@ -62,8 +62,9 @@ export function SettingsPage() {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queries.providerSettings().queryKey }),
   });
-  if (settings.error) return <QueryError error={settings.error} />;
-  if (!settings.data) return <Loading />;
+  if (!settings.data) {
+    return settings.error ? <QueryError error={settings.error} /> : <Loading />;
+  }
   const current = settings.data;
 
   return (
@@ -93,6 +94,12 @@ export function SettingsPage() {
               />
             </div>
           ))}
+          {settings.error && (
+            <p role="alert" className="text-sm text-destructive">
+              No se pudo actualizar la configuración; se muestra el último estado leído:{" "}
+              {settings.error.message}
+            </p>
+          )}
           {update.error && (
             <p role="alert" className="text-sm text-destructive">
               No se pudo guardar: {update.error.message}
