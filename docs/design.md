@@ -66,6 +66,14 @@ stateDiagram-v2
     Verification --> Completed: pass
     Completed --> InProgress: PR en conflicto o CI fallido
     Completed --> [*]
+    Draft --> Paused: pausa (humano)
+    Refined --> Paused: pausa (humano)
+    InProgress --> Paused: pausa (humano)
+    Verification --> Paused: pausa (humano)
+    Paused --> Draft: reanudar
+    Paused --> Refined: reanudar
+    Paused --> InProgress: reanudar
+    Paused --> Verification: reanudar
     InProgress: In progress
     note right of Completed
         Desde cualquier estado: Needs human
@@ -89,7 +97,11 @@ Cada estado con agente tiene un sub‑estado: `queued` (esperando slot o depende
 | Verification → In progress | Conflictos al integrar la rama base en la entrega | Sin subir la iteración | Sistema |
 | Completed → In progress | El PR abierto queda en conflicto con la rama base (otro PR se mergeó antes), o falla uno de sus checks de CI | PR de la tarea abierto; sin subir la iteración | Sistema (poller de PRs) |
 | Cualquiera no terminal → Cancelled | Cancelación | Agente vivo se detiene y se limpia | Humano |
+| Draft, Refined, In progress o Verification → Paused | Pausa | Solo el humano; no desde Needs human, Paused ni terminales; en Verification se rechaza con la entrega en curso (Run del verificador abierto con su pass guardado). El agente vivo se detiene y su Run se cierra como `cancelled`; el worktree y el branch se conservan | Humano |
+| Paused → estado previo | Reanudar | Vuelve al estado previo a la pausa (el `from` del evento que entró a Paused), con sub‑estado `queued` si lleva agente y la iteración intacta; la fase se redespacha desde cero sobre el mismo worktree | Humano |
 | Needs human → estado previo | Reanudar | Vuelve al estado previo al último escalamiento, con sub‑estado `queued` si lleva agente; opcionalmente reinicia la iteración | Humano |
+
+Paused es el estado de una tarea que el humano sacó del flujo: no tiene sub‑estado ni agente, el scheduler nunca la despacha y no aparece en la bandeja (no espera nada del humano). Solo sale con Reanudar o Cancelar; `escalate` y el resto de comandos se rechazan. Al pausar, la pregunta abierta de una tarea en `waiting_human` se cancela como en cualquier otra salida de ese sub‑estado, y el reconciliador cierra el Run abierto como `cancelled` con `task_left_phase` y libera su pane ([ADR 0007](decisions/0007-maquina-de-estados.md)).
 
 Completed y Cancelled son terminales, salvo que el PR abierto de una tarea completada quede en conflicto con la base o falle CI: entonces vuelve a In progress ([ADR pr-en-conflicto](decisions/pr-en-conflicto.md)). El catálogo de comandos, los guards, los sub-estados y el Event log están en [ADR 0007](decisions/0007-maquina-de-estados.md).
 
@@ -250,7 +262,7 @@ El Run registra también qué fuente se usó, para saber si la sesión se puede 
 
 **Loop de reconciliación**
 
-Cada N segundos (default 60), al arrancar y al reconectar con herdr: tomar `session.snapshot`, compararlo con los Runs activos en la BD y corregir. Runs sin pane → reintentar. Runs abiertos de una tarea que salió de su fase (cancelada, reanudada) → cerrar como cancelled. Runs vivos sin observar (tras un reinicio) → volver a observar. Panes con prefijo del sistema sin Run → cerrar (huérfanos). Worktrees de tareas canceladas o mergeadas, y los huérfanos de cada proyecto → remover ([ADR uw-17-reconciliacion](decisions/uw-17-reconciliacion.md)). Esto cubre el caso documentado de `events_lost` (en protocol 22 herdr cierra el stream sin mensaje explícito: todo cierre cuenta como pérdida; ADR 0004), donde herdr corta la suscripción si el consumidor se atrasa.
+Cada N segundos (default 60), al arrancar y al reconectar con herdr: tomar `session.snapshot`, compararlo con los Runs activos en la BD y corregir. Runs sin pane → reintentar. Runs abiertos de una tarea que salió de su fase (cancelada, pausada, reanudada) → cerrar como cancelled. Runs vivos sin observar (tras un reinicio) → volver a observar. Panes con prefijo del sistema sin Run → cerrar (huérfanos). Worktrees de tareas canceladas o mergeadas, y los huérfanos de cada proyecto → remover ([ADR uw-17-reconciliacion](decisions/uw-17-reconciliacion.md)). Esto cubre el caso documentado de `events_lost` (en protocol 22 herdr cierra el stream sin mensaje explícito: todo cierre cuenta como pérdida; ADR 0004), donde herdr corta la suscripción si el consumidor se atrasa.
 
 **Dónde vive el dispatcher: servicio externo (decidido)**
 
@@ -542,7 +554,7 @@ Cualquier otro fallo (push, `gh`, un hook bloqueado) escala a Needs human. Una e
 
 **Front end: vistas mínimas**
 
-- Tablero por proyecto (columnas por estado) y vista global de la cola ordenada por score.
+- Tablero por proyecto (columnas por estado, incluida Paused) y vista global de la cola ordenada por score. Pausar y reanudar están en el detalle de la tarea (botón con icono y texto), en cada fila de «En curso» (solo pausa) y en la columna «Acciones» de la Cola, con botones de solo icono: pausa para las tareas pausables, reanudar para las pausadas y las de Needs human.
 - Pestaña «En curso» con las tareas In progress y las que tienen un agente corriendo (sub-estado running) de todos los proyectos, con Iteración, Agente y Pane del Run más reciente de cada tarea; la etiqueta In progress va en azul en todas las vistas. El pane id de esta tabla y del panel de Runs es un botón que enfoca el agente en herdr. Detalle: [ADR uw-21-front-end](decisions/uw-21-front-end.md) y [ADR runs-foco-pane](decisions/runs-foco-pane.md).
 - Bandeja de aprobaciones y preguntas pendientes (todo lo que espera al humano); las specs por aprobar son una lista de enlaces al detalle de la tarea, donde se aprueban; los bloqueos por permiso incluyen un acceso que enfoca el pane en herdr. Detalle: [ADR uw-27-bandeja](decisions/uw-27-bandeja.md) y [ADR 0015](decisions/0015-bandeja-lista-de-specs.md).
 - Detalle de tarea: spec y versiones, Runs (con el pane id como botón que enfoca el agente en herdr), event log, enlace al pane en herdr.
