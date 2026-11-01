@@ -124,10 +124,14 @@ describe("tasks", () => {
         number: numberBefore,
       });
       expect(db.$client.prepare("select count(*) from runs").pluck().get()).toBe(1);
-      const paused = insertTask(db, p.id, { state: "paused", subState: null });
-      expect(paused.state).toBe("paused");
+      // Sin la migración el CHECK rechaza paused: la aserción falla aquí, no con un error suelto.
+      let paused: ReturnType<typeof insertTask> | undefined;
+      expect(() => {
+        paused = insertTask(db, p.id, { state: "paused", subState: null });
+      }).not.toThrow();
+      expect(paused?.state).toBe("paused");
       // Los triggers de tasks se recrean: el número se asigna y no cambia.
-      expect(paused.number).toBe((numberBefore ?? 0) + 1);
+      expect(paused?.number).toBe((numberBefore ?? 0) + 1);
       expect(() => db.update(tasks).set({ number: 99 }).where(eq(tasks.id, t.id)).run()).toThrow(
         /el número de una tarea no cambia/,
       );
