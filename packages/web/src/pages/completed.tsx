@@ -5,8 +5,10 @@ import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
+import { ExternalLinkIcon } from "../components/external-link-icon.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
+import { buttonVariants } from "../components/ui/button.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
 import { taskLabel } from "../lib/format.ts";
@@ -57,8 +59,14 @@ export function CompletedPage() {
         cell: (cell) => {
           const task = cell.row.original;
           return task.prUrl ? (
-            <a href={task.prUrl} target="_blank" rel="noreferrer" className="underline">
+            <a
+              href={task.prUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
               {`PR ${cell.getValue()}`}
+              <ExternalLinkIcon />
             </a>
           ) : (
             cell.getValue()

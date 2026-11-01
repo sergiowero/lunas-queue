@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
+import { buttonVariants } from "../components/ui/button.tsx";
 
 describe("pestaña Completed", () => {
   it("enlaza desde la navegación y lista tareas completadas de todos los proyectos", async () => {
@@ -67,5 +68,59 @@ describe("pestaña Completed", () => {
     });
     renderApp("/completed", fake);
     expect(await screen.findByText("No hay tareas completadas.")).toBeTruthy();
+  });
+  it("muestra el PR como botón outline sm que abre en otra pestaña", async () => {
+    const fake = new FakeApi();
+    fake.addTask(fake.addProject().id, {
+      intent: "Con PR",
+      state: "completed",
+      subState: null,
+      prUrl: "https://github.com/o/r/pull/7",
+      prState: "merged",
+    });
+    renderApp("/completed", fake);
+
+    const row = within(await screen.findByRole("row", { name: /Con PR/ }));
+    const link = row.getByRole("link", { name: "PR merged" });
+    expect(link.getAttribute("href")).toBe("https://github.com/o/r/pull/7");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noreferrer");
+    for (const cls of buttonVariants({ variant: "outline", size: "sm" }).split(" ")) {
+      expect(link.classList.contains(cls)).toBe(true);
+    }
+  });
+
+  it("el botón del PR lleva un icono de enlace externo decorativo", async () => {
+    const fake = new FakeApi();
+    fake.addTask(fake.addProject().id, {
+      intent: "Con PR",
+      state: "completed",
+      subState: null,
+      prUrl: "https://github.com/o/r/pull/7",
+      prState: "merged",
+    });
+    renderApp("/completed", fake);
+
+    const link = await screen.findByRole("link", { name: "PR merged" });
+    const icon = link.querySelector("svg");
+    expect(icon?.getAttribute("data-icon")).toBe("external-link");
+    expect(icon?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("sin prUrl la celda del PR es texto, sin enlace ni icono", async () => {
+    const fake = new FakeApi();
+    fake.addTask(fake.addProject().id, {
+      intent: "Sin PR",
+      state: "completed",
+      subState: null,
+      prUrl: null,
+      prState: null,
+    });
+    renderApp("/completed", fake);
+
+    const row = within(await screen.findByRole("row", { name: /Sin PR/ }));
+    expect(row.getByText("—")).toBeTruthy();
+    expect(row.queryByRole("link", { name: /^PR / })).toBeNull();
+    expect(document.querySelector('[data-icon="external-link"]')).toBeNull();
   });
 });
