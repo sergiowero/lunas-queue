@@ -23,6 +23,14 @@ describe("api.focusRun", () => {
     expect(fake.focused).toEqual([run.herdrName]);
   });
 
+  it("el FakeApi solo enfoca con POST, como el servidor: un GET responde 404 y no enfoca", async () => {
+    const { fake, task } = seeded();
+    const run = fake.startRun(task.id, "implement");
+    const response = await fake.fetch(`/api/runs/${run.id}/focus`);
+    expect(response.status).toBe(404);
+    expect(fake.focused).toEqual([]);
+  });
+
   it("un Run que no existe falla con 404 not_found", async () => {
     seeded();
     await expect(api.focusRun("no-existe")).rejects.toMatchObject({

@@ -104,6 +104,8 @@ export class FakeApi {
   hookExecutionsFail = false;
   /** Tareas cuyo GET .../runs responde 500. */
   readonly runsFail = new Set<string>();
+  /** Si se asigna, GET .../runs no responde hasta que la promesa se resuelva (consulta pendiente). */
+  runsGate: Promise<void> | null = null;
   readonly requests: Request[] = [];
   readonly questions: Json<Question>[] = [];
   /** Lo que respondería el RunWatcher: los agentes bloqueados ahora. */
@@ -294,6 +296,7 @@ export class FakeApi {
     const method = init?.method ?? "GET";
     const body = typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : undefined;
     this.requests.push({ method, path: url.pathname + url.search, body });
+    if (this.runsGate && /^\/api\/tasks\/[^/]+\/runs$/.test(url.pathname)) await this.runsGate;
     const [status, payload] = this.route(method, url, body);
     return new Response(status === 204 ? null : JSON.stringify(payload), {
       status,
@@ -341,7 +344,8 @@ export class FakeApi {
       this.focused.push(agent.agentName);
       return [204, null];
     }
-    if (resource === "runs") return this.focusRun(id, sub);
+    if (resource === "runs" && method === "POST") return this.focusRun(id, sub);
+    if (resource === "runs") return notFound;
     if (resource === "queue") return [200, this.queue ?? this.defaultQueue(url)];
     if (resource !== "tasks") return notFound;
 
