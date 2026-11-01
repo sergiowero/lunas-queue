@@ -1,7 +1,13 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FakeApi, SPEC_CONTENT } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
+import * as format from "../lib/format.ts";
+
+vi.mock("../lib/format.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/format.ts")>();
+  return { ...actual, formatAgent: vi.fn(actual.formatAgent) };
+});
 
 function seeded() {
   const fake = new FakeApi();
@@ -149,6 +155,20 @@ describe("detalle de tarea", () => {
     expect(within(dialog).queryByRole("textbox")).toBeNull();
     await user.click(within(dialog).getByRole("button", { name: "Cerrar" }));
     expect(within(rows[1] as HTMLElement).getByText(failed.herdrPane as string)).toBeTruthy();
+  });
+
+  it("el panel de Runs obtiene el Agente del helper compartido formatAgent", async () => {
+    const { fake, task } = seeded();
+    fake.startRun(task.id, "refine");
+    const original = vi.mocked(format.formatAgent).getMockImplementation();
+    vi.mocked(format.formatAgent).mockImplementation(() => "agente-del-helper");
+    try {
+      renderApp(`/tasks/${task.id}`, fake);
+      const runs = await section("Runs");
+      expect(await runs.findByText("agente-del-helper")).toBeTruthy();
+    } finally {
+      if (original) vi.mocked(format.formatAgent).mockImplementation(original);
+    }
   });
 
   it("muestra la última página de Runs por default y permite navegar", async () => {
