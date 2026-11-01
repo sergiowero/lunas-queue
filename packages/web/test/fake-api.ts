@@ -110,7 +110,7 @@ export class FakeApi {
   blocked: Json<BlockedAgent>[] = [];
   /** Nombres de agente que la UI pidió enfocar en herdr. */
   readonly focused: string[] = [];
-  /** Si se fija, `POST /api/blocked/:runId/focus` responde este error de herdr. */
+  /** Si se fija, `POST /api/blocked/:runId/focus` y `POST /api/runs/:runId/focus` responden este error de herdr. */
   focusError: { status: number; error: string; message: string } | null = null;
   /** Si el agente que preguntó sigue vivo: la respuesta va al pane; si no, a un Run nuevo. */
   agentAlive = false;
@@ -301,6 +301,21 @@ export class FakeApi {
     });
   };
 
+  /** Como `runRoutes`: 404 sin Run, 409 sin pane, y recién entonces lo que responda herdr. */
+  private focusRun(id: string | undefined, sub: string | undefined): [number, unknown] {
+    const run = this.runs.find((r) => r.id === id);
+    if (sub !== "focus" || !run) return [404, { error: "not_found" }];
+    if (!run.herdrPane || !run.herdrName) {
+      return [409, { error: "no_pane", message: "el Run no tiene un pane de herdr" }];
+    }
+    if (this.focusError) {
+      const { status, ...error } = this.focusError;
+      return [status, error];
+    }
+    this.focused.push(run.herdrName);
+    return [204, null];
+  }
+
   private route(method: string, url: URL, body: unknown): [number, unknown] {
     const parts = url.pathname.split("/").filter(Boolean).slice(1);
     const [resource, id, sub, version, action] = parts;
@@ -326,6 +341,7 @@ export class FakeApi {
       this.focused.push(agent.agentName);
       return [204, null];
     }
+    if (resource === "runs") return this.focusRun(id, sub);
     if (resource === "queue") return [200, this.queue ?? this.defaultQueue(url)];
     if (resource !== "tasks") return notFound;
 
