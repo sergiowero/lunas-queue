@@ -14,6 +14,7 @@ export const TaskCommand = z.enum([
   "delivery_conflict",
   "escalate",
   "cancel",
+  "pause",
   "resume",
   "dispatch",
   "ask_human",

@@ -26,6 +26,7 @@ describe("evento task.transitioned", () => {
       "delivery_conflict",
       "escalate",
       "cancel",
+      "pause",
       "resume",
       "dispatch",
       "ask_human",

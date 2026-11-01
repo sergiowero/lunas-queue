@@ -12,11 +12,12 @@ import { IntentText } from "../components/task/intent-text.tsx";
 import { RunsPanel } from "../components/task/runs.tsx";
 import { SpecPanel } from "../components/task/spec.tsx";
 import { UsagePanel } from "../components/task/usage.tsx";
+import { PauseTaskButton, ResumeTaskButton } from "../components/task-actions.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { ApiError, api, type Json } from "../lib/api.ts";
-import { formatDate, isTerminal } from "../lib/format.ts";
+import { canPause, canResume, formatDate, isTerminal } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/tasks/$taskId");
@@ -72,30 +73,6 @@ function CancelTask({ task }: { task: Json<Task> }) {
   );
 }
 
-function ResumeTask({ task }: { task: Json<Task> }) {
-  const queryClient = useQueryClient();
-  const resume = useMutation({
-    mutationFn: () => api.resumeTask(task.id),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["task", task.id] });
-      await queryClient.invalidateQueries({ queryKey: ["queue"] });
-      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
-    },
-  });
-  return (
-    <div className="flex items-center gap-2 text-sm">
-      <Button size="sm" disabled={resume.isPending} onClick={() => resume.mutate()}>
-        Reanudar tarea
-      </Button>
-      {resume.error && (
-        <span role="alert" className="text-destructive">
-          {resume.error.message}
-        </span>
-      )}
-    </div>
-  );
-}
-
 function Header({ task }: { task: Json<Task> }) {
   const projects = useQuery(queries.projects());
   const project = projects.data?.find((p) => p.id === task.projectId);
@@ -117,7 +94,8 @@ function Header({ task }: { task: Json<Task> }) {
         </div>
         {!isTerminal(task.state) && (
           <div className="flex flex-wrap items-center gap-2">
-            {task.state === "needs_human" && <ResumeTask task={task} />}
+            {canPause(task.state) && <PauseTaskButton task={task} variant="text" />}
+            {canResume(task.state) && <ResumeTaskButton task={task} variant="text" />}
             <CancelTask task={task} />
           </div>
         )}

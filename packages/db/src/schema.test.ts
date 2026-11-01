@@ -99,6 +99,51 @@ describe("tasks", () => {
     expect(migration).not.toMatch(/DROP TABLE/);
   });
 
+  it("la migración de paused recrea tasks conservando filas, Runs, número y triggers", () => {
+    // Base con las migraciones previas a 0010_task_paused: el CHECK de state no acepta paused.
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-drizzle-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8"));
+      journal.entries = journal.entries.filter((e: { tag: string }) => e.tag < "0010");
+      writeFileSync(journalFile, JSON.stringify(journal));
+      const { db } = freshDatabase();
+      migrate(db, { migrationsFolder: previous });
+      const p = insertProject(db);
+      const t = insertTask(db, p.id, { state: "in_progress", subState: "running" });
+      insertRun(db, t.id);
+      const numberBefore = t.number;
+      expect(() => insertTask(db, p.id, { state: "paused", subState: null })).toThrow(CHECK);
+
+      migrateDatabase(db);
+
+      expect(db.select().from(tasks).where(eq(tasks.id, t.id)).get()).toMatchObject({
+        state: "in_progress",
+        subState: "running",
+        number: numberBefore,
+      });
+      expect(db.$client.prepare("select count(*) from runs").pluck().get()).toBe(1);
+      // Sin la migración el CHECK rechaza paused: la aserción falla aquí, no con un error suelto.
+      let paused: ReturnType<typeof insertTask> | undefined;
+      expect(() => {
+        paused = insertTask(db, p.id, { state: "paused", subState: null });
+      }).not.toThrow();
+      expect(paused?.state).toBe("paused");
+      // Los triggers de tasks se recrean: el número se asigna y no cambia.
+      expect(paused?.number).toBe((numberBefore ?? 0) + 1);
+      expect(() => db.update(tasks).set({ number: 99 }).where(eq(tasks.id, t.id)).run()).toThrow(
+        /el número de una tarea no cambia/,
+      );
+      expect(() => insertTask(db, p.id, { state: "otro" as never })).toThrow(CHECK);
+      expect(db.$client.pragma("foreign_keys", { simple: true })).toBe(1);
+      expect(db.$client.pragma("foreign_key_check")).toEqual([]);
+      expect(db.$client.pragma("integrity_check", { simple: true })).toBe("ok");
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
+  });
+
   it("número: entero positivo y único, asignado si el insert no lo trae", () => {
     const db = migratedDatabase();
     const p = insertProject(db);

@@ -67,7 +67,7 @@ describe("pendingPhase", () => {
     expect(pendingPhase("verification")).toBe("verify");
   });
 
-  it.each(["refined", "needs_human", "completed", "cancelled"] as const)(
+  it.each(["refined", "needs_human", "paused", "completed", "cancelled"] as const)(
     "%s no lleva agente",
     (state) => {
       expect(pendingPhase(state)).toBeNull();
@@ -93,6 +93,14 @@ describe("ready set", () => {
       projectId: alfa.id,
       expected: { state: "in_progress", subState: "queued" },
     });
+  });
+
+  it("una tarea paused no se despacha aunque esté lista y otra queued sí", () => {
+    const result = plan([
+      task("pausada", { state: "paused", subState: null }),
+      task("lista", { state: "in_progress" }),
+    ]);
+    expect(dispatched(result)).toEqual(["lista"]);
   });
 
   it("una tarea espera hasta que todas sus dependencias tengan el PR mergeado", () => {
@@ -424,6 +432,17 @@ describe("dependencias que ya no se entregarán", () => {
         task("fin", { state: "cancelled", subState: null }),
       ],
       [edge("humano", "cancelada"), edge("fin", "cancelada")],
+    );
+    expect(result.escalate).toEqual([]);
+  });
+
+  it("no escala a un dependiente paused: escalate se rechaza en paused", () => {
+    const result = plan(
+      [
+        task("cerrada", { state: "completed", subState: null, prState: "closed" }),
+        task("pausada", { state: "paused", subState: null }),
+      ],
+      [edge("pausada", "cerrada")],
     );
     expect(result.escalate).toEqual([]);
   });

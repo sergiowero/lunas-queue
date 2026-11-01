@@ -44,6 +44,8 @@ export type CommandInput =
   | { type: "delivery_conflict" }
   | { type: "escalate"; reason: EscalationReason; note?: string }
   | { type: "cancel"; note?: string }
+  // deliveryInProgress: el Run del verificador sigue abierto con el handoff guardado (entrega).
+  | { type: "pause"; deliveryInProgress: boolean }
   // resetIteration: el humano concede un nuevo ciclo de verificación completo.
   | { type: "resume"; resumeTo: TaskState; resetIteration?: boolean }
   | { type: "dispatch" }
@@ -70,6 +72,7 @@ export const COMMAND_ACTORS: Readonly<Record<TaskCommand, readonly Actor[]>> = {
   delivery_conflict: ["system"],
   escalate: ["system"],
   cancel: ["human"],
+  pause: ["human"],
   resume: ["human"],
   dispatch: ["system"],
   ask_human: ["agent"],
@@ -79,6 +82,7 @@ export const COMMAND_ACTORS: Readonly<Record<TaskCommand, readonly Actor[]>> = {
 
 const AGENT_STATES: readonly TaskState[] = ["draft", "in_progress", "verification"];
 const TERMINAL_STATES: readonly TaskState[] = ["completed", "cancelled"];
+const PAUSABLE_STATES: readonly TaskState[] = ["draft", "refined", "in_progress", "verification"];
 const RESUMABLE_STATES: readonly TaskState[] = ["draft", "refined", "in_progress", "verification"];
 
 /** Sub-estado con el que se entra a un estado: queued si lleva agente, null si no. */
@@ -192,7 +196,7 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
       };
     case "escalate":
       return {
-        from: (t) => !isTerminal(t.state) && t.state !== "needs_human",
+        from: (t) => !isTerminal(t.state) && t.state !== "needs_human" && t.state !== "paused",
         outcome: () => ({ to: "needs_human", reason: command.reason }),
       };
     case "cancel":
@@ -200,9 +204,19 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
         from: (t) => !isTerminal(t.state),
         outcome: () => ({ to: "cancelled" }),
       };
+    case "pause":
+      return {
+        from: (t) => PAUSABLE_STATES.includes(t.state),
+        // La entrega (PR) corre con el Run del verificador abierto: pausar la dejaría a medias.
+        guard: () =>
+          task.state === "verification" && command.deliveryInProgress
+            ? "la entrega está en curso"
+            : undefined,
+        outcome: () => ({ to: "paused" }),
+      };
     case "resume":
       return {
-        from: at("needs_human", null),
+        from: (t) => at("needs_human", null)(t) || at("paused", null)(t),
         guard: () =>
           RESUMABLE_STATES.includes(command.resumeTo)
             ? undefined

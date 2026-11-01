@@ -123,6 +123,25 @@ describe("QuestionEscalations", () => {
     expect(s.questions.get(question.id)?.status).toBe("cancelled");
   });
 
+  it("pausar la tarea con una pregunta abierta la cancela y apaga su aviso", async () => {
+    const s = setup();
+    const question = s.ask();
+    s.escalations.onTransition(transitioned(s.task.id, running, waiting));
+    const paused = applyTransition(s.db as never, {
+      taskId: s.task.id,
+      actor: "human",
+      command: { type: "pause", deliveryInProgress: false },
+    });
+    expect(paused.ok).toBe(true);
+    s.escalations.onTransition(
+      transitioned(s.task.id, waiting, { state: "paused", subState: null }),
+    );
+
+    await vi.advanceTimersByTimeAsync(5 * MIN);
+    expect(s.notifications).toEqual([]);
+    expect(s.questions.get(question.id)?.status).toBe("cancelled");
+  });
+
   it("otras transiciones y otros topics no hacen nada", async () => {
     const s = setup();
     s.ask();

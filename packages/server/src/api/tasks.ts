@@ -1,6 +1,11 @@
 // Rutas de tareas y de su DAG (UW-07, ADR 0010). La validación vive en @lunasq/schemas y las
 // reglas en TaskRepository; aquí solo se traducen sus errores a códigos HTTP.
-import { type TaskRepository, TaskRepositoryError, type TransitionTaskResult } from "@lunasq/db";
+import {
+  type RunRepository,
+  type TaskRepository,
+  TaskRepositoryError,
+  type TransitionTaskResult,
+} from "@lunasq/db";
 import { TaskCancel, TaskCreate, TaskListQuery, TaskUpdate } from "@lunasq/schemas";
 import { type Context, Hono } from "hono";
 import { invalidInput, notFound, readJson, readOptionalJson } from "./http.ts";
@@ -19,7 +24,7 @@ function transitionError(c: Context, result: Extract<TransitionTaskResult, { ok:
   return c.json({ error: result.error.code, message: result.error.message }, 409);
 }
 
-export function taskRoutes(tasks: TaskRepository): Hono {
+export function taskRoutes(tasks: TaskRepository, runs: RunRepository): Hono {
   return new Hono()
     .get("/", (c) => {
       const query = TaskListQuery.safeParse(c.req.query());
@@ -59,6 +64,16 @@ export function taskRoutes(tasks: TaskRepository): Hono {
       const input = TaskCancel.safeParse(json.body);
       if (!input.success) return invalidInput(c, input.error);
       const result = tasks.cancel(c.req.param("id"), input.data.note);
+      if (!result.ok) return transitionError(c, result);
+      const task = tasks.get(result.task.id);
+      return task ? c.json(task) : notFound(c);
+    })
+    .post("/:id/pause", (c) => {
+      // La API REST no autentica al llamante: es el canal local del humano (como cancel y resume).
+      // Que solo el humano pause (AC-3) lo impone el dominio: esta ruta emite siempre con actor human.
+      const id = c.req.param("id");
+      // La entrega corre con el Run del verificador abierto y su pass guardado: no se pausa.
+      const result = tasks.pause(id, runs.deliveryInProgress(id));
       if (!result.ok) return transitionError(c, result);
       const task = tasks.get(result.task.id);
       return task ? c.json(task) : notFound(c);

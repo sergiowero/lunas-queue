@@ -124,6 +124,20 @@ describe("bandeja", () => {
     expect(screen.queryByText("Nada espera por ti.")).toBeNull();
   });
 
+  it("una tarea pausada no está en la bandeja ni suma al menú; la de needs_human sí", async () => {
+    const { fake, project } = seeded();
+    const paused = fake.addTask(project.id, { intent: "Pausada por mí" });
+    fake.transition(paused.id, "paused", null);
+    const escalated = fake.addTask(project.id, { intent: "Escalada" });
+    fake.transition(escalated.id, "needs_human", null);
+    renderApp("/inbox", fake);
+
+    const attention = await section("Tareas que necesitan atención");
+    expect(await attention.findByRole("link", { name: "Escalada" })).toBeTruthy();
+    expect(screen.queryByText("Pausada por mí")).toBeNull();
+    expect(await screen.findByRole("link", { name: "Bandeja, 1 pendientes" })).toBeTruthy();
+  });
+
   it("muestra la pregunta abierta con su contexto y la responde", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Migrar usuarios" });

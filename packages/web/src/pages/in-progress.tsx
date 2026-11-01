@@ -3,16 +3,17 @@
 import type { RunView, Task } from "@lunasq/schemas";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
+import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { PaneFocusButton } from "../components/pane-focus-button.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
+import { PauseTaskButton } from "../components/task-actions.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { formatAgent, SUB_STATE_LABEL, taskLabel } from "../lib/format.ts";
+import { canPause, formatAgent, SUB_STATE_LABEL, taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 type Row = Json<Task>;
@@ -36,6 +37,18 @@ function runCell(run: LatestRun | undefined, format: (run: Run) => string): stri
   if (run === undefined || run === "loading") return "…";
   if (run === "error") return "error";
   return run ? format(run) : "—";
+}
+
+/**
+ * Solo el icono: el nombre accesible lleva la tarea. Una tarea pausada deja de estar en la lista al
+ * refrescar, así que aquí solo hay pausa. Es un componente de módulo (no una función en línea):
+ * las columnas se recrean al llegar los Runs y una celda nueva remontaría el botón, perdiendo su
+ * estado pendiente y su error.
+ */
+function ActionsCell({ row }: CellContext<Row, unknown>) {
+  return canPause(row.original.state) ? (
+    <PauseTaskButton task={row.original} variant="icon" />
+  ) : null;
 }
 
 export function InProgressPage() {
@@ -127,6 +140,7 @@ export function InProgressPage() {
           );
         },
       }),
+      column.display({ id: "actions", header: "Acciones", cell: ActionsCell }),
     ],
     [names, latestRuns],
   );

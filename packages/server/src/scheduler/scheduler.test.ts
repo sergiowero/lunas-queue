@@ -81,6 +81,33 @@ describe("Scheduler", () => {
     expect(result.dispatched).toEqual([alta.id, baja.id]);
   });
 
+  it("no despacha una tarea pausada y despacha la que está en queued", async () => {
+    const { db, project, dispatcher, scheduler, errors } = setup();
+    const pausada = insertTask(db, project.id, { priority: 900 });
+    const lista = insertTask(db, project.id, { priority: 100 });
+    const paused = transitionTask(db, {
+      taskId: pausada.id,
+      actor: "human",
+      command: { type: "pause", deliveryInProgress: false },
+    });
+    expect(paused.ok).toBe(true);
+    const result = await scheduler.run();
+    expect(result.dispatched).toEqual([lista.id]);
+    expect(dispatcher.calls.map((d) => d.taskId)).toEqual([lista.id]);
+    expect(errors).toEqual([]);
+  });
+
+  it("una pausada con una dependencia cerrada no se escala ni da error", async () => {
+    const { db, project, scheduler, errors } = setup();
+    const dep = insertTask(db, project.id, { state: "cancelled", subState: null });
+    const pausada = insertTask(db, project.id, { state: "paused", subState: null });
+    db.insert(taskDependencies).values({ taskId: pausada.id, dependsOnId: dep.id }).run();
+    expect((await scheduler.run()).escalated).toEqual([]);
+    expect(errors).toEqual([]);
+    const row = db.$client.prepare("select state from tasks where id = ?").get(pausada.id);
+    expect(row).toEqual({ state: "paused" });
+  });
+
   it("en pasadas sucesivas nunca excede los límites", async () => {
     const { db, project, dispatcher, scheduler } = setup({ config: { globalConcurrency: 3 } });
     const ids = Array.from({ length: 8 }, () => insertTask(db, project.id).id);

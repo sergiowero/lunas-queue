@@ -34,6 +34,7 @@ const passing: { [K in CommandInput["type"]]: Extract<CommandInput, { type: K }>
   delivery_conflict: { type: "delivery_conflict" },
   escalate: { type: "escalate", reason: "phase_timeout" },
   cancel: { type: "cancel" },
+  pause: { type: "pause", deliveryInProgress: false },
   resume: { type: "resume", resumeTo: "in_progress" },
   dispatch: { type: "dispatch" },
   ask_human: { type: "ask_human" },
@@ -51,12 +52,13 @@ const actorFor = (command: CommandInput["type"]): Actor => {
 const AGENT_STATES = ["draft", "in_progress", "verification"] as const;
 const SUB_STATES = ["queued", "running", "waiting_human"] as const;
 
-// Las 13 combinaciones coherentes de estado y sub-estado.
+// Las 14 combinaciones coherentes de estado y sub-estado.
 const SNAPSHOTS: [TaskState, SubState | null][] = [
   ...AGENT_STATES.flatMap((s) => SUB_STATES.map((sub): [TaskState, SubState] => [s, sub])),
   ["refined", null],
   ["completed", null],
   ["needs_human", null],
+  ["paused", null],
   ["cancelled", null],
 ];
 
@@ -77,12 +79,16 @@ add("verification/running", "delivery_conflict", "in_progress/queued");
 add("completed/-", "delivery_conflict", "in_progress/queued");
 add("needs_human/-", "resume", "in_progress/queued");
 add("needs_human/-", "cancel", "cancelled/-");
+add("paused/-", "resume", "in_progress/queued");
+add("paused/-", "cancel", "cancelled/-");
+add("refined/-", "pause", "paused/-");
 add("refined/-", "escalate", "needs_human/-");
 add("refined/-", "cancel", "cancelled/-");
 for (const s of AGENT_STATES) {
   for (const sub of SUB_STATES) {
     add(`${s}/${sub}`, "escalate", "needs_human/-");
     add(`${s}/${sub}`, "cancel", "cancelled/-");
+    add(`${s}/${sub}`, "pause", "paused/-");
   }
   add(`${s}/queued`, "dispatch", `${s}/running`);
   add(`${s}/running`, "ask_human", `${s}/waiting_human`);
@@ -122,10 +128,10 @@ describe("transition: tabla completa de estados × comandos", () => {
     }
   }
 
-  it("la tabla cubre las 13 combinaciones y los 14 comandos", () => {
-    expect(SNAPSHOTS).toHaveLength(13);
-    expect(COMMANDS).toHaveLength(14);
-    expect(Object.keys(VALID)).toHaveLength(42);
+  it("la tabla cubre las 14 combinaciones y los 15 comandos", () => {
+    expect(SNAPSHOTS).toHaveLength(14);
+    expect(COMMANDS).toHaveLength(15);
+    expect(Object.keys(VALID)).toHaveLength(54);
   });
 });
 
@@ -169,6 +175,7 @@ describe("transition: actores", () => {
     delivery_conflict: snap("verification", "running"),
     escalate: snap("in_progress", "running"),
     cancel: snap("in_progress", "running"),
+    pause: snap("in_progress", "running"),
     resume: snap("needs_human", null),
     dispatch: snap("draft", "queued"),
     ask_human: snap("draft", "running"),
@@ -187,6 +194,7 @@ describe("transition: actores", () => {
       delivery_conflict: ["system"],
       escalate: ["system"],
       cancel: ["human"],
+      pause: ["human"],
       resume: ["human"],
       dispatch: ["system"],
       ask_human: ["agent"],
@@ -255,6 +263,20 @@ describe("transition: guards", () => {
     for (const resumeTo of ["completed", "cancelled", "needs_human"] as const) {
       rejects(snap("needs_human", null), { type: "resume", resumeTo }, "human");
     }
+  });
+
+  it("pause desde verification se rechaza mientras la entrega está en curso", () => {
+    rejects(snap("verification", "running"), { type: "pause", deliveryInProgress: true }, "human");
+  });
+
+  it("pause con la entrega en curso solo se rechaza en verification", () => {
+    expect(
+      transition(
+        snap("in_progress", "running"),
+        { type: "pause", deliveryInProgress: true },
+        "human",
+      ),
+    ).toMatchObject({ ok: true, next: snap("paused", null) });
   });
 
   it("el evento debe cumplir su esquema: nota vacía o larga y razón fuera del enum se rechazan", () => {
@@ -403,12 +425,88 @@ describe("transition: humano en el loop", () => {
   });
 });
 
+describe("transition: pausa", () => {
+  const pausable: [TaskState, SubState | null][] = SNAPSHOTS.filter(([state]) =>
+    ["draft", "refined", "in_progress", "verification"].includes(state),
+  );
+
+  it("pause deja la tarea en paused sin sub-estado, conserva la iteración y registra el origen", () => {
+    for (const [state, sub] of pausable) {
+      const result = transition(snap(state, sub, 2), passing.pause, "human");
+      expect(result).toMatchObject({
+        ok: true,
+        next: snap("paused", null, 2),
+        event: {
+          type: "task.transitioned",
+          actor: "human",
+          payload: {
+            command: "pause",
+            from: { state, subState: sub },
+            to: { state: "paused", subState: null },
+            verificationIteration: 2,
+          },
+        },
+      });
+    }
+  });
+
+  it("pause se rechaza en completed, cancelled, needs_human y paused", () => {
+    for (const state of ["completed", "cancelled", "needs_human", "paused"] as const) {
+      expect(transition(snap(state, null), passing.pause, "human")).toMatchObject({
+        ok: false,
+        error: { code: "invalid_transition" },
+      });
+    }
+  });
+
+  it("pause por el sistema o el agente se rechaza con actor_not_allowed", () => {
+    for (const actor of ["system", "agent"] as const) {
+      expect(transition(snap("in_progress", "running"), passing.pause, actor)).toMatchObject({
+        ok: false,
+        error: { code: "actor_not_allowed" },
+      });
+    }
+  });
+
+  it("resume desde paused vuelve a in_progress/queued conservando la iteración", () => {
+    expect(
+      transition(snap("paused", null, 2), { type: "resume", resumeTo: "in_progress" }, "human"),
+    ).toMatchObject({
+      ok: true,
+      next: snap("in_progress", "queued", 2),
+      event: { payload: { command: "resume", from: { state: "paused", subState: null } } },
+    });
+  });
+
+  it("resume desde paused hacia refined deja el sub-estado en null", () => {
+    expect(
+      transition(snap("paused", null), { type: "resume", resumeTo: "refined" }, "human"),
+    ).toMatchObject({ ok: true, next: snap("refined", null) });
+  });
+
+  it("cancel desde paused deja la tarea en cancelled", () => {
+    expect(transition(snap("paused", null), { type: "cancel" }, "human")).toMatchObject({
+      ok: true,
+      next: snap("cancelled", null),
+    });
+  });
+
+  it("una tarea paused rechaza escalate y todo comando distinto de resume y cancel", () => {
+    for (const command of COMMANDS) {
+      if (command === "resume" || command === "cancel") continue;
+      for (const actor of ["human", "agent", "system"] as const) {
+        expect(transition(snap("paused", null), passing[command], actor).ok).toBe(false);
+      }
+    }
+  });
+});
+
 describe("helpers", () => {
   it("subStateFor da queued a los estados con agente y null al resto", () => {
     expect(subStateFor("draft")).toBe("queued");
     expect(subStateFor("in_progress")).toBe("queued");
     expect(subStateFor("verification")).toBe("queued");
-    for (const s of ["refined", "completed", "needs_human", "cancelled"] as const) {
+    for (const s of ["refined", "completed", "needs_human", "paused", "cancelled"] as const) {
       expect(subStateFor(s)).toBeNull();
     }
   });

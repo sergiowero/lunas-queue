@@ -20,7 +20,25 @@ export function openDatabase(path: string): LunasqDatabase {
   return drizzle({ client: sqlite, schema });
 }
 
-/** Aplica las migraciones pendientes; repetirlo no tiene efecto. */
+/**
+ * Aplica las migraciones pendientes; repetirlo no tiene efecto.
+ *
+ * Las llaves foráneas se apagan mientras corre: drizzle ejecuta cada migración en una transacción,
+ * donde `PRAGMA foreign_keys=OFF` no actúa, y las que recrean una tabla padre (0010 con `tasks`)
+ * borrarían en cascada a sus hijos. Es el procedimiento de SQLite para cambiar un esquema; al
+ * terminar se verifica que no queden filas huérfanas.
+ */
 export function migrateDatabase(db: LunasqDatabase): void {
-  migrate(db, { migrationsFolder });
+  const sqlite = db.$client;
+  const foreignKeys = sqlite.pragma("foreign_keys", { simple: true }) === 1;
+  sqlite.pragma("foreign_keys = OFF");
+  try {
+    migrate(db, { migrationsFolder });
+    const violations = sqlite.pragma("foreign_key_check") as unknown[];
+    if (violations.length > 0) {
+      throw new Error(`la migración dejó ${violations.length} filas con llaves foráneas rotas`);
+    }
+  } finally {
+    sqlite.pragma(`foreign_keys = ${foreignKeys ? "ON" : "OFF"}`);
+  }
 }

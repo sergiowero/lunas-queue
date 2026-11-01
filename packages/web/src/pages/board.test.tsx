@@ -36,6 +36,16 @@ describe("tablero por proyecto", () => {
     expect(screen.queryByText("Ajena")).toBeNull();
   });
 
+  it("una tarea pausada aparece en la columna Paused con su etiqueta", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "lunas-queue" });
+    fake.addTask(project.id, { intent: "En pausa", state: "paused", subState: null });
+    renderApp(`/projects/${project.id}`, fake);
+
+    const column = within(await screen.findByRole("region", { name: "Paused" }));
+    expect(column.getByRole("link", { name: "En pausa" })).toBeTruthy();
+  });
+
   it("muestra el título de la tarea y, mientras no hay, su intent", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });

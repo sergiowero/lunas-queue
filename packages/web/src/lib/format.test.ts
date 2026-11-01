@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatAgent, formatTimeout } from "./format.ts";
+import {
+  BOARD_STATES,
+  canPause,
+  canResume,
+  formatAgent,
+  formatTimeout,
+  STATE_LABEL,
+} from "./format.ts";
 
 describe("formatTimeout", () => {
   it("muestra el timeout configurado sin redondearlo", () => {
@@ -18,5 +25,29 @@ describe("formatAgent", () => {
 
   it("muestra solo el agentKind cuando no hay modelo", () => {
     expect(formatAgent({ agentKind: "claude", model: null })).toBe("claude");
+  });
+});
+
+describe("pausa", () => {
+  it("Paused tiene etiqueta y su columna del tablero", () => {
+    expect(STATE_LABEL.paused).toBe("Paused");
+    expect(BOARD_STATES).toContain("paused");
+  });
+
+  it("se pausan draft, refined, in_progress y verification", () => {
+    expect((["draft", "refined", "in_progress", "verification"] as const).every(canPause)).toBe(
+      true,
+    );
+    for (const state of ["completed", "cancelled", "needs_human", "paused"] as const) {
+      expect(canPause(state)).toBe(false);
+    }
+  });
+
+  it("se reanudan paused y needs_human", () => {
+    expect(canResume("paused")).toBe(true);
+    expect(canResume("needs_human")).toBe(true);
+    for (const state of ["draft", "refined", "in_progress", "completed"] as const) {
+      expect(canResume(state)).toBe(false);
+    }
   });
 });
