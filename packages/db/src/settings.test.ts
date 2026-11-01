@@ -29,6 +29,25 @@ describe("SettingsRepository: proveedores de agente", () => {
     expect(db.select().from(appSettings).all()).toHaveLength(1);
   });
 
+  it("guardar lo que ya está vigente no publica otro settings.updated", () => {
+    const db = migratedDatabase();
+    const repo = new SettingsRepository(db);
+    repo.saveProviders({ claude: false, copilot: true });
+    repo.saveProviders({ claude: false, copilot: true });
+    expect(listPendingOutbox(db)).toHaveLength(1);
+    expect(db.select().from(events).all()).toHaveLength(1);
+    repo.saveProviders({ claude: true, copilot: true });
+    expect(listPendingOutbox(db)).toHaveLength(2);
+  });
+
+  it("guardar los defaults sin configuración previa no publica nada", () => {
+    const db = migratedDatabase();
+    const repo = new SettingsRepository(db);
+    repo.saveProviders({ claude: true, copilot: true });
+    expect(listPendingOutbox(db)).toEqual([]);
+    expect(repo.providers()).toEqual({ claude: true, copilot: true });
+  });
+
   it("registra settings.updated en el outbox sin tarea asociada", () => {
     const db = migratedDatabase();
     new SettingsRepository(db).saveProviders({ claude: true, copilot: false }, "human");

@@ -45,6 +45,7 @@ describe("PUT /api/settings/providers", () => {
     await send("PUT", { claude: false, copilot: false });
     expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: false });
     expect(db.$client.prepare("select count(*) from app_settings").pluck().get()).toBe(1);
+    expect(listPendingOutbox(db)).toHaveLength(1);
   });
 
   it.each([

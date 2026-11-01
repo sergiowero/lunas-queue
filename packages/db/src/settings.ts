@@ -3,6 +3,7 @@
 // misma configuración deja el mismo estado.
 import {
   type Actor,
+  AgentKind,
   AgentProviderSettings,
   SETTINGS_UPDATED,
   SettingsUpdatedPayload,
@@ -40,10 +41,16 @@ export class SettingsRepository implements ProviderSettingsReader {
     return readProviderSettings(this.db);
   }
 
-  /** Guarda la configuración y publica settings.updated en la misma transacción. */
+  /**
+   * Guarda la configuración y publica settings.updated en la misma transacción. Idempotente: si
+   * lo pedido ya es lo vigente no escribe ni publica, para no despertar al scheduler ni a la UI
+   * sin un cambio real.
+   */
   saveProviders(input: unknown, actor: Actor = "human"): AgentProviderSettings {
     const providers = AgentProviderSettings.parse(input);
     this.db.transaction((tx) => {
+      const current = readProviderSettings(tx);
+      if (AgentKind.options.every((kind) => current[kind] === providers[kind])) return;
       tx.insert(appSettings)
         .values({ key: PROVIDERS_KEY, value: providers })
         .onConflictDoUpdate({ target: appSettings.key, set: { value: providers } })
