@@ -1,14 +1,14 @@
 // Bandeja (docs/design.md §Preguntas del agente y bloqueos, ADR uw-27-bandeja): todo lo que espera
-// al humano en un solo lugar. Las specs por aprobar (tareas en refined) se resuelven con el mismo
-// gate del detalle; las preguntas se responden aquí; los bloqueos por permiso se responden en
-// herdr, y la bandeja lleva la vista al pane del agente.
+// al humano en un solo lugar. Las specs por aprobar (tareas en refined) son solo una lista de
+// enlaces: la spec y su gate se revisan en el detalle de la tarea (ADR 0015); las preguntas se
+// responden aquí; los bloqueos por permiso se responden en herdr, y la bandeja lleva la vista al
+// pane del agente.
 import type { BlockedAgent, Question, QuestionDelivery, Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useId, useState } from "react";
 import { Muted, Section } from "../components/section.tsx";
 import { Loading, MutationError, QueryError, StateBadges } from "../components/status.tsx";
-import { SpecVersions } from "../components/task/spec.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
@@ -27,6 +27,32 @@ const DELIVERY_TEXT: Record<QuestionDelivery, string> = {
   new_run: "Respuesta enviada: irá a un agente nuevo.",
 };
 
+/** Nombre del proyecto de la tarea, si ya cargó la lista de proyectos. */
+function ProjectName({ task }: { task: Json<Task> | undefined }) {
+  const projects = useQuery(queries.projects());
+  const project = projects.data?.find((p) => p.id === task?.projectId);
+  return project ? <span className="text-xs text-muted-foreground">{project.name}</span> : null;
+}
+
+function TaskLink({
+  id,
+  task,
+  taskId,
+}: {
+  id?: string;
+  task: Json<Task> | undefined;
+  taskId: string;
+}) {
+  return (
+    <>
+      {task && <TaskNumber number={task.number} />}
+      <Link id={id} to="/tasks/$taskId" params={{ taskId }} className="font-medium underline">
+        {task ? taskLabel(task) : taskId}
+      </Link>
+    </>
+  );
+}
+
 /** Un pendiente: tarjeta con nombre (la tarea) para lectores de pantalla y tests. */
 function Item({
   task,
@@ -38,25 +64,21 @@ function Item({
   children: ReactNode;
 }) {
   const id = useId();
-  const projects = useQuery(queries.projects());
-  const project = projects.data?.find((p) => p.id === task?.projectId);
   return (
     <article
       aria-labelledby={id}
       className="flex flex-col gap-3 rounded-md border border-border p-3"
     >
       <header className="flex flex-wrap items-baseline gap-2">
-        {task && <TaskNumber number={task.number} />}
-        <Link id={id} to="/tasks/$taskId" params={{ taskId }} className="font-medium underline">
-          {task ? taskLabel(task) : taskId}
-        </Link>
-        {project && <span className="text-xs text-muted-foreground">{project.name}</span>}
+        <TaskLink id={id} task={task} taskId={taskId} />
+        <ProjectName task={task} />
       </header>
       {children}
     </article>
   );
 }
 
+/** Una fila por tarea en refined: la spec y su gate viven en el detalle de la tarea. */
 function SpecsSection({ refined, tasks }: { refined: Json<Task>[]; tasks: Inbox["tasks"] }) {
   return (
     <Section title="Specs por aprobar">
@@ -67,13 +89,14 @@ function SpecsSection({ refined, tasks }: { refined: Json<Task>[]; tasks: Inbox[
       ) : refined.length === 0 ? (
         <Muted>Ninguna spec espera aprobación.</Muted>
       ) : (
-        <div className="flex flex-col gap-4">
+        <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
           {refined.map((task) => (
-            <Item key={task.id} task={task} taskId={task.id}>
-              <SpecVersions task={task} />
-            </Item>
+            <li key={task.id} className="flex flex-wrap items-baseline gap-2 px-3 py-2">
+              <TaskLink task={task} taskId={task.id} />
+              <ProjectName task={task} />
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </Section>
   );

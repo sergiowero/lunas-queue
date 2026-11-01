@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { FakeApi, SPEC_CONTENT } from "../../test/fake-api.ts";
+import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 import { BLOCKED_REFRESH_MS, queries } from "../lib/queries.ts";
 
@@ -14,6 +14,12 @@ const section = async (name: string) => within(await screen.findByRole("region",
 /** Pendiente dentro de su sección: una tarea puede aparecer en más de una. */
 const item = async (sectionName: string, name: string) =>
   within(await (await section(sectionName)).findByRole("article", { name }));
+/** Fila de la lista de specs: la tarea en refined con su enlace. */
+const specRow = async (name: string) => {
+  const specs = await section("Specs por aprobar");
+  const link = await specs.findByRole("link", { name });
+  return within(link.closest("li") as HTMLElement);
+};
 
 describe("bandeja", () => {
   it("sin nada pendiente lo dice en cada sección", async () => {
@@ -36,22 +42,73 @@ describe("bandeja", () => {
     ).toBeTruthy();
   });
 
-  it("muestra la spec por aprobar con su diff y la aprueba", async () => {
+  it("lista la spec por aprobar como enlace a la tarea con su proyecto", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Login con email" });
     fake.addSpec(task.id);
     fake.transition(task.id, "refined", null);
-    const { user } = renderApp("/inbox", fake);
+    renderApp("/inbox", fake);
 
-    const spec = await item("Specs por aprobar", "Login con email");
-    expect(spec.getByRole("link", { name: "Login con email" })).toBeTruthy();
-    expect(await spec.findByText("lunas-queue")).toBeTruthy();
+    const row = await specRow("Login con email");
+    expect(row.getByRole("link", { name: "Login con email" }).getAttribute("href")).toBe(
+      `/tasks/${task.id}`,
+    );
+    expect(await row.findByText("lunas-queue")).toBeTruthy();
+  });
+
+  it("la lista de specs no muestra la spec ni su gate", async () => {
+    const { fake, project } = seeded();
+    const task = fake.addTask(project.id, { intent: "Login con email" });
+    fake.addSpec(task.id);
+    fake.transition(task.id, "refined", null);
+    renderApp("/inbox", fake);
+
+    await specRow("Login con email");
+    const specs = await section("Specs por aprobar");
+    // Lo que el detalle muestra en cuanto carga la spec; aquí nunca debe aparecer.
+    await expect(specs.findByText(/AC-1: dado un usuario/, {}, { timeout: 200 })).rejects.toThrow();
+    expect(specs.queryByText("Primera versión")).toBeNull();
+    expect(specs.queryByRole("button", { name: "v1" })).toBeNull();
+    expect(specs.queryByRole("button", { name: "Aprobar v1" })).toBeNull();
+    expect(specs.queryByRole("button", { name: "Pedir cambios" })).toBeNull();
+    expect(specs.queryByRole("button", { name: "Editar y aprobar" })).toBeNull();
+    expect(specs.queryByLabelText("Comentarios")).toBeNull();
+    expect(fake.requests.some((r) => r.path.includes("/specs"))).toBe(false);
+  });
+
+  it("cada tarea en refined aparece una sola vez en la lista de specs", async () => {
+    const { fake, project } = seeded();
+    for (const intent of ["Login con email", "Logout", "Reset de contraseña"]) {
+      const task = fake.addTask(project.id, { intent });
+      fake.addSpec(task.id);
+      fake.addSpec(task.id);
+      fake.transition(task.id, "refined", null);
+    }
+    renderApp("/inbox", fake);
+
+    const specs = await section("Specs por aprobar");
+    const rows = await specs.findAllByRole("listitem");
+    expect(rows.map((r) => within(r).getByRole("link").textContent)).toEqual([
+      "Login con email",
+      "Logout",
+      "Reset de contraseña",
+    ]);
+  });
+
+  it("el enlace de la spec lleva al detalle de la tarea con su gate", async () => {
+    const { fake, project } = seeded();
+    const task = fake.addTask(project.id, { intent: "Login con email" });
+    fake.addSpec(task.id);
+    fake.transition(task.id, "refined", null);
+    const { user, router } = renderApp("/inbox", fake);
+
+    await user.click((await specRow("Login con email")).getByRole("link"));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/tasks/${task.id}`));
+    expect(await screen.findByRole("heading", { name: "Login con email" })).toBeTruthy();
+    const spec = await section("Spec");
     expect(await spec.findByText(/AC-1: dado un usuario/)).toBeTruthy();
-    expect(await spec.findByText("Primera versión")).toBeTruthy();
-    await user.click(spec.getByRole("button", { name: "Aprobar v1" }));
-
-    expect(await screen.findByText("Ninguna spec espera aprobación.")).toBeTruthy();
-    expect(fake.task(task.id).state).toBe("in_progress");
+    expect(await spec.findByRole("button", { name: "Aprobar v1" })).toBeTruthy();
   });
 
   it("lista la tarea en needs_human y la cuenta en el menú", async () => {
@@ -65,84 +122,6 @@ describe("bandeja", () => {
     expect(await escalated.findByText("Needs human")).toBeTruthy();
     expect(await screen.findByRole("link", { name: "Bandeja, 1 pendientes" })).toBeTruthy();
     expect(screen.queryByText("Nada espera por ti.")).toBeNull();
-  });
-
-  it("pide cambios a la spec desde la bandeja", async () => {
-    const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Login con email" });
-    fake.addSpec(task.id);
-    fake.transition(task.id, "refined", null);
-    const { user } = renderApp("/inbox", fake);
-
-    const spec = await item("Specs por aprobar", "Login con email");
-    await user.type(await spec.findByLabelText("Comentarios"), "Falta el logout");
-    await user.click(spec.getByRole("button", { name: "Pedir cambios" }));
-
-    expect(await screen.findByText("Ninguna spec espera aprobación.")).toBeTruthy();
-    expect(fake.task(task.id).state).toBe("draft");
-    expect(fake.specs[0]?.reviewComments).toBe("Falta el logout");
-  });
-
-  it("edita la spec y la aprueba como una versión nueva del humano", async () => {
-    const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Login con email" });
-    fake.addSpec(task.id);
-    fake.transition(task.id, "refined", null);
-    const { user } = renderApp("/inbox", fake);
-
-    const spec = await item("Specs por aprobar", "Login con email");
-    await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
-    const editor = spec.getByLabelText("Contenido de la spec (JSON)") as HTMLTextAreaElement;
-    expect(JSON.parse(editor.value)).toEqual(SPEC_CONTENT);
-    const edited = { ...SPEC_CONTENT, requirements: ["El usuario inicia sesión con SSO"] };
-    await user.clear(editor);
-    // user.type interpreta { y [ como teclas especiales; se pega el JSON tal cual.
-    await user.click(editor);
-    await user.paste(JSON.stringify(edited));
-    await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
-
-    expect(await screen.findByText("Ninguna spec espera aprobación.")).toBeTruthy();
-    const latest = fake.specs.at(-1);
-    expect(latest).toMatchObject({ version: 2, createdBy: "human", approval: "approved" });
-    expect(latest?.content.requirements).toEqual(["El usuario inicia sesión con SSO"]);
-    expect(fake.task(task.id).state).toBe("in_progress");
-  });
-
-  it("no manda una edición que no es JSON válido", async () => {
-    const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Login con email" });
-    fake.addSpec(task.id);
-    fake.transition(task.id, "refined", null);
-    const { user } = renderApp("/inbox", fake);
-
-    const spec = await item("Specs por aprobar", "Login con email");
-    await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
-    const editor = spec.getByLabelText("Contenido de la spec (JSON)");
-    await user.clear(editor);
-    await user.type(editor, "no es json");
-    await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
-
-    expect((await spec.findByRole("alert")).textContent).toMatch(/JSON inválido/);
-    expect(fake.requests.some((r) => r.path.endsWith("/edit-and-approve"))).toBe(false);
-  });
-
-  it("muestra los errores de validación del servidor al editar", async () => {
-    const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Login con email" });
-    fake.addSpec(task.id);
-    fake.transition(task.id, "refined", null);
-    const { user } = renderApp("/inbox", fake);
-
-    const spec = await item("Specs por aprobar", "Login con email");
-    await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
-    const editor = spec.getByLabelText("Contenido de la spec (JSON)");
-    await user.clear(editor);
-    await user.click(editor);
-    await user.paste("{}");
-    await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
-
-    expect((await spec.findByRole("alert")).textContent).toMatch(/content\.domainModel: /);
-    expect(fake.task(task.id).state).toBe("refined");
   });
 
   it("muestra la pregunta abierta con su contexto y la responde", async () => {
@@ -252,7 +231,7 @@ describe("bandeja", () => {
     );
   });
 
-  it("todo lo que espera al humano aparece y se resuelve desde la bandeja", async () => {
+  it("las preguntas y bloqueos se resuelven en la bandeja y la spec en el detalle", async () => {
     const { fake, project } = seeded();
     const refined = fake.addTask(project.id, { intent: "Spec pendiente" });
     fake.addSpec(refined.id);
@@ -266,8 +245,6 @@ describe("bandeja", () => {
     fake.block(fake.startRun(stuck.id, "implement"));
     const { user, refresh } = renderApp("/inbox", fake);
 
-    const spec = await item("Specs por aprobar", "Spec pendiente");
-    await user.click(await spec.findByRole("button", { name: "Aprobar v1" }));
     const question = await item("Preguntas abiertas", "Pregunta pendiente");
     await user.type(question.getByLabelText("Respuesta"), "No");
     await user.click(question.getByRole("button", { name: "Responder" }));
@@ -277,11 +254,49 @@ describe("bandeja", () => {
     // El humano responde el permiso en herdr y el RunWatcher deja de verlo bloqueado.
     fake.blocked = [];
     await refresh();
+    expect(await screen.findByText("Ningún agente espera un permiso.")).toBeTruthy();
+
+    await user.click((await specRow("Spec pendiente")).getByRole("link"));
+    await user.click(await (await section("Spec")).findByRole("button", { name: "Aprobar v1" }));
+    expect(await screen.findByText("In progress")).toBeTruthy();
+    const nav = within(screen.getByRole("navigation"));
+    await user.click(nav.getByRole("link", { name: /^Bandeja/ }));
 
     expect(await screen.findByText("Nada espera por ti.")).toBeTruthy();
     expect(fake.task(refined.id).state).toBe("in_progress");
     expect(fake.task(asking.id).subState).toBe("queued");
     expect(fake.focused).toHaveLength(1);
+  });
+
+  it.each([
+    ["aprueba", "in_progress"],
+    ["pide cambios", "draft"],
+    ["edita y aprueba", "in_progress"],
+  ] as const)("si el humano %s en el detalle la spec sale de la bandeja", async (action, state) => {
+    const { fake, project } = seeded();
+    const task = fake.addTask(project.id, { intent: "Login con email" });
+    fake.addSpec(task.id);
+    fake.transition(task.id, "refined", null);
+    const { user } = renderApp("/inbox", fake);
+
+    await user.click((await specRow("Login con email")).getByRole("link"));
+    const spec = await section("Spec");
+    if (action === "aprueba") {
+      await user.click(await spec.findByRole("button", { name: "Aprobar v1" }));
+    } else if (action === "pide cambios") {
+      await user.type(await spec.findByLabelText("Comentarios"), "Falta el logout");
+      await user.click(spec.getByRole("button", { name: "Pedir cambios" }));
+    } else {
+      await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
+      await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
+    }
+    await waitFor(() => expect(fake.task(task.id).state).toBe(state));
+    const nav = within(screen.getByRole("navigation"));
+    await user.click(nav.getByRole("link", { name: /^Bandeja/ }));
+
+    expect(
+      await (await section("Specs por aprobar")).findByText("Ninguna spec espera aprobación."),
+    ).toBeTruthy();
   });
 
   it.each([
@@ -299,31 +314,6 @@ describe("bandeja", () => {
     expect(await (await section(sectionName)).findByRole("alert")).toBeTruthy();
     expect(screen.queryByText("Nada espera por ti.")).toBeNull();
     expect(screen.queryByText(empty)).toBeNull();
-  });
-
-  it("muestra solo el error de la última acción sobre la spec", async () => {
-    const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Login con email" });
-    fake.addSpec(task.id);
-    fake.transition(task.id, "refined", null);
-    const { user } = renderApp("/inbox", fake);
-
-    const spec = await item("Specs por aprobar", "Login con email");
-    // Otro actor saca la tarea de refined: aprobar responde 409.
-    fake.task(task.id).state = "in_progress";
-    await user.click(await spec.findByRole("button", { name: "Aprobar v1" }));
-    expect((await spec.findByRole("alert")).textContent).toMatch(/no en refined/);
-    fake.task(task.id).state = "refined";
-    await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
-    const editor = spec.getByLabelText("Contenido de la spec (JSON)");
-    await user.clear(editor);
-    await user.click(editor);
-    await user.paste("{}");
-    await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
-
-    const alert = await spec.findByRole("alert");
-    await waitFor(() => expect(alert.textContent).toMatch(/content\.domainModel/));
-    expect(alert.textContent).not.toMatch(/no en refined/);
   });
 
   it("los bloqueos se refrescan solos aunque no lleguen eventos", () => {

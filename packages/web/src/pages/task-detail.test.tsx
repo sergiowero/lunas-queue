@@ -347,6 +347,89 @@ describe("detalle de tarea", () => {
     });
   });
 
+  it("edita la spec y la aprueba como una versión nueva del humano", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "refined", null);
+    fake.addSpec(task.id);
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+
+    const spec = await section("Spec");
+    await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
+    const editor = spec.getByLabelText("Contenido de la spec (JSON)") as HTMLTextAreaElement;
+    expect(JSON.parse(editor.value)).toEqual(SPEC_CONTENT);
+    const edited = { ...SPEC_CONTENT, requirements: ["El usuario inicia sesión con SSO"] };
+    await user.clear(editor);
+    // user.type interpreta { y [ como teclas especiales; se pega el JSON tal cual.
+    await user.click(editor);
+    await user.paste(JSON.stringify(edited));
+    await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
+
+    expect(await screen.findByText("In progress")).toBeTruthy();
+    const latest = fake.specs.at(-1);
+    expect(latest).toMatchObject({ version: 2, createdBy: "human", approval: "approved" });
+    expect(latest?.content.requirements).toEqual(["El usuario inicia sesión con SSO"]);
+    expect(fake.task(task.id).state).toBe("in_progress");
+  });
+
+  it("no manda una edición que no es JSON válido", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "refined", null);
+    fake.addSpec(task.id);
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+
+    const spec = await section("Spec");
+    await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
+    const editor = spec.getByLabelText("Contenido de la spec (JSON)");
+    await user.clear(editor);
+    await user.type(editor, "no es json");
+    await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
+
+    expect((await spec.findByRole("alert")).textContent).toMatch(/JSON inválido/);
+    expect(fake.requests.some((r) => r.path.endsWith("/edit-and-approve"))).toBe(false);
+  });
+
+  it("muestra los errores de validación del servidor al editar", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "refined", null);
+    fake.addSpec(task.id);
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+
+    const spec = await section("Spec");
+    await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
+    const editor = spec.getByLabelText("Contenido de la spec (JSON)");
+    await user.clear(editor);
+    await user.click(editor);
+    await user.paste("{}");
+    await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
+
+    expect((await spec.findByRole("alert")).textContent).toMatch(/content\.domainModel: /);
+    expect(fake.task(task.id).state).toBe("refined");
+  });
+
+  it("muestra solo el error de la última acción sobre la spec", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "refined", null);
+    fake.addSpec(task.id);
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+
+    const spec = await section("Spec");
+    // Otro actor saca la tarea de refined: aprobar responde 409.
+    fake.task(task.id).state = "in_progress";
+    await user.click(await spec.findByRole("button", { name: "Aprobar v1" }));
+    expect((await spec.findByRole("alert")).textContent).toMatch(/no en refined/);
+    fake.task(task.id).state = "refined";
+    await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
+    const editor = spec.getByLabelText("Contenido de la spec (JSON)");
+    await user.clear(editor);
+    await user.click(editor);
+    await user.paste("{}");
+    await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
+
+    const alert = await spec.findByRole("alert");
+    await waitFor(() => expect(alert.textContent).toMatch(/content\.domainModel/));
+    expect(alert.textContent).not.toMatch(/no en refined/);
+  });
+
   it("cancela la tarea tras confirmar", async () => {
     const { fake, task } = seeded();
     const { user } = renderApp(`/tasks/${task.id}`, fake);
