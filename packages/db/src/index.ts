@@ -10,6 +10,7 @@ export * from "./run-subagents.ts";
 export * from "./runs.ts";
 export * from "./scheduler-state.ts";
 export * from "./schema.ts";
+export * from "./settings.ts";
 export * from "./specs.ts";
 export * from "./task-prs.ts";
 export * from "./task-transitions.ts";

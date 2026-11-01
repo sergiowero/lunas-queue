@@ -7,6 +7,7 @@ import { migrateDatabase, migrationsFolder, openDatabase } from "./client.ts";
 import { freshDatabase } from "./test-helpers.ts";
 
 const TABLES = [
+  "app_settings",
   "events",
   "outbox",
   "projects",

@@ -9,7 +9,8 @@ export const OutboxMessage = z.strictObject({
   id: z.int().positive(),
   eventId: z.int().positive(),
   topic: z.string().min(1),
-  taskId: EntityId,
+  // Null en los eventos globales (settings.updated).
+  taskId: EntityId.nullable(),
   actor: Actor,
   payload: z.unknown(),
   createdAt: z.iso.datetime(),

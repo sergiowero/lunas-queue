@@ -320,10 +320,9 @@ export const events = sqliteTable(
   "events",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    // Append-only: una tarea con eventos no se puede borrar.
-    taskId: text("task_id")
-      .notNull()
-      .references(() => tasks.id, { onDelete: "restrict" }),
+    // Append-only: una tarea con eventos no se puede borrar. Null en los eventos globales
+    // (settings.updated), que no pertenecen a ninguna tarea.
+    taskId: text("task_id").references(() => tasks.id, { onDelete: "restrict" }),
     type: text("type").notNull(),
     actor: text("actor", { enum: values(Actor) }).notNull(),
     payload: text("payload", { mode: "json" }),
@@ -334,6 +333,13 @@ export const events = sqliteTable(
     index("events_task_idx").on(t.taskId, t.id),
   ],
 );
+
+/** Configuración global clave/valor (p. ej. "providers": AgentProviderSettings). */
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value", { mode: "json" }).notNull(),
+  updatedAt: updatedAt(),
+});
 
 export const outbox = sqliteTable(
   "outbox",

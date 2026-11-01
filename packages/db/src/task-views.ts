@@ -179,7 +179,8 @@ export class TaskViewRepository {
       .all();
     return {
       lastId: rows.at(-1)?.id ?? afterId,
-      taskIds: [...new Set(rows.map((r) => r.taskId))],
+      // Los eventos globales (settings.updated) no pertenecen a ninguna tarea.
+      taskIds: [...new Set(rows.flatMap((r) => (r.taskId === null ? [] : [r.taskId])))],
     };
   }
 

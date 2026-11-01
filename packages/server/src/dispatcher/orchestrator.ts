@@ -184,6 +184,7 @@ export class Orchestrator {
     if (this.unsubscribes.length === 0 && this.publisher) {
       this.unsubscribes = [
         this.publisher.subscribe(TASK_TRANSITIONED, async (m) => {
+          if (m.taskId === null) return;
           this.watcher.onTransition(m);
           this.reconciler.onMessage(m);
           this.questionEscalations.onTransition(m);
@@ -208,7 +209,7 @@ export class Orchestrator {
     const payload = TaskTransitionedPayload.safeParse(message.payload);
     if (!payload.success) return;
     const { from, to } = payload.data;
-    if (from.subState !== "running" || to.subState === "running") return;
+    if (message.taskId === null || from.subState !== "running" || to.subState === "running") return;
     const run = this.runs.latestForTask(message.taskId);
     if (run?.endedAt) await this.dispatcher.releaseRun(run.id);
   }

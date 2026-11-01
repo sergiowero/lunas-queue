@@ -20,11 +20,12 @@ export function subscribeAfterMergeHooks(opts: AfterMergeHooksOptions): () => vo
   const onError = opts.onError ?? defaultError;
   return opts.publisher.subscribe(TASK_PR_STATE_CHANGED, (message) => {
     const parsed = TaskPrStateChangedPayload.safeParse(message.payload);
-    if (!parsed.success || parsed.data.to !== "merged") return;
+    const { taskId } = message;
+    if (!parsed.success || parsed.data.to !== "merged" || taskId === null) return;
     opts.hooks
-      .run({ taskId: message.taskId, point: "after_merge", prUrl: parsed.data.url })
+      .run({ taskId, point: "after_merge", prUrl: parsed.data.url })
       .catch((error: unknown) =>
-        onError(error instanceof Error ? error : new Error(String(error)), message.taskId),
+        onError(error instanceof Error ? error : new Error(String(error)), taskId),
       );
   });
 }

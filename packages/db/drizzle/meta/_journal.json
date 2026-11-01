@@ -78,6 +78,13 @@
       "when": 1793568524040,
       "tag": "0010_task_paused",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1793568525041,
+      "tag": "0011_settings_proveedores",
+      "breakpoints": true
     }
   ]
 }

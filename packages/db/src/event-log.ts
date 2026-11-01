@@ -13,7 +13,8 @@ type Writer = Pick<LunasqDatabase, "insert" | "transaction">;
 type Reader = Pick<LunasqDatabase, "select">;
 
 export type AppendEventInput = {
-  taskId: string;
+  /** Null en los eventos globales (settings.updated), que no pertenecen a una tarea. */
+  taskId: string | null;
   type: string;
   actor: Actor;
   payload?: unknown;
