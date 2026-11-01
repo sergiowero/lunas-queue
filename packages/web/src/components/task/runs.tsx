@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useState } from "react";
 import type { Json } from "../../lib/api.ts";
-import { formatDate, PHASE_LABEL, RESULT_LABEL } from "../../lib/format.ts";
+import { formatAgent, formatDate, PHASE_LABEL, RESULT_LABEL } from "../../lib/format.ts";
 import { queries } from "../../lib/queries.ts";
 import { DataTable } from "../data-table.tsx";
 import { PAGE_SIZE, Pagination } from "../pagination.tsx";
@@ -34,10 +34,7 @@ function HandoffCell({ handoff }: { handoff: Run["handoff"] }) {
 const columns = [
   column.accessor((r) => PHASE_LABEL[r.phase], { id: "phase", header: "Fase" }),
   column.accessor("iteration", { header: "Iteración" }),
-  column.accessor((r) => (r.model ? `${r.agentKind} · ${r.model}` : r.agentKind), {
-    id: "agent",
-    header: "Agente",
-  }),
+  column.accessor(formatAgent, { id: "agent", header: "Agente" }),
   column.accessor((r) => r.herdrPane ?? "—", { id: "pane", header: "Pane" }),
   column.accessor((r) => formatDate(r.startedAt), { id: "started", header: "Inicio" }),
   column.accessor((r) => formatDate(r.endedAt), { id: "ended", header: "Fin" }),
