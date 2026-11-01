@@ -9,6 +9,7 @@ export const TaskState = z.enum([
   "verification",
   "completed",
   "needs_human",
+  "paused",
   "cancelled",
 ]);
 export type TaskState = z.infer<typeof TaskState>;

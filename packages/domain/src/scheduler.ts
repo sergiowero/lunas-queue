@@ -255,7 +255,7 @@ export function schedule(
 
 /**
  * Dependientes vivos con una dependencia que ya no se entregará. Se omiten los que están en
- * needs_human y los que tienen un agente vivo: escalarlos liberaría su slot con el agente todavía
+ * needs_human o paused (escalate se rechaza en paused) y los que tienen un agente vivo: escalarlos liberaría su slot con el agente todavía
  * corriendo; se escalan cuando su Run termina y vuelven a queued o salen del estado.
  */
 function blockedForever(snapshot: SchedulerSnapshot): DependencyEscalation[] {
@@ -263,7 +263,8 @@ function blockedForever(snapshot: SchedulerSnapshot): DependencyEscalation[] {
   const graph = DependencyGraph.from(snapshot.edges);
   const escalate: DependencyEscalation[] = [];
   for (const task of snapshot.tasks) {
-    if (isTerminal(task.state) || task.state === "needs_human" || holdsSlot(task)) continue;
+    if (isTerminal(task.state) || task.state === "needs_human" || task.state === "paused") continue;
+    if (holdsSlot(task)) continue;
     const dependsOnId = graph.dependenciesOf(task.id).find((id) => {
       const dep = byId.get(id);
       return dep !== undefined && failed(dep);

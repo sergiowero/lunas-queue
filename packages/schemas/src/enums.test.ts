@@ -14,7 +14,7 @@ import {
 } from "./index.ts";
 
 describe("enums del dominio", () => {
-  it("TaskState tiene los cinco estados más needs_human y cancelled", () => {
+  it("TaskState tiene los cinco estados más needs_human, paused y cancelled", () => {
     expect(TaskState.options).toEqual([
       "draft",
       "refined",
@@ -22,6 +22,7 @@ describe("enums del dominio", () => {
       "verification",
       "completed",
       "needs_human",
+      "paused",
       "cancelled",
     ]);
   });
