@@ -1,6 +1,7 @@
 // Cliente de la API de LunasQ. Los tipos vienen de @lunasq/schemas; por JSON las fechas llegan
 // como string ISO, así que cada respuesta se tipa con Json<T>.
 import type {
+  AgentProviderSettings,
   BlockedAgent,
   EventView,
   HookExecutionView,
@@ -128,6 +129,12 @@ export const api = {
   answerQuestion: (id: string, answer: string) =>
     post<AnswerResponse>(`/api/questions/${encodeURIComponent(id)}/answer`, { answer }),
   blocked: () => request<BlockedAgent[]>("/api/blocked"),
+  providerSettings: () => request<AgentProviderSettings>("/api/settings/providers"),
+  updateProviderSettings: (input: AgentProviderSettings) =>
+    request<AgentProviderSettings>("/api/settings/providers", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
   focusBlocked: (runId: string) => post<void>(`/api/blocked/${encodeURIComponent(runId)}/focus`),
   /** Enfoca en herdr el agente de un Run (columna Pane de las tablas de Runs). */
   focusRun: (runId: string) => post<void>(`/api/runs/${encodeURIComponent(runId)}/focus`),

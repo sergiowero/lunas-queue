@@ -6,6 +6,7 @@
 
 import type {
   Actor,
+  AgentProviderSettings as AgentProviderSettingsValue,
   BlockedAgent,
   EventView,
   EvidenceSource,
@@ -24,6 +25,7 @@ import type {
   UsageTotals,
 } from "@lunasq/schemas";
 import {
+  AgentProviderSettings,
   type HookExecutionView,
   ProjectCreate,
   ProjectUpdate,
@@ -114,6 +116,10 @@ export class FakeApi {
   readonly focused: string[] = [];
   /** Si se fija, `POST /api/blocked/:runId/focus` y `POST /api/runs/:runId/focus` responden este error de herdr. */
   focusError: { status: number; error: string; message: string } | null = null;
+  /** Proveedores habilitados guardados; por defecto todos, como el servidor sin configuración. */
+  providers: AgentProviderSettingsValue = { claude: true, copilot: true };
+  /** Si se fija, PUT /api/settings/providers responde este error. */
+  providersError: { status: number; error: string; message: string } | null = null;
   /** Si el agente que preguntó sigue vivo: la respuesta va al pane; si no, a un Run nuevo. */
   agentAlive = false;
   /** Si se fija, GET /api/queue responde esto tal cual. */
@@ -320,6 +326,19 @@ export class FakeApi {
     return [204, null];
   }
 
+  private providerSettings(method: string, body: unknown): [number, unknown] {
+    if (method === "GET") return [200, this.providers];
+    if (method !== "PUT") return [404, { error: "not_found" }];
+    if (this.providersError) {
+      const { status, ...error } = this.providersError;
+      return [status, error];
+    }
+    const input = validate(AgentProviderSettings, body);
+    if (!input.ok) return input.response;
+    this.providers = input.data;
+    return [200, this.providers];
+  }
+
   private route(method: string, url: URL, body: unknown): [number, unknown] {
     const parts = url.pathname.split("/").filter(Boolean).slice(1);
     const [resource, id, sub, version, action] = parts;
@@ -331,6 +350,7 @@ export class FakeApi {
     if (resource === "projects" && method === "GET") {
       return sub === "hooks" ? this.projectHooks(id, version, url) : [200, this.projects];
     }
+    if (resource === "settings" && id === "providers") return this.providerSettings(method, body);
     if (resource === "questions") return this.question(method, url, id, sub, body);
     if (resource === "blocked") {
       if (method === "GET") return [200, this.blocked];

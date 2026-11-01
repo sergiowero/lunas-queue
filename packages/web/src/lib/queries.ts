@@ -43,6 +43,8 @@ export const queries = {
     queryOptions({ queryKey: ["task", id, "specs"], queryFn: () => api.specs(id) }),
   openQuestions: () =>
     queryOptions({ queryKey: ["questions", "open"], queryFn: api.openQuestions }),
+  providerSettings: () =>
+    queryOptions({ queryKey: ["settings", "providers"], queryFn: api.providerSettings }),
   blocked: () =>
     queryOptions({
       queryKey: ["blocked"],

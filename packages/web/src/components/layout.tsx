@@ -1,6 +1,7 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { useInbox } from "../lib/inbox.ts";
 import { useLiveUpdates } from "../lib/live.ts";
+import { DispatchPausedBanner } from "./dispatch-paused-banner.tsx";
 import { ThemeToggle } from "./theme-toggle.tsx";
 import { Badge } from "./ui/badge.tsx";
 
@@ -78,10 +79,14 @@ export function Layout() {
             <Link to="/tasks/new" className={nav} activeProps={active}>
               Nueva tarea
             </Link>
+            <Link to="/settings" className={nav} activeProps={active}>
+              Settings
+            </Link>
           </nav>
           <ThemeToggle className="ml-auto" />
         </div>
       </header>
+      <DispatchPausedBanner />
       <main className="mx-auto max-w-7xl px-6 py-6">
         <Outlet />
       </main>
