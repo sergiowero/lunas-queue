@@ -1,5 +1,5 @@
 // Tareas completadas de todos los proyectos; el filtro permite enfocarse en uno.
-import type { Task } from "@lunasq/schemas";
+import { PrState, type Task } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -17,8 +17,12 @@ import { queries } from "../lib/queries.ts";
 type Row = Json<Task>;
 const column = createColumnHelper<Row>();
 
+// Valor del selector para las tareas completadas sin PR (prState null).
+const NO_PR = "none";
+
 export function CompletedPage() {
   const [projectId, setProjectId] = useState("");
+  const [prFilter, setPrFilter] = useState("");
   const projects = useQuery(queries.projects());
   const tasks = useQuery(queries.tasks(projectId || undefined));
   const names = useMemo(
@@ -26,8 +30,14 @@ export function CompletedPage() {
     [projects.data],
   );
   const completed = useMemo(
-    () => tasks.data?.filter((task) => task.state === "completed"),
-    [tasks.data],
+    () =>
+      tasks.data?.filter(
+        (task) =>
+          task.state === "completed" &&
+          (prFilter === "" ||
+            (prFilter === NO_PR ? task.prState === null : task.prState === prFilter)),
+      ),
+    [tasks.data, prFilter],
   );
 
   const columns = useMemo(
@@ -85,20 +95,38 @@ export function CompletedPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-xl font-semibold">Completed</h1>
-        <div className="flex w-64 flex-col gap-1">
-          <Label htmlFor="completed-project">Proyecto</Label>
-          <Select
-            id="completed-project"
-            value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
-          >
-            <option value="">Todos</option>
-            {(projects.data ?? []).map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </Select>
+        <div className="flex flex-wrap gap-4">
+          <div className="flex w-64 flex-col gap-1">
+            <Label htmlFor="completed-project">Proyecto</Label>
+            <Select
+              id="completed-project"
+              value={projectId}
+              onChange={(event) => setProjectId(event.target.value)}
+            >
+              <option value="">Todos</option>
+              {(projects.data ?? []).map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex w-64 flex-col gap-1">
+            <Label htmlFor="completed-pr-state">Estado del PR</Label>
+            <Select
+              id="completed-pr-state"
+              value={prFilter}
+              onChange={(event) => setPrFilter(event.target.value)}
+            >
+              <option value="">Todos</option>
+              {PrState.options.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+              <option value={NO_PR}>Sin PR</option>
+            </Select>
+          </div>
         </div>
       </div>
       <DataTable
