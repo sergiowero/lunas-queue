@@ -128,4 +128,6 @@ export const api = {
     post<AnswerResponse>(`/api/questions/${encodeURIComponent(id)}/answer`, { answer }),
   blocked: () => request<BlockedAgent[]>("/api/blocked"),
   focusBlocked: (runId: string) => post<void>(`/api/blocked/${encodeURIComponent(runId)}/focus`),
+  /** Enfoca en herdr el agente de un Run (columna Pane de las tablas de Runs). */
+  focusRun: (runId: string) => post<void>(`/api/runs/${encodeURIComponent(runId)}/focus`),
 };

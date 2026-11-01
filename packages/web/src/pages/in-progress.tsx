@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
+import { PaneFocusButton } from "../components/pane-focus-button.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
@@ -58,9 +59,17 @@ export function InProgressPage() {
       const byTask = new Map<string, LatestRun>();
       (inProgress ?? []).forEach((t, i) => {
         const result = results[i];
+        // El error gana sobre los datos en caché: un refetch fallido conserva `data`, pero la fila
+        // debe decir «error» y no ofrecer enfocar un pane que quizá ya no es el vigente.
         byTask.set(
           t.id,
-          result?.data ? (latestRun(result.data) ?? null) : result?.isPending ? "loading" : "error",
+          result?.isError
+            ? "error"
+            : result?.data
+              ? (latestRun(result.data) ?? null)
+              : result?.isPending
+                ? "loading"
+                : "error",
         );
       });
       return byTask;
@@ -109,7 +118,14 @@ export function InProgressPage() {
       column.display({
         id: "pane",
         header: "Pane",
-        cell: (c) => runCell(latestRuns.get(c.row.original.id), (r) => r.herdrPane ?? "—"),
+        cell: (c) => {
+          const run = latestRuns.get(c.row.original.id);
+          return typeof run === "object" && run ? (
+            <PaneFocusButton run={run} />
+          ) : (
+            runCell(run, () => "—")
+          );
+        },
       }),
     ],
     [names, latestRuns],

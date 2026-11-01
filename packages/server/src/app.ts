@@ -7,6 +7,7 @@ import {
   ProjectRepository,
   ProjectRepositoryError,
   QuestionRepository,
+  RunRepository,
   SchedulerStateRepository,
   SpecRepository,
   SpecRepositoryError,
@@ -25,6 +26,7 @@ import {
   type QuestionAnswerer,
   questionRoutes,
 } from "./api/questions.ts";
+import { runRoutes } from "./api/runs.ts";
 import { specRoutes } from "./api/specs.ts";
 import { changeStreamRoutes, DEFAULT_CHANGE_STREAM_INTERVAL_MS } from "./api/stream.ts";
 import { taskRoutes } from "./api/tasks.ts";
@@ -74,8 +76,8 @@ export interface AppDeps {
    */
   blocked?: BlockedSource;
   /**
-   * Enfoca en herdr el pane de un agente bloqueado (`herdr.focusAgent`). Sin él,
-   * `POST /api/blocked/:runId/focus` responde 503.
+   * Enfoca en herdr el pane de un agente (`herdr.focusAgent`). Sin él, `POST /api/blocked/:runId/focus`
+   * y `POST /api/runs/:runId/focus` responden 503.
    */
   focus?: AgentFocuser;
   /**
@@ -140,6 +142,7 @@ export function createApp({
     .route("/api/projects", projectRoutes(projects))
     .route("/api/tasks/:id/specs", specRoutes(new SpecRepository(db)))
     .route("/api/blocked", blockedRoutes(blocked ?? (() => []), focus))
+    .route("/api/runs", runRoutes(new RunRepository(db), focus))
     .route("/api/questions", questionRoutes(new QuestionRepository(db), questions))
     .route("/api/queue", queueRoutes(views))
     .route("/api/stream", changeStreamRoutes(taskViews, changeStreamIntervalMs))

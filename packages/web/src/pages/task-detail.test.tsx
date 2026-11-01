@@ -157,6 +157,67 @@ describe("detalle de tarea", () => {
     expect(within(rows[1] as HTMLElement).getByText(failed.herdrPane as string)).toBeTruthy();
   });
 
+  it("el pane id de un Run del panel de Runs enfoca su agente en herdr", async () => {
+    const { fake, task } = seeded();
+    const first = fake.startRun(task.id, "refine");
+    fake.endRun(first.id, {});
+    const second = fake.startRun(task.id, "implement");
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+
+    const runs = await section("Runs");
+    const button = await runs.findByRole("button", {
+      name: `Enfocar pane ${first.herdrPane} en herdr`,
+    });
+    await user.click(button);
+
+    await waitFor(() => expect(fake.focused).toEqual([first.herdrName]));
+    expect(fake.requests.at(-1)).toMatchObject({
+      method: "POST",
+      path: `/api/runs/${first.id}/focus`,
+    });
+    expect(
+      runs.getByRole("button", { name: `Enfocar pane ${second.herdrPane} en herdr` }),
+    ).toBeTruthy();
+  });
+
+  it("un Run sin pane muestra «—» como texto, sin botón de foco", async () => {
+    const { fake, task } = seeded();
+    const run = fake.startRun(task.id, "refine");
+    run.herdrPane = null;
+    renderApp(`/tasks/${task.id}`, fake);
+
+    const runs = await section("Runs");
+    const row = within((await runs.findAllByRole("row"))[1] as HTMLElement);
+    expect(row.getAllByRole("cell")[3]?.textContent).toBe("—");
+    expect(row.queryByRole("button", { name: /Enfocar pane/ })).toBeNull();
+  });
+
+  it("si el foco falla muestra el error junto a ese pane y deja la tabla y las demás filas", async () => {
+    const { fake, task } = seeded();
+    const first = fake.startRun(task.id, "refine");
+    fake.endRun(first.id, {});
+    const second = fake.startRun(task.id, "implement");
+    fake.focusError = {
+      status: 409,
+      error: "agent_gone",
+      message: "lunasq-refine ya no está en herdr",
+    };
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+
+    const runs = await section("Runs");
+    await user.click(
+      await runs.findByRole("button", { name: `Enfocar pane ${first.herdrPane} en herdr` }),
+    );
+
+    const rows = runs.getAllByRole("row");
+    expect((await within(rows[1] as HTMLElement).findByRole("alert")).textContent).toBe(
+      "lunasq-refine ya no está en herdr",
+    );
+    expect(within(rows[2] as HTMLElement).queryByRole("alert")).toBeNull();
+    expect(within(rows[2] as HTMLElement).getByText(second.herdrPane as string)).toBeTruthy();
+    expect(fake.focused).toEqual([]);
+  });
+
   it("el panel de Runs obtiene el Agente del helper compartido formatAgent", async () => {
     const { fake, task } = seeded();
     fake.startRun(task.id, "refine");
