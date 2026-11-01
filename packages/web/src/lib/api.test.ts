@@ -61,3 +61,30 @@ describe("api.focusRun", () => {
     expect(fake.focused).toEqual([]);
   });
 });
+
+describe("api.pauseTask y resumeTask", () => {
+  it("pauseTask pide POST /api/tasks/:id/pause y devuelve la tarea pausada", async () => {
+    const { fake, task } = seeded();
+    const paused = await api.pauseTask(task.id);
+    expect(fake.requests.at(-1)).toMatchObject({
+      method: "POST",
+      path: `/api/tasks/${task.id}/pause`,
+    });
+    expect(paused).toMatchObject({ id: task.id, state: "paused", subState: null });
+  });
+
+  it("resumeTask devuelve la tarea pausada a su estado previo", async () => {
+    const { task } = seeded();
+    await api.pauseTask(task.id);
+    expect(await api.resumeTask(task.id)).toMatchObject({ state: "draft", subState: "queued" });
+  });
+
+  it("pausar una tarea que no se puede pausar falla con 409 invalid_transition", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "completed", null);
+    await expect(api.pauseTask(task.id)).rejects.toMatchObject({
+      status: 409,
+      code: "invalid_transition",
+    });
+  });
+});

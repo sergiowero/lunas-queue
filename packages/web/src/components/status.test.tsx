@@ -18,8 +18,10 @@ describe("etiqueta de estado", () => {
         <StateBadges state="verification" subState="running" />
         <StateBadges state="needs_human" subState={null} />
         <StateBadges state="completed" subState={null} />
+        <StateBadges state="paused" subState={null} />
       </>,
     );
+    expect(screen.getByText("Paused").dataset.variant).toBe("secondary");
     expect(screen.getByText("Draft").dataset.variant).toBe("secondary");
     expect(screen.getByText("Verification").dataset.variant).toBe("secondary");
     expect(screen.getByText("Completed").dataset.variant).toBe("secondary");

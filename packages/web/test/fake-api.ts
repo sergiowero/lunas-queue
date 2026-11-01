@@ -189,12 +189,13 @@ export class FakeApi {
     state: TaskState,
     subState: SubState | null,
     patch: Partial<Json<Task>> = {},
+    command = "test",
   ): void {
     const task = this.task(taskId);
     const from = { state: task.state, subState: task.subState };
     Object.assign(task, { state, subState, updatedAt: this.now(), ...patch });
     this.event(taskId, "task.transitioned", "system", {
-      command: "test",
+      command,
       from,
       to: { state, subState },
       verificationIteration: task.verificationIteration,
@@ -365,16 +366,23 @@ export class FakeApi {
         }
         this.transition(id, "cancelled", null);
         return [200, task];
+      case "pause":
+        if (!["draft", "refined", "in_progress", "verification"].includes(task.state)) {
+          return conflict("invalid_transition", `pause no aplica desde ${task.state}`);
+        }
+        this.transition(id, "paused", null, {}, "pause");
+        return [200, task];
       case "resume": {
-        if (task.state !== "needs_human") {
+        if (task.state !== "needs_human" && task.state !== "paused") {
           return conflict("invalid_transition", `la tarea está en ${task.state}`);
         }
+        const entered = task.state;
         const origin = this.events
           .filter((e) => e.taskId === id && e.type === "task.transitioned")
           .map((e) => e.payload as { from: { state: TaskState }; to: { state: TaskState } })
-          .findLast((p) => p.to.state === "needs_human")?.from.state;
+          .findLast((p) => p.to.state === entered)?.from.state;
         if (!origin) return conflict("no_escalation_found", `la tarea ${id} no tiene escalamiento`);
-        this.transition(id, origin, origin === "refined" ? null : "queued");
+        this.transition(id, origin, origin === "refined" ? null : "queued", {}, "resume");
         return [200, task];
       }
       case "dependencies":

@@ -17,6 +17,7 @@ export const BOARD_STATES: TaskState[] = [
   "in_progress",
   "verification",
   "needs_human",
+  "paused",
   "completed",
   "cancelled",
 ];
@@ -27,6 +28,7 @@ export const STATE_LABEL: Record<TaskState, string> = {
   in_progress: "In progress",
   verification: "Verification",
   needs_human: "Needs human",
+  paused: "Paused",
   completed: "Completed",
   cancelled: "Cancelled",
 };
@@ -52,6 +54,18 @@ export const RESULT_LABEL: Record<RunResult, string> = {
 
 export function isTerminal(state: TaskState): boolean {
   return state === "completed" || state === "cancelled";
+}
+
+/** Estados desde los que el humano puede pausar (espejo de la máquina de estados). */
+export function canPause(state: TaskState): boolean {
+  return (
+    state === "draft" || state === "refined" || state === "in_progress" || state === "verification"
+  );
+}
+
+/** Estados que el humano devuelve al flujo con resume. */
+export function canResume(state: TaskState): boolean {
+  return state === "paused" || state === "needs_human";
 }
 
 const dateTime = new Intl.DateTimeFormat("es", { dateStyle: "short", timeStyle: "medium" });

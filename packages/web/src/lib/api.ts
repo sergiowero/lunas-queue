@@ -108,6 +108,7 @@ export const api = {
     request<void>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
   createTask: (input: TaskCreate) => post<Task>("/api/tasks", input),
   cancelTask: (id: string) => post<Task>(`${task(id)}/cancel`),
+  pauseTask: (id: string) => post<Task>(`${task(id)}/pause`),
   resumeTask: (id: string) => post<Task>(`${task(id)}/resume`),
   addDependency: (id: string, dependsOnId: string) =>
     request<{ created: boolean }>(`${task(id)}/dependencies/${encodeURIComponent(dependsOnId)}`, {
