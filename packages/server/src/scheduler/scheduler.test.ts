@@ -2,6 +2,7 @@ import {
   type LunasqDatabase,
   listEvents,
   SchedulerStateRepository,
+  SettingsRepository,
   taskDependencies,
   transitionTask,
 } from "@lunasq/db";
@@ -253,6 +254,56 @@ describe("Scheduler", () => {
     publisher.wake();
     await vi.waitFor(() =>
       expect(dispatcher.calls.map((d) => [d.taskId, d.phase])).toEqual([[task.id, "implement"]]),
+    );
+  });
+
+  it("con claude y copilot deshabilitados no despacha y las tareas siguen en queued", async () => {
+    const { db, project, dispatcher, scheduler } = setup();
+    const task = insertTask(db, project.id);
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+    expect((await scheduler.run()).dispatched).toEqual([]);
+    expect(dispatcher.calls).toEqual([]);
+    expect(live(db)).toBe(0);
+    expect(
+      db.$client.prepare("select sub_state from tasks where id = ?").pluck().get(task.id),
+    ).toBe("queued");
+  });
+
+  it("lee la configuración en cada pasada y despacha al proveedor habilitado", async () => {
+    const { db, project, dispatcher, scheduler } = setup();
+    const settings = new SettingsRepository(db);
+    const task = insertTask(db, project.id);
+    settings.saveProviders({ claude: false, copilot: false });
+    await scheduler.run();
+    expect(dispatcher.calls).toEqual([]);
+
+    settings.saveProviders({ claude: false, copilot: true });
+    await scheduler.run();
+    expect(dispatcher.calls.map((d) => [d.taskId, d.agentKind])).toEqual([[task.id, "copilot"]]);
+  });
+
+  it("settings.updated despierta al scheduler por el outbox", async () => {
+    const { db, project, dispatcher } = setup();
+    const publisher = new OutboxPublisher({ db, onError: () => {}, pollIntervalMs: 60_000 });
+    const scheduler = new Scheduler({
+      db,
+      dispatcher,
+      publisher,
+      config: { tickIntervalMs: 60_000 },
+      onError: () => {},
+    });
+    stoppables.push(scheduler, publisher);
+    const settings = new SettingsRepository(db);
+    settings.saveProviders({ claude: false, copilot: false });
+    const task = insertTask(db, project.id);
+    await scheduler.start();
+    await publisher.start();
+    expect(dispatcher.calls).toEqual([]);
+
+    settings.saveProviders({ claude: true, copilot: false });
+    publisher.wake();
+    await vi.waitFor(() =>
+      expect(dispatcher.calls.map((d) => [d.taskId, d.agentKind])).toEqual([[task.id, "claude"]]),
     );
   });
 

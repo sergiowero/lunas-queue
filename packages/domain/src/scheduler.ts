@@ -3,6 +3,7 @@
 // exceder ningún límite de concurrencia. Sin preemption: solo se reparten los slots libres.
 import type {
   AgentKind,
+  AgentProviderSettings,
   Project,
   PrState,
   SchedulablePhase,
@@ -13,6 +14,7 @@ import type {
 } from "@lunasq/schemas";
 import { type DependencyEdge, DependencyGraph } from "./dependency-graph.ts";
 import { type ProjectConfigReader, phaseProfile } from "./project-config.ts";
+import { ALL_PROVIDERS_ENABLED, effectiveAgentKind } from "./providers.ts";
 import { isTerminal } from "./state-machine.ts";
 
 /** Lo que el scheduler necesita de una tarea. */
@@ -162,7 +164,7 @@ class Slots<K> {
   }
 }
 
-/** Un agente vivo o por despachar; `agentKind` falta si el proyecto no tiene configuración. */
+/** Un agente vivo o por despachar; `agentKind` falta sin configuración de proyecto o sin proveedor habilitado. */
 export type Slot = { projectId: string; phase: SchedulablePhase; agentKind: AgentKind | undefined };
 
 /**
@@ -175,28 +177,55 @@ export class Occupancy {
   readonly #byPhase = new Slots<SchedulablePhase>();
   readonly #byKind = new Slots<AgentKind>();
   readonly #projects: (id: string) => Project | null;
+  readonly #providers: AgentProviderSettings;
 
-  private constructor(projects: Pick<ProjectConfigReader, "get">) {
+  private constructor(
+    projects: Pick<ProjectConfigReader, "get">,
+    providers: AgentProviderSettings,
+  ) {
     this.#projects = memo((id: string) => projects.get(id));
+    this.#providers = providers;
   }
 
-  /** Ocupación de los agentes vivos del snapshot. */
-  static of(snapshot: SchedulerSnapshot, projects: Pick<ProjectConfigReader, "get">): Occupancy {
-    const occupancy = new Occupancy(projects);
+  /**
+   * Ocupación de los agentes vivos del snapshot. `providers` son los proveedores habilitados vigentes
+   * (por defecto todos) y solo afectan a los slots nuevos: un agente vivo cuenta contra el tipo de su
+   * perfil, porque cambiar la configuración nunca lo interrumpe.
+   */
+  static of(
+    snapshot: SchedulerSnapshot,
+    projects: Pick<ProjectConfigReader, "get">,
+    providers: AgentProviderSettings = ALL_PROVIDERS_ENABLED,
+  ): Occupancy {
+    const occupancy = new Occupancy(projects, providers);
     for (const task of snapshot.tasks) {
       const phase = pendingPhase(task.state);
-      if (phase && holdsSlot(task)) occupancy.add(occupancy.slotFor(task, phase));
+      if (phase && holdsSlot(task))
+        occupancy.add(occupancy.#slot(task, phase, ALL_PROVIDERS_ENABLED));
     }
     return occupancy;
   }
 
-  /** El slot que ocuparía `task` en `phase`, con el tipo de agente del perfil del proyecto. */
+  /**
+   * El slot que ocuparía `task` en `phase`: el proveedor efectivo del perfil del proyecto (el
+   * primario si está habilitado, si no el primero habilitado del fallback). `agentKind` falta si el
+   * proyecto no tiene configuración o si no hay ningún proveedor habilitado.
+   */
   slotFor(task: Pick<SchedulerTask, "projectId">, phase: SchedulablePhase): Slot {
+    return this.#slot(task, phase, this.#providers);
+  }
+
+  #slot(
+    task: Pick<SchedulerTask, "projectId">,
+    phase: SchedulablePhase,
+    providers: AgentProviderSettings,
+  ): Slot {
     const settings = this.#projects(task.projectId);
+    const primary = settings ? phaseProfile(settings, phase).kind : undefined;
     return {
       projectId: task.projectId,
       phase,
-      agentKind: settings ? phaseProfile(settings, phase).kind : undefined,
+      agentKind: primary ? (effectiveAgentKind(primary, providers) ?? undefined) : undefined,
     };
   }
 
@@ -226,15 +255,18 @@ export class Occupancy {
 
 /**
  * Qué despachar y qué escalar en esta pasada. Las decisiones respetan, sumadas a los agentes
- * vivos del snapshot, los límites global, por proyecto, por fase y por tipo de agente.
+ * vivos del snapshot, los límites global, por proyecto, por fase y por tipo de agente. Solo se
+ * despacha a proveedores habilitados (por defecto todos): si el primario está deshabilitado se usa
+ * el primero habilitado del fallback y, sin ninguno, no se despacha nada.
  */
 export function schedule(
   snapshot: SchedulerSnapshot,
   projects: Pick<ProjectConfigReader, "get">,
   config: SchedulerConfig,
   now: Date,
+  providers: AgentProviderSettings = ALL_PROVIDERS_ENABLED,
 ): SchedulePlan {
-  const occupancy = Occupancy.of(snapshot, projects);
+  const occupancy = Occupancy.of(snapshot, projects, providers);
   const dispatch: DispatchDecision[] = [];
   for (const { task, score } of rankReady(snapshot, config, now)) {
     if (occupancy.globalFull(config)) break;

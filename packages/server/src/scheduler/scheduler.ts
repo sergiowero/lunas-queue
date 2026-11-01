@@ -6,7 +6,9 @@
 import {
   type LunasqDatabase,
   ProjectRepository,
+  type ProviderSettingsReader,
   SchedulerStateRepository,
+  SettingsRepository,
   transitionTask,
 } from "@lunasq/db";
 import {
@@ -42,6 +44,8 @@ export interface SchedulerOptions {
   publisher?: OutboxPublisher;
   state?: SchedulerStateReader;
   projects?: ProjectConfigReader;
+  /** Proveedores habilitados; se lee en cada pasada. Por defecto, los de la base. */
+  settings?: ProviderSettingsReader;
   now?: () => Date;
   onError?: SchedulerErrorHandler;
 }
@@ -55,6 +59,7 @@ export class Scheduler {
   private readonly publisher: OutboxPublisher | undefined;
   private readonly state: SchedulerStateReader;
   private readonly projects: ProjectConfigReader;
+  private readonly settings: ProviderSettingsReader;
   private readonly now: () => Date;
   private readonly onError: SchedulerErrorHandler;
   private running: Promise<SchedulerPassResult> | undefined;
@@ -71,6 +76,7 @@ export class Scheduler {
     this.publisher = opts.publisher;
     this.state = opts.state ?? new SchedulerStateRepository(opts.db);
     this.projects = opts.projects ?? new ProjectRepository(opts.db);
+    this.settings = opts.settings ?? new SettingsRepository(opts.db);
     this.now = opts.now ?? (() => new Date());
     this.onError = opts.onError ?? defaultError;
   }
@@ -126,7 +132,14 @@ export class Scheduler {
   }
 
   private async pass(): Promise<SchedulerPassResult> {
-    const plan = schedule(this.state.snapshot(), this.projects, this.config, this.now());
+    // La configuración se lee en cada pasada: un cambio en Settings aplica a la siguiente.
+    const plan = schedule(
+      this.state.snapshot(),
+      this.projects,
+      this.config,
+      this.now(),
+      this.settings.providers(),
+    );
     const escalated = plan.escalate.filter((e) => this.escalate(e));
     if (escalated.length > 0) this.publisher?.wake();
 

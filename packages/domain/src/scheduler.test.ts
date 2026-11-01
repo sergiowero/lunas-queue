@@ -1,4 +1,9 @@
-import type { Project, SchedulablePhase, SchedulerConfigInput } from "@lunasq/schemas";
+import type {
+  AgentProviderSettings,
+  Project,
+  SchedulablePhase,
+  SchedulerConfigInput,
+} from "@lunasq/schemas";
 import { SchedulerConfig } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import type { DependencyEdge } from "./dependency-graph.ts";
@@ -53,9 +58,16 @@ function plan(
   edges: DependencyEdge[] = [],
   input: SchedulerConfigInput = {},
   projects: Project[] = [alfa, beta],
+  providers?: AgentProviderSettings,
 ) {
   const snapshot: SchedulerSnapshot = { tasks, edges };
-  return schedule(snapshot, new InMemoryProjectConfigReader(projects), config(input), NOW);
+  return schedule(
+    snapshot,
+    new InMemoryProjectConfigReader(projects),
+    config(input),
+    NOW,
+    providers,
+  );
 }
 
 const dispatched = (result: ReturnType<typeof plan>) => result.dispatch.map((d) => d.taskId);
@@ -393,6 +405,66 @@ describe("Occupancy", () => {
     const slot = occupancy.slotFor({ projectId: beta.id }, "refine");
     expect(slot.agentKind).toBeUndefined();
     expect(occupancy.fits(slot, config())).toBe(false);
+  });
+});
+
+describe("proveedores habilitados", () => {
+  const copilotPrimary = sampleProject("copiloto", {
+    agentProfiles: { refine: { kind: "copilot", args: [] } },
+  });
+  const projects = [alfa, copilotPrimary];
+
+  it("con claude y copilot deshabilitados no despacha nada y las tareas siguen en queued", () => {
+    const tareas = [task("a"), task("b", { projectId: copilotPrimary.id })];
+    const result = plan(tareas, [], {}, projects, { claude: false, copilot: false });
+    expect(result.dispatch).toEqual([]);
+    expect(tareas.every((t) => t.subState === "queued")).toBe(true);
+  });
+
+  it("con claude deshabilitado, una tarea con primario claude va a copilot y ocupa su slot", () => {
+    const result = plan([task("a")], [], {}, projects, { claude: false, copilot: true });
+    expect(result.dispatch.map((d) => d.agentKind)).toEqual(["copilot"]);
+    // El slot de copilot se llena: el límite por tipo de agente se aplica al proveedor efectivo.
+    const limited = plan(
+      [task("a"), task("b")],
+      [],
+      { agentKindConcurrency: { copilot: 1 } },
+      projects,
+      { claude: false, copilot: true },
+    );
+    expect(dispatched(limited)).toEqual(["a"]);
+  });
+
+  it("con copilot deshabilitado, una tarea con primario copilot va a claude", () => {
+    const result = plan([task("a", { projectId: copilotPrimary.id })], [], {}, projects, {
+      claude: true,
+      copilot: false,
+    });
+    expect(result.dispatch.map((d) => d.agentKind)).toEqual(["claude"]);
+  });
+
+  it("con ambos habilitados usa el primario del perfil de la fase, como siempre", () => {
+    const result = plan(
+      [task("a"), task("b", { projectId: copilotPrimary.id })],
+      [],
+      {},
+      projects,
+      { claude: true, copilot: true },
+    );
+    expect(result.dispatch.map((d) => [d.taskId, d.agentKind])).toEqual([
+      ["a", "claude"],
+      ["b", "copilot"],
+    ]);
+    expect(plan([task("c")], [], {}, projects).dispatch[0]?.agentKind).toBe("claude");
+  });
+
+  it("los agentes vivos siguen ocupando el slot de su proveedor primario", () => {
+    const viva = task("viva", { subState: "running" });
+    const result = plan([viva, task("a")], [], { agentKindConcurrency: { claude: 1 } }, projects, {
+      claude: true,
+      copilot: true,
+    });
+    expect(result.dispatch).toEqual([]);
   });
 });
 

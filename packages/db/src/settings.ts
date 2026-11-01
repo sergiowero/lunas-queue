@@ -19,6 +19,16 @@ export interface ProviderSettingsReader {
   providers(): AgentProviderSettings;
 }
 
+/** Lo guardado, completado con los defaults; sin fila, todos habilitados. Acepta una transacción. */
+export function readProviderSettings(db: Pick<LunasqDatabase, "select">): AgentProviderSettings {
+  const row = db
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, PROVIDERS_KEY))
+    .get();
+  return AgentProviderSettings.parse(row?.value ?? {});
+}
+
 export class SettingsRepository implements ProviderSettingsReader {
   private readonly db: LunasqDatabase;
 
@@ -26,14 +36,8 @@ export class SettingsRepository implements ProviderSettingsReader {
     this.db = db;
   }
 
-  /** Lo guardado, completado con los defaults; sin fila, todos habilitados. */
   providers(): AgentProviderSettings {
-    const row = this.db
-      .select({ value: appSettings.value })
-      .from(appSettings)
-      .where(eq(appSettings.key, PROVIDERS_KEY))
-      .get();
-    return AgentProviderSettings.parse(row?.value ?? {});
+    return readProviderSettings(this.db);
   }
 
   /** Guarda la configuración y publica settings.updated en la misma transacción. */

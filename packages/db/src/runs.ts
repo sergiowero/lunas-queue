@@ -5,6 +5,7 @@
 import { randomBytes } from "node:crypto";
 import {
   agentName,
+  effectiveAgentKind,
   Occupancy,
   type ProjectConfigReader,
   pendingPhase,
@@ -32,6 +33,7 @@ import type { LunasqDatabase } from "./client.ts";
 import { appendEvent } from "./event-log.ts";
 import { SchedulerStateRepository } from "./scheduler-state.ts";
 import { events, questions, runs, tasks } from "./schema.ts";
+import { readProviderSettings } from "./settings.ts";
 import { applyTransition, type TaskRow } from "./task-transitions.ts";
 
 export type RunRow = typeof runs.$inferSelect;
@@ -62,6 +64,7 @@ export type ClaimErrorCode =
   | "phase_mismatch"
   | "stale_state"
   | "no_slot"
+  | "providers_disabled"
   | "run_active"
   | "invalid_transition"
   | "actor_not_allowed"
@@ -86,8 +89,8 @@ const newRunToken = () => randomBytes(32).toString("hex");
 
 /**
  * Reclama la tarea para una fase: en una sola transacción IMMEDIATE revalida los límites con un
- * snapshot fresco (el plan del scheduler se calculó antes), aplica `dispatch` con `expected` y
- * crea el Run con su token. Si algo no cuadra no escribe nada. Repetirlo con la misma decisión
+ * snapshot fresco (el plan del scheduler se calculó antes) y contra los proveedores habilitados
+ * vigentes, aplica `dispatch` con `expected` y crea el Run con su token y el proveedor efectivo. Si algo no cuadra no escribe nada. Repetirlo con la misma decisión
  * da `stale_state`: la tarea ya está en running.
  */
 export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
@@ -127,8 +130,22 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
             `la tarea ${task.id} tiene abierto el Run ${active.id}`,
           );
         }
+        // Los proveedores habilitados se leen aquí, no al planear: el humano pudo cambiarlos.
+        const providers = readProviderSettings(tx);
+        const profile = phaseProfile(project, decision.phase);
+        const agentKind = effectiveAgentKind(profile.kind, providers);
+        if (agentKind === null) {
+          throw new ClaimRejected(
+            "providers_disabled",
+            `no hay proveedor de agente habilitado para ${task.id}`,
+          );
+        }
         // La misma conexión: el snapshot ve lo que esta transacción ve (savepoint anidado).
-        const occupancy = Occupancy.of(new SchedulerStateRepository(tx).snapshot(), input.projects);
+        const occupancy = Occupancy.of(
+          new SchedulerStateRepository(tx).snapshot(),
+          input.projects,
+          providers,
+        );
         if (!occupancy.fits(occupancy.slotFor(task, decision.phase), input.config)) {
           throw new ClaimRejected("no_slot", `sin slot para ${task.id} en ${decision.phase}`);
         }
@@ -146,14 +163,14 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
           .from(runs)
           .where(and(eq(runs.taskId, task.id), eq(runs.phase, decision.phase)))
           .all();
-        const profile = phaseProfile(project, decision.phase);
         const [run] = tx
           .insert(runs)
           .values({
             taskId: task.id,
             phase: decision.phase,
-            agentKind: profile.kind,
-            model: profile.model ?? null,
+            agentKind,
+            // El modelo del perfil es del proveedor primario; un fallback usa el suyo por default.
+            model: agentKind === profile.kind ? (profile.model ?? null) : null,
             iteration: task.verificationIteration,
             herdrName: agentName(task.id, decision.phase, previous + 1),
             agentSession: input.sessionId,

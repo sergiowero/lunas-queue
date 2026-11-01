@@ -25,13 +25,16 @@ import {
   type FailRunResult,
   type LunasqDatabase,
   ProjectRepository,
+  type ProviderSettingsReader,
   RunRepository,
   type RunRow,
+  SettingsRepository,
   TaskWorktreeRepository,
 } from "@lunasq/db";
 import {
   type DispatchDecision,
   DispatchRuleError,
+  enabledFallbackOrder,
   type ProjectConfigReader,
   phaseProfile,
   phasePrompt,
@@ -119,6 +122,8 @@ export interface PhaseDispatcherOptions {
   /** Settings estable con los hooks de subagentes (ADR uw-19-revisores); ver `ensureHookSettings`. */
   hookSettingsPath: string;
   projects?: ProjectConfigReader;
+  /** Proveedores habilitados; por defecto los de la base. Se leen en el claim y al lanzar. */
+  settings?: ProviderSettingsReader;
   /** Los mismos límites que el scheduler: el claim los revalida (ADR 0014). */
   config?: SchedulerConfigInput;
   /** Variables extra del pane de cada agente (telemetría, PATH de pruebas). */
@@ -141,6 +146,7 @@ export class PhaseDispatcher implements Dispatcher {
   private readonly copilotMcpDirs = new Map<string, string>();
   private readonly hookSettingsPath: string;
   private readonly projects: ProjectConfigReader;
+  private readonly settings: ProviderSettingsReader;
   private readonly config: SchedulerConfig;
   private readonly paneEnv: Record<string, string>;
   private readonly observer: RunObserver | undefined;
@@ -167,6 +173,7 @@ export class PhaseDispatcher implements Dispatcher {
     this.mcpUrl = opts.mcpUrl;
     this.hookSettingsPath = opts.hookSettingsPath;
     this.projects = opts.projects ?? new ProjectRepository(opts.db);
+    this.settings = opts.settings ?? new SettingsRepository(opts.db);
     this.config = SchedulerConfig.parse(opts.config ?? {});
     this.paneEnv = {
       ...opts.paneEnv,
@@ -413,7 +420,9 @@ export class PhaseDispatcher implements Dispatcher {
     worktree: { workspaceId: string; rootPaneId: string; path: string },
   ): Promise<HerdrAgent | null> {
     const primary = phaseProfile(project, phase);
-    const order = agentProviders.fallbackOrder(primary.kind);
+    // Solo los proveedores habilitados ahora; el humano pudo cambiarlos después del claim.
+    const enabled = new Set(enabledFallbackOrder(primary.kind, this.settings.providers()));
+    const order = agentProviders.fallbackOrder(primary.kind).filter((p) => enabled.has(p.kind));
     const attempts = this.runs.providerAttempts(initial.id);
     const latest = new Map<AgentKind, (typeof attempts)[number]["status"]>();
     for (const attempt of attempts) latest.set(attempt.provider, attempt.status);
@@ -480,7 +489,8 @@ export class PhaseDispatcher implements Dispatcher {
       }
     }
 
-    const reason = `ningún proveedor respondió al arrancar: ${diagnostics.join("; ") || "sin diagnóstico"}`;
+    const none = enabled.size === 0 ? "todos los proveedores están deshabilitados en Settings" : "";
+    const reason = `ningún proveedor respondió al arrancar: ${diagnostics.join("; ") || none || "sin diagnóstico"}`;
     await this.failRun(initial.id, reason, { providersUnavailable: true });
     return null;
   }

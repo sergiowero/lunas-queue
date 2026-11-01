@@ -8,6 +8,7 @@ import {
   ProjectRepository,
   ProjectWorkspaceRepository,
   RunRepository,
+  SettingsRepository,
   TaskWorktreeRepository,
 } from "@lunasq/db";
 import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
@@ -461,6 +462,80 @@ describe("PhaseDispatcher: confianza de carpeta", () => {
     expect(errors.map((e) => e.runId)).toEqual([run?.id]);
     expect(taskRow(task.id)).toMatchObject({ state: "draft", subState: "queued" });
     expect((await herdr.snapshot()).panes.some((p) => p.paneId === run?.herdrPane)).toBe(false);
+  });
+});
+
+describe("PhaseDispatcher: proveedores habilitados", () => {
+  it("con claude deshabilitado solo intenta copilot y no registra intento para claude", async () => {
+    const { db, project, herdr, dispatcher, runs } = setup();
+    const task = insertTask(db, project.id);
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+    const kinds: string[] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      return start(input);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(kinds).toEqual(["copilot"]);
+    expect(run?.agentKind).toBe("copilot");
+    expect(runs.providerAttempts(run?.id ?? "")).toEqual([
+      { provider: "copilot", status: "started" },
+    ]);
+  });
+
+  it("si el único habilitado falla al arrancar, no cae a un proveedor deshabilitado", async () => {
+    const { db, project, herdr, dispatcher, runs, taskRow } = setup();
+    const task = insertTask(db, project.id);
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+    const kinds: string[] = [];
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      throw new Error(`${input.kind} service unavailable`);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    expect(kinds).toEqual(["copilot"]);
+    expect(runs.forTask(task.id)[0]?.failureReason).toContain(
+      "copilot: copilot service unavailable",
+    );
+    expect(taskRow(task.id)).toMatchObject({ state: "needs_human" });
+  });
+
+  it("rechaza el claim si todos los proveedores se deshabilitaron tras planear y la tarea sigue en queued", async () => {
+    const { db, project, dispatcher, runs, taskRow } = setup();
+    const task = insertTask(db, project.id);
+    const decision = refine(task);
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+
+    await expect(dispatcher.dispatch(decision)).rejects.toMatchObject({
+      code: "providers_disabled",
+    });
+
+    expect(taskRow(task.id)).toMatchObject({ state: "draft", subState: "queued" });
+    expect(runs.forTask(task.id)).toEqual([]);
+  });
+
+  it("deshabilitar claude no interrumpe a un agente vivo ni cierra su Run", async () => {
+    const { db, project, herdr, dispatcher, runs, taskRow } = setup();
+    const task = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+    const [run] = runs.forTask(task.id);
+
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+    await dispatcher.recover();
+    await dispatcher.idle();
+
+    expect(runs.get(run?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
+    expect(taskRow(task.id)).toMatchObject({ subState: "running" });
+    expect((await herdr.snapshot()).agents).toHaveLength(1);
   });
 });
 
