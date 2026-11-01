@@ -192,6 +192,26 @@ describe("startRuntime", () => {
     expect(await answer.json()).toMatchObject({ delivery: "new_run" });
   });
 
+  it("enfoca en herdr el agente de un Run despachado desde la tabla de Runs", async () => {
+    const opts = options();
+    const seed = prepareDatabase(opts.dbPath);
+    const task = insertTask(seed, insertProject(seed).id);
+    seed.$client.close();
+    const herdr = opts.adapters?.herdr as FakeHerdr;
+    const runtime = await start(opts);
+    const db = openDatabase(opts.dbPath);
+    cleanups.push(() => {
+      db.$client.close();
+    });
+    const runs = new RunRepository(db);
+    await vi.waitFor(() => expect(runs.forTask(task.id)[0]?.herdrPane).toBeTruthy());
+    const run = runs.forTask(task.id)[0];
+
+    const res = await fetch(`${runtime.url}/api/runs/${run?.id}/focus`, { method: "POST" });
+    expect(res.status).toBe(204);
+    expect(herdr.focused).toBe(run?.herdrName);
+  });
+
   it("stop cierra el servidor y es idempotente", async () => {
     const runtime = await startRuntime(options());
     await runtime.stop();
