@@ -19,7 +19,7 @@ import { events, tasks } from "./schema.ts";
 
 export type TaskRow = typeof tasks.$inferSelect;
 
-/** Como CommandInput, pero resume toma su destino del último escalamiento registrado. */
+/** Como CommandInput, pero resume toma su destino del último escalamiento o pausa registrados. */
 export type TransitionCommand =
   | Exclude<CommandInput, { type: "resume" }>
   | Omit<Extract<CommandInput, { type: "resume" }>, "resumeTo">;
@@ -76,11 +76,16 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
 
   let command: CommandInput;
   if (input.command.type === "resume") {
-    // Fuera de needs_human resume se rechaza en el dominio; el destino no importa.
+    // Fuera de needs_human y paused resume se rechaza en el dominio; el destino no importa.
     const origin =
-      current.state === "needs_human" ? lastEscalationOrigin(tx, current.id) : undefined;
-    if (current.state === "needs_human" && !origin) {
-      return fail("no_escalation_found", `la tarea ${current.id} no tiene escalamiento`);
+      current.state === "needs_human" || current.state === "paused"
+        ? lastOrigin(tx, current.id, current.state)
+        : undefined;
+    if ((current.state === "needs_human" || current.state === "paused") && !origin) {
+      return fail(
+        "no_escalation_found",
+        `la tarea ${current.id} no tiene un evento que la llevara a ${current.state}`,
+      );
     }
     // Iteraciones agotadas en verificación: hay un must-fix sin corregir. Reanudar a verificación
     // volvería a verificar el mismo diff sin cambios y volvería a escalar; el destino es implementar.
@@ -132,8 +137,12 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
   return { ok: true, task, event };
 }
 
-/** Estado desde el que la tarea pasó a needs_human por última vez, y el motivo del escalamiento. */
-function lastEscalationOrigin(tx: Pick<LunasqDatabase, "select">, taskId: string) {
+/** Estado desde el que la tarea pasó a `entered` (needs_human o paused) por última vez, y el motivo. */
+function lastOrigin(
+  tx: Pick<LunasqDatabase, "select">,
+  taskId: string,
+  entered: "needs_human" | "paused",
+) {
   const row = tx
     .select({ payload: events.payload })
     .from(events)
@@ -141,7 +150,7 @@ function lastEscalationOrigin(tx: Pick<LunasqDatabase, "select">, taskId: string
       and(
         eq(events.taskId, taskId),
         eq(events.type, TASK_TRANSITIONED),
-        sql`json_extract(${events.payload}, '$.to.state') = 'needs_human'`,
+        sql`json_extract(${events.payload}, '$.to.state') = ${entered}`,
       ),
     )
     .orderBy(desc(events.id))

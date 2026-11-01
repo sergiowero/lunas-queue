@@ -211,7 +211,19 @@ export class TaskRepository implements DependencyGraphReader {
     });
   }
 
-  /** Reanuda una tarea en needs_human hacia el estado desde el que se escaló. */
+  /**
+   * Pausa con la máquina de estados; detener el agente vivo es del dispatcher (UW-16/17).
+   * `deliveryInProgress`: el Run del verificador sigue abierto con el handoff guardado.
+   */
+  pause(taskId: string, deliveryInProgress: boolean): TransitionTaskResult {
+    return transitionTask(this.db, {
+      taskId,
+      actor: "human",
+      command: { type: "pause", deliveryInProgress },
+    });
+  }
+
+  /** Reanuda una tarea en needs_human o paused hacia el estado desde el que se escaló o pausó. */
   resume(taskId: string): TransitionTaskResult {
     return transitionTask(this.db, { taskId, actor: "human", command: { type: "resume" } });
   }

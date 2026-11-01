@@ -249,6 +249,87 @@ describe("transitionTask", () => {
     ).toBe("in_progress");
   });
 
+  it("pause y resume devuelven la tarea al estado previo con la iteración y dejan dos eventos", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id, {
+      state: "in_progress",
+      subState: "running",
+      verificationIteration: 2,
+    });
+    const paused = apply(db, {
+      taskId: t.id,
+      actor: "human",
+      command: { type: "pause", deliveryInProgress: false },
+    });
+    expect(paused.task).toMatchObject({
+      state: "paused",
+      subState: null,
+      verificationIteration: 2,
+    });
+    expect(TaskTransitionedPayload.parse(paused.event.payload)).toMatchObject({
+      command: "pause",
+      from: { state: "in_progress", subState: "running" },
+      to: { state: "paused", subState: null },
+    });
+
+    const resumed = apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } });
+    expect(resumed.task).toMatchObject({
+      state: "in_progress",
+      subState: "queued",
+      verificationIteration: 2,
+    });
+    expect(
+      listEvents(db, t.id).map((e) => TaskTransitionedPayload.parse(e.payload).command),
+    ).toEqual(["pause", "resume"]);
+  });
+
+  it("resume desde paused usa la última pausa, no un escalamiento anterior", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id, { state: "refined", subState: null });
+    apply(db, { taskId: t.id, actor: "system", command: { type: "escalate", reason: "blocked" } });
+    apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } });
+    apply(db, { taskId: t.id, actor: "human", command: { type: "approve", specApproved: true } });
+    apply(db, {
+      taskId: t.id,
+      actor: "human",
+      command: { type: "pause", deliveryInProgress: false },
+    });
+    expect(
+      apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } }).task,
+    ).toMatchObject({ state: "in_progress", subState: "queued" });
+  });
+
+  it("pause con la entrega en curso se rechaza con guard_failed y no escribe", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id, {
+      state: "verification",
+      subState: "running",
+    });
+    expect(
+      transitionTask(db, {
+        taskId: t.id,
+        actor: "human",
+        command: { type: "pause", deliveryInProgress: true },
+      }),
+    ).toMatchObject({ ok: false, error: { code: "guard_failed" } });
+    expect(taskRow(db, t.id)).toMatchObject({ state: "verification", subState: "running" });
+    expect(listEvents(db, t.id)).toEqual([]);
+  });
+
+  it("una tarea paused rechaza escalate y no cambia", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id, { state: "paused", subState: null });
+    expect(
+      transitionTask(db, {
+        taskId: t.id,
+        actor: "system",
+        command: { type: "escalate", reason: "blocked" },
+      }),
+    ).toMatchObject({ ok: false, error: { code: "invalid_transition" } });
+    expect(taskRow(db, t.id).state).toBe("paused");
+    expect(listEvents(db, t.id)).toEqual([]);
+  });
+
   it("resume sin escalamiento registrado se rechaza", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id, { state: "needs_human", subState: null });
