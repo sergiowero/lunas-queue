@@ -29,4 +29,6 @@ Cuando se agota el límite de uso de Claude Code o de Copilot CLI, el scheduler 
 
 ## Origen de las peticiones
 
-`/api/settings/*` no tiene autenticación y muta estado que pausa el despacho, así que rechaza con 403 `forbidden_origin` cualquier `Host` u `Origin` que no sea `localhost`, `127.0.0.1` o `[::1]` (defensa contra DNS rebinding, igual que el MCP).
+`/api/settings/*` no tiene autenticación y muta estado que pausa el despacho, así que rechaza con 403 `forbidden_origin` cualquier `Host` u `Origin` que no sea `localhost`, `127.0.0.1` o `[::1]` (defensa contra DNS rebinding, igual que el MCP). Como `Host` y `Origin` los fija el cliente, también exige que la conexión venga de loopback (dirección del socket): con el servidor ligado a otra interfaz, un cliente remoto no puede saltarse la guarda falsificando `Host: localhost`.
+
+Si la lectura de la configuración falla, el aviso global lo dice («Estado del despacho desconocido») en vez de desaparecer.

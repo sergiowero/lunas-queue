@@ -97,6 +97,37 @@ describe("origen de las peticiones a /api/settings", () => {
     expect((await send("GET", undefined, { host: "evil.example.com:8123" })).status).toBe(403);
   });
 
+  it.each([
+    ["una IP de la red local", "192.168.1.20"],
+    ["una IPv6 ajena", "2001:db8::1"],
+  ])("rechaza el PUT de %s aunque falsifique Host: localhost", async (_name, remoteAddress) => {
+    const { db } = setup();
+    const app = createApp({ db });
+    const res = await app.request(
+      "/api/settings/providers",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json", host: "localhost" },
+        body: JSON.stringify({ claude: false, copilot: false }),
+      },
+      { incoming: { socket: { remoteAddress } } },
+    );
+    expect(res.status).toBe(403);
+    expect(new SettingsRepository(db).providers()).toEqual({ claude: true, copilot: true });
+    expect(listPendingOutbox(db)).toEqual([]);
+  });
+
+  it("acepta una conexión loopback con Host de localhost", async () => {
+    const { db } = setup();
+    const app = createApp({ db });
+    const res = await app.request(
+      "/api/settings/providers",
+      { method: "GET", headers: { host: "localhost:8123" } },
+      { incoming: { socket: { remoteAddress: "::ffff:127.0.0.1" } } },
+    );
+    expect(res.status).toBe(200);
+  });
+
   it("acepta Host y Origin de localhost con puerto", async () => {
     const { send } = setup();
     const res = await send(

@@ -43,11 +43,25 @@ function hostnameOf(value: string): string | null {
   }
 }
 
+/** Dirección del par que abrió la conexión; undefined fuera de un servidor real (app.request). */
+function peerAddress(c: Context): string | undefined {
+  const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
+  return env?.incoming?.socket?.remoteAddress;
+}
+
+function isLoopback(address: string): boolean {
+  return address === "::1" || address.startsWith("127.") || address.startsWith("::ffff:127.");
+}
+
 /**
  * Defensa contra DNS rebinding y peticiones cruzadas del navegador: la API local no tiene
  * autenticación, así que rechaza (403 forbidden_origin) cualquier Host u Origin que no sea localhost.
+ * Host y Origin los controla el cliente, así que también exige que la conexión venga de loopback:
+ * con el servidor ligado a otra interfaz, un cliente remoto no basta con falsificar Host.
  */
 export const localOriginOnly: MiddlewareHandler = async (c, next) => {
+  const peer = peerAddress(c);
+  if (peer !== undefined && !isLoopback(peer)) return c.json({ error: "forbidden_origin" }, 403);
   const host = c.req.header("host");
   const origin = c.req.header("origin");
   const hostname = host === undefined ? hostnameOf(c.req.url) : hostnameOf(host);

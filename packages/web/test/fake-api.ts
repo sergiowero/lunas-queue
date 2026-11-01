@@ -121,6 +121,8 @@ export class FakeApi {
   providers: AgentProviderSettingsValue = { claude: true, copilot: true };
   /** Si se fija, PUT /api/settings/providers responde este error. */
   providersError: { status: number; error: string; message: string } | null = null;
+  /** Si es true, GET /api/settings/providers responde 500. */
+  providersReadFails = false;
   /** Se ejecuta tras guardar un PUT y antes de responderlo: simula un cambio de otra pestaña. */
   afterProvidersPut: (() => void) | null = null;
   /** Si el agente que preguntó sigue vivo: la respuesta va al pane; si no, a un Run nuevo. */
@@ -330,7 +332,10 @@ export class FakeApi {
   }
 
   private providerSettings(method: string, body: unknown): [number, unknown] {
-    if (method === "GET") return [200, this.providers];
+    if (method === "GET") {
+      if (this.providersReadFails) return [500, { error: "internal", message: "sin conexión" }];
+      return [200, this.providers];
+    }
     if (method !== "PUT") return [404, { error: "not_found" }];
     if (this.providersError) {
       const { status, ...error } = this.providersError;

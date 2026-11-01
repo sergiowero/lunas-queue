@@ -96,6 +96,15 @@ describe("aviso de despacho en pausa", () => {
     },
   );
 
+  it("avisa que el estado es desconocido si la configuración no se puede leer", async () => {
+    const fake = new FakeApi();
+    fake.providersReadFails = true;
+    renderApp("/queue", fake);
+    const banner = await screen.findByRole("status", {}, { timeout: 5000 });
+    expect(banner.textContent).toMatch(/Estado del despacho desconocido/);
+    expect(banner.querySelector('a[href="/settings"]')).not.toBeNull();
+  });
+
   it("desaparece al habilitar un proveedor desde Settings", async () => {
     const fake = new FakeApi();
     fake.providers = { claude: false, copilot: false };
