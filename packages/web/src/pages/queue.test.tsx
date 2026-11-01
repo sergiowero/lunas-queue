@@ -52,6 +52,7 @@ describe("cola global", () => {
       "5 → 30",
       "42.5",
       "120 · $1.50",
+      "",
     ]);
     expect(body[2]?.[5]?.textContent).toBe("—");
     expect(within(rows[1] as HTMLElement).getByRole("link", { name: "Segunda" })).toHaveProperty(
@@ -91,6 +92,97 @@ describe("cola global", () => {
     expect(await variant("Verificando", "Verification")).toBe("secondary");
     expect(await variant("Bloqueada", "Needs human")).toBe("destructive");
     expect(screen.getAllByText("In progress")).toHaveLength(1);
+  });
+
+  describe("columna Acciones", () => {
+    const queueOf = (fake: FakeApi) => {
+      fake.queue = fake.tasks.map((task) => ({
+        task,
+        ready: false,
+        score: null,
+        effectivePriority: null,
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          costUsd: null,
+        },
+      }));
+    };
+    const rowOf = async (intent: string) =>
+      within((await screen.findByRole("link", { name: intent })).closest("tr") as HTMLElement);
+
+    it("la pausable lleva solo el icono de pausa; la pausada y la de needs_human solo el de reanudar", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      fake.addTask(project.id, { intent: "Pausable", state: "in_progress", subState: "running" });
+      fake.addTask(project.id, { intent: "Pausada", state: "paused", subState: null });
+      fake.addTask(project.id, { intent: "Escalada", state: "needs_human", subState: null });
+      queueOf(fake);
+      renderApp("/queue", fake);
+
+      expect((await screen.findAllByRole("columnheader")).map((h) => h.textContent).at(-1)).toBe(
+        "Acciones",
+      );
+      const actions = async (intent: string) => {
+        const cells = (await rowOf(intent)).getAllByRole("cell");
+        return cells[cells.length - 1] as HTMLElement;
+      };
+
+      const pausable = within(await actions("Pausable"));
+      const pause = pausable.getByRole("button", { name: "Pausar tarea Pausable" });
+      expect(pause.textContent).toBe("");
+      expect(pause.querySelector('svg[data-icon="pause"]')).not.toBeNull();
+      expect(pausable.getAllByRole("button")).toHaveLength(1);
+
+      for (const intent of ["Pausada", "Escalada"]) {
+        const cell = within(await actions(intent));
+        const resume = cell.getByRole("button", { name: `Reanudar tarea ${intent}` });
+        expect(resume.textContent).toBe("");
+        expect(resume.querySelector('svg[data-icon="resume"]')).not.toBeNull();
+        expect(cell.getAllByRole("button")).toHaveLength(1);
+      }
+    });
+
+    it("pausar desde la Cola mueve la tarea a Paused y ofrece reanudarla", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      const task = fake.addTask(project.id, {
+        intent: "Se pausa",
+        state: "refined",
+        subState: null,
+      });
+      const { user } = renderApp("/queue", fake);
+
+      await user.click(await screen.findByRole("button", { name: "Pausar tarea Se pausa" }));
+
+      expect(await screen.findByRole("button", { name: "Reanudar tarea Se pausa" })).toBeTruthy();
+      expect(fake.task(task.id).state).toBe("paused");
+      expect(screen.getByText("Paused")).toBeTruthy();
+
+      await user.click(screen.getByRole("button", { name: "Reanudar tarea Se pausa" }));
+
+      expect(await screen.findByRole("button", { name: "Pausar tarea Se pausa" })).toBeTruthy();
+      expect(fake.task(task.id).state).toBe("refined");
+    });
+
+    it("si la API rechaza la acción muestra el error con role alert en esa fila", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      const task = fake.addTask(project.id, { intent: "Rechazada", state: "draft" });
+      fake.addTask(project.id, { intent: "Intacta", state: "draft" });
+      const { user } = renderApp("/queue", fake);
+      const button = await screen.findByRole("button", { name: "Pausar tarea Rechazada" });
+      fake.task(task.id).state = "completed";
+
+      await user.click(button);
+
+      expect((await (await rowOf("Rechazada")).findByRole("alert")).textContent).toMatch(
+        /pause no aplica/,
+      );
+      expect((await rowOf("Intacta")).queryByRole("alert")).toBeNull();
+    });
   });
 
   it("filtra por proyecto", async () => {

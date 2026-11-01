@@ -3,14 +3,15 @@
 import type { QueueEntry } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
+import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
+import { PauseTaskButton, ResumeTaskButton } from "../components/task-actions.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { formatCost, formatTokens, taskLabel } from "../lib/format.ts";
+import { canPause, canResume, formatCost, formatTokens, taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 type Entry = Json<QueueEntry>;
@@ -25,6 +26,14 @@ function priority(entry: Entry): string {
   return entry.effectivePriority !== null && entry.effectivePriority !== base
     ? `${base} → ${entry.effectivePriority}`
     : String(base);
+}
+
+/** Solo iconos, con la tarea en el aria-label: pausar si se puede pausar, reanudar si está pausada o escalada. */
+function ActionsCell({ row }: CellContext<Entry, unknown>) {
+  const { task } = row.original;
+  if (canPause(task.state)) return <PauseTaskButton task={task} variant="icon" />;
+  if (canResume(task.state)) return <ResumeTaskButton task={task} variant="icon" />;
+  return null;
 }
 
 export function QueuePage() {
@@ -72,6 +81,7 @@ export function QueuePage() {
         id: "usage",
         header: "Usage",
       }),
+      column.display({ id: "actions", header: "Acciones", cell: ActionsCell }),
     ],
     [names],
   );
