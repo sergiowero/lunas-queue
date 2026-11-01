@@ -21,6 +21,7 @@ function setup(overrides: { herdrPane?: string | null; herdrName?: string | null
   return {
     fake,
     run,
+    queryClient,
     user: userEvent.setup(),
     ...render(view),
     stub: (f = fake.fetch) => vi.stubGlobal("fetch", f),
@@ -83,6 +84,23 @@ describe("PaneFocusButton", () => {
       expect(screen.getByRole("button").hasAttribute("disabled")).toBe(false);
     },
   );
+
+  it("si la fila pasa a otro Run no hereda el error del foco del Run anterior", async () => {
+    const { fake, run, queryClient, user, stub, rerender } = setup();
+    fake.focusError = { status: 502, error: "herdr_error", message: "herdr no responde" };
+    stub();
+    await user.click(screen.getByRole("button"));
+    await screen.findByRole("alert");
+
+    const next = { ...run, id: "run-nuevo", herdrPane: "p-9", herdrName: "t-nuevo" };
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <PaneFocusButton run={next} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Enfocar pane p-9 en herdr" })).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 
   it("un Run sin herdrPane muestra «—» como texto, sin botón", () => {
     setup({ herdrPane: null });

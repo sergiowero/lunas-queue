@@ -11,19 +11,24 @@ import { Button } from "./ui/button.tsx";
 type FocusableRun = Pick<Json<RunView>, "id" | "herdrPane" | "herdrName">;
 
 export function PaneFocusButton({ run }: { run: FocusableRun }) {
-  const focus = useMutation({ mutationFn: () => api.focusRun(run.id) });
   if (!run.herdrPane || !run.herdrName) return <>—</>;
+  // key por Run: si la fila pasa a otro Run, el error y el estado pendiente no se heredan.
+  return <FocusButton key={run.id} runId={run.id} pane={run.herdrPane} />;
+}
+
+function FocusButton({ runId, pane }: { runId: string; pane: string }) {
+  const focus = useMutation({ mutationFn: () => api.focusRun(runId) });
   return (
     <div className="flex flex-col items-start gap-1">
       <Button
         variant="outline"
         size="sm"
         className="font-mono"
-        aria-label={`Enfocar pane ${run.herdrPane} en herdr`}
+        aria-label={`Enfocar pane ${pane} en herdr`}
         disabled={focus.isPending}
         onClick={() => focus.mutate()}
       >
-        {run.herdrPane}
+        {pane}
       </Button>
       {focus.error && <MutationError error={focus.error} />}
     </div>
