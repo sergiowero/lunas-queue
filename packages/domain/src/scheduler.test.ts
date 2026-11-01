@@ -443,25 +443,60 @@ describe("proveedores habilitados", () => {
     expect(result.dispatch.map((d) => d.agentKind)).toEqual(["claude"]);
   });
 
-  it("con ambos habilitados usa el primario del perfil y solo cede al deshabilitarse", () => {
+  it("con ambos habilitados cada tarea usa el primario de su perfil y ocupa el slot de ese tipo", () => {
+    const both = { claude: true, copilot: true };
+    const kinds = (tasks: SchedulerTask[], input: SchedulerConfigInput = {}) =>
+      plan(tasks, [], input, projects, both).dispatch.map((d) => [d.taskId, d.agentKind]);
+    expect(kinds([task("a"), task("b", { projectId: copilotPrimary.id })])).toEqual([
+      ["a", "claude"],
+      ["b", "copilot"],
+    ]);
+    // Cada tipo cuenta contra su propio límite: la de copilot no gasta el slot de claude.
+    const limited = kinds([task("a"), task("b"), task("c", { projectId: copilotPrimary.id })], {
+      agentKindConcurrency: { claude: 1, copilot: 1 },
+    });
+    expect(limited).toEqual([
+      ["a", "claude"],
+      ["c", "copilot"],
+    ]);
+    // Sin configuración explícita, todos habilitados.
+    expect(plan([task("g")], [], {}, projects).dispatch[0]?.agentKind).toBe("claude");
+  });
+
+  it("la misma tarea cambia de proveedor solo cuando su primario se deshabilita", () => {
     const providerOf = (id: string, projectId: string, providers: AgentProviderSettings) =>
       plan([task(id, { projectId })], [], {}, projects, providers).dispatch.map((d) => d.agentKind);
-    const both = { claude: true, copilot: true };
-    // AC-5: con ambos habilitados manda el primario del perfil de la fase.
-    expect(providerOf("a", alfa.id, both)).toEqual(["claude"]);
-    expect(providerOf("b", copilotPrimary.id, both)).toEqual(["copilot"]);
-    // Y solo cede cuando el primario se deshabilita: la misma tarea cambia con la configuración.
     expect(providerOf("c", alfa.id, { claude: true, copilot: false })).toEqual(["claude"]);
     expect(providerOf("d", alfa.id, { claude: false, copilot: true })).toEqual(["copilot"]);
     expect(providerOf("e", copilotPrimary.id, { claude: true, copilot: false })).toEqual([
       "claude",
     ]);
     expect(providerOf("f", alfa.id, { claude: false, copilot: false })).toEqual([]);
-    // Sin configuración explícita, todos habilitados.
-    expect(plan([task("g")], [], {}, projects).dispatch[0]?.agentKind).toBe("claude");
   });
 
-  it("los agentes vivos siguen ocupando el slot de su proveedor primario", () => {
+  it("un agente vivo ocupa el slot del proveedor con el que corre, no el de su perfil", () => {
+    const both = { claude: true, copilot: true };
+    // El perfil dice claude, pero el Run cayó a copilot en el fallback.
+    const viva = task("viva", { subState: "running", agentKind: "copilot" });
+    const claudeLibre = plan(
+      [viva, task("a")],
+      [],
+      { agentKindConcurrency: { claude: 1 } },
+      projects,
+      both,
+    );
+    expect(dispatched(claudeLibre)).toEqual(["a"]);
+    const copilotLleno = plan(
+      [viva, task("b", { projectId: copilotPrimary.id }), task("c")],
+      [],
+      { agentKindConcurrency: { copilot: 1 } },
+      projects,
+      both,
+    );
+    expect(dispatched(copilotLleno)).toEqual(["c"]);
+  });
+
+  it("un agente vivo sin proveedor registrado cuenta contra el primario de su perfil", () => {
     const viva = task("viva", { subState: "running" });
     const result = plan([viva, task("a")], [], { agentKindConcurrency: { claude: 1 } }, projects, {
       claude: true,

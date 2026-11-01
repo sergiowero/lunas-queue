@@ -2,8 +2,8 @@ import { spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { describe, expect, it } from "vitest";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { describe, expect, it } from "vitest";
 import { migrateDatabase, migrationsFolder, openDatabase } from "./client.ts";
 import { freshDatabase } from "./test-helpers.ts";
 
@@ -102,9 +102,9 @@ describe("migraciones", () => {
     migrateDatabase(db);
 
     expect(sqlite.prepare("select count(*) from events").pluck().get()).toBe(1);
-    expect(
-      sqlite.prepare("select event_id, topic, published_at from outbox").all(),
-    ).toEqual([{ event_id: 1, topic: "task.created", published_at: 5 }]);
+    expect(sqlite.prepare("select event_id, topic, published_at from outbox").all()).toEqual([
+      { event_id: 1, topic: "task.created", published_at: 5 },
+    ]);
     expect(sqlite.pragma("foreign_key_check")).toEqual([]);
   });
 

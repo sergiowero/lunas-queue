@@ -159,3 +159,29 @@ describe("SchedulerStateRepository: retry", () => {
     expect(retry(task.id)).toBeUndefined();
   });
 });
+
+describe("SchedulerStateRepository: proveedor del agente vivo", () => {
+  function setup() {
+    const db = migratedDatabase();
+    const project = insertProject(db);
+    const repo = new SchedulerStateRepository(db);
+    const agentKind = (taskId: string) =>
+      repo.snapshot().tasks.find((t) => t.id === taskId)?.agentKind;
+    return { db, project, agentKind };
+  }
+
+  it("es el proveedor del Run abierto, que puede ser un fallback del perfil", () => {
+    const { db, project, agentKind } = setup();
+    const task = insertTask(db, project.id, { state: "in_progress", subState: "running" });
+    insertRun(db, task.id, { agentKind: "claude", endedAt: new Date(), result: "failure" });
+    insertRun(db, task.id, { agentKind: "copilot" });
+    expect(agentKind(task.id)).toBe("copilot");
+  });
+
+  it("una tarea sin Run abierto no lo tiene", () => {
+    const { db, project, agentKind } = setup();
+    const task = insertTask(db, project.id, { state: "in_progress", subState: "queued" });
+    insertRun(db, task.id, { agentKind: "copilot", endedAt: new Date(), result: "failure" });
+    expect(agentKind(task.id)).toBeUndefined();
+  });
+});

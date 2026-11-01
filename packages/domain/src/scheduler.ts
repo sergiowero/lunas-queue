@@ -31,6 +31,8 @@ export type SchedulerTask = {
   readySince: Date;
   /** Runs fallidos seguidos de su fase pendiente y cuándo terminó el último: base del backoff. */
   retry?: RetryState;
+  /** Proveedor con el que corre su agente vivo (el del Run abierto, que puede ser un fallback). */
+  agentKind?: AgentKind;
 };
 
 export type RetryState = { failures: number; lastFailedAt: Date };
@@ -189,8 +191,9 @@ export class Occupancy {
 
   /**
    * Ocupación de los agentes vivos del snapshot. `providers` son los proveedores habilitados vigentes
-   * (por defecto todos) y solo afectan a los slots nuevos: un agente vivo cuenta contra el tipo de su
-   * perfil, porque cambiar la configuración nunca lo interrumpe.
+   * (por defecto todos) y solo afectan a los slots nuevos: un agente vivo cuenta contra el proveedor
+   * con el que corre (`agentKind` de su Run; sin él, el primario de su perfil), porque cambiar la
+   * configuración nunca lo interrumpe.
    */
   static of(
     snapshot: SchedulerSnapshot,
@@ -200,8 +203,9 @@ export class Occupancy {
     const occupancy = new Occupancy(projects, providers);
     for (const task of snapshot.tasks) {
       const phase = pendingPhase(task.state);
-      if (phase && holdsSlot(task))
-        occupancy.add(occupancy.#slot(task, phase, ALL_PROVIDERS_ENABLED));
+      if (!phase || !holdsSlot(task)) continue;
+      const slot = occupancy.#slot(task, phase, ALL_PROVIDERS_ENABLED);
+      occupancy.add(task.agentKind ? { ...slot, agentKind: task.agentKind } : slot);
     }
     return occupancy;
   }
