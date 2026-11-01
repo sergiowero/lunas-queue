@@ -40,6 +40,17 @@ describe("SettingsRepository: proveedores de agente", () => {
     expect(listPendingOutbox(db)).toHaveLength(2);
   });
 
+  it("un cambio parcial conserva los demás proveedores, aunque otro cambio sea más nuevo", () => {
+    const db = migratedDatabase();
+    const repo = new SettingsRepository(db);
+    // Dos clientes con una vista vieja: cada uno cambia solo su proveedor.
+    repo.saveProviders({ claude: false });
+    expect(repo.saveProviders({ copilot: false })).toEqual({ claude: false, copilot: false });
+    expect(repo.providers()).toEqual({ claude: false, copilot: false });
+    expect(repo.saveProviders({ copilot: true })).toEqual({ claude: false, copilot: true });
+    expect(listPendingOutbox(db)).toHaveLength(3);
+  });
+
   it("guardar los defaults sin configuración previa no publica nada", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);

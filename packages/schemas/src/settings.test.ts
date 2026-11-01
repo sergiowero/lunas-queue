@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { AgentProviderSettings, SETTINGS_UPDATED, SettingsUpdatedPayload } from "./index.ts";
+import {
+  AgentProviderPatch,
+  AgentProviderSettings,
+  SETTINGS_UPDATED,
+  SettingsUpdatedPayload,
+} from "./index.ts";
 
 describe("AgentProviderSettings", () => {
   it("sin configuración guardada, claude y copilot quedan habilitados", () => {
@@ -21,6 +26,16 @@ describe("AgentProviderSettings", () => {
     expect(() => AgentProviderSettings.parse({ gemini: true })).toThrow();
     expect(() => AgentProviderSettings.parse({ claude: "no" })).toThrow();
     expect(() => AgentProviderSettings.parse({ claude: null })).toThrow();
+  });
+});
+
+describe("AgentProviderPatch", () => {
+  it("admite solo los proveedores que cambian y rechaza kinds desconocidos o no booleanos", () => {
+    expect(AgentProviderPatch.parse({ claude: false })).toEqual({ claude: false });
+    expect(AgentProviderPatch.parse({})).toEqual({});
+    expect(() => AgentProviderPatch.parse({ gemini: true })).toThrow();
+    expect(() => AgentProviderPatch.parse({ claude: "no" })).toThrow();
+    expect(() => AgentProviderPatch.parse({ claude: null })).toThrow();
   });
 });
 

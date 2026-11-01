@@ -524,21 +524,26 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
 
   it("deshabilitar claude no interrumpe a un agente vivo ni cierra su Run", async () => {
     const { db, project, herdr, dispatcher, runs, taskRow } = setup();
-    const task = insertTask(db, project.id);
-    await dispatcher.dispatch(refine(task));
+    const viva = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(viva));
     await dispatcher.idle();
-    const [run] = runs.forTask(task.id);
-    const before = await herdr.snapshot();
+    const [vivaRun] = runs.forTask(viva.id);
 
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+    new SettingsRepository(db).saveProviders({ claude: false });
     // La reconciliación corre en cada pasada: no debe tratar al agente de un proveedor apagado como huérfano.
     await dispatcher.recover();
     await dispatcher.idle();
-    await dispatcher.releaseRun(run?.id ?? "");
+    // El despacho siguiente ya respeta la configuración (copilot) sin tocar al agente que corría.
+    const nueva = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(nueva));
+    await dispatcher.idle();
+    await dispatcher.releaseRun(vivaRun?.id ?? "");
 
-    expect(runs.get(run?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
-    expect(taskRow(task.id)).toMatchObject({ subState: "running" });
-    expect(await herdr.snapshot()).toEqual(before);
+    expect(runs.forTask(nueva.id)[0]?.agentKind).toBe("copilot");
+    expect(runs.get(vivaRun?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
+    expect(taskRow(viva.id)).toMatchObject({ subState: "running" });
+    const { panes } = await herdr.snapshot();
+    expect(panes.some((p) => p.paneId === vivaRun?.herdrPane)).toBe(true);
   });
 });
 

@@ -12,6 +12,18 @@ export const AgentProviderSettings = z.strictObject(
 );
 export type AgentProviderSettings = z.infer<typeof AgentProviderSettings>;
 
+/**
+ * Cambio parcial de la configuración: solo los proveedores que trae. Cada interruptor de la UI
+ * envía solo el suyo, así dos pestañas no se pisan el cambio del otro proveedor.
+ */
+export const AgentProviderPatch = z.strictObject(
+  Object.fromEntries(AgentKind.options.map((kind) => [kind, z.boolean().optional()])) as Record<
+    AgentKind,
+    z.ZodOptional<z.ZodBoolean>
+  >,
+);
+export type AgentProviderPatch = z.infer<typeof AgentProviderPatch>;
+
 export const SETTINGS_UPDATED = "settings.updated";
 
 export const SettingsUpdatedPayload = z.strictObject({ providers: AgentProviderSettings });

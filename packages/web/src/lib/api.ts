@@ -1,6 +1,7 @@
 // Cliente de la API de LunasQ. Los tipos vienen de @lunasq/schemas; por JSON las fechas llegan
 // como string ISO, así que cada respuesta se tipa con Json<T>.
 import type {
+  AgentProviderPatch,
   AgentProviderSettings,
   BlockedAgent,
   EventView,
@@ -130,7 +131,7 @@ export const api = {
     post<AnswerResponse>(`/api/questions/${encodeURIComponent(id)}/answer`, { answer }),
   blocked: () => request<BlockedAgent[]>("/api/blocked"),
   providerSettings: () => request<AgentProviderSettings>("/api/settings/providers"),
-  updateProviderSettings: (input: AgentProviderSettings) =>
+  updateProviderSettings: (input: AgentProviderPatch) =>
     request<AgentProviderSettings>("/api/settings/providers", {
       method: "PUT",
       body: JSON.stringify(input),

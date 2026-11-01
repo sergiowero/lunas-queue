@@ -21,7 +21,7 @@ describe("página Settings", () => {
 
     await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
     expect(fake.requests.filter((r) => r.method === "PUT")).toEqual([
-      { method: "PUT", path: "/api/settings/providers", body: { claude: false, copilot: true } },
+      { method: "PUT", path: "/api/settings/providers", body: { claude: false } },
     ]);
     expect(fake.providers).toEqual({ claude: false, copilot: true });
 
@@ -30,6 +30,20 @@ describe("página Settings", () => {
     renderApp("/settings", fake);
     expect(on(await screen.findByRole("switch", { name: "Claude" }))).toBe(false);
     expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(true);
+  });
+
+  it("un cambio de otra pestaña no se pisa: cada interruptor envía solo su proveedor", async () => {
+    const fake = new FakeApi();
+    const { user } = renderApp("/settings", fake);
+    await screen.findByRole("switch", { name: "Claude" });
+    // Otra pestaña apaga Claude mientras esta conserva la vista vieja (Claude encendido).
+    fake.providers = { claude: false, copilot: true };
+
+    await user.click(screen.getByRole("switch", { name: "Copilot" }));
+
+    await waitFor(() => expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(false));
+    expect(fake.providers).toEqual({ claude: false, copilot: false });
+    expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false);
   });
 
   it("muestra el error si el servidor rechaza el cambio y conserva el estado guardado", async () => {

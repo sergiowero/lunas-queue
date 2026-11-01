@@ -39,6 +39,14 @@ describe("PUT /api/settings/providers", () => {
     ]);
   });
 
+  it("un PUT parcial cambia solo el proveedor enviado y conserva el otro", async () => {
+    const { send } = setup();
+    await send("PUT", { claude: false });
+    const res = await send("PUT", { copilot: false });
+    expect(await res.json()).toEqual({ claude: false, copilot: false });
+    expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: false });
+  });
+
   it("enviar la misma configuración dos veces deja el mismo estado y una sola fila", async () => {
     const { db, send } = setup();
     await send("PUT", { claude: false, copilot: false });

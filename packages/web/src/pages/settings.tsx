@@ -1,7 +1,7 @@
 // Settings: el humano habilita o deshabilita cada proveedor de agente (docs/decisions/
 // settings-proveedores.md). Apagar uno aplica las reglas de fallback; apagar ambos pausa el
 // despacho. Los agentes vivos nunca se interrumpen.
-import { AgentKind, type AgentProviderSettings } from "@lunasq/schemas";
+import { AgentKind, type AgentProviderPatch } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loading, QueryError } from "../components/status.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
@@ -54,7 +54,7 @@ export function SettingsPage() {
   const settings = useQuery(queries.providerSettings());
   const queryClient = useQueryClient();
   const update = useMutation({
-    mutationFn: (input: AgentProviderSettings) => api.updateProviderSettings(input),
+    mutationFn: (input: AgentProviderPatch) => api.updateProviderSettings(input),
     onSuccess: (saved) => queryClient.setQueryData(queries.providerSettings().queryKey, saved),
   });
   if (settings.error) return <QueryError error={settings.error} />;
@@ -84,7 +84,7 @@ export function SettingsPage() {
                 label={LABEL[kind]}
                 checked={current[kind]}
                 disabled={update.isPending}
-                onChange={(checked) => update.mutate({ ...current, [kind]: checked })}
+                onChange={(checked) => update.mutate({ [kind]: checked })}
               />
             </div>
           ))}

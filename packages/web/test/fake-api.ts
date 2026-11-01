@@ -25,6 +25,7 @@ import type {
   UsageTotals,
 } from "@lunasq/schemas";
 import {
+  AgentProviderPatch,
   AgentProviderSettings,
   type HookExecutionView,
   ProjectCreate,
@@ -333,9 +334,12 @@ export class FakeApi {
       const { status, ...error } = this.providersError;
       return [status, error];
     }
-    const input = validate(AgentProviderSettings, body);
+    const input = validate(AgentProviderPatch, body);
     if (!input.ok) return input.response;
-    this.providers = input.data;
+    this.providers = AgentProviderSettings.parse({
+      ...this.providers,
+      ...Object.fromEntries(Object.entries(input.data).filter(([, v]) => v !== undefined)),
+    });
     return [200, this.providers];
   }
 

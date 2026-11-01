@@ -4,6 +4,7 @@
 import {
   type Actor,
   AgentKind,
+  AgentProviderPatch,
   AgentProviderSettings,
   SETTINGS_UPDATED,
   SettingsUpdatedPayload,
@@ -42,15 +43,20 @@ export class SettingsRepository implements ProviderSettingsReader {
   }
 
   /**
-   * Guarda la configuración y publica settings.updated en la misma transacción. Idempotente: si
-   * lo pedido ya es lo vigente no escribe ni publica, para no despertar al scheduler ni a la UI
-   * sin un cambio real.
+   * Aplica un cambio (parcial o completo) sobre lo vigente y publica settings.updated en la misma
+   * transacción; los proveedores que el cambio no nombra conservan su valor, así que dos cambios
+   * concurrentes sobre proveedores distintos no se pisan. Idempotente: si el resultado ya es lo
+   * vigente no escribe ni publica, para no despertar al scheduler ni a la UI sin un cambio real.
    */
   saveProviders(input: unknown, actor: Actor = "human"): AgentProviderSettings {
-    const providers = AgentProviderSettings.parse(input);
-    this.db.transaction((tx) => {
+    const patch = AgentProviderPatch.parse(input);
+    return this.db.transaction((tx) => {
       const current = readProviderSettings(tx);
-      if (AgentKind.options.every((kind) => current[kind] === providers[kind])) return;
+      const providers = AgentProviderSettings.parse({
+        ...current,
+        ...Object.fromEntries(Object.entries(patch).filter(([, enabled]) => enabled !== undefined)),
+      });
+      if (AgentKind.options.every((kind) => current[kind] === providers[kind])) return providers;
       tx.insert(appSettings)
         .values({ key: PROVIDERS_KEY, value: providers })
         .onConflictDoUpdate({ target: appSettings.key, set: { value: providers } })
@@ -65,7 +71,7 @@ export class SettingsRepository implements ProviderSettingsReader {
         },
         { publish: true },
       );
+      return providers;
     });
-    return providers;
   }
 }
