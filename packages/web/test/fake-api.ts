@@ -102,6 +102,8 @@ export class FakeApi {
   readonly hookExecutions: Json<HookExecutionView>[] = [];
   /** Si es true, GET .../hooks/executions responde 500. */
   hookExecutionsFail = false;
+  /** Tareas cuyo GET .../runs responde 500. */
+  readonly runsFail = new Set<string>();
   readonly requests: Request[] = [];
   readonly questions: Json<Question>[] = [];
   /** Lo que respondería el RunWatcher: los agentes bloqueados ahora. */
@@ -363,6 +365,7 @@ export class FakeApi {
           { dependsOn: this.links(id, "dependsOn"), dependents: this.links(id, "dependents") },
         ];
       case "runs":
+        if (this.runsFail.has(id)) return [500, { error: "internal" }];
         return [200, this.runs.filter((r) => r.taskId === id)];
       case "events":
         return [200, this.events.filter((e) => e.taskId === id)];

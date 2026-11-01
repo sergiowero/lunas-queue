@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 
@@ -49,18 +49,30 @@ describe("pestaña En curso", () => {
 
     const link = await screen.findByRole("link", { name: "Corriendo en uno" });
     expect(link.getAttribute("href")).toBe(`/tasks/${running.id}`);
+    await waitFor(() => expect(screen.queryAllByText("…")).toHaveLength(0));
     const rows = screen.getAllByRole("row").slice(1);
     const cells = rows.map((r) =>
       within(r)
         .getAllByRole("cell")
         .map((c) => c.textContent),
     );
-    expect(cells).toContainEqual([`#${running.number}Corriendo en uno`, "uno", "corriendo", "300"]);
+    expect(cells).toContainEqual([
+      `#${running.number}Corriendo en uno`,
+      "uno",
+      "corriendo",
+      "300",
+      "—",
+      "—",
+      "—",
+    ]);
     expect(cells).toContainEqual([
       `#${waiting.number}Esperando en dos`,
       "dos",
       "esperando humano",
       "50",
+      "—",
+      "—",
+      "—",
     ]);
     expect(cells.map((c) => c[0])).toContain(`#${verifying.number}Verificando`);
     expect(cells).toHaveLength(3);
@@ -94,5 +106,212 @@ describe("pestaña En curso", () => {
 
     expect(await screen.findByText("No hay tareas en curso.")).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  describe("columnas Iteración, Agente y Pane", () => {
+    const rowOf = async (text: string) => {
+      await screen.findByRole("link", { name: text });
+      // La fila se vuelve a montar al cambiar las columnas: se busca de nuevo en cada lectura.
+      const read = () =>
+        within(screen.getByRole("link", { name: text }).closest("tr") as HTMLElement)
+          .getAllByRole("cell")
+          .map((c) => c.textContent);
+      await waitFor(() => expect(read()).not.toContain("…"));
+      return read();
+    };
+
+    it("encabezados de la tabla: las existentes y las tres nuevas al final", async () => {
+      const fake = new FakeApi();
+      fake.addTask(fake.addProject().id, { intent: "Una", state: "in_progress" });
+      renderApp("/in-progress", fake);
+
+      await screen.findByRole("link", { name: "Una" });
+      const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+      expect(headers).toEqual([
+        "Tarea",
+        "Proyecto",
+        "Sub-estado",
+        "Prioridad",
+        "Iteración",
+        "Agente",
+        "Pane",
+      ]);
+    });
+
+    it("muestra iteración, agente con modelo y pane del Run abierto", async () => {
+      const fake = new FakeApi();
+      const task = fake.addTask(fake.addProject({ name: "uno" }).id, {
+        intent: "Con run",
+        state: "in_progress",
+        subState: "running",
+        priority: 10,
+        verificationIteration: 1,
+      });
+      const run = fake.startRun(task.id, "implement");
+      run.herdrPane = "p-7";
+      renderApp("/in-progress", fake);
+
+      expect(await rowOf("Con run")).toEqual([
+        `#${task.number}Con run`,
+        "uno",
+        "corriendo",
+        "10",
+        "1",
+        "claude · opus",
+        "p-7",
+      ]);
+    });
+
+    it("usa el Run más reciente cuando hay uno anterior terminado", async () => {
+      const fake = new FakeApi();
+      const task = fake.addTask(fake.addProject().id, {
+        intent: "Dos runs",
+        state: "in_progress",
+        subState: "running",
+      });
+      const first = fake.startRun(task.id, "implement");
+      first.herdrPane = "p-1";
+      fake.endRun(first.id, {});
+      const latest = fake.startRun(task.id, "implement");
+      latest.herdrPane = "p-2";
+      latest.iteration = 2;
+      latest.model = "sonnet";
+      renderApp("/in-progress", fake);
+
+      const cells = await rowOf("Dos runs");
+      expect(cells.slice(4)).toEqual(["2", "claude · sonnet", "p-2"]);
+    });
+
+    it("el Run más reciente se decide por startedAt, no por el orden de la respuesta", async () => {
+      const fake = new FakeApi();
+      const task = fake.addTask(fake.addProject().id, {
+        intent: "Desordenados",
+        state: "in_progress",
+      });
+      const older = fake.startRun(task.id, "implement");
+      older.herdrPane = "p-old";
+      const newer = fake.startRun(task.id, "verify");
+      newer.herdrPane = "p-new";
+      fake.runs.reverse();
+      renderApp("/in-progress", fake);
+
+      const cells = await rowOf("Desordenados");
+      expect(cells[6]).toBe("p-new");
+    });
+
+    it("sin Runs, las tres columnas muestran «—» y el resto de la fila se conserva", async () => {
+      const fake = new FakeApi();
+      const task = fake.addTask(fake.addProject({ name: "uno" }).id, {
+        intent: "Sin runs",
+        state: "in_progress",
+        subState: "queued",
+        priority: 5,
+      });
+      renderApp("/in-progress", fake);
+
+      expect(await rowOf("Sin runs")).toEqual([
+        `#${task.number}Sin runs`,
+        "uno",
+        "en cola",
+        "5",
+        "—",
+        "—",
+        "—",
+      ]);
+    });
+
+    it("sin modelo ni pane, Agente muestra solo el agentKind y Pane «—»", async () => {
+      const fake = new FakeApi();
+      const task = fake.addTask(fake.addProject().id, {
+        intent: "Sin modelo",
+        state: "in_progress",
+      });
+      const run = fake.startRun(task.id, "implement");
+      run.model = null;
+      run.herdrPane = null;
+      renderApp("/in-progress", fake);
+
+      const cells = await rowOf("Sin modelo");
+      expect(cells.slice(4)).toEqual(["0", "claude", "—"]);
+    });
+
+    it("un Run nuevo que llega por el stream en vivo reemplaza los valores de la fila", async () => {
+      class FakeEventSource {
+        static instances: FakeEventSource[] = [];
+        private readonly listeners = new Map<string, Set<(e: MessageEvent<string>) => void>>();
+        readonly url: string;
+        constructor(url: string) {
+          this.url = url;
+          FakeEventSource.instances.push(this);
+        }
+        addEventListener(type: string, fn: (e: MessageEvent<string>) => void) {
+          if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+          this.listeners.get(type)?.add(fn);
+        }
+        removeEventListener(type: string, fn: (e: MessageEvent<string>) => void) {
+          this.listeners.get(type)?.delete(fn);
+        }
+        close() {}
+        emit(type: string, data: string) {
+          for (const fn of this.listeners.get(type) ?? []) fn(new MessageEvent(type, { data }));
+        }
+      }
+      vi.stubGlobal("EventSource", FakeEventSource);
+      const fake = new FakeApi();
+      const task = fake.addTask(fake.addProject().id, {
+        intent: "En vivo",
+        state: "in_progress",
+        subState: "running",
+      });
+      const first = fake.startRun(task.id, "implement");
+      first.herdrPane = "p-1";
+      renderApp("/in-progress", fake);
+      expect((await rowOf("En vivo")).slice(4)).toEqual(["0", "claude · opus", "p-1"]);
+
+      fake.endRun(first.id, {});
+      const next = fake.startRun(task.id, "implement");
+      next.herdrPane = "p-9";
+      next.iteration = 1;
+      next.model = null;
+      FakeEventSource.instances[0]?.emit("change", JSON.stringify({ taskIds: [task.id] }));
+
+      await waitFor(async () =>
+        expect((await rowOf("En vivo")).slice(4)).toEqual(["1", "claude", "p-9"]),
+      );
+    });
+
+    it("una consulta de Runs fallida muestra «error» y no «—», sin afectar a las demás filas", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      const broken = fake.addTask(project.id, { intent: "Rota", state: "in_progress" });
+      const fine = fake.addTask(project.id, { intent: "Sana", state: "in_progress" });
+      fake.startRun(broken.id, "implement");
+      fake.startRun(fine.id, "implement").herdrPane = "p-ok";
+      fake.runsFail.add(broken.id);
+      renderApp("/in-progress", fake);
+
+      expect((await rowOf("Rota")).slice(4)).toEqual(["error", "error", "error"]);
+      expect((await rowOf("Sana")).slice(4)).toEqual(["0", "claude · opus", "p-ok"]);
+    });
+
+    it("al filtrar por proyecto cada fila conserva los valores de su propia tarea", async () => {
+      const fake = new FakeApi();
+      const one = fake.addProject({ name: "uno" });
+      const two = fake.addProject({ name: "dos" });
+      const a = fake.addTask(one.id, { intent: "De uno", state: "in_progress" });
+      const b = fake.addTask(two.id, { intent: "De dos", state: "in_progress" });
+      const runA = fake.startRun(a.id, "implement");
+      runA.herdrPane = "p-a";
+      runA.iteration = 3;
+      const runB = fake.startRun(b.id, "implement");
+      runB.herdrPane = "p-b";
+      runB.model = "sonnet";
+      const { user } = renderApp("/in-progress", fake);
+
+      expect((await rowOf("De dos")).slice(4)).toEqual(["0", "claude · sonnet", "p-b"]);
+      await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
+      await waitFor(() => expect(screen.queryByText("De dos")).toBeNull());
+      expect((await rowOf("De uno")).slice(4)).toEqual(["3", "claude · opus", "p-a"]);
+    });
   });
 });

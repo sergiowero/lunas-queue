@@ -1,7 +1,7 @@
 // Pestaña En curso: las tareas en In progress y cualquier tarea con un agente corriendo (sub-estado running), de todos los proyectos.
 // Lee la lista de tareas, así que el stream en vivo la refresca al invalidar ["tasks"].
-import type { Task } from "@lunasq/schemas";
-import { useQuery } from "@tanstack/react-query";
+import type { RunView, Task } from "@lunasq/schemas";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
@@ -11,11 +11,31 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { SUB_STATE_LABEL, taskLabel } from "../lib/format.ts";
+import { formatAgent, SUB_STATE_LABEL, taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 type Row = Json<Task>;
+type Run = Json<RunView>;
 const column = createColumnHelper<Row>();
+
+/** El último Run por startedAt: el abierto si hay agente corriendo. */
+function latestRun(runs: Run[]): Run | undefined {
+  return runs.reduce<Run | undefined>(
+    (latest, run) =>
+      !latest || Date.parse(run.startedAt) >= Date.parse(latest.startedAt) ? run : latest,
+    undefined,
+  );
+}
+
+/** Runs de una tarea: cargando, con error, sin ninguno (`null`) o el más reciente. */
+type LatestRun = Run | null | "loading" | "error";
+
+/** «…» mientras cargan los Runs de la tarea; «error» si falló la consulta; «—» si no tiene ninguno. */
+function runCell(run: LatestRun | undefined, format: (run: Run) => string): string {
+  if (run === undefined || run === "loading") return "…";
+  if (run === "error") return "error";
+  return run ? format(run) : "—";
+}
 
 export function InProgressPage() {
   const [projectId, setProjectId] = useState("");
@@ -29,6 +49,23 @@ export function InProgressPage() {
     () => tasks.data?.filter((t) => t.state === "in_progress" || t.subState === "running"),
     [tasks.data],
   );
+  // Un query por tarea, con la misma clave que el panel de Runs: el stream en vivo la invalida
+  // junto con ["task", id], así que las columnas de Run se refrescan solas.
+  // Distingue cargando, error de la consulta y «sin Runs» (`null`): un fallo no se muestra como vacío.
+  const latestRuns = useQueries({
+    queries: (inProgress ?? []).map((t) => queries.runs(t.id)),
+    combine: (results) => {
+      const byTask = new Map<string, LatestRun>();
+      (inProgress ?? []).forEach((t, i) => {
+        const result = results[i];
+        byTask.set(
+          t.id,
+          result?.data ? (latestRun(result.data) ?? null) : result?.isPending ? "loading" : "error",
+        );
+      });
+      return byTask;
+    },
+  });
 
   const columns = useMemo(
     () => [
@@ -57,8 +94,25 @@ export function InProgressPage() {
         },
       }),
       column.accessor("priority", { header: "Prioridad" }),
+      // Columnas de display: TanStack Table cachea el valor de los accessors por fila mientras
+      // `data` no cambie, y los Runs llegan después de la lista de tareas.
+      column.display({
+        id: "iteration",
+        header: "Iteración",
+        cell: (c) => runCell(latestRuns.get(c.row.original.id), (r) => String(r.iteration)),
+      }),
+      column.display({
+        id: "agent",
+        header: "Agente",
+        cell: (c) => runCell(latestRuns.get(c.row.original.id), formatAgent),
+      }),
+      column.display({
+        id: "pane",
+        header: "Pane",
+        cell: (c) => runCell(latestRuns.get(c.row.original.id), (r) => r.herdrPane ?? "—"),
+      }),
     ],
-    [names],
+    [names, latestRuns],
   );
 
   return (

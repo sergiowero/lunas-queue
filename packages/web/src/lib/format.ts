@@ -5,6 +5,11 @@ export function taskLabel(task: { title: string | null; intent: string }): strin
   return task.title ?? task.intent;
 }
 
+/** Agente de un Run: su tipo y, si lo hay, su modelo («claude · opus»). */
+export function formatAgent(run: { agentKind: string; model?: string | null }): string {
+  return run.model ? `${run.agentKind} · ${run.model}` : run.agentKind;
+}
+
 /** Orden de las columnas del tablero: el flujo de la máquina de estados. */
 export const BOARD_STATES: TaskState[] = [
   "draft",
