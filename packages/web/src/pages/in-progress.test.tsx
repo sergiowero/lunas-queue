@@ -335,6 +335,34 @@ describe("pestaña En curso", () => {
       expect(screen.queryByRole("button", { name: /Enfocar pane/ })).toBeNull();
     });
 
+    it("mientras carga los Runs la celda Pane dice «…» como texto, sin botón de foco", async () => {
+      const fake = new FakeApi();
+      const task = fake.addTask(fake.addProject().id, {
+        intent: "Pendiente",
+        state: "in_progress",
+      });
+      fake.startRun(task.id, "implement");
+      let release = () => {};
+      fake.runsGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      renderApp("/in-progress", fake);
+
+      await screen.findByRole("link", { name: "Pendiente" });
+      // La fila se vuelve a montar al cargar las columnas: se lee de nuevo hasta que aparezca «…».
+      const read = () =>
+        within(screen.getByRole("link", { name: "Pendiente" }).closest("tr") as HTMLElement)
+          .getAllByRole("cell")
+          .map((c) => c.textContent);
+      await waitFor(() => expect(read().slice(4)).toEqual(["…", "…", "…"]));
+      const cells = read();
+      expect(cells.slice(4)).toEqual(["…", "…", "…"]);
+      expect(screen.queryByRole("button", { name: /Enfocar pane/ })).toBeNull();
+
+      release();
+      expect(await screen.findByRole("button", { name: /Enfocar pane/ })).toBeTruthy();
+    });
+
     it("si un refetch de los Runs falla con datos previos en caché la celda Pane dice «error», sin botón de foco", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
