@@ -280,6 +280,20 @@ describe("pestaña En curso", () => {
       );
     });
 
+    it("una consulta de Runs fallida muestra «error» y no «—», sin afectar a las demás filas", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      const broken = fake.addTask(project.id, { intent: "Rota", state: "in_progress" });
+      const fine = fake.addTask(project.id, { intent: "Sana", state: "in_progress" });
+      fake.startRun(broken.id, "implement");
+      fake.startRun(fine.id, "implement").herdrPane = "p-ok";
+      fake.runsFail.add(broken.id);
+      renderApp("/in-progress", fake);
+
+      expect((await rowOf("Rota")).slice(4)).toEqual(["error", "error", "error"]);
+      expect((await rowOf("Sana")).slice(4)).toEqual(["0", "claude · opus", "p-ok"]);
+    });
+
     it("al filtrar por proyecto cada fila conserva los valores de su propia tarea", async () => {
       const fake = new FakeApi();
       const one = fake.addProject({ name: "uno" });

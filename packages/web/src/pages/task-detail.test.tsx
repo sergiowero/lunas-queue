@@ -130,6 +130,7 @@ describe("detalle de tarea", () => {
     const runs = await section("Runs");
     const rows = await runs.findAllByRole("row");
     expect(rows).toHaveLength(3);
+    expect(within(rows[1] as HTMLElement).getByText("claude · opus")).toBeTruthy();
     expect(within(rows[1] as HTMLElement).getByText("fallo")).toBeTruthy();
     expect(within(rows[1] as HTMLElement).getByText("timeout de fase (60 min)")).toBeTruthy();
     expect(within(rows[2] as HTMLElement).getByText("éxito")).toBeTruthy();

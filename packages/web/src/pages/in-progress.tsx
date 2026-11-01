@@ -27,9 +27,13 @@ function latestRun(runs: Run[]): Run | undefined {
   );
 }
 
-/** «…» mientras cargan los Runs de la tarea; «—» si no tiene ninguno. */
-function runCell(run: Run | null | undefined, format: (run: Run) => string): string {
-  if (run === undefined) return "…";
+/** Runs de una tarea: cargando, con error, sin ninguno (`null`) o el más reciente. */
+type LatestRun = Run | null | "loading" | "error";
+
+/** «…» mientras cargan los Runs de la tarea; «error» si falló la consulta; «—» si no tiene ninguno. */
+function runCell(run: LatestRun | undefined, format: (run: Run) => string): string {
+  if (run === undefined || run === "loading") return "…";
+  if (run === "error") return "error";
   return run ? format(run) : "—";
 }
 
@@ -47,16 +51,16 @@ export function InProgressPage() {
   );
   // Un query por tarea, con la misma clave que el panel de Runs: el stream en vivo la invalida
   // junto con ["task", id], así que las columnas de Run se refrescan solas.
-  // `undefined` mientras cargan los Runs de la tarea; `null` si no tiene ninguno o la consulta falló.
+  // Distingue cargando, error de la consulta y «sin Runs» (`null`): un fallo no se muestra como vacío.
   const latestRuns = useQueries({
     queries: (inProgress ?? []).map((t) => queries.runs(t.id)),
     combine: (results) => {
-      const byTask = new Map<string, Run | null | undefined>();
+      const byTask = new Map<string, LatestRun>();
       (inProgress ?? []).forEach((t, i) => {
         const result = results[i];
         byTask.set(
           t.id,
-          result?.data ? (latestRun(result.data) ?? null) : result?.isPending ? undefined : null,
+          result?.data ? (latestRun(result.data) ?? null) : result?.isPending ? "loading" : "error",
         );
       });
       return byTask;
