@@ -18,13 +18,24 @@ export function TableBody(props: ComponentProps<"tbody">) {
 }
 
 export function TableRow({ className, ...props }: ComponentProps<"tr">) {
-  return <tr className={cn("border-b border-border hover:bg-muted/50", className)} {...props} />;
+  return (
+    <tr
+      className={cn(
+        "border-b border-border-light transition-colors hover:bg-surface-secondary",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export function TableHead({ className, ...props }: ComponentProps<"th">) {
   return (
     <th
-      className={cn("h-9 px-2 text-left align-middle font-medium text-muted-foreground", className)}
+      className={cn(
+        "h-9 px-2 text-left align-middle text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted",
+        className,
+      )}
       {...props}
     />
   );

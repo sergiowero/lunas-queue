@@ -8,6 +8,16 @@ import { buttonVariants } from "./components/ui/button.tsx";
 
 const css = readFileSync(join(import.meta.dirname, "index.css"), "utf8");
 
+// MoonlightQ usa el mismo valor en ambos temas para estos tokens (texto blanco sobre el relleno
+// sólido, el rojo de peligro): lo que importa es que el oscuro los declare.
+const SAME_IN_BOTH_THEMES = new Set([
+  "--color-primary-fg",
+  "--color-danger",
+  "--color-danger-fg",
+  "--color-info-fg",
+  "--color-accent-fg",
+]);
+
 function tokens(block: string): Map<string, string> {
   return new Map(
     [...block.matchAll(/(--color-[\w-]+):\s*([^;]+);/g)].map((m) => [m[1] ?? "", m[2] ?? ""]),
@@ -27,6 +37,7 @@ describe("tokens del tema oscuro", () => {
     expect(light.size).toBeGreaterThan(0);
     for (const [name, value] of light) {
       expect(dark.has(name), `${name} sin valor oscuro`).toBe(true);
+      if (SAME_IN_BOTH_THEMES.has(name)) continue;
       expect(dark.get(name), `${name} igual en ambos temas`).not.toBe(value);
     }
   });
@@ -36,8 +47,16 @@ describe("tokens del tema oscuro", () => {
   });
 });
 
-// Luminancia relativa (WCAG) de un `oklch(L C h)` opaco, vía OKLab → sRGB lineal.
+// Luminancia relativa (WCAG) de un `#rrggbb` o un `oklch(L C h)` opaco, vía OKLab → sRGB lineal.
 function luminance(color: string): number {
+  const hex = color.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+  if (hex) {
+    const [r, g, bl] = [1, 2, 3].map((i) => {
+      const v = Number.parseInt(hex[i] ?? "0", 16) / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (bl ?? 0);
+  }
   const m = color.match(/^oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)$/);
   expect(m, `color no soportado: ${color}`).not.toBeNull();
   const [l, c, h] = [Number(m?.[1]), Number(m?.[2]), (Number(m?.[3]) * Math.PI) / 180];
@@ -63,9 +82,9 @@ describe("contraste de las variantes destructivas", () => {
     ["oscuro", ".dark"],
   ])("en tema %s, el texto sobre el fondo destructivo cumple el 4.5:1 de AA", (_, selector) => {
     const t = tokens(block(selector));
-    const fg = t.get("--color-destructive-foreground");
-    const bg = t.get("--color-destructive");
-    expect(fg, "falta --color-destructive-foreground").toBeDefined();
+    const fg = t.get("--color-danger-fg");
+    const bg = t.get("--color-danger");
+    expect(fg, "falta --color-danger-fg").toBeDefined();
     expect(contrast(fg ?? "", bg ?? "")).toBeGreaterThanOrEqual(4.5);
   });
 
@@ -74,7 +93,7 @@ describe("contraste de las variantes destructivas", () => {
       badgeVariants({ variant: "destructive" }),
       buttonVariants({ variant: "destructive" }),
     ]) {
-      expect(classes).toContain("text-destructive-foreground");
+      expect(classes).toContain("text-danger");
       expect(classes).not.toContain("text-white");
     }
   });

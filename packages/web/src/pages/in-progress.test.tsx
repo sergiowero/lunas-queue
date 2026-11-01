@@ -9,11 +9,11 @@ describe("pestaña En curso", () => {
     const nav = within(await screen.findByRole("navigation"));
     const link = nav.getByRole("link", { name: "En curso" });
     expect(link.getAttribute("href")).toBe("/in-progress");
-    expect(link.className).not.toContain("bg-muted");
+    expect(link.className).not.toContain("bg-primary/10");
 
     await user.click(link);
     await waitFor(() => expect(router.state.location.pathname).toBe("/in-progress"));
-    expect(nav.getByRole("link", { name: "En curso" }).className).toContain("bg-muted");
+    expect(nav.getByRole("link", { name: "En curso" }).className).toContain("bg-primary/10");
     expect(await screen.findByRole("heading", { name: "En curso" })).toBeTruthy();
   });
 

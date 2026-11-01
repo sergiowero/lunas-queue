@@ -187,10 +187,10 @@ export function TaskDetailPage() {
       <Header task={task.data} />
       <div className="grid gap-4 lg:grid-cols-2">
         <DependenciesPanel task={task.data} />
-        <UsagePanel taskId={taskId} />
+        <UsagePanel key={taskId} taskId={taskId} />
       </div>
       <SpecPanel task={task.data} />
-      <RunsPanel taskId={taskId} />
+      <RunsPanel key={taskId} taskId={taskId} />
       <EventLogPanel taskId={taskId} />
       <EvidencePanel key={taskId} taskId={taskId} />
     </div>

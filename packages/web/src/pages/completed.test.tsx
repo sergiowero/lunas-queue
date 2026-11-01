@@ -25,7 +25,7 @@ describe("pestaña Completed", () => {
     expect(link.getAttribute("href")).toBe("/completed");
     await user.click(link);
     await waitFor(() => expect(router.state.location.pathname).toBe("/completed"));
-    expect(nav.getByRole("link", { name: "Completed" }).className).toContain("bg-muted");
+    expect(nav.getByRole("link", { name: "Completed" }).className).toContain("bg-primary/10");
     expect(await screen.findByRole("heading", { name: "Completed" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Entrega lista" })).toHaveProperty(
       "href",

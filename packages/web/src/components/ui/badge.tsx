@@ -3,15 +3,15 @@ import type { ComponentProps } from "react";
 import { cn } from "../../lib/utils.ts";
 
 export const badgeVariants = cva(
-  "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ring-1 ring-inset",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-primary text-primary-foreground",
-        secondary: "border-transparent bg-secondary text-secondary-foreground",
-        destructive: "border-transparent bg-destructive text-destructive-foreground",
-        info: "border-transparent bg-info text-info-foreground",
-        outline: "border-border text-foreground",
+        default: "bg-primary/10 text-primary-text ring-primary/20",
+        secondary: "bg-surface-secondary text-text-secondary ring-border",
+        destructive: "bg-danger/10 text-danger-text ring-danger/20",
+        info: "bg-info/10 text-info-text ring-info/20",
+        outline: "bg-transparent text-text-secondary ring-border-strong",
       },
     },
     defaultVariants: { variant: "default" },

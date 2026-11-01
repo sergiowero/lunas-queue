@@ -108,8 +108,24 @@ describe("detalle de tarea", () => {
     const failed = fake.startRun(task.id, "refine");
     fake.endRun(failed.id, { result: "failure", failureReason: "timeout de fase (60 min)" });
     const ok = fake.startRun(task.id, "refine");
-    fake.endRun(ok.id, { handoff: { phase: "refinement", summary: "spec lista" } });
-    renderApp(`/tasks/${task.id}`, fake);
+    fake.endRun(ok.id, {
+      handoff: {
+        phase: "refinement",
+        summary: "Spec lista para implementar",
+        body: {
+          requirements: ["Validar los datos", "Mostrar errores claros"],
+          criteria: [
+            {
+              id: "AC-1",
+              given: "datos válidos",
+              when: "se envía el formulario",
+              outcome: "se guarda",
+            },
+          ],
+        },
+      },
+    });
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
 
     const runs = await section("Runs");
     const rows = await runs.findAllByRole("row");
@@ -117,8 +133,37 @@ describe("detalle de tarea", () => {
     expect(within(rows[1] as HTMLElement).getByText("fallo")).toBeTruthy();
     expect(within(rows[1] as HTMLElement).getByText("timeout de fase (60 min)")).toBeTruthy();
     expect(within(rows[2] as HTMLElement).getByText("éxito")).toBeTruthy();
-    expect(within(rows[2] as HTMLElement).getByText(/"summary": "spec lista"/)).toBeTruthy();
+    const openHandoff = within(rows[2] as HTMLElement).getByRole("button", {
+      name: "Abrir handoff",
+    });
+    await user.click(openHandoff);
+    const dialog = await screen.findByRole("dialog", { name: "Handoff · Refinamiento" });
+    expect(within(dialog).getByText("Spec lista para implementar")).toBeTruthy();
+    const requirements = within(dialog).getByText("Requisitos (2)");
+    expect(requirements).toBeTruthy();
+    await user.click(requirements);
+    expect(within(dialog).getByText("Validar los datos")).toBeTruthy();
+    expect(within(dialog).getByText("AC-1")).toBeTruthy();
+    expect(within(dialog).queryByText(/"summary":/)).toBeNull();
+    expect(within(dialog).queryByRole("textbox")).toBeNull();
+    await user.click(within(dialog).getByRole("button", { name: "Cerrar" }));
     expect(within(rows[1] as HTMLElement).getByText(failed.herdrPane as string)).toBeTruthy();
+  });
+
+  it("muestra la última página de Runs por default y permite navegar", async () => {
+    const { fake, task } = seeded();
+    const runs = Array.from({ length: 11 }, () => fake.startRun(task.id, "implement"));
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+
+    const panel = await section("Runs");
+    expect(await panel.findByText(runs[10]?.herdrPane as string)).toBeTruthy();
+    expect(panel.queryByText(runs[0]?.herdrPane as string)).toBeNull();
+    expect(within(await panel.findByRole("table")).getAllByRole("row")).toHaveLength(2);
+    expect(panel.getByText("Página 2 de 2")).toBeTruthy();
+
+    await user.click(await panel.findByRole("button", { name: "Anterior" }));
+    expect(await panel.findByText(runs[0]?.herdrPane as string)).toBeTruthy();
+    expect(within(panel.getByRole("table")).getAllByRole("row")).toHaveLength(11);
   });
 
   it("muestra el Event log con actor y transición", async () => {
@@ -167,6 +212,46 @@ describe("detalle de tarea", () => {
     expect(block.getByText(/360 tokens · \$0\.25/)).toBeTruthy();
     expect(block.getByText("Implementación")).toBeTruthy();
     expect(block.getAllByText("No disponible")).toHaveLength(4);
+  });
+
+  it("muestra la última página de Usage por default y permite navegar", async () => {
+    const { fake, task } = seeded();
+    const runs = Array.from({ length: 11 }, () => fake.startRun(task.id, "implement"));
+    fake.usage.set(task.id, {
+      total: {
+        inputTokens: 66,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        costUsd: 0,
+      },
+      byRun: runs.map((run, index) => ({
+        runId: run.id,
+        phase: run.phase,
+        usage: {
+          inputTokens: index + 1,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          costUsd: 0,
+        },
+      })),
+      byPhase: [],
+      byAgent: [],
+      byModel: [],
+      byReviewer: [],
+    });
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+
+    const panel = await section("Usage");
+    expect(await panel.findByText("11")).toBeTruthy();
+    expect(panel.queryByText("1", { selector: "td" })).toBeNull();
+    expect(panel.getByText("Página 2 de 2")).toBeTruthy();
+
+    await user.click(panel.getByRole("button", { name: "Anterior" }));
+    expect(await panel.findByText("1", { selector: "td" })).toBeTruthy();
+    expect(panel.queryByText("11", { selector: "td" })).toBeNull();
+    expect(within(panel.getByRole("table")).getAllByRole("row")).toHaveLength(11);
   });
 
   it("el panel Evidencia nace colapsado y no muestra la evidencia", async () => {

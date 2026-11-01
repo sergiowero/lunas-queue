@@ -1,49 +1,193 @@
+/* Design system de MoonlightQ (design-system/ del repo moonlight-task-queue): neutros zinc sobre un
+   `canvas` casi blanco, un único índigo `primary` y seis tonos semánticos. Cada tono trae su relleno
+   sólido, `-hover`, `-fg` (texto sobre el sólido) y `-text` (texto de color sobre superficies neutras). */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
 /* `dark:` se activa con la clase `dark` de <html>, que pone lib/theme.ts (o el script de index.html
    antes de montar React), no con prefers-color-scheme. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Tokens de shadcn/ui (tema neutro). */
 @theme {
-  --color-background: oklch(1 0 0);
-  --color-foreground: oklch(0.145 0 0);
-  --color-muted: oklch(0.97 0 0);
-  --color-muted-foreground: oklch(0.556 0 0);
-  --color-border: oklch(0.922 0 0);
-  --color-primary: oklch(0.205 0 0);
-  --color-primary-foreground: oklch(0.985 0 0);
-  --color-secondary: oklch(0.97 0 0);
-  --color-secondary-foreground: oklch(0.205 0 0);
-  --color-destructive: oklch(0.577 0.245 27.325);
-  --color-destructive-foreground: oklch(1 0 0);
-  /* Azul de las tareas In progress (ADR uw-21-front-end). */
-  --color-info: oklch(0.546 0.245 262.881);
-  --color-info-foreground: oklch(0.985 0 0);
-  --color-ring: oklch(0.708 0 0);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-canvas: #f6f6f8;
+  --color-surface: #ffffff;
+  --color-surface-secondary: #f4f4f6;
+  --color-surface-tertiary: #e9e9ed;
+  --color-surface-elevated: #ffffff;
+
+  --color-border: #e4e4e8;
+  --color-border-light: #efeff2;
+  --color-border-strong: #d0d0d7;
+
+  --color-text: #18181b;
+  --color-text-secondary: #52525b;
+  --color-text-muted: #71717a;
+
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+  --color-primary-fg: #ffffff;
+  --color-primary-text: #4f46e5;
+
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-fg: #ffffff;
+  --color-danger-text: #b91c1c;
+
+  --color-success: #16a34a;
+  --color-success-hover: #15803d;
+  --color-success-fg: #ffffff;
+  --color-success-text: #15803d;
+
+  --color-warning: #d97706;
+  --color-warning-hover: #b45309;
+  --color-warning-fg: #ffffff;
+  --color-warning-text: #b45309;
+
+  --color-info: #2563eb;
+  --color-info-hover: #1d4ed8;
+  --color-info-fg: #ffffff;
+  --color-info-text: #1d4ed8;
+
+  --color-accent: #7c3aed;
+  --color-accent-hover: #6d28d9;
+  --color-accent-fg: #ffffff;
+  --color-accent-text: #6d28d9;
+
+  --shadow-xs: 0 1px 2px 0 rgb(16 16 24 / 0.04);
+  --shadow-sm: 0 1px 2px 0 rgb(16 16 24 / 0.05), 0 1px 3px 0 rgb(16 16 24 / 0.04);
+  --shadow-md: 0 4px 12px -2px rgb(16 16 24 / 0.08), 0 2px 4px -2px rgb(16 16 24 / 0.04);
+  --shadow-lg: 0 12px 28px -6px rgb(16 16 24 / 0.12), 0 4px 8px -4px rgb(16 16 24 / 0.05);
+  --shadow-xl: 0 24px 56px -12px rgb(16 16 24 / 0.22), 0 8px 16px -8px rgb(16 16 24 / 0.08);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Tema oscuro: los mismos tokens con los valores oscuros de shadcn/ui. */
+/* Nombres de shadcn/ui que usan las páginas: apuntan a los tokens de arriba y siguen al tema. */
+@theme inline {
+  --color-background: var(--color-surface);
+  --color-foreground: var(--color-text);
+  --color-muted: var(--color-surface-secondary);
+  --color-muted-foreground: var(--color-text-secondary);
+  --color-primary-foreground: var(--color-primary-fg);
+  --color-secondary: var(--color-surface-secondary);
+  --color-secondary-foreground: var(--color-text);
+  /* Solo se usa como color de texto (`text-destructive`): la variante -text mantiene el contraste en ambos temas. */
+  --color-destructive: var(--color-danger-text);
+  --color-destructive-foreground: var(--color-danger-fg);
+  --color-info-foreground: var(--color-info-fg);
+  --color-ring: var(--color-primary);
+}
+
+/* Tema oscuro: los mismos tokens con los valores oscuros de MoonlightQ. */
 .dark {
   color-scheme: dark;
-  --color-background: oklch(0.145 0 0);
-  --color-foreground: oklch(0.985 0 0);
-  --color-muted: oklch(0.269 0 0);
-  --color-muted-foreground: oklch(0.708 0 0);
-  --color-border: oklch(1 0 0 / 15%);
-  --color-primary: oklch(0.922 0 0);
-  --color-primary-foreground: oklch(0.205 0 0);
-  --color-secondary: oklch(0.269 0 0);
-  --color-secondary-foreground: oklch(0.985 0 0);
-  --color-destructive: oklch(0.704 0.191 22.216);
-  /* El rojo oscuro es claro: el blanco quedaría en 2.9:1, bajo el 4.5:1 de AA. */
-  --color-destructive-foreground: oklch(0.145 0 0);
-  /* Azul más claro con texto oscuro para mantener el contraste AA. */
-  --color-info: oklch(0.707 0.165 254.624);
-  --color-info-foreground: oklch(0.145 0 0);
-  --color-ring: oklch(0.556 0 0);
+
+  --color-canvas: #09090b;
+  --color-surface: #111114;
+  --color-surface-secondary: #1a1a1e;
+  --color-surface-tertiary: #242429;
+  --color-surface-elevated: #16161a;
+
+  --color-border: #27272c;
+  --color-border-light: #1e1e22;
+  --color-border-strong: #3f3f46;
+
+  --color-text: #f4f4f5;
+  --color-text-secondary: #aaaab4;
+  --color-text-muted: #80808a;
+
+  --color-primary: #6366f1;
+  --color-primary-hover: #7679f8;
+  --color-primary-fg: #ffffff;
+  --color-primary-text: #a5aafc;
+
+  --color-danger: #dc2626;
+  --color-danger-hover: #ef4444;
+  --color-danger-fg: #ffffff;
+  --color-danger-text: #f87171;
+
+  --color-success: #22c55e;
+  --color-success-hover: #4ade80;
+  --color-success-fg: #052e16;
+  --color-success-text: #4ade80;
+
+  --color-warning: #f59e0b;
+  --color-warning-hover: #fbbf24;
+  --color-warning-fg: #451a03;
+  --color-warning-text: #fbbf24;
+
+  --color-info: #3b82f6;
+  --color-info-hover: #60a5fa;
+  --color-info-fg: #ffffff;
+  --color-info-text: #60a5fa;
+
+  --color-accent: #8b5cf6;
+  --color-accent-hover: #a78bfa;
+  --color-accent-fg: #ffffff;
+  --color-accent-text: #a78bfa;
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 12px 28px -6px rgb(0 0 0 / 0.6), 0 4px 8px -4px rgb(0 0 0 / 0.4);
+  --shadow-xl: 0 24px 56px -12px rgb(0 0 0 / 0.7), 0 8px 16px -8px rgb(0 0 0 / 0.5);
 }
 
-body {
-  @apply bg-background text-foreground antialiased;
+@layer base {
+  body {
+    @apply bg-canvas font-sans text-text antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-feature-settings: normal;
+  }
+
+  :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, transparent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-primary);
+  }
+}
+
+@layer components {
+  /* Contenedor estático: paneles, filas de lista, secciones de formulario. */
+  .card {
+    @apply rounded-xl border border-border bg-surface shadow-xs;
+  }
+
+  /* Micro-etiqueta en mayúsculas sobre un valor o sección. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: anula las animaciones de cualquier componente. */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: anula las animaciones de cualquier componente. */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: anula las animaciones de cualquier componente. */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: anula las animaciones de cualquier componente. */
+    scroll-behavior: auto !important;
+  }
 }

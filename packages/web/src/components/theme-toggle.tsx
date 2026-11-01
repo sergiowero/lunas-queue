@@ -40,7 +40,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       title={next === "dark" ? "Cambiar a tema oscuro" : "Cambiar a tema claro"}
       onClick={() => setTheme(next)}
       className={cn(
-        "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-all duration-150 hover:bg-surface-tertiary/70 hover:text-text active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
         className,
       )}
     >
