@@ -618,11 +618,71 @@ describe("detalle de tarea", () => {
     expect(screen.getByRole("button", { name: "Cancelar tarea" })).toBeTruthy();
   });
 
-  it("no ofrece reanudar fuera de needs_human", async () => {
+  it("no ofrece reanudar fuera de needs_human y paused", async () => {
     const { fake, task } = seeded();
     renderApp(`/tasks/${task.id}`, fake);
     await screen.findByRole("button", { name: "Cancelar tarea" });
     expect(screen.queryByRole("button", { name: "Reanudar tarea" })).toBeNull();
+  });
+
+  it("una tarea pausable muestra el botón con icono de pausa y al pulsarlo la pausa", async () => {
+    const { fake, task } = seeded();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const button = await screen.findByRole("button", { name: "Pausar tarea" });
+    expect(button.querySelector('svg[data-icon="pause"]')).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Reanudar tarea" })).toBeNull();
+
+    await user.click(button);
+
+    expect(await screen.findByText("Paused")).toBeTruthy();
+    expect(fake.requests.some((r) => r.path === `/api/tasks/${task.id}/pause`)).toBe(true);
+    expect(fake.task(task.id).state).toBe("paused");
+    expect(screen.queryByRole("button", { name: "Pausar tarea" })).toBeNull();
+  });
+
+  it("una tarea pausada muestra el badge Paused y Reanudar tarea con icono, sin el botón de pausa", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "paused", null, {}, "pause");
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const button = await screen.findByRole("button", { name: "Reanudar tarea" });
+    expect(button.querySelector('svg[data-icon="resume"]')).not.toBeNull();
+    expect(screen.getByText("Paused")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Pausar tarea" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Cancelar tarea" })).toBeTruthy();
+
+    await user.click(button);
+
+    await waitFor(() => expect(fake.task(task.id).state).toBe("draft"));
+    expect(fake.requests.some((r) => r.path === `/api/tasks/${task.id}/resume`)).toBe(true);
+    expect(await screen.findByRole("button", { name: "Pausar tarea" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Reanudar tarea" })).toBeNull();
+  });
+
+  it("una tarea en needs_human ofrece reanudar y no pausar", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "needs_human", null);
+    renderApp(`/tasks/${task.id}`, fake);
+    expect(await screen.findByRole("button", { name: "Reanudar tarea" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Pausar tarea" })).toBeNull();
+  });
+
+  it("una tarea terminada no ofrece pausar ni reanudar", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "completed", null);
+    renderApp(`/tasks/${task.id}`, fake);
+    await screen.findByText("Completed");
+    expect(screen.queryByRole("button", { name: "Pausar tarea" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reanudar tarea" })).toBeNull();
+  });
+
+  it("si la API rechaza la pausa muestra el error con role alert", async () => {
+    const { fake, task } = seeded();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const button = await screen.findByRole("button", { name: "Pausar tarea" });
+    // La tarea se completó mientras la pantalla seguía abierta: el servidor rechaza la pausa.
+    fake.task(task.id).state = "completed";
+    await user.click(button);
+    expect((await screen.findByRole("alert")).textContent).toMatch(/pause no aplica/);
   });
 
   it("avisa si la tarea no existe", async () => {
