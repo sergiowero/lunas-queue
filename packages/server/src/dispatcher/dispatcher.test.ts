@@ -157,6 +157,7 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
       "gpt-5",
       "--reasoning-effort",
       "medium",
+      "--autopilot",
       "--allow-all-tools",
       "--session-id",
       run?.agentSession,

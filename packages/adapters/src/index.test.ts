@@ -50,6 +50,7 @@ describe("@lunasq/adapters", () => {
       "--reasoning-effort",
       "xhigh",
       "--disable-client-telemetry",
+      "--autopilot",
       "--allow-all-tools",
       "--session-id",
       "sess-1",
@@ -83,6 +84,36 @@ describe("@lunasq/adapters", () => {
         },
       ),
     ).toThrow(/deja uno/);
+  });
+
+  it("lanza Copilot en autopilot aunque el perfil no traiga model, effort ni args", () => {
+    const args = agentProviders
+      .get("copilot")
+      .args(
+        { kind: "copilot", args: [] },
+        { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" },
+      );
+    expect(args.filter((arg) => arg === "--autopilot")).toEqual(["--autopilot"]);
+  });
+
+  it("reserva --autopilot, --mode y --plan para Copilot", () => {
+    const context = { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" };
+    for (const args of [["--autopilot"], ["--mode", "autopilot"], ["--mode=plan"], ["--plan"]]) {
+      expect(() => agentProviders.get("copilot").args({ kind: "copilot", args }, context)).toThrow(
+        /lo fija LunasQ/,
+      );
+    }
+  });
+
+  it("no pasa flags de autopilot a Claude", () => {
+    const args = agentProviders
+      .get("claude")
+      .args(
+        { kind: "claude", args: [] },
+        { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" },
+      );
+    expect(args).not.toContain("--autopilot");
+    expect(args).not.toContain("--mode");
   });
 
   it("rechaza providers duplicados en el registry", () => {

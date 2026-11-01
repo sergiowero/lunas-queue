@@ -58,6 +58,9 @@ const RESERVED_COPILOT_FLAGS = [
   "--reasoning-effort",
   "--allow-all-tools",
   "--trust-folder",
+  "--autopilot",
+  "--mode",
+  "--plan",
 ];
 
 function assertNoReservedArgs(args: string[], flags: string[]): void {
@@ -112,6 +115,7 @@ const copilotProvider: AgentProvider = {
       ...(profile.model === undefined ? [] : ["--model", profile.model]),
       ...(profile.effort === undefined ? [] : ["--reasoning-effort", profile.effort]),
       ...profile.args,
+      "--autopilot",
       "--allow-all-tools",
       // Copilot rejects --trust-folder together with --session-id; LunasQ supplies MCP explicitly.
       "--session-id",

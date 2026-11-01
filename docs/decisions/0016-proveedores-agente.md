@@ -13,6 +13,7 @@ El dispatcher debe ejecutar Claude Code y GitHub Copilot CLI sin mezclar flags, 
 - Los proveedores explícitos y validados por esquema son Claude Code y Copilot CLI; un registry en `adapters` declara sus capacidades y compone argumentos específicos.
 - La configuración primaria es por fase. El fallback prueba una vez cada proveedor registrado, en orden empezando por el primario, solo cuando el proceso no puede arrancar o quedar listo antes de recibir el prompt. Los fallos de todos los proveedores se conservan como eventos del Run y escalan la tarea a `needs_human`.
 - `lunasq install` mantiene una entrada `lunasq` en `~/.copilot/mcp-config.json`, preservando las demás opciones y servidores. Cada Run Copilot usa un archivo MCP temporal de permisos restrictivos con su token; se elimina tras iniciar el CLI.
+- Copilot CLI corre siempre en modo autopilot: el adapter agrega `--autopilot` a toda sesión de fase y `CopilotCliReviewerExecutor` lo agrega a los revisores. `--autopilot`, `--mode` y `--plan` (también como `--flag=valor`) quedan reservados y un perfil que los traiga en `args` se rechaza. Los argumentos de Claude no cambian.
 - Los datos de usage no soportados no se inventan: la UI identifica Runs de Copilot sin métricas y marca los totales registrados como parciales.
 - La verificación con revisores HTTP y los hooks de evidencia siguen siendo Claude-only. No se debe presentar la verificación de Copilot como paritaria hasta conectar revisores/evidencia a los mismos guards.
 
