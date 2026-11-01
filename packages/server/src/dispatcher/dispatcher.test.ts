@@ -508,6 +508,48 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     expect(taskRow(task.id)).toMatchObject({ state: "needs_human" });
   });
 
+  it("si claude se deshabilita mientras se prepara el lanzamiento, no lo arranca y cae a copilot", async () => {
+    const { db, project, herdr, dispatcher, runs } = setup();
+    const task = insertTask(db, project.id);
+    const kinds: string[] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      return start(input);
+    });
+    const closed: string[] = [];
+    const close = herdr.closePane.bind(herdr);
+    vi.spyOn(herdr, "closePane").mockImplementation(async (paneId) => {
+      closed.push(paneId);
+      return close(paneId);
+    });
+    // El humano apaga claude después del claim, mientras el dispatcher prepara el pane.
+    const split = herdr.splitPane.bind(herdr);
+    let disabled = false;
+    vi.spyOn(herdr, "splitPane").mockImplementation(async (input) => {
+      if (!disabled) {
+        disabled = true;
+        new SettingsRepository(db).saveProviders({ claude: false });
+      }
+      return split(input);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(kinds).toEqual(["copilot"]);
+    expect(run?.agentKind).toBe("copilot");
+    expect(runs.providerAttempts(run?.id ?? "")).toEqual([
+      { provider: "copilot", status: "started" },
+    ]);
+    // El pane preparado para claude no queda huérfano: se cierra y solo el de copilot sigue abierto.
+    expect(closed).toHaveLength(1);
+    const { panes } = await herdr.snapshot();
+    expect(panes.some((p) => p.paneId === closed[0])).toBe(false);
+    expect(panes.some((p) => p.paneId === run?.herdrPane)).toBe(true);
+  });
+
   it("rechaza el claim si todos los proveedores se deshabilitaron tras planear y la tarea sigue en queued", async () => {
     const { db, project, dispatcher, runs, taskRow } = setup();
     const task = insertTask(db, project.id);
@@ -528,22 +570,27 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     await dispatcher.dispatch(refine(viva));
     await dispatcher.idle();
     const [vivaRun] = runs.forTask(viva.id);
+    expect(vivaRun).toMatchObject({ agentKind: "claude", endedAt: null });
+    const closed: string[] = [];
+    const close = herdr.closePane.bind(herdr);
+    vi.spyOn(herdr, "closePane").mockImplementation(async (paneId) => {
+      closed.push(paneId);
+      return close(paneId);
+    });
 
     new SettingsRepository(db).saveProviders({ claude: false });
-    // La reconciliación corre en cada pasada: no debe tratar al agente de un proveedor apagado como huérfano.
+    // La reconciliación y un relanzamiento corren tras el cambio: no deben tratar al agente de un
+    // proveedor apagado como huérfano ni reiniciarlo.
     await dispatcher.recover();
     await dispatcher.idle();
-    // El despacho siguiente ya respeta la configuración (copilot) sin tocar al agente que corría.
-    const nueva = insertTask(db, project.id);
-    await dispatcher.dispatch(refine(nueva));
-    await dispatcher.idle();
-    await dispatcher.releaseRun(vivaRun?.id ?? "");
+    await dispatcher.launch(vivaRun?.id ?? "");
 
-    expect(runs.forTask(nueva.id)[0]?.agentKind).toBe("copilot");
+    expect(closed).toEqual([]);
     expect(runs.get(vivaRun?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
     expect(taskRow(viva.id)).toMatchObject({ subState: "running" });
-    const { panes } = await herdr.snapshot();
-    expect(panes.some((p) => p.paneId === vivaRun?.herdrPane)).toBe(true);
+    const snapshot = await herdr.snapshot();
+    expect(snapshot.panes.some((p) => p.paneId === vivaRun?.herdrPane)).toBe(true);
+    expect(snapshot.agents.some((a) => a.paneId === vivaRun?.herdrPane)).toBe(true);
   });
 });
 

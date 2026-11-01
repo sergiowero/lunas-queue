@@ -34,7 +34,6 @@ import {
 import {
   type DispatchDecision,
   DispatchRuleError,
-  enabledFallbackOrder,
   type ProjectConfigReader,
   phaseProfile,
   phasePrompt,
@@ -420,9 +419,10 @@ export class PhaseDispatcher implements Dispatcher {
     worktree: { workspaceId: string; rootPaneId: string; path: string },
   ): Promise<HerdrAgent | null> {
     const primary = phaseProfile(project, phase);
-    // Solo los proveedores habilitados ahora; el humano pudo cambiarlos después del claim.
-    const enabled = new Set(enabledFallbackOrder(primary.kind, this.settings.providers()));
-    const order = agentProviders.fallbackOrder(primary.kind).filter((p) => enabled.has(p.kind));
+    // Solo los proveedores habilitados ahora; el humano pudo cambiarlos después del claim, así que
+    // se vuelve a leer justo antes de arrancar cada uno.
+    const order = agentProviders.fallbackOrder(primary.kind);
+    const isEnabled = (kind: AgentKind) => this.settings.providers()[kind];
     const attempts = this.runs.providerAttempts(initial.id);
     const latest = new Map<AgentKind, (typeof attempts)[number]["status"]>();
     for (const attempt of attempts) latest.set(attempt.provider, attempt.status);
@@ -448,7 +448,7 @@ export class PhaseDispatcher implements Dispatcher {
 
     const attempted = new Set(latest.keys());
     for (const provider of order) {
-      if (attempted.has(provider.kind)) continue;
+      if (attempted.has(provider.kind) || !isEnabled(provider.kind)) continue;
       let run = this.runs.setAgentKind(
         initial.id,
         provider.kind,
@@ -459,6 +459,13 @@ export class PhaseDispatcher implements Dispatcher {
       const args = await this.args(project, phase, run);
       const paneId = await this.ensurePane(run, worktree, phase);
       run = this.checkOpen(run.id);
+      // La preparación espera a herdr y al sistema de archivos: el humano pudo apagar el proveedor.
+      if (!isEnabled(provider.kind)) {
+        await this.herdr.closePane(paneId);
+        this.runs.clearPane(run.id);
+        await this.removeCopilotMcpConfig(run.id);
+        continue;
+      }
       this.runs.recordProviderAttempt(run.id, provider.kind, "started");
       try {
         const started = await this.herdr.startAgent({
@@ -489,7 +496,9 @@ export class PhaseDispatcher implements Dispatcher {
       }
     }
 
-    const none = enabled.size === 0 ? "todos los proveedores están deshabilitados en Settings" : "";
+    const none = order.every((p) => !isEnabled(p.kind))
+      ? "todos los proveedores están deshabilitados en Settings"
+      : "";
     const reason = `ningún proveedor respondió al arrancar: ${diagnostics.join("; ") || none || "sin diagnóstico"}`;
     await this.failRun(initial.id, reason, { providersUnavailable: true });
     return null;
