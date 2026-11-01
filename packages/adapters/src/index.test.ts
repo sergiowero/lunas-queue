@@ -114,6 +114,10 @@ describe("@lunasq/adapters", () => {
 
   it("no pasa flags de autopilot a Claude ni reserva los de Copilot", () => {
     const context = { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" };
+    // Contraste: el mismo perfil vacío lleva --autopilot en Copilot y no en Claude.
+    expect(agentProviders.get("copilot").args({ kind: "copilot", args: [] }, context)).toContain(
+      "--autopilot",
+    );
     expect(agentProviders.get("claude").args({ kind: "claude", args: [] }, context)).toEqual([
       "--mcp-config",
       "/mcp",
