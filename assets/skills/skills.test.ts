@@ -189,8 +189,9 @@ describe("@lunasq/assets-skills", () => {
       "implementación mínima",
       "refactor",
       "criterionTests",
-      "verificationHistory",
+      "rework",
       "mustFix",
+      "knownRisks",
       "dirty_worktree",
       "commits_missing",
       "test_gate_failed",
@@ -227,6 +228,7 @@ describe("@lunasq/assets-skills", () => {
       "learning",
       "merge-base origin/",
       "criterionTests",
+      "vuelve a tu `mustFix`",
     ]) {
       expect(body, piece).toContain(piece);
     }
