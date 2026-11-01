@@ -11,7 +11,12 @@ function setup() {
   const db = migratedDatabase();
   const project = insertProject(db);
   const app = createApp({ db });
-  const send = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
+  const send = (
+    method: string,
+    path: string,
+    body?: unknown,
+    headers: Record<string, string> = {},
+  ) =>
     app.request(path, {
       method,
       headers: { "content-type": "application/json", ...headers },
