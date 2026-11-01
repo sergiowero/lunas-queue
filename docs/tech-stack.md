@@ -120,7 +120,7 @@ LunasQ no embebe ninguna de estas herramientas: las invoca como procesos o las c
 | --- | --- | --- |
 | herdr | CLI con salida JSON y socket Unix (NDJSON) para eventos; versión mínima 0.9.5, protocol 22 ([ADR 0004](decisions/0004-herdr-version-y-cli.md)) | Verifica versión; instala la integración oficial de herdr para Claude Code |
 | Claude Code | Lo arranca herdr con `agent start --kind claude`; el dispatcher agrega el archivo MCP y un `--settings` estable con hooks HTTP de subagentes | Escribe MCP/settings en `~/.lunasq/`; copia skills y revisores a `~/.claude/` |
-| GitHub Copilot CLI | Lo arranca herdr con `agent start --kind copilot`; usa `--additional-mcp-config` por Run con su token MCP y `--trust-folder` | Registra el MCP en `~/.copilot/mcp-config.json` de forma idempotente y preservando otras entradas; copia skills a `~/.copilot/`. La captura automática de revisores aún no está implementada |
+| GitHub Copilot CLI | Lo arranca herdr con `agent start --kind copilot`; siempre con `--autopilot` (reservado junto con `--mode` y `--plan`, [ADR 0016](decisions/0016-proveedores-agente.md)), `--allow-all-tools`, `--session-id` y `--additional-mcp-config` por Run con su token MCP; no pasa `--trust-folder` | Registra el MCP en `~/.copilot/mcp-config.json` de forma idempotente y preservando otras entradas; copia skills a `~/.copilot/`. La captura automática de revisores aún no está implementada |
 | GitHub | CLI `gh` con `--json` | Verifica que `gh` esté autenticado |
 | git | Worktrees vía herdr; trailers `LunasQ-Task` y `LunasQ-Run` en los mensajes de commit | — |
 | OpenTelemetry | Claude Code exporta métricas y eventos por OTLP/HTTP JSON a `localhost` | Variables de telemetría en el entorno de cada pane |
