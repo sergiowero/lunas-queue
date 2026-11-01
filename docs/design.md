@@ -193,6 +193,10 @@ score = prioridad base + aging + boost por desbloqueo
 
 Todos los límites son configurables; el global tiene default de 5 y los demás son opcionales. Sin preemption: una tarea de mayor prioridad espera el siguiente slot libre. Los gates humanos no consumen slots: una tarea en refined esperando aprobación no tiene agente vivo. Una tarea con una pregunta abierta (`waiting_human`) sí ocupa su slot. Defaults del score, cálculo del aging, escalamiento de dependientes y contrato con el dispatcher: [ADR 0014](decisions/0014-scheduler.md).
 
+**Proveedores habilitados (Settings)**
+
+El humano habilita o deshabilita cada proveedor de agente (Claude Code, Copilot CLI) desde la página Settings, p. ej. cuando se agota su límite de uso. Es una configuración global (por defecto todos habilitados) que el scheduler lee en cada pasada. El **proveedor efectivo** de una tarea es el primario del perfil de la fase si está habilitado; si no, el primero habilitado del orden de fallback (el primario y luego los demás en orden de registro). Con todos deshabilitados el scheduler no despacha y las tareas siguen en `queued`; la UI muestra un aviso de despacho en pausa. El claim del dispatcher revalida contra la configuración vigente (`providers_disabled`), el lanzamiento solo prueba proveedores habilitados y los agentes vivos nunca se interrumpen. Guardar la configuración registra `settings.updated` en el outbox, que despierta al scheduler. Detalle: [ADR settings-proveedores](decisions/settings-proveedores.md).
+
 ## Dispatcher e integración con herdr (propuesta inicial)
 
 El dispatcher es un worker de larga vida con dos entradas (eventos de la BD y eventos de herdr) y un loop de reconciliación periódico; cada "despacho" es una secuencia idempotente sobre primitivas que herdr ya expone en su CLI y socket API ([CLI reference](https://herdr.dev/docs/cli-reference/), [Socket API](https://herdr.dev/docs/socket-api/)).
