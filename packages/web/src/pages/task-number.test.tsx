@@ -52,6 +52,35 @@ describe("número de tarea en las vistas", () => {
     nextToIntent(table, 42, "Login con email");
   });
 
+  it("en curso: una tarea in_progress muestra el #N junto al intent y el enlace conserva su nombre", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "in_progress", "queued");
+    renderApp("/in-progress", fake);
+    const table = within(await screen.findByRole("table"));
+    const link = await table.findByRole("link", { name: "Login con email" });
+    expect(link.getAttribute("href")).toBe(`/tasks/${task.id}`);
+    nextToIntent(table, 42, "Login con email");
+  });
+
+  it("en curso: una tarea con sub-estado running en otro estado muestra el #N junto al intent", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "verification", "running");
+    renderApp("/in-progress", fake);
+    const table = within(await screen.findByRole("table"));
+    await table.findByRole("link", { name: "Login con email" });
+    nextToIntent(table, 42, "Login con email");
+  });
+
+  it("completed: una tarea completada muestra el #N junto al intent y el enlace conserva su nombre", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "completed", null);
+    renderApp("/completed", fake);
+    const table = within(await screen.findByRole("table"));
+    const link = await table.findByRole("link", { name: "Login con email" });
+    expect(link.getAttribute("href")).toBe(`/tasks/${task.id}`);
+    nextToIntent(table, 42, "Login con email");
+  });
+
   it("bandeja: cada pendiente muestra el #N de su tarea", async () => {
     const { fake, task } = seeded();
     fake.addSpec(task.id);
