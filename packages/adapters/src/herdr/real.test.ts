@@ -18,6 +18,18 @@ const agentJson = (status: string) =>
       },
     },
   });
+const startedAgentWithoutKindJson = JSON.stringify({
+  id: "cli:agent:start",
+  result: {
+    type: "agent_info",
+    agent: {
+      name: "t1-refine-1",
+      pane_id: "w2:p2",
+      workspace_id: "w2",
+      agent_status: "idle",
+    },
+  },
+});
 const error = (code: string) => ({
   stdout: "",
   stderr: JSON.stringify({ error: { code, message: code } }),
@@ -39,6 +51,24 @@ function scripted(
 }
 
 describe("RealHerdr con exec simulado", () => {
+  it("startAgent conserva el kind solicitado si herdr lo omite en la respuesta inicial", async () => {
+    const { exec } = scripted({
+      "agent get": () => error("agent_not_found"),
+      "agent start": () => ({ stdout: startedAgentWithoutKindJson, stderr: "", exitCode: 0 }),
+    });
+
+    const result = await new RealHerdr({ exec }).startAgent({
+      name: "t1-refine-1",
+      kind: "copilot",
+      paneId: "w2:p2",
+    });
+
+    expect(result).toMatchObject({
+      started: true,
+      agent: { name: "t1-refine-1", kind: "copilot", status: "idle" },
+    });
+  });
+
   it("startAgent con agent_not_ready devuelve el agente bloqueado como arrancado", async () => {
     let gets = 0;
     const { exec } = scripted({

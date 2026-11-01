@@ -21,6 +21,7 @@ import {
   notificationWire,
   paneInfoWire,
   snapshotWire,
+  startedAgentInfoWire,
   toAgent,
   toPane,
   toSnapshot,
@@ -177,14 +178,13 @@ export class RealHerdr implements HerdrAdapter {
       ...(input.args?.length ? ["--", ...input.args] : []),
     ];
     try {
+      const response = startedAgentInfoWire.parse(
+        await this.cli.json(args, {
+          timeoutMs: (input.timeoutMs ?? MAX_START_TIMEOUT_MS) + CLI_GRACE_MS,
+        }),
+      );
       return {
-        agent: toAgent(
-          agentInfoWire.parse(
-            await this.cli.json(args, {
-              timeoutMs: (input.timeoutMs ?? MAX_START_TIMEOUT_MS) + CLI_GRACE_MS,
-            }),
-          ).agent,
-        ),
+        agent: toAgent({ ...response.agent, agent: response.agent.agent ?? input.kind }),
         started: true,
       };
     } catch (err) {

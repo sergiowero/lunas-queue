@@ -63,6 +63,9 @@ export const worktreeOpenedWire = z.looseObject({
 export const worktreeListWire = z.looseObject({ worktrees: z.array(worktreeWire) });
 export const paneInfoWire = z.looseObject({ pane: paneWire });
 export const agentInfoWire = z.looseObject({ agent: agentWire });
+export const startedAgentInfoWire = z.looseObject({
+  agent: agentWire.extend({ agent: z.string().optional() }),
+});
 export const notificationWire = z.looseObject({
   shown: z.boolean(),
   reason: z.string().nullish(),
