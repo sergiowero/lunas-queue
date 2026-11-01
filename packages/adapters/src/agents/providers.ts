@@ -72,6 +72,15 @@ function assertNoReservedArgs(args: string[], flags: string[]): void {
   }
 }
 
+/** `--` desactiva la interpretación de flags: los fijos de LunasQ pasarían a ser posicionales. */
+function assertNoOptionTerminator(args: string[]): void {
+  if (args.includes("--")) {
+    throw new AgentProviderError(
+      "el perfil de agente no puede traer --: desactivaría los flags que fija LunasQ",
+    );
+  }
+}
+
 function assertEffortNotDuplicated(profile: AgentProfile): void {
   if (
     profile.effort &&
@@ -110,6 +119,7 @@ const copilotProvider: AgentProvider = {
   capabilities: { usage: "unavailable", reviewerExecution: "lunasq-runner" },
   args(profile, context) {
     assertNoReservedArgs(profile.args, RESERVED_COPILOT_FLAGS);
+    assertNoOptionTerminator(profile.args);
     assertEffortNotDuplicated(profile);
     return [
       ...(profile.model === undefined ? [] : ["--model", profile.model]),

@@ -105,15 +105,41 @@ describe("@lunasq/adapters", () => {
     }
   });
 
-  it("no pasa flags de autopilot a Claude", () => {
-    const args = agentProviders
-      .get("claude")
-      .args(
-        { kind: "claude", args: [] },
-        { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" },
-      );
-    expect(args).not.toContain("--autopilot");
-    expect(args).not.toContain("--mode");
+  it("rechaza el terminador -- en los args de Copilot para que no anule los flags fijos", () => {
+    const context = { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" };
+    expect(() =>
+      agentProviders.get("copilot").args({ kind: "copilot", args: ["--", "x"] }, context),
+    ).toThrow(/no puede traer --/);
+  });
+
+  it("no pasa flags de autopilot a Claude ni reserva los de Copilot", () => {
+    const context = { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" };
+    expect(agentProviders.get("claude").args({ kind: "claude", args: [] }, context)).toEqual([
+      "--mcp-config",
+      "/mcp",
+      "--strict-mcp-config",
+      "--settings",
+      "/settings",
+      "--session-id",
+      "id",
+    ]);
+    // --mode y --plan solo están reservados para Copilot: Claude los deja pasar tal cual.
+    expect(
+      agentProviders
+        .get("claude")
+        .args({ kind: "claude", args: ["--mode", "x", "--plan"] }, context),
+    ).toEqual([
+      "--mode",
+      "x",
+      "--plan",
+      "--mcp-config",
+      "/mcp",
+      "--strict-mcp-config",
+      "--settings",
+      "/settings",
+      "--session-id",
+      "id",
+    ]);
   });
 
   it("rechaza providers duplicados en el registry", () => {
