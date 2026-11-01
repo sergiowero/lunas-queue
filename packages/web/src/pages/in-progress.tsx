@@ -59,9 +59,17 @@ export function InProgressPage() {
       const byTask = new Map<string, LatestRun>();
       (inProgress ?? []).forEach((t, i) => {
         const result = results[i];
+        // El error gana sobre los datos en caché: un refetch fallido conserva `data`, pero la fila
+        // debe decir «error» y no ofrecer enfocar un pane que quizá ya no es el vigente.
         byTask.set(
           t.id,
-          result?.data ? (latestRun(result.data) ?? null) : result?.isPending ? "loading" : "error",
+          result?.isError
+            ? "error"
+            : result?.data
+              ? (latestRun(result.data) ?? null)
+              : result?.isPending
+                ? "loading"
+                : "error",
         );
       });
       return byTask;

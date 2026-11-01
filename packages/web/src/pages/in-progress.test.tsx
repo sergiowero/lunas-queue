@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
+import { queries } from "../lib/queries.ts";
 
 describe("pestaña En curso", () => {
   it("el enlace En curso de la navegación lleva a /in-progress y queda activo", async () => {
@@ -331,6 +332,24 @@ describe("pestaña En curso", () => {
       expect((await rowOf("Sin runs")).at(-1)).toBe("—");
       expect((await rowOf("Rota")).at(-1)).toBe("error");
       expect((await rowOf("Sin pane")).at(-1)).toBe("—");
+      expect(screen.queryByRole("button", { name: /Enfocar pane/ })).toBeNull();
+    });
+
+    it("si un refetch de los Runs falla con datos previos en caché la celda Pane dice «error», sin botón de foco", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject();
+      const task = fake.addTask(project.id, { intent: "Se rompe", state: "in_progress" });
+      const run = fake.startRun(task.id, "implement");
+      const { queryClient } = renderApp("/in-progress", fake);
+
+      expect(
+        await screen.findByRole("button", { name: `Enfocar pane ${run.herdrPane} en herdr` }),
+      ).toBeTruthy();
+
+      fake.runsFail.add(task.id);
+      await queryClient.invalidateQueries({ queryKey: queries.runs(task.id).queryKey });
+
+      await waitFor(async () => expect((await rowOf("Se rompe")).at(-1)).toBe("error"));
       expect(screen.queryByRole("button", { name: /Enfocar pane/ })).toBeNull();
     });
 
