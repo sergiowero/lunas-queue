@@ -51,7 +51,6 @@ describe("@lunasq/adapters", () => {
       "xhigh",
       "--disable-client-telemetry",
       "--allow-all-tools",
-      "--trust-folder",
       "--session-id",
       "sess-1",
       "--additional-mcp-config",

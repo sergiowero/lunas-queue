@@ -2,7 +2,7 @@
 // (ADR 0004): ids opacos `wN`, `wN:tN`, `wN:pN`; worktrees que sobreviven como branch tras
 // `remove`; eventos por pane; notificaciones apagadas por defecto. Cumple la suite de contrato.
 import { type ChildProcess, spawn } from "node:child_process";
-import { TRUST_DIALOG_MARKER } from "./claude-tui.ts";
+import { COPILOT_TRUST_ACCEPT_KEYS, TRUST_ACCEPT_KEYS, TRUST_DIALOG_MARKER } from "./claude-tui.ts";
 import { HerdrError } from "./errors.ts";
 import type {
   AgentSessionInfo,
@@ -22,14 +22,22 @@ const SETTLED: AgentStatus[] = ["idle", "done"];
 
 // Pantalla del diálogo como la captura `spikes/herdr/outputs/09-agent-read-blocked.txt`: el
 // cursor arranca en "No, exit", así que un Enter a secas cierra Claude Code.
-const trustDialog = (cursor: number) =>
-  [
-    " Quick safety check: Is this a project you created or",
-    " one you trust?",
-    ` ${cursor === 0 ? "❯" : " "} No, exit`,
-    ` ${cursor === 1 ? "❯" : " "} ${TRUST_DIALOG_MARKER}`,
-    " Enter to confirm · Esc to cancel",
-  ].join("\n");
+const trustDialog = (cursor: number, kind: string) =>
+  kind === "copilot"
+    ? [
+        " Confirm folder trust",
+        " Do you trust the files in this folder?",
+        ` ${cursor === 0 ? "❯" : " "} 1. Yes`,
+        ` ${cursor === 1 ? "❯" : " "} 2. Yes, and remember this folder for future sessions`,
+        "   3. No (Esc)",
+      ].join("\n")
+    : [
+        " Quick safety check: Is this a project you created or",
+        " one you trust?",
+        ` ${cursor === 0 ? "❯" : " "} No, exit`,
+        ` ${cursor === 1 ? "❯" : " "} ${TRUST_DIALOG_MARKER}`,
+        " Enter to confirm · Esc to cancel",
+      ].join("\n");
 
 interface FakeWorkspace extends HerdrWorkspace {
   /** Checkout que abre el workspace; herdr solo lo publica para worktrees (ADR 0004, adenda). */
@@ -343,7 +351,7 @@ export class FakeHerdr implements HerdrAdapter {
         ? agent.screen.split("\n")
         : agent.trustCursor === undefined
           ? agent.transcript
-          : [...agent.transcript, trustDialog(agent.trustCursor)];
+          : [...agent.transcript, trustDialog(agent.trustCursor, agent.kind)];
     return lines.slice(-(input.lines ?? lines.length)).join("\n");
   }
 
@@ -355,7 +363,10 @@ export class FakeHerdr implements HerdrAdapter {
       if (key === "down") agent.trustCursor = 1;
       else if (key === "up") agent.trustCursor = 0;
       else if (key === "enter") {
-        const accepted = agent.trustCursor === 1;
+        const accepted =
+          agent.kind === "copilot"
+            ? agent.trustCursor === 0 && COPILOT_TRUST_ACCEPT_KEYS.includes(key)
+            : agent.trustCursor === 1 && TRUST_ACCEPT_KEYS.includes(key);
         delete agent.trustCursor;
         if (accepted) this.setAgentStatus(agent.name, "idle");
         else return this.exitAgent(agent.name);

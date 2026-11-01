@@ -10,9 +10,11 @@ import { join } from "node:path";
 import {
   AgentProviderError,
   agentProviders,
+  COPILOT_TRUST_ACCEPT_KEYS,
   type HerdrAdapter,
   type HerdrAgent,
   isHerdrError,
+  showsCopilotTrustDialog,
   showsTrustDialog,
   TRUST_ACCEPT_KEYS,
 } from "@lunasq/adapters";
@@ -606,14 +608,20 @@ export class PhaseDispatcher implements Dispatcher {
    */
   private async unblockStart(name: string, agent: HerdrAgent, fresh: boolean): Promise<HerdrAgent> {
     const screen = await this.herdr.readAgent({ name, lines: SCREEN_LINES });
-    if (!showsTrustDialog(screen)) {
+    const acceptKeys =
+      agent.kind === "copilot" && showsCopilotTrustDialog(screen)
+        ? COPILOT_TRUST_ACCEPT_KEYS
+        : showsTrustDialog(screen)
+          ? TRUST_ACCEPT_KEYS
+          : undefined;
+    if (!acceptKeys) {
       if (!fresh) return agent;
       throw new DispatchError(
         "agent_blocked",
         `el agente ${name} arrancó bloqueado: ${screen.slice(-300)}`,
       );
     }
-    await this.herdr.sendKeys({ name, keys: [...TRUST_ACCEPT_KEYS] });
+    await this.herdr.sendKeys({ name, keys: [...acceptKeys] });
     return this.herdr.waitAgent({ name, until: ["idle", "done"], timeoutMs: this.trustTimeoutMs });
   }
 

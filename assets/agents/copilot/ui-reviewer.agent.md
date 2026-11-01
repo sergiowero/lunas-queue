@@ -1,7 +1,7 @@
 ---
 name: lunasq-ui-reviewer
 description: Reviews LunasQ task diffs for visual, markup, layout, and accessibility regressions.
-tools: ["read", "search"]
+tools: ["view", "grep", "glob"]
 include-custom-instructions: true
 ---
 

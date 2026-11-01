@@ -10,9 +10,21 @@ export const TRUST_DIALOG_MARKER = "Yes, I trust this folder";
  */
 export const TRUST_ACCEPT_KEYS = ["down", "enter"] as const;
 
+/** Copilot's interactive workspace-trust dialog selects "1. Yes" by default. */
+export const COPILOT_TRUST_ACCEPT_KEYS = ["enter"] as const;
+
 /** Si la pantalla del agente muestra el diálogo de confianza de carpeta. */
 export function showsTrustDialog(screen: string): boolean {
   return screen.includes(TRUST_DIALOG_MARKER) && screen.includes("No, exit");
+}
+
+/** Si Copilot CLI muestra su diálogo interactivo de confianza de carpeta. */
+export function showsCopilotTrustDialog(screen: string): boolean {
+  return (
+    screen.includes("Confirm folder trust") &&
+    screen.includes("Do you trust the files in this folder?") &&
+    screen.includes("1. Yes")
+  );
 }
 
 /**
