@@ -53,7 +53,7 @@ export function harness(
     escalator,
     notify,
     failRun: (runId, reason) => {
-      if (!dispatcher) throw new Error("sin dispatcher");
+      if (!dispatcher) throw new Error("no dispatcher");
       return dispatcher.failRun(runId, reason);
     },
     onLost: () => {

@@ -65,7 +65,7 @@ export class HerdrCli {
       throw new HerdrError("invalid_response", `${args.join(" ")}: output is not JSON: ${stdout}`);
     }
     if (typeof parsed !== "object" || parsed === null || !("result" in parsed)) {
-      throw new HerdrError("invalid_response", `${args.join(" ")}: sin result: ${stdout}`);
+      throw new HerdrError("invalid_response", `${args.join(" ")}: missing result: ${stdout}`);
     }
     return parsed.result;
   }

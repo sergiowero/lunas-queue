@@ -48,9 +48,18 @@ describe("HerdrCli", () => {
   });
 
   it("rejects an output that is not JSON", async () => {
-    const { exec } = fakeExec("hola");
+    const { exec } = fakeExec("hello");
     await expect(new HerdrCli({ exec }).json(["api", "snapshot"])).rejects.toMatchObject({
       code: "invalid_response",
+      message: "herdr invalid_response: api snapshot: output is not JSON: hello",
+    });
+  });
+
+  it("rejects a JSON output without result with an English message", async () => {
+    const { exec } = fakeExec('{"id":"x"}');
+    await expect(new HerdrCli({ exec }).json(["api", "snapshot"])).rejects.toMatchObject({
+      code: "invalid_response",
+      message: 'herdr invalid_response: api snapshot: missing result: {"id":"x"}',
     });
   });
 });
