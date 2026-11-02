@@ -5,6 +5,7 @@
 import type { RunView } from "@lunasq/schemas";
 import { useMutation } from "@tanstack/react-query";
 import { api, type Json } from "../lib/api.ts";
+import { useT } from "../lib/i18n.ts";
 import { MutationError } from "./status.tsx";
 import { Button } from "./ui/button.tsx";
 
@@ -17,6 +18,7 @@ export function PaneFocusButton({ run }: { run: FocusableRun }) {
 }
 
 function FocusButton({ runId, pane }: { runId: string; pane: string }) {
+  const t = useT();
   const focus = useMutation({ mutationFn: () => api.focusRun(runId) });
   return (
     <div className="flex flex-col items-start gap-1">
@@ -24,7 +26,7 @@ function FocusButton({ runId, pane }: { runId: string; pane: string }) {
         variant="outline"
         size="sm"
         className="font-mono"
-        aria-label={`Enfocar pane ${pane} en herdr`}
+        aria-label={t.paneFocus.aria(pane)}
         disabled={focus.isPending}
         onClick={() => focus.mutate()}
       >

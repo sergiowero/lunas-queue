@@ -4,6 +4,7 @@ import type { Task } from "@lunasq/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type Json } from "../lib/api.ts";
 import { taskLabel } from "../lib/format.ts";
+import { useT } from "../lib/i18n.ts";
 import { PauseIcon, ResumeIcon } from "./icons.tsx";
 import { MutationError } from "./status.tsx";
 import { Button } from "./ui/button.tsx";
@@ -55,11 +56,12 @@ function ActionButton(props: {
 }
 
 export function PauseTaskButton({ task, variant }: { task: ActionTask; variant: Variant }) {
+  const t = useT();
   return (
     <ActionButton
       task={task}
       variant={variant}
-      label="Pausar tarea"
+      label={t.taskActions.pause}
       icon={<PauseIcon />}
       action={() => api.pauseTask(task.id)}
     />
@@ -67,11 +69,12 @@ export function PauseTaskButton({ task, variant }: { task: ActionTask; variant: 
 }
 
 export function ResumeTaskButton({ task, variant }: { task: ActionTask; variant: Variant }) {
+  const t = useT();
   return (
     <ActionButton
       task={task}
       variant={variant}
-      label="Reanudar tarea"
+      label={t.taskActions.resume}
       icon={<ResumeIcon />}
       action={() => api.resumeTask(task.id)}
       primary

@@ -14,18 +14,14 @@ import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Label, Textarea } from "../components/ui/input.tsx";
 import { api, type Json } from "../lib/api.ts";
-import { formatDate, PHASE_LABEL, taskLabel } from "../lib/format.ts";
+import { formatDate, taskLabel } from "../lib/format.ts";
+import { useT } from "../lib/i18n.ts";
 import { type Inbox, type TasksById, useInbox } from "../lib/inbox.ts";
 import { invalidateInbox } from "../lib/live.ts";
 import { queries } from "../lib/queries.ts";
 
 /** Resultado de la última respuesta; se muestra en la sección porque la tarjeta puede desaparecer. */
 type Notice = { ok: true; delivery: QuestionDelivery } | { ok: false; error: Error };
-
-const DELIVERY_TEXT: Record<QuestionDelivery, string> = {
-  pane: "Respuesta enviada al agente en su pane.",
-  new_run: "Respuesta enviada: irá a un agente nuevo.",
-};
 
 /** Nombre del proyecto de la tarea, si ya cargó la lista de proyectos. */
 function ProjectName({ task }: { task: Json<Task> | undefined }) {
@@ -80,14 +76,15 @@ function Item({
 
 /** Una fila por tarea en refined: la spec y su gate viven en el detalle de la tarea. */
 function SpecsSection({ refined, tasks }: { refined: Json<Task>[]; tasks: Inbox["tasks"] }) {
+  const t = useT();
   return (
-    <Section title="Specs por aprobar">
+    <Section title={t.inbox.specsTitle}>
       {tasks.error ? (
         <QueryError error={tasks.error} />
       ) : tasks.isPending ? (
         <Loading />
       ) : refined.length === 0 ? (
-        <Muted>Ninguna spec espera aprobación.</Muted>
+        <Muted>{t.inbox.specsEmpty}</Muted>
       ) : (
         <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
           {refined.map((task) => (
@@ -109,21 +106,22 @@ function EscalatedSection({
   escalated: Json<Task>[];
   tasks: Inbox["tasks"];
 }) {
+  const t = useT();
   return (
-    <Section title="Tareas que necesitan atención">
+    <Section title={t.inbox.escalatedTitle}>
       {tasks.error ? (
         <QueryError error={tasks.error} />
       ) : tasks.isPending ? (
         <Loading />
       ) : escalated.length === 0 ? (
-        <Muted>Ninguna tarea necesita atención.</Muted>
+        <Muted>{t.inbox.escalatedEmpty}</Muted>
       ) : (
         <div className="flex flex-col gap-4">
           {escalated.map((task) => (
             <Item key={task.id} task={task} taskId={task.id}>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <StateBadges state={task.state} subState={task.subState} />
-                <span>{`desde: ${formatDate(task.updatedAt)}`}</span>
+                <span>{t.inbox.since(formatDate(task.updatedAt))}</span>
               </div>
             </Item>
           ))}
@@ -145,6 +143,7 @@ function QuestionItem({
   task: Json<Task> | undefined;
   onResult: (notice: Notice | null) => void;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const runs = useQuery(queries.runs(question.taskId));
   const phase = runs.data?.find((r) => r.id === question.runId)?.phase;
@@ -176,8 +175,8 @@ function QuestionItem({
   return (
     <Item task={task} taskId={question.taskId}>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        {phase && <Badge variant="outline">{PHASE_LABEL[phase]}</Badge>}
-        <span>{`preguntó: ${formatDate(question.createdAt)}`}</span>
+        {phase && <Badge variant="outline">{t.phase[phase]}</Badge>}
+        <span>{t.inbox.asked(formatDate(question.createdAt))}</span>
       </div>
       <p className="whitespace-pre-wrap text-sm font-medium">{question.question}</p>
       {question.context && (
@@ -185,7 +184,7 @@ function QuestionItem({
       )}
       {options ? (
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-[13px] font-medium">Respuesta</legend>
+          <legend className="mb-1 text-[13px] font-medium">{t.inbox.answer}</legend>
           {options.map((option, index) => (
             <label key={option.label} className="flex items-start gap-2 text-sm">
               <input
@@ -211,11 +210,11 @@ function QuestionItem({
               checked={choice === OTHER}
               onChange={() => setChoice(OTHER)}
             />
-            <span>Otra respuesta</span>
+            <span>{t.inbox.otherAnswer}</span>
           </label>
           {choice === OTHER && (
             <Textarea
-              aria-label="Otra respuesta"
+              aria-label={t.inbox.otherAnswer}
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
             />
@@ -223,7 +222,7 @@ function QuestionItem({
         </fieldset>
       ) : (
         <>
-          <Label htmlFor={field}>Respuesta</Label>
+          <Label htmlFor={field}>{t.inbox.answer}</Label>
           <Textarea id={field} value={typed} onChange={(e) => setTyped(e.target.value)} />
         </>
       )}
@@ -232,7 +231,7 @@ function QuestionItem({
         disabled={send.isPending || answer === ""}
         onClick={() => send.mutate()}
       >
-        Responder
+        {t.inbox.reply}
       </Button>
     </Item>
   );
@@ -245,13 +244,14 @@ function QuestionsSection({
   questions: Inbox["questions"];
   tasks: TasksById;
 }) {
+  const t = useT();
   const [notice, setNotice] = useState<Notice | null>(null);
   return (
-    <Section title="Preguntas abiertas">
+    <Section title={t.inbox.questionsTitle}>
       <div className="flex flex-col gap-4">
         {notice?.ok && (
           <p role="status" className="text-sm">
-            {DELIVERY_TEXT[notice.delivery]}
+            {t.inbox.delivery[notice.delivery]}
           </p>
         )}
         {notice && !notice.ok && <MutationError error={notice.error} />}
@@ -260,7 +260,7 @@ function QuestionsSection({
         ) : questions.isPending ? (
           <Loading />
         ) : questions.data.length === 0 ? (
-          <Muted>Ningún agente espera una respuesta.</Muted>
+          <Muted>{t.inbox.questionsEmpty}</Muted>
         ) : (
           questions.data.map((q) => (
             <QuestionItem key={q.id} question={q} task={tasks.get(q.taskId)} onResult={setNotice} />
@@ -272,6 +272,7 @@ function QuestionsSection({
 }
 
 function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Task> | undefined }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const focus = useMutation({
     mutationFn: () => api.focusBlocked(agent.runId),
@@ -281,24 +282,24 @@ function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Ta
   return (
     <Item task={task} taskId={agent.taskId}>
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
-        <dt className="text-muted-foreground">Fase</dt>
-        <dd>{PHASE_LABEL[agent.phase]}</dd>
-        <dt className="text-muted-foreground">Agente</dt>
+        <dt className="text-muted-foreground">{t.inbox.phase}</dt>
+        <dd>{t.phase[agent.phase]}</dd>
+        <dt className="text-muted-foreground">{t.inbox.agent}</dt>
         <dd className="font-mono">{agent.agentName}</dd>
-        <dt className="text-muted-foreground">Pane</dt>
+        <dt className="text-muted-foreground">{t.inbox.pane}</dt>
         <dd className="font-mono">{agent.paneId}</dd>
-        <dt className="text-muted-foreground">Bloqueado desde</dt>
+        <dt className="text-muted-foreground">{t.inbox.blockedSince}</dt>
         <dd>{formatDate(agent.since)}</dd>
       </dl>
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={() => focus.mutate()} disabled={focus.isPending}>
-          Abrir pane en herdr
+          {t.inbox.openPane}
         </Button>
         <code className="text-xs text-muted-foreground">{`herdr agent focus ${agent.agentName}`}</code>
       </div>
       {focus.isSuccess && (
         <p role="status" className="text-sm">
-          Pane enfocado en herdr: responde el permiso ahí.
+          {t.inbox.paneFocused}
         </p>
       )}
       {focus.error && <MutationError error={focus.error} />}
@@ -307,14 +308,15 @@ function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Ta
 }
 
 function BlockedSection({ blocked, tasks }: { blocked: Inbox["blocked"]; tasks: TasksById }) {
+  const t = useT();
   return (
-    <Section title="Agentes bloqueados">
+    <Section title={t.inbox.blockedTitle}>
       {blocked.error ? (
         <QueryError error={blocked.error} />
       ) : blocked.isPending ? (
         <Loading />
       ) : blocked.data.length === 0 ? (
-        <Muted>Ningún agente espera un permiso.</Muted>
+        <Muted>{t.inbox.blockedEmpty}</Muted>
       ) : (
         <div className="flex flex-col gap-4">
           {blocked.data.map((b) => (
@@ -327,14 +329,15 @@ function BlockedSection({ blocked, tasks }: { blocked: Inbox["blocked"]; tasks: 
 }
 
 export function InboxPage() {
+  const t = useT();
   const inbox = useInbox();
   // Solo con las tres consultas en éxito: una que falló no puede leerse como «nada pendiente».
   const loaded = inbox.tasks.isSuccess && inbox.questions.isSuccess && inbox.blocked.isSuccess;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-baseline gap-3">
-        <h1 className="text-xl font-semibold">Bandeja</h1>
-        {loaded && inbox.count === 0 && <Muted>Nada espera por ti.</Muted>}
+        <h1 className="text-xl font-semibold">{t.inbox.title}</h1>
+        {loaded && inbox.count === 0 && <Muted>{t.inbox.nothing}</Muted>}
       </div>
       <SpecsSection refined={inbox.refined} tasks={inbox.tasks} />
       <EscalatedSection escalated={inbox.escalated} tasks={inbox.tasks} />

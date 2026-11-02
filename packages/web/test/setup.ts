@@ -3,9 +3,10 @@ import { afterEach } from "vitest";
 
 afterEach(() => {
   cleanup();
-  // El tema vive en <html> y en localStorage, fuera del árbol que desmonta cleanup.
+  // The theme and the language live in <html> and in localStorage, outside the tree that cleanup unmounts.
   localStorage.clear();
   document.documentElement.classList.remove("dark");
+  document.documentElement.removeAttribute("lang");
 });
 
 // React Flow mide el DOM con APIs que jsdom no trae.

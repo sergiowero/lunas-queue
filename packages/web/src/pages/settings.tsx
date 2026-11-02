@@ -15,14 +15,10 @@ import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
 import { Input, Label } from "../components/ui/input.tsx";
 import { api } from "../lib/api.ts";
+import { useErrorText } from "../lib/error-text.ts";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 import { cn } from "../lib/utils.ts";
-
-const LABEL: Record<AgentKind, string> = { claude: "Claude", copilot: "Copilot" };
-const DESCRIPTION: Record<AgentKind, string> = {
-  claude: "Claude Code",
-  copilot: "GitHub Copilot CLI",
-};
 
 function Switch({
   label,
@@ -65,18 +61,19 @@ function Switch({
 }
 
 export function SettingsPage() {
+  const t = useT();
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Settings</h1>
+      <h1 className="text-xl font-semibold">{t.settings.title}</h1>
       <ProvidersSection />
       <ConcurrencySection />
     </div>
   );
 }
 
-const CONCURRENCY_INVALID = `Escribe un número entero entre 1 y ${MAX_GLOBAL_CONCURRENCY}.`;
-
 function ConcurrencySection() {
+  const t = useT();
+  const errorText = useErrorText();
   const inputId = useId();
   const messageId = useId();
   const settings = useQuery(queries.concurrencySettings());
@@ -128,19 +125,15 @@ function ConcurrencySection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Concurrencia</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Máximo de agentes vivos a la vez, entre todos los proyectos y fases (incluye los que
-          esperan una respuesta). Subirlo despacha de inmediato las tareas en cola; bajarlo no
-          interrumpe a los que ya corren, solo frena los despachos nuevos.
-        </p>
+        <CardTitle>{t.settings.concurrencyTitle}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t.settings.concurrencyHelp}</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {!settings.data && !settings.error && <Loading />}
         {settings.data && (
           <form onSubmit={submit} noValidate className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">
-              <Label htmlFor={inputId}>Agentes concurrentes</Label>
+              <Label htmlFor={inputId}>{t.settings.concurrentAgents}</Label>
               <Input
                 id={inputId}
                 type="number"
@@ -159,11 +152,11 @@ function ConcurrencySection() {
               />
             </div>
             <Button type="submit" disabled={update.isPending}>
-              Guardar
+              {t.settings.save}
             </Button>
             {invalid && (
               <p id={messageId} className="basis-full text-sm text-destructive">
-                {CONCURRENCY_INVALID}
+                {t.settings.concurrencyInvalid(MAX_GLOBAL_CONCURRENCY)}
               </p>
             )}
           </form>
@@ -172,15 +165,15 @@ function ConcurrencySection() {
           <p role="alert" className="text-sm text-destructive">
             {settings.data
               ? savedUnread === null
-                ? "No se pudo actualizar el límite; se muestra el último valor leído: "
-                : `El límite se guardó (${savedUnread}), pero no se pudo volver a leer: `
-              : "No se pudo leer el límite de concurrencia: "}
-            {settings.error.message}
+                ? t.settings.limitUpdateFailed
+                : t.settings.limitSavedUnread(savedUnread)
+              : t.settings.limitReadFailed}
+            {errorText(settings.error)}
           </p>
         )}
         {update.error && effective !== undefined && (
           <p role="alert" className="text-sm text-destructive">
-            No se pudo guardar el límite; sigue vigente {effective}: {update.error.message}
+            {t.settings.limitSaveFailed(effective, errorText(update.error))}
           </p>
         )}
       </CardContent>
@@ -189,6 +182,8 @@ function ConcurrencySection() {
 }
 
 function ProvidersSection() {
+  const t = useT();
+  const errorText = useErrorText();
   const settings = useQuery(queries.providerSettings());
   const queryClient = useQueryClient();
   const update = useMutation({
@@ -215,22 +210,20 @@ function ProvidersSection() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Proveedores de agente</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Deshabilita un proveedor cuando se agote su límite de uso: no recibirá despachos nuevos
-            y se aplica el fallback al otro. Con ambos deshabilitados, las tareas esperan en cola.
-            Los agentes que ya corren no se interrumpen.
-          </p>
+          <CardTitle>{t.settings.providersTitle}</CardTitle>
+          <p className="text-sm text-muted-foreground">{t.settings.providersHelp}</p>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {AgentKind.options.map((kind) => (
             <div key={kind} className="flex items-center justify-between gap-4">
               <div className="flex flex-col">
-                <span className="font-medium">{LABEL[kind]}</span>
-                <span className="text-sm text-muted-foreground">{DESCRIPTION[kind]}</span>
+                <span className="font-medium">{t.settings.providers[kind]}</span>
+                <span className="text-sm text-muted-foreground">
+                  {t.settings.providerDescriptions[kind]}
+                </span>
               </div>
               <Switch
-                label={LABEL[kind]}
+                label={t.settings.providers[kind]}
                 checked={current[kind]}
                 disabled={update.isPending}
                 onChange={(checked) => update.mutate({ [kind]: checked })}
@@ -239,15 +232,13 @@ function ProvidersSection() {
           ))}
           {settings.error && (
             <p role="alert" className="text-sm text-destructive">
-              {savedButUnread
-                ? "El cambio se guardó, pero no se pudo leer el estado; los interruptores muestran el último estado leído, que puede no reflejarlo: "
-                : "No se pudo actualizar la configuración; se muestra el último estado leído: "}
-              {settings.error.message}
+              {savedButUnread ? t.settings.providersSavedUnread : t.settings.providersUpdateFailed}
+              {errorText(settings.error)}
             </p>
           )}
           {update.error && (
             <p role="alert" className="text-sm text-destructive">
-              No se pudo guardar: {update.error.message}
+              {t.settings.saveFailed(errorText(update.error))}
             </p>
           )}
         </CardContent>

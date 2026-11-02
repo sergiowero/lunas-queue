@@ -7,12 +7,14 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 import type { Json } from "../lib/api.ts";
-import { BOARD_STATES, STATE_LABEL, SUB_STATE_LABEL, taskLabel } from "../lib/format.ts";
+import { BOARD_STATES, taskLabel } from "../lib/format.ts";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/projects/$projectId");
 
 function TaskCard({ task }: { task: Json<Task> }) {
+  const t = useT();
   return (
     <li className="flex flex-col gap-2 rounded-md border border-border bg-background p-3 text-sm shadow-sm">
       <div className="flex items-baseline gap-2">
@@ -27,7 +29,7 @@ function TaskCard({ task }: { task: Json<Task> }) {
       </div>
       <div className="flex flex-wrap gap-1">
         <Badge variant="outline">P{task.priority}</Badge>
-        {task.subState && <Badge variant="secondary">{SUB_STATE_LABEL[task.subState]}</Badge>}
+        {task.subState && <Badge variant="secondary">{t.subState[task.subState]}</Badge>}
         {task.tags.map((tag) => (
           <Badge key={tag} variant="outline">
             #{tag}
@@ -44,6 +46,7 @@ function TaskCard({ task }: { task: Json<Task> }) {
 }
 
 export function BoardPage() {
+  const t = useT();
   const { projectId } = route.useParams();
   const projects = useQuery(queries.projects());
   const tasks = useQuery(queries.tasks(projectId));
@@ -52,7 +55,7 @@ export function BoardPage() {
   const error = projects.error ?? tasks.error;
   if (error) return <QueryError error={error} />;
   if (!projects.data || !tasks.data) return <Loading />;
-  if (!project) return <p className="text-sm">El proyecto no existe.</p>;
+  if (!project) return <p className="text-sm">{t.board.notFound}</p>;
 
   const byState = new Map<TaskState, Json<Task>[]>(BOARD_STATES.map((s) => [s, []]));
   for (const task of tasks.data) byState.get(task.state)?.push(task);
@@ -69,17 +72,17 @@ export function BoardPage() {
             to="/projects/$projectId/hooks"
             params={{ projectId }}
             className={buttonVariants({ size: "sm", variant: "outline" })}
-            aria-label="Hooks de este proyecto"
+            aria-label={t.board.hooksAria}
           >
-            Hooks
+            {t.board.hooks}
           </Link>
           <Link
             to="/tasks/new"
             search={{ projectId }}
             className={buttonVariants({ size: "sm" })}
-            aria-label="Nueva tarea en este proyecto"
+            aria-label={t.board.newTaskAria}
           >
-            Nueva tarea
+            {t.board.newTask}
           </Link>
         </div>
       </div>
@@ -94,10 +97,10 @@ export function BoardPage() {
               className="flex w-64 shrink-0 flex-col gap-2 rounded-lg bg-muted p-2"
             >
               <h2 id={headingId} className="px-1 text-sm font-semibold">
-                {STATE_LABEL[state]}
+                {t.state[state]}
               </h2>
               {items.length === 0 ? (
-                <p className="px-1 text-xs text-muted-foreground">Sin tareas</p>
+                <p className="px-1 text-xs text-muted-foreground">{t.board.noTasks}</p>
               ) : (
                 <ul className="flex flex-col gap-2">
                   {items.map((task) => (

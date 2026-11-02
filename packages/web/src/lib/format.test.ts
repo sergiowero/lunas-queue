@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  BOARD_STATES,
-  canPause,
-  canResume,
-  formatAgent,
-  formatTimeout,
-  STATE_LABEL,
-} from "./format.ts";
+import { es } from "./dictionary/es.ts";
+import { BOARD_STATES, canPause, canResume, formatAgent, formatTimeout } from "./format.ts";
 
 describe("formatTimeout", () => {
   it("muestra el timeout configurado sin redondearlo", () => {
@@ -30,7 +24,7 @@ describe("formatAgent", () => {
 
 describe("pausa", () => {
   it("Paused tiene etiqueta y su columna del tablero", () => {
-    expect(STATE_LABEL.paused).toBe("Paused");
+    expect(es.state.paused).toBe("Paused");
     expect(BOARD_STATES).toContain("paused");
   });
 

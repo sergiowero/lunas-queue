@@ -1,8 +1,10 @@
-// El script inline de index.html pone el tema antes de que React monte, para que una recarga en
-// tema oscuro no destelle en claro (AC-9). Debe resolver igual que lib/theme.ts.
+// The inline script of index.html sets the theme and the language before React mounts, so a reload
+// in the dark theme does not flash light (AC-9) and one in English does not pass through Spanish.
+// It must resolve the same as lib/theme.ts and lib/i18n.ts.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { LANGUAGE_KEY } from "../src/lib/i18n.ts";
 import { THEME_KEY } from "../src/lib/theme.ts";
 import { stubColorScheme } from "./render.tsx";
 
@@ -59,5 +61,35 @@ describe("tema antes de montar React", () => {
     });
     expect(runInline).not.toThrow();
     expect(html.classList.contains("dark")).toBe(false);
+  });
+});
+
+describe("language before mounting React", () => {
+  it("without a stored preference sets lang to es", () => {
+    runInline();
+    expect(html.lang).toBe("es");
+  });
+
+  it("with «en» stored sets lang to en", () => {
+    localStorage.setItem(LANGUAGE_KEY, "en");
+    runInline();
+    expect(html.lang).toBe("en");
+  });
+
+  it("with an invalid value keeps es", () => {
+    localStorage.setItem(LANGUAGE_KEY, "fr");
+    runInline();
+    expect(html.lang).toBe("es");
+  });
+
+  it("does not fail with a localStorage that throws and falls back to es", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      clear: () => {},
+    });
+    expect(runInline).not.toThrow();
+    expect(html.lang).toBe("es");
   });
 });

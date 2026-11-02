@@ -1,3 +1,4 @@
+import { useT } from "../lib/i18n.ts";
 import { setTheme, useTheme } from "../lib/theme.ts";
 import { cn } from "../lib/utils.ts";
 
@@ -32,12 +33,13 @@ function SunIcon() {
 /** Alterna claro y oscuro; el icono muestra el tema al que se cambiaría. */
 export function ThemeToggle({ className }: { className?: string }) {
   const theme = useTheme();
+  const t = useT();
   const next = theme === "dark" ? "light" : "dark";
   return (
     <button
       type="button"
-      aria-label={next === "dark" ? "Cambiar a tema oscuro" : "Cambiar a tema claro"}
-      title={next === "dark" ? "Cambiar a tema oscuro" : "Cambiar a tema claro"}
+      aria-label={next === "dark" ? t.theme.toDark : t.theme.toLight}
+      title={next === "dark" ? t.theme.toDark : t.theme.toLight}
       onClick={(event) => {
         const rect = event.currentTarget.getBoundingClientRect();
         setTheme(next, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });

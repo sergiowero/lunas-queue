@@ -26,9 +26,13 @@ describe("selector de tema", () => {
       expect(bar?.parentElement?.tagName).toBe("HEADER");
       expect(bar?.lastElementChild).toBe(button);
       expect(button.className).not.toContain("ml-auto");
-      expect(button.previousElementSibling?.getAttribute("href")).toBe("/settings");
-      expect(button.previousElementSibling?.className).not.toContain("ml-auto");
-      expect(button.previousElementSibling?.previousElementSibling?.className).toContain("ml-auto");
+      const language = button.previousElementSibling;
+      expect(language?.getAttribute("aria-label")).toBe("Cambiar a inglés");
+      expect(language?.previousElementSibling?.getAttribute("href")).toBe("/settings");
+      expect(language?.previousElementSibling?.className).not.toContain("ml-auto");
+      expect(language?.previousElementSibling?.previousElementSibling?.className).toContain(
+        "ml-auto",
+      );
     },
   );
 

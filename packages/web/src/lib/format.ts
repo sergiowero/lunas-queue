@@ -1,11 +1,5 @@
-import type {
-  Phase,
-  ResultKind,
-  RunResult,
-  SubState,
-  TaskState,
-  UsageTotals,
-} from "@lunasq/schemas";
+import type { TaskState, UsageTotals } from "@lunasq/schemas";
+import { currentLanguage, LOCALE } from "./i18n.ts";
 
 /** Nombre de una tarea en la UI: su título y, mientras el refinamiento no lo genera, el intent. */
 export function taskLabel(task: { title: string | null; intent: string }): string {
@@ -29,43 +23,6 @@ export const BOARD_STATES: TaskState[] = [
   "cancelled",
 ];
 
-export const STATE_LABEL: Record<TaskState, string> = {
-  draft: "Draft",
-  refined: "Refined",
-  in_progress: "In progress",
-  verification: "Verification",
-  needs_human: "Needs human",
-  paused: "Paused",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
-export const SUB_STATE_LABEL: Record<SubState, string> = {
-  queued: "en cola",
-  running: "corriendo",
-  waiting_human: "esperando humano",
-};
-
-export const PHASE_LABEL: Record<Phase, string> = {
-  refine: "Refinamiento",
-  implement: "Implementación",
-  verify: "Verificación",
-  deliver: "Entrega",
-};
-
-export const RESULT_LABEL: Record<RunResult, string> = {
-  success: "éxito",
-  failure: "fallo",
-  cancelled: "cancelado",
-};
-
-/** Tipo de Resultado de una tarea completada sin código (submit_result). */
-export const RESULT_KIND_LABEL: Record<ResultKind, string> = {
-  research: "Investigación",
-  already_implemented: "Ya implementada",
-  not_resolvable: "Sin resolución",
-};
-
 export function isTerminal(state: TaskState): boolean {
   return state === "completed" || state === "cancelled";
 }
@@ -82,18 +39,39 @@ export function canResume(state: TaskState): boolean {
   return state === "paused" || state === "needs_human";
 }
 
-const dateTime = new Intl.DateTimeFormat("es", { dateStyle: "short", timeStyle: "medium" });
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+const numberFormats = new Map<string, Intl.NumberFormat>();
 
-export function formatDate(iso: string | null): string {
-  return iso ? dateTime.format(new Date(iso)) : "—";
+/** Locale of the effective language: dates and numbers follow it. */
+function locale(): string {
+  return LOCALE[currentLanguage()];
 }
 
-const integer = new Intl.NumberFormat("es");
+export function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  const key = locale();
+  let format = dateFormats.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat(key, { dateStyle: "short", timeStyle: "medium" });
+    dateFormats.set(key, format);
+  }
+  return format.format(new Date(iso));
+}
+
+function integer(value: number): string {
+  const key = locale();
+  let format = numberFormats.get(key);
+  if (!format) {
+    format = new Intl.NumberFormat(key);
+    numberFormats.set(key, format);
+  }
+  return format.format(value);
+}
 
 export function formatTokens(usage: UsageTotals): string {
   const total =
     usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
-  return integer.format(total);
+  return integer(total);
 }
 
 export function formatCost(cost: number | null): string {
@@ -103,7 +81,7 @@ export function formatCost(cost: number | null): string {
 /** Duración legible: milisegundos, segundos o minutos. */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms} ms`;
-  if (ms < 60_000) return `${(Math.round(ms / 100) / 10).toLocaleString("es")} s`;
+  if (ms < 60_000) return `${(Math.round(ms / 100) / 10).toLocaleString(locale())} s`;
   return `${Math.round(ms / 60_000)} min`;
 }
 

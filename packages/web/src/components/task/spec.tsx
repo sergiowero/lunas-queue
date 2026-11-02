@@ -1,9 +1,11 @@
 // Versiones de la spec, su contenido y el diff contra la anterior (ADR 0013), con el gate: aprobar,
 // pedir cambios o editar y aprobar. Solo lo monta el detalle de tarea: la bandeja enlaza a él (ADR 0015).
-import type { Spec, SpecApproval, SpecContent, SpecDiff, Task } from "@lunasq/schemas";
+import type { Spec, SpecContent, SpecDiff, Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type Json } from "../../lib/api.ts";
+import type { Dictionary } from "../../lib/dictionary/index.ts";
+import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
 import { Muted, Section } from "../section.tsx";
 import { Loading, MutationError, QueryError } from "../status.tsx";
@@ -11,21 +13,16 @@ import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { Label, Textarea } from "../ui/input.tsx";
 
-const APPROVAL_LABEL: Record<SpecApproval, string> = {
-  pending: "pendiente",
-  approved: "aprobada",
-  changes_requested: "cambios pedidos",
-};
-
 function Content({ spec }: { spec: Json<Spec> }) {
+  const t = useT();
   const { domainModel, requirements, criteria, taskList } = spec.content;
   return (
     <div className="flex flex-col gap-3 text-sm">
       <p>
-        <span className="font-medium">Bounded context:</span> {domainModel.boundedContext}
+        <span className="font-medium">{t.spec.boundedContext}</span> {domainModel.boundedContext}
       </p>
       <div>
-        <h3 className="font-medium">Requerimientos</h3>
+        <h3 className="font-medium">{t.spec.requirements}</h3>
         <ul className="list-disc pl-5">
           {requirements.map((r, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: los textos pueden repetirse y la lista no se reordena.
@@ -34,20 +31,18 @@ function Content({ spec }: { spec: Json<Spec> }) {
         </ul>
       </div>
       <div>
-        <h3 className="font-medium">Criterios de aceptación</h3>
-        <ul aria-label="Criterios de aceptación" className="flex flex-col gap-1">
+        <h3 className="font-medium">{t.spec.criteria}</h3>
+        <ul aria-label={t.spec.criteria} className="flex flex-col gap-1">
           {criteria.map((c) => (
-            <li key={c.id}>
-              {`${c.id}: dado ${c.given}, cuando ${c.when}, entonces ${c.outcome}`}
-            </li>
+            <li key={c.id}>{t.spec.criterion(c.id, c.given, c.when, c.outcome)}</li>
           ))}
         </ul>
       </div>
       <div>
-        <h3 className="font-medium">Tareas</h3>
+        <h3 className="font-medium">{t.spec.tasks}</h3>
         <ul className="flex flex-col gap-1">
-          {taskList.map((t) => (
-            <li key={t.id}>{`${t.id}: ${t.title} (${t.criterionIds.join(", ")})`}</li>
+          {taskList.map((item) => (
+            <li key={item.id}>{`${item.id}: ${item.title} (${item.criterionIds.join(", ")})`}</li>
           ))}
         </ul>
       </div>
@@ -56,11 +51,13 @@ function Content({ spec }: { spec: Json<Spec> }) {
 }
 
 /** Una línea por cambio: + agregado, − quitado, ~ modificado. */
-function diffLines(diff: Json<SpecDiff>): string[] {
+function diffLines(diff: Json<SpecDiff>, t: Dictionary): string[] {
   const { domainModel: dm, requirements, criteria, taskList } = diff.changes;
   const lines: string[] = [];
   if (dm.boundedContext) {
-    lines.push(`~ bounded context: ${dm.boundedContext.from} → ${dm.boundedContext.to}`);
+    lines.push(
+      `~ ${t.spec.diffBoundedContext}: ${dm.boundedContext.from} → ${dm.boundedContext.to}`,
+    );
   }
   const keyed = <T,>(
     label: string,
@@ -75,27 +72,28 @@ function diffLines(diff: Json<SpecDiff>): string[] {
     for (const item of d.added) lines.push(`+ ${label}: ${item}`);
     for (const item of d.removed) lines.push(`− ${label}: ${item}`);
   };
-  keyed("criterio", criteria, (c) => c.id);
-  text("requerimiento", requirements);
-  keyed("tarea", taskList, (t) => t.id);
-  keyed("término", dm.glossary, (g) => g.term);
-  keyed("agregado", dm.aggregates, (a) => a.name);
-  text("invariante", dm.invariants);
-  keyed("evento", dm.events, (e) => e.name);
+  keyed(t.spec.diffLabels.criterion, criteria, (c) => c.id);
+  text(t.spec.diffLabels.requirement, requirements);
+  keyed(t.spec.diffLabels.task, taskList, (item) => item.id);
+  keyed(t.spec.diffLabels.term, dm.glossary, (g) => g.term);
+  keyed(t.spec.diffLabels.aggregate, dm.aggregates, (a) => a.name);
+  text(t.spec.diffLabels.invariant, dm.invariants);
+  keyed(t.spec.diffLabels.event, dm.events, (e) => e.name);
   return lines;
 }
 
 function Diff({ taskId, version }: { taskId: string; version: number }) {
+  const t = useT();
   const diff = useQuery(queries.specDiff(taskId, version));
   if (diff.error) return <QueryError error={diff.error} />;
   if (!diff.data) return null;
-  if (diff.data.from === null) return <Muted>Primera versión</Muted>;
-  const lines = diffLines(diff.data);
+  if (diff.data.from === null) return <Muted>{t.spec.firstVersion}</Muted>;
+  const lines = diffLines(diff.data, t);
   return (
     <div className="flex flex-col gap-1 text-sm">
-      <h3 className="font-medium">{`Cambios contra v${diff.data.from}`}</h3>
+      <h3 className="font-medium">{t.spec.changesAgainst(diff.data.from)}</h3>
       {diff.data.identical || lines.length === 0 ? (
-        <Muted>Sin cambios.</Muted>
+        <Muted>{t.spec.noChanges}</Muted>
       ) : (
         <ul className="font-mono text-xs">
           {lines.map((line, i) => (
@@ -120,6 +118,7 @@ function Editor({
   onSave: (content: SpecContent) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [text, setText] = useState(() => JSON.stringify(spec.content, null, 2));
   const [parseError, setParseError] = useState<string | null>(null);
   const save = () => {
@@ -128,12 +127,12 @@ function Editor({
       setParseError(null);
       onSave(content);
     } catch (error) {
-      setParseError(`JSON inválido: ${error instanceof Error ? error.message : String(error)}`);
+      setParseError(t.spec.invalidJson(error instanceof Error ? error.message : String(error)));
     }
   };
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={`content-${spec.id}`}>Contenido de la spec (JSON)</Label>
+      <Label htmlFor={`content-${spec.id}`}>{t.spec.editorLabel}</Label>
       <Textarea
         id={`content-${spec.id}`}
         value={text}
@@ -143,10 +142,10 @@ function Editor({
       />
       <div className="flex gap-2">
         <Button onClick={save} disabled={pending}>
-          Guardar y aprobar
+          {t.spec.saveAndApprove}
         </Button>
         <Button variant="outline" onClick={onCancel} disabled={pending}>
-          Cancelar edición
+          {t.spec.cancelEdit}
         </Button>
       </div>
       {parseError && (
@@ -159,6 +158,7 @@ function Editor({
 }
 
 function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [comments, setComments] = useState("");
   const [editing, setEditing] = useState(false);
@@ -213,18 +213,18 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
         <>
           <div className="flex gap-2">
             <Button onClick={() => approve.mutate()} disabled={pending}>
-              {`Aprobar v${spec.version}`}
+              {t.spec.approve(spec.version)}
             </Button>
             <Button variant="outline" onClick={() => setEditing(true)} disabled={pending}>
-              Editar y aprobar
+              {t.spec.editAndApprove}
             </Button>
           </div>
-          <Label htmlFor={`comments-${spec.id}`}>Comentarios</Label>
+          <Label htmlFor={`comments-${spec.id}`}>{t.spec.comments}</Label>
           <Textarea
             id={`comments-${spec.id}`}
             value={comments}
             onChange={(e) => setComments(e.target.value)}
-            placeholder="Qué debe cambiar el refinador"
+            placeholder={t.spec.commentsPlaceholder}
           />
           <Button
             variant="outline"
@@ -232,7 +232,7 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
             disabled={pending || comments.trim() === ""}
             onClick={() => requestChanges.mutate()}
           >
-            Pedir cambios
+            {t.spec.requestChanges}
           </Button>
         </>
       )}
@@ -243,6 +243,7 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
 
 /** Versiones, contenido, diff y gate; sin marco. */
 export function SpecVersions({ task }: { task: Json<Task> }) {
+  const t = useT();
   const specs = useQuery(queries.specs(task.id));
   // La elección vale contra la última versión que había: si llega otra, se muestra la nueva para
   // que el gate (que solo aplica a la última) no quede oculto.
@@ -257,7 +258,7 @@ export function SpecVersions({ task }: { task: Json<Task> }) {
       ? versions.find((s) => s.version === choice.version)
       : undefined;
   const spec = chosen ?? latest;
-  if (!spec || !latest) return <Muted>El refinamiento todavía no entrega una spec.</Muted>;
+  if (!spec || !latest) return <Muted>{t.spec.notDelivered}</Muted>;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -273,12 +274,12 @@ export function SpecVersions({ task }: { task: Json<Task> }) {
           </Button>
         ))}
         <Badge variant={spec.approval === "approved" ? "default" : "outline"}>
-          {APPROVAL_LABEL[spec.approval]}
+          {t.spec.approval[spec.approval]}
         </Badge>
-        <span className="text-xs text-muted-foreground">{`autor: ${spec.createdBy}`}</span>
+        <span className="text-xs text-muted-foreground">{t.spec.author(spec.createdBy)}</span>
       </div>
       {spec.reviewComments && (
-        <p className="text-sm">{`Comentarios de revisión: ${spec.reviewComments}`}</p>
+        <p className="text-sm">{t.spec.reviewComments(spec.reviewComments)}</p>
       )}
       <Content spec={spec} />
       <Diff taskId={task.id} version={spec.version} />
@@ -290,8 +291,9 @@ export function SpecVersions({ task }: { task: Json<Task> }) {
 }
 
 export function SpecPanel({ task }: { task: Json<Task> }) {
+  const t = useT();
   return (
-    <Section title="Spec">
+    <Section title={t.spec.title}>
       <SpecVersions task={task} />
     </Section>
   );

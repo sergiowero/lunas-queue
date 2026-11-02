@@ -12,6 +12,7 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
 import { canPause, canResume, formatCost, formatTokens, taskLabel } from "../lib/format.ts";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 type Entry = Json<QueueEntry>;
@@ -37,6 +38,7 @@ function ActionsCell({ row }: CellContext<Entry, unknown>) {
 }
 
 export function QueuePage() {
+  const t = useT();
   const [projectId, setProjectId] = useState("");
   const projects = useQuery(queries.projects());
   const queue = useQuery(queries.queue(projectId || undefined));
@@ -50,7 +52,7 @@ export function QueuePage() {
       column.display({ id: "position", header: "#", cell: (c) => c.row.index + 1 }),
       column.accessor((e) => taskLabel(e.task), {
         id: "intent",
-        header: "Tarea",
+        header: t.columns.task,
         cell: (c) => (
           <span className="flex items-baseline gap-2">
             <TaskNumber number={c.row.original.task.number} />
@@ -66,38 +68,38 @@ export function QueuePage() {
       }),
       column.accessor((e) => names.get(e.task.projectId) ?? "…", {
         id: "project",
-        header: "Proyecto",
+        header: t.columns.project,
       }),
-      column.accessor((e) => stateText(e.task), {
+      column.accessor((e) => stateText(e.task, t), {
         id: "state",
-        header: "Estado",
+        header: t.columns.state,
         cell: (c) => (
           <StateBadges state={c.row.original.task.state} subState={c.row.original.task.subState} />
         ),
       }),
-      column.accessor(priority, { id: "priority", header: "Prioridad" }),
-      column.accessor(score, { id: "score", header: "Score" }),
+      column.accessor(priority, { id: "priority", header: t.columns.priority }),
+      column.accessor(score, { id: "score", header: t.queue.score }),
       column.accessor((e) => `${formatTokens(e.usage)} · ${formatCost(e.usage.costUsd)}`, {
         id: "usage",
-        header: "Usage",
+        header: t.queue.usage,
       }),
-      column.display({ id: "actions", header: "Acciones", cell: ActionsCell }),
+      column.display({ id: "actions", header: t.columns.actions, cell: ActionsCell }),
     ],
-    [names],
+    [names, t],
   );
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-xl font-semibold">Cola global</h1>
+        <h1 className="text-xl font-semibold">{t.queue.title}</h1>
         <div className="flex w-64 flex-col gap-1">
-          <Label htmlFor="queue-project">Proyecto</Label>
+          <Label htmlFor="queue-project">{t.columns.project}</Label>
           <Select
             id="queue-project"
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
           >
-            <option value="">Todos</option>
+            <option value="">{t.allProjects}</option>
             {(projects.data ?? []).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -113,7 +115,7 @@ export function QueuePage() {
           columns={columns}
           data={queue.data}
           getRowId={(e) => e.task.id}
-          empty="No hay tareas vivas en la cola."
+          empty={t.queue.empty}
         />
       ) : (
         <Loading />

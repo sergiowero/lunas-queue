@@ -70,9 +70,9 @@ describe("PaneFocusButton", () => {
   });
 
   it.each([
-    [409, "agent_gone", "t1 ya no está en herdr"],
+    [409, "agent_gone", "El agente ya no está en herdr."],
     [502, "herdr_error", "herdr no responde"],
-    [503, "focus_unavailable", "focus_unavailable"],
+    [503, "focus_unavailable", "No se puede enfocar en herdr desde este servidor."],
   ])(
     "si el foco responde %i %s muestra el error junto al pane y el botón sigue",
     async (status, error, message) => {

@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { api, type Json } from "../../lib/api.ts";
-import { isTerminal, STATE_LABEL, taskLabel } from "../../lib/format.ts";
+import { useErrorText } from "../../lib/error-text.ts";
+import { isTerminal, taskLabel } from "../../lib/format.ts";
+import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
 import { Muted, Section } from "../section.tsx";
 import { QueryError } from "../status.tsx";
@@ -23,6 +25,7 @@ function Links({
   links: Json<DependencyLink>[];
   onRemove?: ((link: Json<DependencyLink>) => void) | undefined;
 }) {
+  const t = useT();
   if (links.length === 0) return null;
   return (
     <div className="flex flex-col gap-1">
@@ -34,17 +37,19 @@ function Links({
             <Link to="/tasks/$taskId" params={{ taskId: link.taskId }} className="hover:underline">
               {taskLabel(link)}
             </Link>
-            <Badge variant="secondary">{STATE_LABEL[link.state]}</Badge>
+            <Badge variant="secondary">{t.state[link.state]}</Badge>
             {link.prState && <Badge variant="outline">PR {link.prState}</Badge>}
-            {link.crossProject && <Badge variant="destructive">otro proyecto</Badge>}
+            {link.crossProject && (
+              <Badge variant="destructive">{t.dependencies.otherProject}</Badge>
+            )}
             {onRemove && (
               <Button
                 variant="ghost"
                 size="sm"
-                aria-label={`Quitar dependencia ${taskLabel(link)}`}
+                aria-label={t.dependencies.removeAria(taskLabel(link))}
                 onClick={() => onRemove(link)}
               >
-                Quitar
+                {t.dependencies.remove}
               </Button>
             )}
           </li>
@@ -68,17 +73,19 @@ function useDependencyMutation(mutationFn: (dependsOnId: string) => Promise<unkn
 }
 
 function AddDependency({ task, taken }: { task: Json<Task>; taken: Set<string> }) {
+  const t = useT();
+  const errorText = useErrorText();
   const [selected, setSelected] = useState("");
   const projects = useQuery(queries.projects());
   const candidates = useQuery(queries.tasks());
   const add = useDependencyMutation((dependsOnId) => api.addDependency(task.id, dependsOnId));
 
   const live = (candidates.data ?? []).filter(
-    (t) => t.id !== task.id && !taken.has(t.id) && !isTerminal(t.state),
+    (c) => c.id !== task.id && !taken.has(c.id) && !isTerminal(c.state),
   );
   const groups = [...(projects.data ?? [])]
     .sort((a, b) => Number(b.id === task.projectId) - Number(a.id === task.projectId))
-    .map((project) => ({ project, tasks: live.filter((t) => t.projectId === project.id) }))
+    .map((project) => ({ project, tasks: live.filter((c) => c.projectId === project.id) }))
     .filter((group) => group.tasks.length > 0);
 
   return (
@@ -89,9 +96,9 @@ function AddDependency({ task, taken }: { task: Json<Task>; taken: Set<string> }
         add.mutate(selected, { onSuccess: () => setSelected("") });
       }}
     >
-      <Label htmlFor="add-dependency">Agregar dependencia</Label>
+      <Label htmlFor="add-dependency">{t.dependencies.add}</Label>
       {groups.length === 0 ? (
-        <Muted>No hay otras tareas activas de las que depender.</Muted>
+        <Muted>{t.dependencies.noCandidates}</Muted>
       ) : (
         <div className="flex gap-2">
           <Select
@@ -100,31 +107,33 @@ function AddDependency({ task, taken }: { task: Json<Task>; taken: Set<string> }
             onChange={(e) => setSelected(e.target.value)}
           >
             <option value="" disabled>
-              Elige una tarea
+              {t.dependencies.choose}
             </option>
             {groups.map(({ project, tasks }) => (
               <optgroup
                 key={project.id}
                 label={
-                  project.id === task.projectId ? project.name : `${project.name} · otro proyecto`
+                  project.id === task.projectId
+                    ? project.name
+                    : t.dependencies.otherProjectGroup(project.name)
                 }
               >
-                {tasks.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {`${taskNumberLabel(t.number)} · ${taskLabel(t)}`}
+                {tasks.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {`${taskNumberLabel(c.number)} · ${taskLabel(c)}`}
                   </option>
                 ))}
               </optgroup>
             ))}
           </Select>
           <Button type="submit" size="sm" disabled={selected === "" || add.isPending}>
-            Agregar
+            {t.dependencies.addButton}
           </Button>
         </div>
       )}
       {add.error && (
         <p role="alert" className="text-sm text-destructive">
-          {add.error.message}
+          {errorText(add.error)}
         </p>
       )}
     </form>
@@ -132,30 +141,32 @@ function AddDependency({ task, taken }: { task: Json<Task>; taken: Set<string> }
 }
 
 export function DependenciesPanel({ task }: { task: Json<Task> }) {
+  const t = useT();
+  const errorText = useErrorText();
   const deps = useQuery(queries.dependencies(task.id));
   const remove = useDependencyMutation((dependsOnId) => api.removeDependency(task.id, dependsOnId));
   const editable = task.state === "draft";
   return (
-    <Section title="Dependencias">
+    <Section title={t.dependencies.title}>
       {deps.error ? (
         <QueryError error={deps.error} />
       ) : deps.data ? (
         <div className="flex flex-col gap-3">
           {deps.data.dependsOn.length + deps.data.dependents.length === 0 ? (
-            <Muted>Sin dependencias.</Muted>
+            <Muted>{t.dependencies.none}</Muted>
           ) : (
             <>
               <Links
-                title="Depende de"
+                title={t.dependencies.dependsOn}
                 links={deps.data.dependsOn}
                 onRemove={editable ? (link) => remove.mutate(link.taskId) : undefined}
               />
-              <Links title="La esperan" links={deps.data.dependents} />
+              <Links title={t.dependencies.dependents} links={deps.data.dependents} />
             </>
           )}
           {remove.error && (
             <p role="alert" className="text-sm text-destructive">
-              {remove.error.message}
+              {errorText(remove.error)}
             </p>
           )}
           {editable && (

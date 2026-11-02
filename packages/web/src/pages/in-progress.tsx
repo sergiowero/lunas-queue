@@ -13,6 +13,7 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
 import { canPause, formatAgent, taskLabel } from "../lib/format.ts";
+import { useT } from "../lib/i18n.ts";
 import { isInProgress } from "../lib/in-progress.ts";
 import { queries } from "../lib/queries.ts";
 
@@ -33,9 +34,13 @@ function latestRun(runs: Run[]): Run | undefined {
 type LatestRun = Run | null | "loading" | "error";
 
 /** «…» mientras cargan los Runs de la tarea; «error» si falló la consulta; «—» si no tiene ninguno. */
-function runCell(run: LatestRun | undefined, format: (run: Run) => string): string {
+function runCell(
+  run: LatestRun | undefined,
+  format: (run: Run) => string,
+  errorLabel: string,
+): string {
   if (run === undefined || run === "loading") return "…";
-  if (run === "error") return "error";
+  if (run === "error") return errorLabel;
   return run ? format(run) : "—";
 }
 
@@ -52,6 +57,7 @@ function ActionsCell({ row }: CellContext<Row, unknown>) {
 }
 
 export function InProgressPage() {
+  const t = useT();
   const [projectId, setProjectId] = useState("");
   const projects = useQuery(queries.projects());
   const tasks = useQuery(queries.tasks(projectId || undefined));
@@ -90,7 +96,7 @@ export function InProgressPage() {
     () => [
       column.accessor(taskLabel, {
         id: "intent",
-        header: "Tarea",
+        header: t.columns.task,
         cell: (c) => (
           <span className="flex items-baseline gap-2">
             <TaskNumber number={c.row.original.number} />
@@ -104,56 +110,65 @@ export function InProgressPage() {
           </span>
         ),
       }),
-      column.accessor((t) => names.get(t.projectId) ?? "…", { id: "project", header: "Proyecto" }),
-      column.accessor(stateText, {
+      column.accessor((t) => names.get(t.projectId) ?? "…", {
+        id: "project",
+        header: t.columns.project,
+      }),
+      column.accessor((task) => stateText(task, t), {
         id: "state",
-        header: "Estado",
+        header: t.columns.state,
         cell: (c) => (
           <StateBadges state={c.row.original.state} subState={c.row.original.subState} />
         ),
       }),
-      column.accessor("priority", { header: "Prioridad" }),
+      column.accessor("priority", { header: t.columns.priority }),
       // Columnas de display: TanStack Table cachea el valor de los accessors por fila mientras
       // `data` no cambie, y los Runs llegan después de la lista de tareas.
       column.display({
         id: "iteration",
-        header: "Iteración",
-        cell: (c) => runCell(latestRuns.get(c.row.original.id), (r) => String(r.iteration)),
+        header: t.inProgressPage.iteration,
+        cell: (c) =>
+          runCell(
+            latestRuns.get(c.row.original.id),
+            (r) => String(r.iteration),
+            t.inProgressPage.error,
+          ),
       }),
       column.display({
         id: "agent",
-        header: "Agente",
-        cell: (c) => runCell(latestRuns.get(c.row.original.id), formatAgent),
+        header: t.inProgressPage.agent,
+        cell: (c) =>
+          runCell(latestRuns.get(c.row.original.id), formatAgent, t.inProgressPage.error),
       }),
       column.display({
         id: "pane",
-        header: "Pane",
+        header: t.inProgressPage.pane,
         cell: (c) => {
           const run = latestRuns.get(c.row.original.id);
           return typeof run === "object" && run ? (
             <PaneFocusButton run={run} />
           ) : (
-            runCell(run, () => "—")
+            runCell(run, () => "—", t.inProgressPage.error)
           );
         },
       }),
-      column.display({ id: "actions", header: "Acciones", cell: ActionsCell }),
+      column.display({ id: "actions", header: t.columns.actions, cell: ActionsCell }),
     ],
-    [names, latestRuns],
+    [names, latestRuns, t],
   );
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-xl font-semibold">En curso</h1>
+        <h1 className="text-xl font-semibold">{t.inProgressPage.title}</h1>
         <div className="flex w-64 flex-col gap-1">
-          <Label htmlFor="in-progress-project">Proyecto</Label>
+          <Label htmlFor="in-progress-project">{t.columns.project}</Label>
           <Select
             id="in-progress-project"
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
           >
-            <option value="">Todos</option>
+            <option value="">{t.allProjects}</option>
             {(projects.data ?? []).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -169,7 +184,7 @@ export function InProgressPage() {
           columns={columns}
           data={inProgress}
           getRowId={(t) => t.id}
-          empty="No hay tareas en curso."
+          empty={t.inProgressPage.empty}
         />
       ) : (
         <Loading />

@@ -7,6 +7,7 @@ import { type ExecutionsState, HookCard } from "../components/hooks/hook-card.ts
 import { Muted, Section } from "../components/section.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import type { Json } from "../lib/api.ts";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/projects/$projectId/hooks");
@@ -49,6 +50,7 @@ function PointSection({
 }
 
 export function HooksPage() {
+  const t = useT();
   const { projectId } = route.useParams();
   const projects = useQuery(queries.projects());
   const hooks = useQuery(queries.projectHooks(projectId));
@@ -57,7 +59,7 @@ export function HooksPage() {
 
   if (projects.error) return <QueryError error={projects.error} />;
   if (!projects.data) return <Loading />;
-  if (!project) return <p className="text-sm">El proyecto no existe.</p>;
+  if (!project) return <p className="text-sm">{t.board.notFound}</p>;
 
   const executionsOf = (point: HookPoint): Execution[] | "loading" | "failed" =>
     executions.data
@@ -76,18 +78,19 @@ export function HooksPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold">Hooks · {project.name}</h1>
+        <h1 className="text-xl font-semibold">{t.hooksPage.title(project.name)}</h1>
         <p className="text-sm text-muted-foreground">
-          Tal como están en {project.baseBranch}
+          {t.hooksPage.asIn}
+          {project.baseBranch}
           {hooks.data && (
             <>
               {" "}
               (<code>{hooks.data.baseRef.slice(0, 7)}</code>)
             </>
           )}
-          . Se cambian por PR en el repo.{" "}
+          {t.hooksPage.changedByPr}
           <Link to="/projects/$projectId" params={{ projectId }} className="underline">
-            Volver al tablero
+            {t.hooksPage.backToBoard}
           </Link>
         </p>
       </div>
@@ -99,7 +102,7 @@ export function HooksPage() {
         <>
           {hooks.data.configError && (
             <p role="alert" className="text-sm text-destructive">
-              lunasq/hooks/config inválido, se muestran los valores por defecto:{" "}
+              {t.hooksPage.invalidConfig}
               {hooks.data.configError}
             </p>
           )}
@@ -112,7 +115,9 @@ export function HooksPage() {
               executions={executionsOf(point)}
             />
           ))}
-          {empty.length > 0 && <Muted>Sin hooks: {empty.map((p) => p.point).join(", ")}.</Muted>}
+          {empty.length > 0 && (
+            <Muted>{t.hooksPage.noHooks(empty.map((p) => p.point).join(", "))}</Muted>
+          )}
         </>
       )}
     </div>

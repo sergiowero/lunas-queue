@@ -288,7 +288,9 @@ describe("borrado de proyectos", () => {
     const dialog = await screen.findByRole("dialog", { name: "Eliminar proyecto" });
     await user.click(within(dialog).getByRole("button", { name: "Eliminar" }));
 
-    expect((await screen.findByRole("alert")).textContent).toContain("el proyecto tiene tareas");
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "El proyecto tiene tareas y no se puede eliminar.",
+    );
     expect(screen.getByRole("link", { name: "ocupado" })).toBeTruthy();
   });
 });

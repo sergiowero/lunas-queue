@@ -145,7 +145,9 @@ describe("página Settings", () => {
     fake.providersError = { status: 400, error: "invalid_input", message: "entrada inválida" };
     const { user } = renderApp("/settings", fake);
     await user.click(await screen.findByRole("switch", { name: "Copilot" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("entrada inválida");
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Los datos enviados no son válidos.",
+    );
     expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(true);
     expect(fake.providers).toEqual({ claude: true, copilot: true });
   });

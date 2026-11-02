@@ -9,6 +9,7 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import type { Json } from "../../lib/api.ts";
 import { formatDate, stripAnsi } from "../../lib/format.ts";
+import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
 import { Muted, Section } from "../section.tsx";
 import { Loading, QueryError, stateText } from "../status.tsx";
@@ -21,21 +22,27 @@ const TEST_GATE: typeof TEST_GATE_EXECUTED = "test_gate.executed";
 const PRE = "max-h-80 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-xs";
 
 function TransitionDetail({ payload }: { payload: TaskTransitionedPayload }) {
+  const t = useT();
   const extra = [payload.reason, payload.note].filter(Boolean).join(" · ");
   return (
     <>
-      <span>{`${stateText(payload.from)} → ${stateText(payload.to)}`}</span>
+      <span>{`${stateText(payload.from, t)} → ${stateText(payload.to, t)}`}</span>
       {extra && <span className="text-muted-foreground">{extra}</span>}
     </>
   );
 }
 
 function TestGateDetail({ payload }: { payload: TestGateExecutedPayload }) {
-  const outcome = payload.passed ? "pasó" : payload.timedOut ? "excedió el tiempo" : "falló";
+  const t = useT();
+  const outcome = payload.passed
+    ? t.eventLog.testsPassed
+    : payload.timedOut
+      ? t.eventLog.testsTimedOut
+      : t.eventLog.testsFailed;
   const output = stripAnsi(payload.output);
   return (
     <>
-      <span>{`Tests ${outcome}`}</span>
+      <span>{t.eventLog.tests(outcome)}</span>
       <span className="text-muted-foreground">
         {`exit ${payload.exitCode ?? "—"} · ${payload.durationMs} ms`}
         {payload.command && ` · ${payload.command}`}
@@ -43,7 +50,9 @@ function TestGateDetail({ payload }: { payload: TestGateExecutedPayload }) {
       {payload.error && <span className="text-destructive">{stripAnsi(payload.error)}</span>}
       {output && (
         <details className="w-full">
-          <summary className="cursor-pointer text-xs text-muted-foreground">Salida</summary>
+          <summary className="cursor-pointer text-xs text-muted-foreground">
+            {t.common.output}
+          </summary>
           <pre className={`mt-1 ${PRE}`}>{output}</pre>
         </details>
       )}
@@ -52,6 +61,7 @@ function TestGateDetail({ payload }: { payload: TestGateExecutedPayload }) {
 }
 
 function Detail({ event }: { event: Json<EventView> }) {
+  const t = useT();
   if (event.type === TRANSITIONED) {
     return <TransitionDetail payload={event.payload as TaskTransitionedPayload} />;
   }
@@ -61,27 +71,28 @@ function Detail({ event }: { event: Json<EventView> }) {
   if (event.payload === null || event.payload === undefined) return null;
   return (
     <details className="w-full">
-      <summary className="cursor-pointer text-xs text-muted-foreground">Datos</summary>
+      <summary className="cursor-pointer text-xs text-muted-foreground">{t.eventLog.data}</summary>
       <pre className={`mt-1 ${PRE}`}>{JSON.stringify(event.payload, null, 2)}</pre>
     </details>
   );
 }
 
 export function EventLogPanel({ taskId }: { taskId: string }) {
+  const t = useT();
   const events = useQuery(queries.events(taskId));
   const count = events.data?.length;
   return (
-    <Section title="Event log">
+    <Section title={t.eventLog.title}>
       {events.error ? (
         <QueryError error={events.error} />
       ) : !events.data ? (
         <Loading />
       ) : events.data.length === 0 ? (
-        <Muted>Sin eventos.</Muted>
+        <Muted>{t.eventLog.empty}</Muted>
       ) : (
         <details>
           <summary className="cursor-pointer text-sm text-muted-foreground">
-            {`Mostrar ${count} ${count === 1 ? "evento" : "eventos"}`}
+            {t.eventLog.show(count ?? 0)}
           </summary>
           <ol className="mt-3 flex flex-col gap-3 text-sm">
             {events.data.map((event) => (

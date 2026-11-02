@@ -1,4 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
+import { useT } from "../lib/i18n.ts";
 import { useInProgressCount } from "../lib/in-progress.ts";
 import { useInbox } from "../lib/inbox.ts";
 import { useLiveUpdates } from "../lib/live.ts";
@@ -6,6 +7,7 @@ import { useOpenPrCount } from "../lib/open-prs.ts";
 import { cn } from "../lib/utils.ts";
 import { DispatchPausedBanner } from "./dispatch-paused-banner.tsx";
 import { PlusIcon, SettingsIcon } from "./icons.tsx";
+import { LanguageToggle } from "./language-toggle.tsx";
 import { ThemeToggle } from "./theme-toggle.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { buttonVariants } from "./ui/button.tsx";
@@ -41,6 +43,7 @@ function BrandMark() {
 
 export function Layout() {
   useLiveUpdates();
+  const t = useT();
   const { count } = useInbox();
   const inProgressCount = useInProgressCount();
   const openPrs = useOpenPrCount();
@@ -58,19 +61,15 @@ export function Layout() {
           </Link>
           <nav className="-my-2 flex min-w-0 gap-1 overflow-x-auto px-1 py-2">
             <Link to="/queue" className={nav} activeProps={active}>
-              Cola
+              {t.nav.queue}
             </Link>
             <Link
               to="/in-progress"
               className={nav}
               activeProps={active}
-              aria-label={
-                inProgressCount > 0
-                  ? `En curso, ${inProgressCount} ${inProgressCount === 1 ? "tarea" : "tareas"}`
-                  : undefined
-              }
+              aria-label={inProgressCount > 0 ? t.nav.inProgressAria(inProgressCount) : undefined}
             >
-              En curso
+              {t.nav.inProgress}
               {inProgressCount > 0 && (
                 <Badge variant="secondary" className="ml-1.5">
                   {inProgressCount}
@@ -81,9 +80,9 @@ export function Layout() {
               to="/completed"
               className={nav}
               activeProps={active}
-              aria-label={openPrs > 0 ? `Completed, ${openPrs} PR abiertos` : "Completed"}
+              aria-label={openPrs > 0 ? t.nav.completedAria(openPrs) : t.nav.completed}
             >
-              Completed
+              {t.nav.completed}
               {openPrs > 0 && (
                 <Badge variant="success" className="ml-1.5">
                   {openPrs}
@@ -94,9 +93,9 @@ export function Layout() {
               to="/inbox"
               className={nav}
               activeProps={active}
-              aria-label={count > 0 ? `Bandeja, ${count} pendientes` : "Bandeja"}
+              aria-label={count > 0 ? t.nav.inboxAria(count) : t.nav.inbox}
             >
-              Bandeja
+              {t.nav.inbox}
               {count > 0 && (
                 <Badge variant="destructive" className="ml-1.5">
                   {count}
@@ -109,22 +108,23 @@ export function Layout() {
               activeOptions={{ exact: true }}
               activeProps={active}
             >
-              Proyectos
+              {t.nav.projects}
             </Link>
           </nav>
           <Link to="/tasks/new" className={cn(buttonVariants({ size: "sm" }), "ml-auto shrink-0")}>
             <PlusIcon />
-            Nueva tarea
+            {t.nav.newTask}
           </Link>
           <Link
             to="/settings"
-            aria-label="Settings"
-            title="Settings"
+            aria-label={t.nav.settings}
+            title={t.nav.settings}
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-all duration-150 hover:bg-surface-tertiary/70 hover:text-text active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             activeProps={active}
           >
             <SettingsIcon />
           </Link>
+          <LanguageToggle className="shrink-0" />
           <ThemeToggle className="shrink-0" />
         </div>
       </header>

@@ -39,9 +39,11 @@ describe("botón Nueva tarea del header", () => {
     renderApp("/queue");
     const button = await newTaskButton();
     const settings = await screen.findByRole("link", { name: "Settings" });
+    const language = await screen.findByRole("button", { name: "Cambiar a inglés" });
     const theme = await screen.findByRole("button", { name: /^Cambiar a tema/ });
     expect(button.nextElementSibling).toBe(settings);
-    expect(settings.nextElementSibling).toBe(theme);
+    expect(settings.nextElementSibling).toBe(language);
+    expect(language.nextElementSibling).toBe(theme);
     expect(theme.parentElement?.lastElementChild).toBe(theme);
     expect(button.parentElement).toBe(theme.parentElement);
     expect(button.className).toContain("ml-auto");

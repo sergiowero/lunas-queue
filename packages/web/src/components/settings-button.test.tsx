@@ -37,8 +37,10 @@ describe("botón de Settings del header", () => {
   it("queda justo antes del selector de tema, que es el último elemento del header, y después de Nueva tarea", async () => {
     renderApp("/queue");
     const link = await settingsButton();
+    const language = await screen.findByRole("button", { name: "Cambiar a inglés" });
     const theme = await screen.findByRole("button", { name: /^Cambiar a tema/ });
-    expect(link.nextElementSibling).toBe(theme);
+    expect(link.nextElementSibling).toBe(language);
+    expect(language.nextElementSibling).toBe(theme);
     expect(theme.parentElement?.lastElementChild).toBe(theme);
     expect(link.parentElement).toBe(theme.parentElement);
     expect(link.className).not.toContain("ml-auto");

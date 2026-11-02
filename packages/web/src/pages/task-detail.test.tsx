@@ -211,7 +211,7 @@ describe("detalle de tarea", () => {
 
     const rows = runs.getAllByRole("row");
     expect((await within(rows[1] as HTMLElement).findByRole("alert")).textContent).toBe(
-      "lunasq-refine ya no está en herdr",
+      "El agente ya no está en herdr.",
     );
     expect(within(rows[2] as HTMLElement).queryByRole("alert")).toBeNull();
     expect(within(rows[2] as HTMLElement).getByText(second.herdrPane as string)).toBeTruthy();

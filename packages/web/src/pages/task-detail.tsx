@@ -18,7 +18,9 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { ApiError, api, type Json } from "../lib/api.ts";
+import { useErrorText } from "../lib/error-text.ts";
 import { canPause, canResume, formatDate, isTerminal } from "../lib/format.ts";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/tasks/$taskId");
@@ -33,6 +35,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function CancelTask({ task }: { task: Json<Task> }) {
+  const t = useT();
+  const errorText = useErrorText();
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const cancel = useMutation({
@@ -47,27 +51,27 @@ function CancelTask({ task }: { task: Json<Task> }) {
   if (!confirming) {
     return (
       <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
-        Cancelar tarea
+        {t.taskDetail.cancel}
       </Button>
     );
   }
   return (
     <div className="flex items-center gap-2 text-sm">
-      <span>¿Cancelar la tarea?</span>
+      <span>{t.taskDetail.confirmCancel}</span>
       <Button
         variant="destructive"
         size="sm"
         disabled={cancel.isPending}
         onClick={() => cancel.mutate()}
       >
-        Sí, cancelar
+        {t.taskDetail.yesCancel}
       </Button>
       <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
-        No
+        {t.taskDetail.no}
       </Button>
       {cancel.error && (
         <span role="alert" className="text-destructive">
-          {cancel.error.message}
+          {errorText(cancel.error)}
         </span>
       )}
     </div>
@@ -75,6 +79,7 @@ function CancelTask({ task }: { task: Json<Task> }) {
 }
 
 function Header({ task }: { task: Json<Task> }) {
+  const t = useT();
   const projects = useQuery(queries.projects());
   const project = projects.data?.find((p) => p.id === task.projectId);
   return (
@@ -108,10 +113,10 @@ function Header({ task }: { task: Json<Task> }) {
             #{tag}
           </Badge>
         ))}
-        {task.riskLabel && <Badge variant="outline">riesgo {task.riskLabel}</Badge>}
+        {task.riskLabel && <Badge variant="outline">{t.taskDetail.risk(task.riskLabel)}</Badge>}
       </div>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Field label="Proyecto">
+        <Field label={t.taskDetail.project}>
           {project ? (
             <Link
               to="/projects/$projectId"
@@ -124,25 +129,25 @@ function Header({ task }: { task: Json<Task> }) {
             "…"
           )}
         </Field>
-        <Field label="Prioridad">{task.priority}</Field>
-        <Field label="Iteración de verificación">{task.verificationIteration}</Field>
-        <Field label="Creada">{formatDate(task.createdAt)}</Field>
-        <Field label="Branch">{task.branch ?? "—"}</Field>
-        <Field label="Worktree">{task.worktreePath ?? "—"}</Field>
-        <Field label="PR">
+        <Field label={t.taskDetail.priority}>{task.priority}</Field>
+        <Field label={t.taskDetail.verificationIteration}>{task.verificationIteration}</Field>
+        <Field label={t.taskDetail.created}>{formatDate(task.createdAt)}</Field>
+        <Field label={t.taskDetail.branch}>{task.branch ?? "—"}</Field>
+        <Field label={t.taskDetail.worktree}>{task.worktreePath ?? "—"}</Field>
+        <Field label={t.taskDetail.pr}>
           {task.prUrl ? (
             <a href={task.prUrl} target="_blank" rel="noreferrer" className="underline">
               {task.prUrl}
             </a>
           ) : task.resultKind ? (
-            "Sin PR"
+            t.taskDetail.noPr
           ) : (
             "—"
           )}
           {task.prState && ` (${task.prState})`}
         </Field>
         {task.causedBy && (
-          <Field label="Originada por">
+          <Field label={t.taskDetail.causedBy}>
             <Link to="/tasks/$taskId" params={{ taskId: task.causedBy }} className="underline">
               {task.causedBy}
             </Link>
@@ -154,11 +159,12 @@ function Header({ task }: { task: Json<Task> }) {
 }
 
 export function TaskDetailPage() {
+  const t = useT();
   const { taskId } = route.useParams();
   const task = useQuery(queries.task(taskId));
   if (task.error) {
     if (task.error instanceof ApiError && task.error.status === 404) {
-      return <p className="text-sm">La tarea no existe.</p>;
+      return <p className="text-sm">{t.taskDetail.notFound}</p>;
     }
     return <QueryError error={task.error} />;
   }

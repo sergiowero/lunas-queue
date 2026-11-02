@@ -12,7 +12,8 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { RESULT_KIND_LABEL, taskLabel } from "../lib/format.ts";
+import { taskLabel } from "../lib/format.ts";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 type Row = Json<Task>;
@@ -25,6 +26,7 @@ const NO_PR = "none";
 const REST_PAGE_SIZE = 20;
 
 export function CompletedPage() {
+  const t = useT();
   const [projectId, setProjectId] = useState("");
   const [prFilter, setPrFilter] = useState("");
   const [restPage, setRestPage] = useState(0);
@@ -53,7 +55,7 @@ export function CompletedPage() {
     () => [
       column.accessor(taskLabel, {
         id: "intent",
-        header: "Tarea",
+        header: t.columns.task,
         cell: (cell) => (
           <span className="flex items-baseline gap-2">
             <TaskNumber number={cell.row.original.number} />
@@ -69,15 +71,15 @@ export function CompletedPage() {
       }),
       column.accessor((task) => names.get(task.projectId) ?? "…", {
         id: "project",
-        header: "Proyecto",
+        header: t.columns.project,
       }),
-      column.accessor("priority", { header: "Prioridad" }),
+      column.accessor("priority", { header: t.columns.priority }),
       // Sin PR: una tarea completada con Resultado muestra su tipo en lugar del PR.
       column.accessor(
-        (task) => (task.resultKind ? RESULT_KIND_LABEL[task.resultKind] : (task.prState ?? "—")),
+        (task) => (task.resultKind ? t.resultKind[task.resultKind] : (task.prState ?? "—")),
         {
           id: "pr",
-          header: "PR",
+          header: t.completedPage.pr,
           cell: (cell) => {
             const task = cell.row.original;
             return task.prUrl ? (
@@ -87,7 +89,7 @@ export function CompletedPage() {
                 rel="noreferrer"
                 className={buttonVariants({ variant: "outline", size: "sm" })}
               >
-                {`PR ${cell.getValue()}`}
+                {t.completedPage.prButton(String(cell.getValue()))}
                 <ExternalLinkIcon />
               </a>
             ) : (
@@ -97,7 +99,7 @@ export function CompletedPage() {
         },
       ),
     ],
-    [names],
+    [names, t],
   );
 
   const error = projects.error ?? tasks.error;
@@ -111,10 +113,10 @@ export function CompletedPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-xl font-semibold">Completed</h1>
+        <h1 className="text-xl font-semibold">{t.completedPage.title}</h1>
         <div className="flex flex-wrap gap-4">
           <div className="flex w-64 flex-col gap-1">
-            <Label htmlFor="completed-project">Proyecto</Label>
+            <Label htmlFor="completed-project">{t.columns.project}</Label>
             <Select
               id="completed-project"
               value={projectId}
@@ -123,7 +125,7 @@ export function CompletedPage() {
                 setRestPage(0);
               }}
             >
-              <option value="">Todos</option>
+              <option value="">{t.allProjects}</option>
               {(projects.data ?? []).map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
@@ -132,7 +134,7 @@ export function CompletedPage() {
             </Select>
           </div>
           <div className="flex w-64 flex-col gap-1">
-            <Label htmlFor="completed-pr-state">Estado del PR</Label>
+            <Label htmlFor="completed-pr-state">{t.completedPage.prState}</Label>
             <Select
               id="completed-pr-state"
               value={prFilter}
@@ -141,38 +143,38 @@ export function CompletedPage() {
                 setRestPage(0);
               }}
             >
-              <option value="">Todos</option>
+              <option value="">{t.allProjects}</option>
               {PrState.options.map((state) => (
                 <option key={state} value={state}>
                   {state}
                 </option>
               ))}
-              <option value={NO_PR}>Sin PR</option>
+              <option value={NO_PR}>{t.completedPage.noPr}</option>
             </Select>
           </div>
         </div>
       </div>
       <section aria-labelledby="completed-open-heading" className="flex flex-col gap-2">
         <h2 id="completed-open-heading" className="text-base font-semibold">
-          Con PR abierto
+          {t.completedPage.withOpenPr}
         </h2>
         <DataTable
           columns={columns}
           data={lists.open}
           getRowId={(task) => task.id}
-          empty="No hay tareas completadas con PR abierto."
+          empty={t.completedPage.emptyOpen}
         />
       </section>
       <details data-testid="completed-rest" className="rounded-md border border-border px-3 py-2">
         <summary className="cursor-pointer text-base font-semibold">
-          Resto ({lists.rest.length})
+          {t.completedPage.rest(lists.rest.length)}
         </summary>
         <div className="mt-3 flex flex-col gap-3">
           <DataTable
             columns={columns}
             data={restRows}
             getRowId={(task) => task.id}
-            empty="No hay otras tareas completadas."
+            empty={t.completedPage.emptyRest}
           />
           <Pagination page={page} pageCount={pageCount} onPageChange={setRestPage} />
         </div>

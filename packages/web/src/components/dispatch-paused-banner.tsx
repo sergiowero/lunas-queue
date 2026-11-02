@@ -3,9 +3,11 @@
 import { AgentKind } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 export function DispatchPausedBanner() {
+  const t = useT();
   const settings = useQuery(queries.providerSettings());
   const paused = settings.data !== undefined && AgentKind.options.every((k) => !settings.data[k]);
   // Un error de lectura, aunque haya datos en caché, deja el estado sin confirmar: lo último que
@@ -14,13 +16,10 @@ export function DispatchPausedBanner() {
     return (
       <div role="status" className="border-b border-border bg-warning/10 text-sm text-text">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 px-6 py-2">
-          <strong>Estado del despacho desconocido:</strong>
-          <span>
-            No se pudo leer la configuración de proveedores; si ambos están deshabilitados, las
-            tareas esperan en cola.
-          </span>
+          <strong>{t.dispatch.unknownTitle}</strong>
+          <span>{t.dispatch.unknownBody}</span>
           <Link to="/settings" className="font-medium underline">
-            Ir a Settings
+            {t.dispatch.goToSettings}
           </Link>
         </div>
       </div>
@@ -30,13 +29,10 @@ export function DispatchPausedBanner() {
   return (
     <div role="status" className="border-b border-border bg-warning/10 text-sm text-text">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 px-6 py-2">
-        <strong>Despacho en pausa:</strong>
-        <span>
-          Claude y Copilot están deshabilitados, así que las tareas esperan en cola. Los agentes
-          vivos siguen corriendo.
-        </span>
+        <strong>{t.dispatch.pausedTitle}</strong>
+        <span>{t.dispatch.pausedBody}</span>
         <Link to="/settings" className="font-medium underline">
-          Ir a Settings
+          {t.dispatch.goToSettings}
         </Link>
       </div>
     </div>

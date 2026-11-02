@@ -1,28 +1,23 @@
 // Archivo de evidencia `lunasq/tasks/{id}.md` (lo escribe UW-24), en markdown: del worktree o,
 // si ya se limpió, de la branch de la tarea o de la rama base tras el merge. Nace colapsado,
 // con el mismo estilo que el Event log.
-import type { EvidenceSource } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
+import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
 import { MarkdownText } from "../markdown-text.tsx";
 import { Muted, Section } from "../section.tsx";
 import { Loading, QueryError } from "../status.tsx";
 
-const SOURCE_LABEL: Record<EvidenceSource, string> = {
-  worktree: "worktree",
-  branch: "branch de la tarea",
-  base: "rama base (mergeada)",
-};
-
 const useEvidence = (taskId: string) => useQuery(queries.evidence(taskId));
 
 export function EvidencePanel({ taskId }: { taskId: string }) {
+  const t = useT();
   const evidence = useEvidence(taskId);
   const [expanded, setExpanded] = useState(false);
   const contentId = useId();
   return (
-    <Section title="Evidencia">
+    <Section title={t.evidence.title}>
       <button
         type="button"
         aria-expanded={expanded}
@@ -30,7 +25,7 @@ export function EvidencePanel({ taskId }: { taskId: string }) {
         onClick={() => setExpanded((open) => !open)}
         className="cursor-pointer text-left text-sm text-muted-foreground hover:underline"
       >
-        {expanded ? "Ocultar evidencia" : "Mostrar evidencia"}
+        {expanded ? t.evidence.hide : t.evidence.show}
       </button>
       {expanded ? (
         <div id={contentId} className="mt-3">
@@ -42,6 +37,7 @@ export function EvidencePanel({ taskId }: { taskId: string }) {
 }
 
 function EvidenceBody({ evidence }: { evidence: ReturnType<typeof useEvidence> }) {
+  const t = useT();
   return (
     <>
       {evidence.error ? (
@@ -49,11 +45,11 @@ function EvidenceBody({ evidence }: { evidence: ReturnType<typeof useEvidence> }
       ) : evidence.isPending ? (
         <Loading />
       ) : evidence.data === null ? (
-        <Muted>Todavía no hay archivo de evidencia.</Muted>
+        <Muted>{t.evidence.empty}</Muted>
       ) : evidence.data ? (
         <div className="flex flex-col gap-3">
           <p className="text-xs text-muted-foreground">
-            {`Desde ${SOURCE_LABEL[evidence.data.source]}: `}
+            {t.evidence.from(t.evidence.source[evidence.data.source])}
             <code>{evidence.data.path}</code>
           </p>
           <MarkdownText>{evidence.data.markdown}</MarkdownText>
