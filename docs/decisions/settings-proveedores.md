@@ -1,8 +1,8 @@
-# ADR — Settings: habilitar y deshabilitar proveedores de agente
+# ADR — Settings: proveedores de agente y límite de concurrencia
 
 - Estado: aceptada
 - Fecha: 2026-11-01
-- Código: `packages/schemas/src/settings.ts` (`AgentProviderSettings`, `settings.updated`), `packages/db/src/settings.ts` y migración `0011_settings_proveedores`, `packages/domain/src/providers.ts` (`effectiveAgentKind`, `enabledFallbackOrder`), `packages/domain/src/scheduler.ts` (`schedule`, `Occupancy`), `packages/db/src/runs.ts` (`claimRun`), `packages/server/src/dispatcher/dispatcher.ts` (`startAgentWithFallback`), `packages/server/src/api/settings.ts`, `packages/web/src/pages/settings.tsx`
+- Código: `packages/schemas/src/settings.ts` (`AgentProviderSettings`, `settings.updated`), `packages/db/src/settings.ts` y migración `0011_settings_proveedores`, `packages/domain/src/providers.ts` (`effectiveAgentKind`, `enabledFallbackOrder`), `packages/domain/src/scheduler.ts` (`schedule`, `Occupancy`), `packages/db/src/runs.ts` (`claimRun`), `packages/server/src/dispatcher/dispatcher.ts` (`startAgentWithFallback`), `packages/server/src/api/settings.ts`, `packages/web/src/pages/settings.tsx`; concurrencia: `ConcurrencySettings` (`packages/schemas/src/settings.ts`), `readConcurrencySettings` y `SettingsRepository.saveConcurrency` (`packages/db/src/settings.ts`)
 
 ## Contexto
 
@@ -36,3 +36,14 @@ Si la lectura de la configuración falla, el aviso global lo dice («Estado del 
 ## Fallback y concurrencia
 
 El claim reserva el slot del proveedor efectivo de ese momento. Si el lanzamiento pasa a otro proveedor (un fallback tras fallar el arranque, o porque Settings cambió), `RunRepository.switchAgentKind` revalida en una transacción inmediata los límites global, de proyecto, de fase y de tipo de agente contra los demás agentes vivos; un proveedor cuyo slot está lleno se salta. Si por eso no arrancó ninguno y ningún proveedor falló al arrancar, es saturación transitoria, no un fallo de los CLI: el Run se cierra como `cancelled` (sin contar reintentos) y la tarea vuelve a `queued` hasta que se libere un slot, en vez de escalar a `needs_human`. Si algún proveedor sí falló al arrancar (aunque otro quedara sin slot), el Run falla y cuenta como cualquier otro caso sin proveedor disponible: pausarlo ocultaría el fallo y el scheduler reintentaría el proveedor roto sin backoff.
+
+## Límite global de concurrencia
+
+El humano también fija desde Settings cuántos agentes pueden vivir a la vez, sin reiniciar el servidor.
+
+- **Configuración.** `ConcurrencySettings` es `{ globalConcurrency }`, un entero de 1 a 50 (estricto: un decimal, un texto o un campo desconocido es inválido). Se guarda en `app_settings` (clave `concurrency`), sin migración nueva. Sin fila (o con un valor guardado que ya no valida), el **límite efectivo** es el `globalConcurrency` de `SchedulerConfig` (default 5); el que arranca el servidor hace de fallback y Settings lo sobrescribe.
+- **Scheduler.** Lee el límite efectivo en cada pasada y lo pasa a `schedule`. Los agentes vivos (incluidos los `waiting_human`) cuentan contra él.
+- **Claim y fallback.** `claimRun` y `RunRepository.switchAgentKind` leen el límite efectivo dentro de su transacción inmediata: el plan pudo hacerse con un límite anterior. Si ya no cabe, el claim rechaza con `no_slot` sin crear Run y la tarea sigue en `queued`; un cambio de proveedor por fallback se rechaza por falta de slot con el límite guardado, no con el default.
+- **Subir y bajar.** Subir el límite despacha de inmediato las tareas en cola hasta llenar los slots nuevos: el `settings.updated` despierta al scheduler. Bajarlo nunca interrumpe, pausa ni cierra un Run; solo impide despachos nuevos mientras los vivos alcancen o superen el límite.
+- **API y evento.** `GET /api/settings/concurrency` devuelve `{ globalConcurrency }` y `PUT` lo guarda (400 `invalid_input` si no es un entero de 1 a 50 o trae campos desconocidos; no cambia lo guardado), con la misma guarda de origen local que el resto de `/api/settings`. Guardar un valor distinto del vigente registra `settings.updated` con `globalConcurrency` en el payload, en el Event log y el outbox en la misma transacción; guardar el vigente no escribe ni publica. El payload de `settings.updated` admite `providers`, `globalConcurrency` o ambos (al menos uno), así que los eventos antiguos con solo `providers` siguen siendo válidos.
+- **UI.** La sección «Concurrencia» de `/settings` muestra el límite vigente en un campo numérico con un botón Guardar. Un valor vacío, 0, decimal o mayor a 50 no envía nada y muestra un mensaje asociado al campo; el botón se deshabilita mientras guarda y, como con los proveedores, el campo vuelve a leer la configuración en vez de pisar la caché con la respuesta del PUT. Los errores de lectura y de guardado se muestran en un aviso `role=alert` sin perder el último valor leído, y la sección de proveedores sigue funcionando.

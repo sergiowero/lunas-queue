@@ -307,6 +307,67 @@ describe("Scheduler", () => {
     );
   });
 
+  it("con un límite guardado de 1 despacha exactamente una de tres tareas en proyectos distintos", async () => {
+    const { db, dispatcher, scheduler } = setup();
+    for (let i = 0; i < 3; i++) insertTask(db, insertProject(db).id);
+    new SettingsRepository(db).saveConcurrency({ globalConcurrency: 1 });
+    expect((await scheduler.run()).dispatched).toHaveLength(1);
+    expect(dispatcher.calls).toHaveLength(1);
+    expect(live(db)).toBe(1);
+  });
+
+  it("subir el límite en Settings despierta al scheduler y despacha las tareas en cola", async () => {
+    const { db, project, dispatcher } = setup();
+    const publisher = new OutboxPublisher({ db, onError: () => {}, pollIntervalMs: 60_000 });
+    const scheduler = new Scheduler({
+      db,
+      dispatcher,
+      publisher,
+      config: { tickIntervalMs: 60_000 },
+      onError: () => {},
+    });
+    stoppables.push(scheduler, publisher);
+    const settings = new SettingsRepository(db);
+    settings.saveConcurrency({ globalConcurrency: 1 });
+    insertTask(db, project.id);
+    insertTask(db, insertProject(db).id);
+    insertTask(db, insertProject(db).id);
+    await scheduler.start();
+    await publisher.start();
+    expect(dispatcher.calls).toHaveLength(1);
+
+    settings.saveConcurrency({ globalConcurrency: 3 });
+    publisher.wake();
+    await vi.waitFor(() => expect(dispatcher.calls).toHaveLength(3));
+    expect(live(db)).toBe(3);
+  });
+
+  it("bajar el límite no toca a los agentes vivos y no despacha hasta que bajen del límite", async () => {
+    const { db, dispatcher, scheduler } = setup();
+    const settings = new SettingsRepository(db);
+    settings.saveConcurrency({ globalConcurrency: 3 });
+    const running = Array.from({ length: 3 }, () =>
+      insertTask(db, insertProject(db).id, {
+        state: "in_progress",
+        subState: "running",
+      }),
+    );
+    const queued = insertTask(db, insertProject(db).id);
+    settings.saveConcurrency({ globalConcurrency: 1 });
+
+    expect((await scheduler.run()).dispatched).toEqual([]);
+    expect(dispatcher.calls).toEqual([]);
+    expect(live(db)).toBe(3);
+    for (const task of running) {
+      expect(
+        db.$client.prepare("select sub_state from tasks where id = ?").pluck().get(task.id),
+      ).toBe("running");
+    }
+    expect(
+      db.$client.prepare("select sub_state from tasks where id = ?").pluck().get(queued.id),
+    ).toBe("queued");
+  });
+
   it("el tick recoge lo que no pasó por el outbox y stop lo detiene", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     const { db, project, dispatcher, scheduler } = setup({ config: { tickIntervalMs: 1000 } });

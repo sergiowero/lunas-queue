@@ -237,6 +237,46 @@ const decisionFor = (
   expected: ClaimDecision["expected"] = { state: "draft", subState: "queued" },
 ): ClaimDecision => ({ taskId: task.id, projectId: task.projectId, phase, expected });
 
+describe("claimRun y switchAgentKind: límite global guardado en Settings", () => {
+  it("el claim revalida con el límite guardado después de planear y rechaza sin crear Run", () => {
+    const { db, project, claim } = setup({ config: { globalConcurrency: 2 } });
+    const otro = insertProject(db);
+    expect(claim(decisionFor(insertTask(db, otro.id))).ok).toBe(true);
+    const task = insertTask(db, project.id);
+    // El plan se hizo con límite 2 y un agente vivo; el humano baja el límite a 1 antes del claim.
+    new SettingsRepository(db).saveConcurrency({ globalConcurrency: 1 });
+
+    const res = claim(decisionFor(task));
+
+    expect(res).toMatchObject({ ok: false, error: { code: "no_slot" } });
+    expect(db.select().from(tasks).where(eq(tasks.id, task.id)).get()?.subState).toBe("queued");
+    expect(new RunRepository(db).forTask(task.id)).toEqual([]);
+  });
+
+  it("el claim acepta más agentes que el default si Settings sube el límite", () => {
+    const { db, project, claim } = setup({ config: { globalConcurrency: 1 } });
+    new SettingsRepository(db).saveConcurrency({ globalConcurrency: 2 });
+    const otro = insertProject(db);
+    expect(claim(decisionFor(insertTask(db, project.id))).ok).toBe(true);
+    expect(claim(decisionFor(insertTask(db, otro.id))).ok).toBe(true);
+  });
+
+  it("switchAgentKind rechaza por falta de slot con el límite guardado, no con el default", () => {
+    const { db, project, claim, projects, config, runs } = setup();
+    const otro = insertProject(db);
+    const mine = claim(decisionFor(insertTask(db, project.id)));
+    if (!mine.ok) throw new Error(mine.error.message);
+    expect(claim(decisionFor(insertTask(db, otro.id))).ok).toBe(true);
+    // Con el default (5) cabría; el límite guardado ya está lleno por el otro agente vivo.
+    new SettingsRepository(db).saveConcurrency({ globalConcurrency: 1 });
+
+    expect(runs.switchAgentKind(mine.run.id, "copilot", null, { projects, config })).toBe(
+      "no_slot",
+    );
+    expect(runs.get(mine.run.id)?.agentKind).toBe("claude");
+  });
+});
+
 describe("claimRun: proveedores habilitados", () => {
   it("con todos los proveedores deshabilitados rechaza y la tarea sigue en queued sin Run", () => {
     const { db, project, claim } = setup();

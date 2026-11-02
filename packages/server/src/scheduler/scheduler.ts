@@ -4,6 +4,7 @@
 // outbox y en un tick periódico; como recalcula todo desde la base, repetir una pasada no
 // duplica efectos.
 import {
+  type ConcurrencySettingsReader,
   type LunasqDatabase,
   ProjectRepository,
   type ProviderSettingsReader,
@@ -44,8 +45,11 @@ export interface SchedulerOptions {
   publisher?: OutboxPublisher;
   state?: SchedulerStateReader;
   projects?: ProjectConfigReader;
-  /** Proveedores habilitados; se lee en cada pasada. Por defecto, los de la base. */
-  settings?: ProviderSettingsReader;
+  /**
+   * Proveedores habilitados y límite global de concurrencia; se leen en cada pasada. Por defecto,
+   * los de la base.
+   */
+  settings?: ProviderSettingsReader & ConcurrencySettingsReader;
   now?: () => Date;
   onError?: SchedulerErrorHandler;
 }
@@ -59,7 +63,7 @@ export class Scheduler {
   private readonly publisher: OutboxPublisher | undefined;
   private readonly state: SchedulerStateReader;
   private readonly projects: ProjectConfigReader;
-  private readonly settings: ProviderSettingsReader;
+  private readonly settings: ProviderSettingsReader & ConcurrencySettingsReader;
   private readonly now: () => Date;
   private readonly onError: SchedulerErrorHandler;
   private running: Promise<SchedulerPassResult> | undefined;
@@ -136,7 +140,11 @@ export class Scheduler {
     const plan = schedule(
       this.state.snapshot(),
       this.projects,
-      this.config,
+      {
+        ...this.config,
+        globalConcurrency: this.settings.concurrency(this.config.globalConcurrency)
+          .globalConcurrency,
+      },
       this.now(),
       this.settings.providers(),
     );

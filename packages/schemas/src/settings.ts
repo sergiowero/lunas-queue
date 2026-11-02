@@ -1,6 +1,7 @@
-// Configuración global de proveedores de agente (docs/decisions/settings-proveedores.md): el
-// humano habilita o deshabilita cada AgentKind desde el panel de Settings. Sin configuración
-// guardada, todos están habilitados.
+// Configuración global (docs/decisions/settings-proveedores.md): el humano habilita o deshabilita
+// cada AgentKind y fija el límite global de agentes concurrentes desde el panel de Settings. Sin
+// configuración guardada, todos los proveedores están habilitados y rige el default de
+// SchedulerConfig para la concurrencia.
 import { z } from "zod";
 import { AgentKind } from "./enums.ts";
 
@@ -24,7 +25,23 @@ export const AgentProviderPatch = z.strictObject(
 );
 export type AgentProviderPatch = z.infer<typeof AgentProviderPatch>;
 
+export const MAX_GLOBAL_CONCURRENCY = 50;
+
+/** Límite global de agentes vivos guardado en Settings: entero de 1 a 50. */
+export const ConcurrencySettings = z.strictObject({
+  globalConcurrency: z.int().min(1).max(MAX_GLOBAL_CONCURRENCY),
+});
+export type ConcurrencySettings = z.infer<typeof ConcurrencySettings>;
+
 export const SETTINGS_UPDATED = "settings.updated";
 
-export const SettingsUpdatedPayload = z.strictObject({ providers: AgentProviderSettings });
+/** Lo que cambió: los proveedores, el límite de concurrencia o ambos (al menos uno). */
+export const SettingsUpdatedPayload = z
+  .strictObject({
+    providers: AgentProviderSettings.optional(),
+    globalConcurrency: ConcurrencySettings.shape.globalConcurrency.optional(),
+  })
+  .refine((p) => p.providers !== undefined || p.globalConcurrency !== undefined, {
+    message: "settings.updated necesita providers o globalConcurrency",
+  });
 export type SettingsUpdatedPayload = z.infer<typeof SettingsUpdatedPayload>;

@@ -1,10 +1,19 @@
-// Settings: el humano habilita o deshabilita cada proveedor de agente (docs/decisions/
-// settings-proveedores.md). Apagar uno aplica las reglas de fallback; apagar ambos pausa el
-// despacho. Los agentes vivos nunca se interrumpen.
-import { AgentKind, type AgentProviderPatch } from "@lunasq/schemas";
+// Settings: el humano habilita o deshabilita cada proveedor de agente y fija el límite global de
+// agentes concurrentes (docs/decisions/settings-proveedores.md). Apagar un proveedor aplica las
+// reglas de fallback; apagar ambos pausa el despacho. Los agentes vivos nunca se interrumpen, ni
+// al apagar un proveedor ni al bajar el límite.
+import {
+  AgentKind,
+  type AgentProviderPatch,
+  ConcurrencySettings,
+  MAX_GLOBAL_CONCURRENCY,
+} from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type FormEvent, useId, useState } from "react";
 import { Loading, QueryError } from "../components/status.tsx";
+import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
+import { Input, Label } from "../components/ui/input.tsx";
 import { api } from "../lib/api.ts";
 import { queries } from "../lib/queries.ts";
 import { cn } from "../lib/utils.ts";
@@ -56,6 +65,130 @@ function Switch({
 }
 
 export function SettingsPage() {
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-semibold">Settings</h1>
+      <ProvidersSection />
+      <ConcurrencySection />
+    </div>
+  );
+}
+
+const CONCURRENCY_INVALID = `Escribe un número entero entre 1 y ${MAX_GLOBAL_CONCURRENCY}.`;
+
+function ConcurrencySection() {
+  const inputId = useId();
+  const messageId = useId();
+  const settings = useQuery(queries.concurrencySettings());
+  const queryClient = useQueryClient();
+  // null: el campo sigue al valor leído; un texto: lo que el humano está escribiendo.
+  const [draft, setDraft] = useState<string | null>(null);
+  const [invalid, setInvalid] = useState(false);
+  // Último límite que un PUT guardó y que ninguna lectura posterior llegó a leer: el servidor ya lo
+  // tiene, pero la caché sigue con un valor anterior.
+  const [unread, setUnread] = useState<{ value: number; at: number } | null>(null);
+  const update = useMutation({
+    mutationFn: (input: ConcurrencySettings) => api.updateConcurrencySettings(input),
+    // Se vuelve a leer en vez de pisar la caché con la respuesta del PUT, y el campo solo vuelve a
+    // seguir al servidor cuando llegó la lectura: así muestra el valor guardado y no uno viejo.
+    // invalidateQueries no lanza si la lectura falla: en ese caso el campo conserva el valor que el
+    // PUT confirmó y el aviso dice que se guardó, en vez de mostrar el valor anterior.
+    onSuccess: async (saved) => {
+      const queryKey = queries.concurrencySettings().queryKey;
+      await queryClient.invalidateQueries({ queryKey });
+      if (queryClient.getQueryState(queryKey)?.status === "error") {
+        setDraft(String(saved.globalConcurrency));
+        setUnread({ value: saved.globalConcurrency, at: Date.now() });
+      } else {
+        setDraft(null);
+        setUnread(null);
+      }
+    },
+  });
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (update.isPending || !settings.data) return;
+    const text = draft ?? String(settings.data.globalConcurrency);
+    const parsed = ConcurrencySettings.safeParse({
+      globalConcurrency: text.trim() === "" ? Number.NaN : Number(text),
+    });
+    if (!parsed.success) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    update.mutate(parsed.data);
+  }
+
+  // Una lectura posterior al PUT ya refleja lo guardado: entonces rige settings.data.
+  const savedUnread = unread && (settings.dataUpdatedAt ?? 0) < unread.at ? unread.value : null;
+  const effective = savedUnread ?? settings.data?.globalConcurrency;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Concurrencia</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Máximo de agentes vivos a la vez, entre todos los proyectos y fases (incluye los que
+          esperan una respuesta). Subirlo despacha de inmediato las tareas en cola; bajarlo no
+          interrumpe a los que ya corren, solo frena los despachos nuevos.
+        </p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {!settings.data && !settings.error && <Loading />}
+        {settings.data && (
+          <form onSubmit={submit} noValidate className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor={inputId}>Agentes concurrentes</Label>
+              <Input
+                id={inputId}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_GLOBAL_CONCURRENCY}
+                step={1}
+                className="w-28"
+                value={draft ?? String(settings.data.globalConcurrency)}
+                aria-invalid={invalid}
+                aria-describedby={invalid ? messageId : undefined}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  setInvalid(false);
+                }}
+              />
+            </div>
+            <Button type="submit" disabled={update.isPending}>
+              Guardar
+            </Button>
+            {invalid && (
+              <p id={messageId} className="basis-full text-sm text-destructive">
+                {CONCURRENCY_INVALID}
+              </p>
+            )}
+          </form>
+        )}
+        {settings.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {settings.data
+              ? savedUnread === null
+                ? "No se pudo actualizar el límite; se muestra el último valor leído: "
+                : `El límite se guardó (${savedUnread}), pero no se pudo volver a leer: `
+              : "No se pudo leer el límite de concurrencia: "}
+            {settings.error.message}
+          </p>
+        )}
+        {update.error && effective !== undefined && (
+          <p role="alert" className="text-sm text-destructive">
+            No se pudo guardar el límite; sigue vigente {effective}: {update.error.message}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProvidersSection() {
   const settings = useQuery(queries.providerSettings());
   const queryClient = useQueryClient();
   const update = useMutation({
@@ -79,8 +212,7 @@ export function SettingsPage() {
     settings.dataUpdatedAt < update.submittedAt;
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Settings</h1>
+    <>
       <Card>
         <CardHeader>
           <CardTitle>Proveedores de agente</CardTitle>
@@ -120,6 +252,6 @@ export function SettingsPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </>
   );
 }

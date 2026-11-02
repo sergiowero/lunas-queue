@@ -79,6 +79,98 @@ describe("PUT /api/settings/providers", () => {
   });
 });
 
+function concurrencySetup(scheduler?: { globalConcurrency: number }) {
+  const db = migratedDatabase();
+  const app = createApp({ db, ...(scheduler && { scheduler }) });
+  const send = (method: string, body?: unknown, headers: Record<string, string> = {}) =>
+    app.request("/api/settings/concurrency", {
+      method,
+      headers: { "content-type": "application/json", ...headers },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  return { db, send };
+}
+
+describe("GET /api/settings/concurrency", () => {
+  it("sin configuración guardada devuelve el default de 5", async () => {
+    const { send } = concurrencySetup();
+    const res = await send("GET");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ globalConcurrency: 5 });
+  });
+
+  it("sin configuración guardada devuelve el límite de SchedulerConfig del servidor", async () => {
+    const { send } = concurrencySetup({ globalConcurrency: 8 });
+    expect(await (await send("GET")).json()).toEqual({ globalConcurrency: 8 });
+  });
+});
+
+describe("PUT /api/settings/concurrency", () => {
+  it("guarda el límite, lo devuelve y registra settings.updated en el outbox", async () => {
+    const { db, send } = concurrencySetup();
+    const res = await send("PUT", { globalConcurrency: 2 });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ globalConcurrency: 2 });
+    expect(await (await send("GET")).json()).toEqual({ globalConcurrency: 2 });
+    expect(listPendingOutbox(db).map((e) => [e.message.topic, e.message.payload])).toEqual([
+      [SETTINGS_UPDATED, { globalConcurrency: 2 }],
+    ]);
+  });
+
+  it("enviar el límite vigente responde 200 y no registra ningún evento", async () => {
+    const { db, send } = concurrencySetup();
+    await send("PUT", { globalConcurrency: 2 });
+    const res = await send("PUT", { globalConcurrency: 2 });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ globalConcurrency: 2 });
+    expect(listPendingOutbox(db)).toHaveLength(1);
+  });
+
+  it("enviar el default sin nada guardado no registra ningún evento", async () => {
+    const { db, send } = concurrencySetup();
+    expect((await send("PUT", { globalConcurrency: 5 })).status).toBe(200);
+    expect(listPendingOutbox(db)).toEqual([]);
+  });
+
+  it.each([
+    ["cero", { globalConcurrency: 0 }],
+    ["más de 50", { globalConcurrency: 51 }],
+    ["un decimal", { globalConcurrency: 1.5 }],
+    ["un texto", { globalConcurrency: "4" }],
+    ["un campo desconocido", { globalConcurrency: 2, otro: true }],
+    ["un cuerpo sin el campo", {}],
+    ["un cuerpo que no es objeto", [3]],
+  ])("responde 400 invalid_input con %s y no cambia lo guardado", async (_name, body) => {
+    const { db, send } = concurrencySetup();
+    new SettingsRepository(db).saveConcurrency({ globalConcurrency: 3 });
+    const before = listPendingOutbox(db).length;
+    const res = await send("PUT", body);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "invalid_input" });
+    expect(await (await send("GET")).json()).toEqual({ globalConcurrency: 3 });
+    expect(listPendingOutbox(db)).toHaveLength(before);
+  });
+
+  it("responde 400 invalid_json si el cuerpo no es JSON", async () => {
+    const { db } = concurrencySetup();
+    const res = await createApp({ db }).request("/api/settings/concurrency", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: "{no json",
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "invalid_json" });
+  });
+
+  it("rechaza el PUT con un Host ajeno y no cambia lo guardado", async () => {
+    const { db, send } = concurrencySetup();
+    const res = await send("PUT", { globalConcurrency: 2 }, { host: "evil.example.com" });
+    expect(res.status).toBe(403);
+    expect(new SettingsRepository(db).concurrency(5)).toEqual({ globalConcurrency: 5 });
+    expect(listPendingOutbox(db)).toEqual([]);
+  });
+});
+
 describe("origen de las peticiones a /api/settings", () => {
   it.each([
     ["un Host que no es localhost (DNS rebinding)", { host: "evil.example.com" }],

@@ -151,6 +151,187 @@ describe("página Settings", () => {
   });
 });
 
+describe("sección Concurrencia", () => {
+  const field = () => screen.findByRole("spinbutton", { name: /Agentes concurrentes/ });
+
+  it("muestra el límite vigente en un campo numérico con su botón Guardar", async () => {
+    renderApp("/settings");
+    expect((await field()).getAttribute("type")).toBe("number");
+    expect((await field()) as HTMLInputElement).toHaveProperty("value", "5");
+    expect(screen.getByRole("heading", { name: "Concurrencia" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeTruthy();
+  });
+
+  it("escribir 3 y guardar envía el PUT, muestra 3 tras releer y deshabilita Guardar mientras guarda", async () => {
+    const fake = new FakeApi();
+    let release = () => {};
+    fake.holdConcurrencyPut = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { user } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "3");
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(
+        true,
+      ),
+    );
+    release();
+    await waitFor(() => expect(fake.concurrency).toEqual({ globalConcurrency: 3 }));
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    expect(fake.requests.filter((r) => r.method === "PUT")).toEqual([
+      { method: "PUT", path: "/api/settings/concurrency", body: { globalConcurrency: 3 } },
+    ]);
+    expect((await field()) as HTMLInputElement).toHaveProperty("value", "3");
+  });
+
+  it("sobrevive a recargar: una app nueva lee el límite guardado", async () => {
+    const fake = new FakeApi();
+    const { user, unmount } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "7");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(fake.concurrency).toEqual({ globalConcurrency: 7 }));
+    unmount();
+    renderApp("/settings", fake);
+    expect((await field()) as HTMLInputElement).toHaveProperty("value", "7");
+  });
+
+  it.each([
+    ["vacío", ""],
+    ["0", "0"],
+    ["mayor a 50", "51"],
+    ["decimal", "1.5"],
+  ])(
+    "con un valor %s no envía nada y muestra un mensaje asociado al campo",
+    async (_name, typed) => {
+      const fake = new FakeApi();
+      const { user } = renderApp("/settings", fake);
+      const input = (await field()) as HTMLInputElement;
+      await user.clear(input);
+      if (typed) await user.type(input, typed);
+
+      await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+      const message = await screen.findByText(/entero entre 1 y 50/);
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(message.id);
+      expect(fake.requests.filter((r) => r.method === "PUT")).toEqual([]);
+      expect(fake.concurrency).toEqual({ globalConcurrency: 5 });
+    },
+  );
+
+  it("el mensaje de validación desaparece al corregir el valor y guardar", async () => {
+    const fake = new FakeApi();
+    const { user } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByText(/entero entre 1 y 50/);
+
+    await user.type(input, "4");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await waitFor(() => expect(fake.concurrency).toEqual({ globalConcurrency: 4 }));
+    await waitFor(() => expect(screen.queryByText(/entero entre 1 y 50/)).toBeNull());
+    expect(input.getAttribute("aria-invalid")).not.toBe("true");
+  });
+
+  it("si falla el guardado muestra un aviso, conserva el último valor leído y los proveedores siguen", async () => {
+    const fake = new FakeApi();
+    fake.concurrencyError = { status: 500, error: "internal", message: "disco lleno" };
+    const { user } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "3");
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("disco lleno");
+    expect(alert.textContent).toContain("sigue vigente 5");
+    expect(fake.concurrency).toEqual({ globalConcurrency: 5 });
+    // Los proveedores siguen funcionando.
+    await user.click(screen.getByRole("switch", { name: "Claude" }));
+    await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
+    expect(fake.providers).toEqual({ claude: false, copilot: true });
+  });
+
+  it("si el PUT se guarda pero la relectura falla, el campo muestra el valor guardado y el aviso dice que se guardó", async () => {
+    const fake = new FakeApi();
+    const { user } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "3");
+    fake.concurrencyReadFails = true;
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    const alert = await screen.findByText(/El límite se guardó/, {}, { timeout: 5000 });
+    expect(alert.textContent).toContain("3");
+    expect(alert.textContent).not.toMatch(/No se pudo (guardar|actualizar)/);
+    expect(fake.concurrency).toEqual({ globalConcurrency: 3 });
+    expect(((await field()) as HTMLInputElement).value).toBe("3");
+    expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  }, 15000);
+
+  it("si un guardado falla después de uno que se guardó sin releerse, el aviso indica el valor guardado", async () => {
+    const fake = new FakeApi();
+    const { user } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "3");
+    fake.concurrencyReadFails = true;
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByText(/El límite se guardó/, {}, { timeout: 5000 });
+
+    fake.concurrencyError = { status: 500, error: "internal", message: "disco lleno" };
+    await user.clear(input);
+    await user.type(input, "4");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    const alert = await screen.findByText(/No se pudo guardar el límite/, {}, { timeout: 5000 });
+    expect(alert.textContent).toContain("sigue vigente 3");
+    expect(alert.textContent).not.toContain("sigue vigente 5");
+    expect(fake.concurrency).toEqual({ globalConcurrency: 3 });
+  }, 20000);
+
+  it("si falla la lectura muestra un aviso y la sección de proveedores sigue funcionando", async () => {
+    const fake = new FakeApi();
+    fake.concurrencyReadFails = true;
+    const { user } = renderApp("/settings", fake);
+
+    const alert = await screen.findByRole("alert", {}, { timeout: 5000 });
+    expect(alert.textContent).toContain("sin conexión");
+    await user.click(await screen.findByRole("switch", { name: "Claude" }));
+    await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
+  });
+
+  it("si falla una relectura conserva el último valor leído y avisa", async () => {
+    const fake = new FakeApi();
+    const { refresh } = renderApp("/settings", fake);
+    expect((await field()) as HTMLInputElement).toHaveProperty("value", "5");
+    fake.concurrencyReadFails = true;
+
+    await refresh();
+
+    const alert = await screen.findByRole("alert", {}, { timeout: 5000 });
+    expect(alert.textContent).toContain("sin conexión");
+    expect((await field()) as HTMLInputElement).toHaveProperty("value", "5");
+  });
+});
+
 describe("aviso de despacho en pausa", () => {
   it("no aparece mientras haya algún proveedor habilitado", async () => {
     const fake = new FakeApi();

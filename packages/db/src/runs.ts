@@ -33,7 +33,7 @@ import type { LunasqDatabase } from "./client.ts";
 import { appendEvent } from "./event-log.ts";
 import { SchedulerStateRepository } from "./scheduler-state.ts";
 import { events, questions, runs, tasks } from "./schema.ts";
-import { readProviderSettings } from "./settings.ts";
+import { readConcurrencySettings, readProviderSettings } from "./settings.ts";
 import { applyTransition, type TaskRow } from "./task-transitions.ts";
 
 export type RunRow = typeof runs.$inferSelect;
@@ -86,6 +86,20 @@ class ClaimRejected extends Error {
 
 /** 256 bits: el token solo vive en el entorno del pane (ADR 0002). */
 const newRunToken = () => randomBytes(32).toString("hex");
+
+/**
+ * La configuración del scheduler con el límite global vigente: el guardado en Settings o, sin
+ * valor, el de `config`. Se lee dentro de la transacción del claim para revalidar contra lo último.
+ */
+function effectiveConfig(
+  db: Pick<LunasqDatabase, "select">,
+  config: SchedulerConfig,
+): SchedulerConfig {
+  return {
+    ...config,
+    globalConcurrency: readConcurrencySettings(db, config.globalConcurrency).globalConcurrency,
+  };
+}
 
 /**
  * Reclama la tarea para una fase: en una sola transacción IMMEDIATE revalida los límites con un
@@ -146,7 +160,9 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
           input.projects,
           providers,
         );
-        if (!occupancy.fits(occupancy.slotFor(task, decision.phase), input.config)) {
+        // El límite global también se lee aquí: Settings pudo cambiarlo después de planear.
+        const config = effectiveConfig(tx, input.config);
+        if (!occupancy.fits(occupancy.slotFor(task, decision.phase), config)) {
           throw new ClaimRejected("no_slot", `sin slot para ${task.id} en ${decision.phase}`);
         }
 
@@ -372,7 +388,7 @@ export class RunRepository {
             phase: SchedulablePhase.parse(run.phase),
             agentKind: kind,
           };
-          if (!occupancy.fits(slot, limits.config)) return "no_slot" as const;
+          if (!occupancy.fits(slot, effectiveConfig(tx, limits.config))) return "no_slot" as const;
         }
         tx.update(runs).set({ agentKind: kind, model }).where(eq(runs.id, runId)).run();
         return tx.select().from(runs).where(eq(runs.id, runId)).get() ?? null;

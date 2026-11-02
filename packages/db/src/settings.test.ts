@@ -81,3 +81,69 @@ describe("SettingsRepository: proveedores de agente", () => {
     expect(new SettingsRepository(db).providers()).toEqual({ claude: true, copilot: false });
   });
 });
+
+describe("SettingsRepository: concurrencia", () => {
+  it("sin valor guardado devuelve el default recibido", () => {
+    const repo = new SettingsRepository(migratedDatabase());
+    expect(repo.concurrency(5)).toEqual({ globalConcurrency: 5 });
+    expect(repo.concurrency(8)).toEqual({ globalConcurrency: 8 });
+  });
+
+  it("guarda el límite, lo devuelve y publica settings.updated con globalConcurrency", () => {
+    const db = migratedDatabase();
+    const repo = new SettingsRepository(db);
+    expect(repo.saveConcurrency({ globalConcurrency: 2 })).toEqual({ globalConcurrency: 2 });
+    expect(repo.concurrency(5)).toEqual({ globalConcurrency: 2 });
+    const [pending, ...rest] = listPendingOutbox(db);
+    expect(rest).toEqual([]);
+    expect(pending?.message).toMatchObject({
+      topic: SETTINGS_UPDATED,
+      taskId: null,
+      actor: "human",
+      payload: { globalConcurrency: 2 },
+    });
+    expect(db.select().from(events).all()).toHaveLength(1);
+  });
+
+  it("guardar el valor vigente no escribe ni publica otro evento", () => {
+    const db = migratedDatabase();
+    const repo = new SettingsRepository(db);
+    repo.saveConcurrency({ globalConcurrency: 2 });
+    repo.saveConcurrency({ globalConcurrency: 2 });
+    expect(listPendingOutbox(db)).toHaveLength(1);
+    expect(db.select().from(events).all()).toHaveLength(1);
+    expect(db.select().from(appSettings).all()).toHaveLength(1);
+  });
+
+  it("guardar sin valor previo el límite que ya rige por default tampoco publica", () => {
+    const db = migratedDatabase();
+    const repo = new SettingsRepository(db);
+    repo.saveConcurrency({ globalConcurrency: 5 }, "human", 5);
+    expect(listPendingOutbox(db)).toEqual([]);
+    expect(db.select().from(appSettings).all()).toEqual([]);
+  });
+
+  it.each([[0], [51], [1.5], ["4"]])("rechaza %s y conserva lo guardado", (value) => {
+    const db = migratedDatabase();
+    const repo = new SettingsRepository(db);
+    repo.saveConcurrency({ globalConcurrency: 3 });
+    expect(() => repo.saveConcurrency({ globalConcurrency: value })).toThrow();
+    expect(repo.concurrency(5)).toEqual({ globalConcurrency: 3 });
+    expect(listPendingOutbox(db)).toHaveLength(1);
+  });
+
+  it("guardar el límite no toca la configuración de proveedores", () => {
+    const repo = new SettingsRepository(migratedDatabase());
+    repo.saveProviders({ claude: false });
+    repo.saveConcurrency({ globalConcurrency: 2 });
+    expect(repo.providers()).toEqual({ claude: false, copilot: true });
+  });
+
+  it("un valor guardado corrupto cae al default en vez de romper la lectura", () => {
+    const db = migratedDatabase();
+    db.insert(appSettings)
+      .values({ key: "concurrency", value: { globalConcurrency: 0 } })
+      .run();
+    expect(new SettingsRepository(db).concurrency(5)).toEqual({ globalConcurrency: 5 });
+  });
+});

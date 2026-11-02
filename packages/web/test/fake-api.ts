@@ -27,6 +27,7 @@ import type {
 import {
   AgentProviderPatch,
   AgentProviderSettings,
+  ConcurrencySettings,
   type HookExecutionView,
   ProjectCreate,
   ProjectUpdate,
@@ -127,6 +128,14 @@ export class FakeApi {
   afterProvidersPut: (() => void) | null = null;
   /** Si se fija, el PUT de proveedores espera a esta promesa antes de responder. */
   holdProvidersPut: Promise<void> | null = null;
+  /** Límite global guardado; por defecto 5, como el servidor sin configuración. */
+  concurrency = { globalConcurrency: 5 };
+  /** Si se fija, PUT /api/settings/concurrency responde este error. */
+  concurrencyError: { status: number; error: string; message: string } | null = null;
+  /** Si es true, GET /api/settings/concurrency responde 500. */
+  concurrencyReadFails = false;
+  /** Si se fija, el PUT de concurrencia espera a esta promesa antes de responder. */
+  holdConcurrencyPut: Promise<void> | null = null;
   /** Si el agente que preguntó sigue vivo: la respuesta va al pane; si no, a un Run nuevo. */
   agentAlive = false;
   /** Si se fija, GET /api/queue responde esto tal cual. */
@@ -312,6 +321,9 @@ export class FakeApi {
     this.requests.push({ method, path: url.pathname + url.search, body });
     if (this.runsGate && /^\/api\/tasks\/[^/]+\/runs$/.test(url.pathname)) await this.runsGate;
     if (method === "PUT" && url.pathname === "/api/settings/providers") await this.holdProvidersPut;
+    if (method === "PUT" && url.pathname === "/api/settings/concurrency") {
+      await this.holdConcurrencyPut;
+    }
     const [status, payload] = this.route(method, url, body);
     return new Response(status === 204 ? null : JSON.stringify(payload), {
       status,
@@ -355,6 +367,22 @@ export class FakeApi {
     return [200, saved];
   }
 
+  private concurrencySettings(method: string, body: unknown): [number, unknown] {
+    if (method === "GET") {
+      if (this.concurrencyReadFails) return [500, { error: "internal", message: "sin conexión" }];
+      return [200, this.concurrency];
+    }
+    if (method !== "PUT") return [404, { error: "not_found" }];
+    if (this.concurrencyError) {
+      const { status, ...error } = this.concurrencyError;
+      return [status, error];
+    }
+    const input = validate(ConcurrencySettings, body);
+    if (!input.ok) return input.response;
+    this.concurrency = { ...input.data };
+    return [200, { ...this.concurrency }];
+  }
+
   private route(method: string, url: URL, body: unknown): [number, unknown] {
     const parts = url.pathname.split("/").filter(Boolean).slice(1);
     const [resource, id, sub, version, action] = parts;
@@ -367,6 +395,9 @@ export class FakeApi {
       return sub === "hooks" ? this.projectHooks(id, version, url) : [200, this.projects];
     }
     if (resource === "settings" && id === "providers") return this.providerSettings(method, body);
+    if (resource === "settings" && id === "concurrency") {
+      return this.concurrencySettings(method, body);
+    }
     if (resource === "questions") return this.question(method, url, id, sub, body);
     if (resource === "blocked") {
       if (method === "GET") return [200, this.blocked];
