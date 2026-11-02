@@ -470,11 +470,7 @@ describe("transition: human in the loop", () => {
 
   it("resume without newCycle keeps both the iteration and the cycle start (AC-6)", () => {
     expect(
-      transition(
-        snap("paused", null, 2, 0),
-        { type: "resume", resumeTo: "in_progress" },
-        "human",
-      ),
+      transition(snap("paused", null, 2, 0), { type: "resume", resumeTo: "in_progress" }, "human"),
     ).toMatchObject({ ok: true, next: snap("in_progress", "queued", 2, 0) });
     expect(
       transition(

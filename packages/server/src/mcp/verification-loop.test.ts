@@ -203,7 +203,7 @@ async function loop() {
       .filter((e) => e.type === VERDICT_RECORDED)
       .map((e) => e.payload as { verdict: string; iteration: number });
 
-  return { db, task, runs, tasks, implement, verify, agent, verdicts, order };
+  return { app, db, task, runs, tasks, implement, verify, agent, verdicts, order };
 }
 
 describe("implementation ↔ verification loop", { timeout: 60_000 }, () => {
@@ -289,5 +289,41 @@ describe("implementation ↔ verification loop", { timeout: 60_000 }, () => {
     // A fifth implementer is not dispatched.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(l.runs.forTask(l.task.id).filter((r) => r.phase === "implement")).toHaveLength(4);
+  });
+
+  it("keeps the iteration cumulative after resuming an exhausted task and grants a new cycle", async () => {
+    const l = await loop();
+    for (let n = 1; n <= 4; n += 1) {
+      await l.implement(n);
+      await l.verify(n, "reject");
+    }
+    expect(l.tasks.get(l.task.id)).toMatchObject({
+      state: "needs_human",
+      verificationIteration: 3,
+      verificationCycleStart: 0,
+    });
+
+    // The human resumes: the iteration stays at 3 and a new cycle starts at it.
+    const resumed = await l.app.request(`/api/tasks/${l.task.id}/resume`, { method: "POST" });
+    expect(resumed.status).toBe(200);
+    expect(l.tasks.get(l.task.id)).toMatchObject({
+      state: "in_progress",
+      verificationIteration: 3,
+      verificationCycleStart: 3,
+    });
+
+    const fifth = await l.implement(5);
+    expect(fifth.run.iteration).toBe(3);
+    await l.verify(5, "reject");
+
+    // One rework past the first exhausted cycle: the real count, not a reset to 1.
+    const detail = (await (await l.app.request(`/api/tasks/${l.task.id}`)).json()) as {
+      verificationIteration: number;
+      verificationCycleStart: number;
+    };
+    expect(detail).toMatchObject({ verificationIteration: 4, verificationCycleStart: 3 });
+    const sixth = await l.agent("implement", 6);
+    expect(sixth.run.iteration).toBe(4);
+    expect(sixth.context).toMatchObject({ task: { verificationIteration: 4 } });
   });
 });

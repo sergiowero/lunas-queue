@@ -260,7 +260,11 @@ describe("transitionTask", () => {
     const iterations: number[] = [];
     for (let i = 0; i < 3; i++) {
       goToVerification();
-      const rework = apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } });
+      const rework = apply(db, {
+        taskId: t.id,
+        actor: "agent",
+        command: { type: "verdict_rework" },
+      });
       expect(rework.task.state).toBe("in_progress");
       iterations.push(rework.task.verificationIteration);
     }
