@@ -143,7 +143,10 @@ export function createApp({
     .route(SUBAGENT_HOOK_PATH, subagentHookRoutes(db))
     .route("/api/projects/:id/hooks", hookRoutes({ projects, views: taskViews, hooks }))
     .route("/api/projects", projectRoutes(projects))
-    .route("/api/settings", settingsRoutes(new SettingsRepository(db)))
+    .route(
+      "/api/settings",
+      settingsRoutes(new SettingsRepository(db), views.config.globalConcurrency),
+    )
     .route("/api/tasks/:id/specs", specRoutes(new SpecRepository(db)))
     .route("/api/blocked", blockedRoutes(blocked ?? (() => []), focus))
     .route("/api/runs", runRoutes(runs, focus))
