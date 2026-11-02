@@ -258,6 +258,7 @@ describe("sección Concurrencia", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("disco lleno");
+    expect(alert.textContent).toContain("sigue vigente 5");
     expect(fake.concurrency).toEqual({ globalConcurrency: 5 });
     // Los proveedores siguen funcionando.
     await user.click(screen.getByRole("switch", { name: "Claude" }));

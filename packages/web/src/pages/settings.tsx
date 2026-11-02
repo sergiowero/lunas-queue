@@ -10,7 +10,7 @@ import {
 } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useId, useState } from "react";
-import { Loading, MutationError, QueryError } from "../components/status.tsx";
+import { Loading, QueryError } from "../components/status.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
 import { Input, Label } from "../components/ui/input.tsx";
@@ -160,7 +160,12 @@ function ConcurrencySection() {
             {settings.error.message}
           </p>
         )}
-        {update.error && <MutationError error={update.error} />}
+        {update.error && settings.data && (
+          <p role="alert" className="text-sm text-destructive">
+            No se pudo guardar el límite; sigue vigente {settings.data.globalConcurrency}:{" "}
+            {update.error.message}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
