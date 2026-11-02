@@ -875,7 +875,7 @@ describe("PhaseDispatcher: phase close", () => {
   });
 });
 
-describe("PhaseDispatcher: evidence file on closing the Run (UW-24)", () => {
+describe("PhaseDispatcher: evidence file on closing the Run", () => {
   async function withEvidence(recordRun?: (runId: string) => Promise<unknown>) {
     const calls: { runId: string; endedAt: Date | null; paneOpen: boolean }[] = [];
     const ctx = setup();

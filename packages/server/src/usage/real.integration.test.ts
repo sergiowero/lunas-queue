@@ -1,4 +1,4 @@
-// A task's usage against real Claude Code (UW-20 criterion). Does not run in `pnpm test`:
+// A task's usage against real Claude Code. Does not run in `pnpm test`:
 //   pnpm --filter @lunasq/server test:usage
 // Starts the app on a local port and opens `claude -p --output-format json` with a pane's
 // telemetry environment (`telemetryEnv` + `telemetryRunEnv`). Then it compares the usage LunasQ

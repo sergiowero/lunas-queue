@@ -1,5 +1,5 @@
 // Contract suite of the herdr adapter: the same one runs against the fake (pnpm test) and against
-// real herdr (pnpm --filter @lunasq/adapters test:herdr). Done criterion of UW-02.
+// real herdr (pnpm --filter @lunasq/adapters test:herdr). Done criterion of the herdr adapter.
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

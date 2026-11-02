@@ -596,7 +596,7 @@ export class LunasqMcpService {
         recordVerdict(tx, run.taskId, summary);
         return { ok: true, data: { verdict: "reject" } };
       }
-      // Pass: the Run stays open and the delivery (UW-26) emits verdict_pass after creating the PR; the
+      // Pass: the Run stays open and the delivery emits verdict_pass after creating the PR; the
       // verification.verdict_recorded event starts it.
       const task = this.#tasks.get(run.taskId);
       if (task?.state !== "verification" || task.subState !== "running") {

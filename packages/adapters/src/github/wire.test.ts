@@ -26,7 +26,7 @@ const merged = {
     },
   ],
   url: "https://github.com/sergiowero/lunas-queue/pull/10",
-  title: "UW-09: Ciclo de vida de worktrees",
+  title: "Worktree lifecycle",
 };
 
 const open = {

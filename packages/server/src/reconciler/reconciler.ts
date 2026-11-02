@@ -216,7 +216,7 @@ export class Reconciler {
           if (!watching.has(run.id)) this.rewatch(run, agent, result);
           return;
         }
-        // waiting_human occupies its slot on purpose (ADR 0014); the answer relaunches (UW-22).
+        // waiting_human occupies its slot on purpose (ADR 0014); the answer relaunches.
         if (task.subState === "waiting_human") return;
         const res = await this.dispatcher.failRun(
           run.id,

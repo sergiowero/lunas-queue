@@ -1,4 +1,4 @@
-// Evidence file `lunasq/tasks/{id}.md` (written by UW-24), in markdown: from the worktree or,
+// Evidence file `lunasq/tasks/{id}.md` (written by the evidence service), in markdown: from the worktree or,
 // if it was already cleaned up, from the task's branch or the base branch after the merge. It starts collapsed,
 // with the same style as the Event log.
 import { useQuery } from "@tanstack/react-query";

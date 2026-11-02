@@ -19,7 +19,7 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-/** Fake dispatcher: does the claim (dispatch → running) as UW-16 will. */
+/** Fake dispatcher: does the claim (dispatch → running) as the real dispatcher does. */
 class FakeDispatcher {
   readonly calls: DispatchDecision[] = [];
   readonly db: LunasqDatabase;

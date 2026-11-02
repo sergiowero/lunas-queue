@@ -202,7 +202,7 @@ export class TaskRepository implements DependencyGraphReader {
     });
   }
 
-  /** Cancels with the state machine; stopping the live agent is up to the dispatcher (UW-16/17). */
+  /** Cancels with the state machine; stopping the live agent is up to the dispatcher. */
   cancel(taskId: string, note?: string): TransitionTaskResult {
     return transitionTask(this.db, {
       taskId,
@@ -212,7 +212,7 @@ export class TaskRepository implements DependencyGraphReader {
   }
 
   /**
-   * Pauses with the state machine; stopping the live agent is up to the dispatcher (UW-16/17).
+   * Pauses with the state machine; stopping the live agent is up to the dispatcher.
    * `deliveryInProgress`: the verifier's Run stays open with the handoff saved.
    */
   pause(taskId: string, deliveryInProgress: boolean): TransitionTaskResult {

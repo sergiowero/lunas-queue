@@ -1,10 +1,10 @@
-// The phase skills against real Claude Code (UW-18 criterion): each one produces a valid handoff
+// The phase skills against real Claude Code: each one produces a valid handoff
 // on a test task. It does not run in `pnpm test`:
 //   pnpm --filter @lunasq/server test:skills
 // A single task goes through refinement, implementation and verification on a temporary repo. Each
 // phase opens `claude -p` with the dispatcher's phase prompt, the LunasQ MCP via `--mcp-config`
 // (no engram: `--strict-mcp-config`), the hooks settings and the run token in the environment, as
-// in a pane. The test gate is the UW-11 one with a local runner instead of the herdr pane. Phases
+// in a pane. The test gate is the real one with a local runner instead of the herdr pane. Phases
 // run with `LUNASQ_SKILL_MODEL` (sonnet by default) and reviewers with
 // `LUNASQ_REVIEWER_MODEL` (haiku by default).
 import { execFileSync } from "node:child_process";
@@ -280,7 +280,7 @@ describe.skipIf(!enabled)("phase skills against real Claude Code", { timeout: 1_
     expect(handoff).toMatchObject({ phase: "verification", taskId, runId: run.id });
     if (handoff.phase !== "verification") throw new Error("unexpected phase");
 
-    // What UW-23 will require: every reviewer reported as ran appears in the Run hooks.
+    // What verification requires: every reviewer reported as ran appears in the Run hooks.
     const recorded = new RunSubagentRepository(db).forRun(run.id).map((r) => r.agentType);
     const ran = Object.entries(handoff.body.reviewers)
       .filter(([, report]) => report.status === "ran")

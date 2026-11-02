@@ -1,4 +1,4 @@
-# Spike UW-00/d — herdr 0.9.5 (protocol 22)
+# Spike — herdr 0.9.5 (protocol 22)
 
 Throwaway code. Result and decision in `docs/decisions/0004-herdr-version-y-cli.md`.
 

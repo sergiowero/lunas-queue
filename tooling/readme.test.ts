@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // Root README.md: the repo's front door. These tests keep it from rotting:
@@ -229,3 +229,22 @@ describe("README.md", () => {
     });
   });
 });
+
+// The other docs that link to ADRs (including the ones whose file name starts with uw-).
+describe.each(["AGENTS.md", "README.md", "docs/tech-stack.md", "docs/pilot.md"])(
+  "relative links in %s",
+  (doc) => {
+    it("point to files that exist, resolved from the document's folder", () => {
+      const path = join(root, doc);
+      expect(existsSync(path), `${doc} is missing`).toBe(true);
+      const relative = links(readFileSync(path, "utf8")).filter(
+        (l) => !isExternal(l) && !l.startsWith("#"),
+      );
+      const broken = relative.filter((l) => {
+        const target = decodeURIComponent(l.split("#")[0] as string);
+        return !existsSync(resolve(dirname(path), target));
+      });
+      expect(broken, `broken links in ${doc}: ${broken.join(", ")}`).toEqual([]);
+    });
+  },
+);

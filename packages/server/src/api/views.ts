@@ -1,4 +1,4 @@
-// Read-only routes for the front end (UW-21, ADR uw-21-front-end): global queue with the
+// Read-only routes for the front end (ADR uw-21-front-end): global queue with the
 // scheduler's score and, per task, Runs, Event log, usage and evidence file.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -33,7 +33,7 @@ export interface ViewDeps {
   now: () => Date;
 }
 
-/** Path of the evidence file inside the repo (UW-24 writes and commits it). */
+/** Path of the evidence file inside the repo (written and committed by the evidence service). */
 export function evidenceFile(taskId: string): string {
   return `lunasq/tasks/${taskId}.md`;
 }

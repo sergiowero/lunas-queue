@@ -1130,7 +1130,7 @@ describe("submit_verdict", () => {
   });
 });
 
-describe("submit_verdict: reviewer evidence, cap, risk and hooks (UW-23)", () => {
+describe("submit_verdict: reviewer evidence, cap, risk and hooks", () => {
   const verdictEvents = (h: ReturnType<typeof mcpHarness>, taskId: string) =>
     listEvents(h.db, taskId).filter((e) => e.type === "verification.verdict_recorded");
 

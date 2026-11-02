@@ -74,7 +74,7 @@ export const projects = sqliteTable("projects", {
   repo: text("repo").notNull(),
   baseBranch: text("base_branch").notNull(),
   localPath: text("local_path").notNull().unique(),
-  // Agent profile per phase and limits; its shape is validated by UW-05 with Zod.
+  // Agent profile per phase and limits; its shape is validated with Zod.
   agentProfiles: text("agent_profiles", { mode: "json" })
     .$type<Record<string, unknown>>()
     .notNull()
@@ -107,7 +107,7 @@ export const tasks = sqliteTable(
     state: text("state", { enum: values(TaskState) })
       .notNull()
       .default("draft"),
-    // Only the states with an agent have a sub-state; consistency with state is UW-04's.
+    // Only the states with an agent have a sub-state; consistency with state is enforced by the state machine.
     subState: text("sub_state", { enum: values(SubState) }).default("queued"),
     verificationIteration: integer("verification_iteration").notNull().default(0),
     branch: text("branch"),

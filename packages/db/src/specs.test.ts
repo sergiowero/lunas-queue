@@ -335,7 +335,7 @@ describe("SpecRepository: reads and diff", () => {
   });
 });
 
-// The dispatcher (UW-16) dispatches the refiner again: draft/queued → draft/running.
+// The dispatcher dispatches the refiner again: draft/queued → draft/running.
 function setRunning(db: LunasqDatabase, taskId: string) {
   const result = transitionTask(db, { taskId, actor: "system", command: { type: "dispatch" } });
   if (!result.ok) throw new Error(result.error.message);

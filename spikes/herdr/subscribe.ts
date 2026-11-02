@@ -1,4 +1,4 @@
-// Spike UW-00/d: subscribes to events.subscribe over the Unix socket (NDJSON) and dumps each line.
+// Spike: subscribes to events.subscribe over the Unix socket (NDJSON) and dumps each line.
 // Uso: node subscribe.ts <socket> <salida.ndjson> [subs-json] [--slow=<ms>]
 // subs-json: suscripciones extra, p. ej. [{"type":"pane.agent_status_changed","pane_id":"w2:p1"}]
 // --slow=<ms> stops reading for that long to cause backpressure

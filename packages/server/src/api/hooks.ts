@@ -1,4 +1,4 @@
-// Per-project hooks view (UW-25), mounted under /api/projects/:id/hooks. The content comes from
+// Per-project hooks view, mounted under /api/projects/:id/hooks. The content comes from
 // lunasq/hooks/ on the base branch (HookService.listHooks) and the executions from the Event log: hooks
 // are edited through a PR in the repo, not from here.
 import type { ProjectRepository, TaskViewRepository } from "@lunasq/db";

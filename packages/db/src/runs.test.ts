@@ -33,7 +33,7 @@ import {
   migratedDatabase,
 } from "./test-helpers.ts";
 
-// --- LunasQ MCP (UW-15) ---
+// --- LunasQ MCP ---
 
 function mcpSetup() {
   const db = migratedDatabase();
@@ -232,7 +232,7 @@ describe("Questions and checklist", () => {
   });
 });
 
-// --- Dispatcher (UW-16) ---
+// --- Dispatcher ---
 
 function setup(opts: { concurrency?: number; config?: SchedulerConfigInput } = {}) {
   const db = migratedDatabase();

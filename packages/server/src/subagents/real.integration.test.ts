@@ -1,4 +1,4 @@
-// The 4 reviewers against real Claude Code (UW-19 criterion). Does not run in `pnpm test`:
+// The 4 reviewers against real Claude Code. Does not run in `pnpm test`:
 //   pnpm --filter @lunasq/server test:claude
 // Starts the Hono app on a local port, copies the reviewers from assets/agents to the
 // `.claude/agents/lunasq/` of a temporary repo and opens a `claude -p` session with the dispatcher's

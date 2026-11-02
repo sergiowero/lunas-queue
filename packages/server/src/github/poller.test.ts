@@ -221,7 +221,7 @@ describe("PrPoller", () => {
   });
 });
 
-/** Fake dispatcher: does the claim (dispatch → running) as UW-16 will. */
+/** Fake dispatcher: does the claim (dispatch → running) as the real dispatcher does. */
 class FakeDispatcher {
   readonly calls: DispatchDecision[] = [];
   readonly db: LunasqDatabase;
@@ -242,7 +242,7 @@ class FakeDispatcher {
   }
 }
 
-// UW-10's done criterion: a detected merge releases the dependent tasks.
+// Done criterion: a detected merge releases the dependent tasks.
 describe("PrPoller with outbox and scheduler", () => {
   async function wired() {
     const ctx = setup();

@@ -1,8 +1,8 @@
-// Per-phase hooks (UW-10; docs/design.md §Per-phase hooks, ADR uw-10-hooks). LunasQ reads the scripts
+// Per-phase hooks (docs/design.md §Per-phase hooks, ADR uw-10-hooks). LunasQ reads the scripts
 // and lunasq/hooks/config from the `origin/<base>` commit, never from the worktree or the task's
 // branch, copies them outside the worktree and runs them in order in a herdr pane. Each run
 // and the point's result are left in the Event log; a failure with the block policy sends the task to
-// needs_human. Connecting each point to its phase is up to whoever orchestrates it (UW-16, UW-23, UW-26).
+// needs_human. Connecting each point to its phase is up to whoever orchestrates it (the verification loop and the delivery).
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -179,7 +179,7 @@ export class HookService {
     return this.locks.run(input.taskId, () => this.runLocked(input));
   }
 
-  /** Hooks of each point as they are in the base branch, for the front end view (UW-25). */
+  /** Hooks of each point as they are in the base branch, for the front end view. */
   async listHooks(projectId: string): Promise<ProjectHooks> {
     const project = this.project(projectId);
     const baseRef = await this.fetchBase(project);

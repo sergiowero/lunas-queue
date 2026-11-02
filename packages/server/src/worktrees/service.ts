@@ -1,4 +1,4 @@
-// Lifecycle of a task's worktree (UW-09; docs/design.md §Worktree lifecycle,
+// Lifecycle of a task's worktree (docs/design.md §Worktree lifecycle,
 // docs/decisions/0012-ciclo-de-vida-worktrees.md). One task = one worktree = one branch, from the
 // first dispatch until the merge. The DB is the truth: `worktree_path` is saved only when the
 // worktree is ready, so a bootstrap that failed is retried on the next `ensure`.

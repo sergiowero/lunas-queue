@@ -1,4 +1,4 @@
-# Spike UW-00/b — per-Run run token via `--mcp-config`
+# Spike — per-Run run token via `--mcp-config`
 
 Throwaway code. Result and decision in `docs/decisions/0002-run-token-mcp-config.md`. Reuses `../mcp-sdk/server.ts` (install dependencies there first).
 

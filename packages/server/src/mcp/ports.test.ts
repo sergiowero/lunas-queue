@@ -8,7 +8,7 @@ import type { HookService } from "../hooks/service.ts";
 import { GitCommitVerifier, type PhaseHooks, tailOf } from "./ports.ts";
 
 // HookService is what the server composition passes as PhaseHooks: if it stops meeting the
-// port, the typecheck fails here and not only in UW-29.
+// port, the typecheck fails here and not only in the end-to-end pilot.
 const _hookServiceIsPhaseHooks = (service: HookService): PhaseHooks => service;
 void _hookServiceIsPhaseHooks;
 

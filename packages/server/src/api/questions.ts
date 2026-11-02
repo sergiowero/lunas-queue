@@ -1,4 +1,4 @@
-// Question inbox routes (UW-22, ADR uw-22-preguntas). Listing and querying read the database;
+// Question inbox routes (ADR uw-22-preguntas). Listing and querying read the database;
 // answering is done by the QuestionService, which talks to herdr. Validation lives in
 // @lunasq/schemas and the logic in QuestionRepository and QuestionService.
 import { isHerdrError } from "@lunasq/adapters";

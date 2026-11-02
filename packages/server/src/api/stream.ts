@@ -1,4 +1,4 @@
-// SSE change stream for the UI (UW-21, ADR uw-21-front-end). Each task change leaves an
+// SSE change stream for the UI (ADR uw-21-front-end). Each task change leaves an
 // event in the Event log, so the stream follows the id of the last event: with new events it sends
 // `change` with the affected tasks and the front end invalidates those queries. The message id is
 // the event's, so a reconnection with Last-Event-ID recovers what was lost.

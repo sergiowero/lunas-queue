@@ -1,4 +1,4 @@
-// Project routes (UW-05). Validation lives in the @lunasq/schemas schemas; here only
+// Project routes. Validation lives in the @lunasq/schemas schemas; here only
 // their errors and the repository's are translated into HTTP codes.
 import { type ProjectRepository, ProjectRepositoryError } from "@lunasq/db";
 import { ProjectCreate, ProjectUpdate } from "@lunasq/schemas";

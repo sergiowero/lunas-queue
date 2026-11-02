@@ -1,4 +1,4 @@
-// Spike UW-00/d: generates N workspace.metadata_updated events via workspace.report_metadata to cause backpressure.
+// Spike: generates N workspace.metadata_updated events via workspace.report_metadata to cause backpressure.
 // The socket serves one request per connection, so it opens one connection per request (in groups of `batch`).
 import { createConnection } from "node:net";
 

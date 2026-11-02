@@ -11,7 +11,6 @@ This file says how to work in the repo. The detail lives in `docs/`; read it bef
 | `docs/design.md` | Full design: domain model, state machine, dispatcher, MCP, verification, hooks, audit | Before changing anything it describes |
 | `docs/tech-stack.md` | Stack, monorepo packages and their boundaries, external integrations, tooling | Before adding dependencies or creating files in a package |
 | `docs/decisions/` | Short ADRs with decisions made during implementation | Before contradicting something in the documents above |
-| `docs/archive/` | Historical backlog of units of work (no longer used) | Only as historical reference |
 
 The repo is the source of truth. If a decision changes while you implement, update the corresponding `.md` in the same PR as the code. A new ADR goes in `docs/decisions/<topic>.md`.
 

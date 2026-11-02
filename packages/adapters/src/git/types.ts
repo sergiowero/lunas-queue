@@ -1,4 +1,4 @@
-// Git adapter (UW-10): what LunasQ reads from the base branch and the commit of the changes the
+// Git adapter: what LunasQ reads from the base branch and the commit of the changes the
 // hooks leave. The rest of the system depends only on this interface; RealGit and FakeGit pass the same
 // contract suite. Worktrees are handled by herdr (ADR 0012).
 

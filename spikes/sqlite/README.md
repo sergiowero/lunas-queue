@@ -1,4 +1,4 @@
-# Spike UW-00/c — better-sqlite3 on Node 26
+# Spike — better-sqlite3 on Node 26
 
 Throwaway code. Result and decision in `docs/decisions/0003-sqlite-driver-node26.md`.
 

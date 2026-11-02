@@ -1,7 +1,7 @@
 // LunasQ MCP ports toward the worktree: the test gate, the commit check and the
 // phase hooks. The gate runs in a herdr pane and leaves its result in the Event log
-// (test-gate/, UW-11); the commit check runs git commands with adapters' ProcessRunner;
-// the hooks are run by HookService (hooks/, UW-10).
+// (test-gate/); the commit check runs git commands with adapters' ProcessRunner;
+// the hooks are run by HookService (hooks/).
 import type { ProcessRunner } from "@lunasq/adapters";
 import {
   EVIDENCE_DIR,
