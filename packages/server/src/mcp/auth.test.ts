@@ -3,12 +3,12 @@ import { closeRun, listEvents, RunRepository } from "@lunasq/db";
 import { insertRun } from "@lunasq/db/test-helpers";
 import { describe, expect, it } from "vitest";
 import { TOOL_NAMES, TOOL_PHASES } from "./service.ts";
-import { handoffFor, mcpHarness } from "./test-helpers.ts";
+import { handoffFor, mcpHarness, resultFor } from "./test-helpers.ts";
 
 const running = { state: "in_progress", subState: "running" } as const;
 
 describe("LunasQ MCP: transporte", () => {
-  it("lista las 8 tools con su inputSchema", async () => {
+  it("lista las 9 tools con su inputSchema", async () => {
     const h = mcpHarness();
     const { client } = await h.connect("cualquiera");
     const { tools } = await client.listTools();
@@ -42,6 +42,7 @@ describe("LunasQ MCP: run token", () => {
     ask_human: { question: "¿Sigo?" },
     update_checklist: { items: [{ taskId: "T-1", done: true }] },
     submit_for_verification: { handoff: handoffFor("implementation", run) },
+    submit_result: { handoff: resultFor(run, { phase: "implementation" }) },
     run_reviewer: {
       reviewer: "lunasq-code-reviewer",
       instructions: "revisa el diff",

@@ -93,6 +93,39 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     ).toEqual([work]);
   });
 
+  it("branchHasCommits distingue un branch con commits de uno que está en la base", async () => {
+    const { dir, base } = repo();
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    expect(await verifier.branchHasCommits({ worktreePath: dir, baseBranch: "main" })).toBe(true);
+    // Sin commits propios: el branch apunta a la base.
+    git(dir, "reset", "-q", "--hard", base);
+    expect(await verifier.branchHasCommits({ worktreePath: dir, baseBranch: "main" })).toBe(false);
+  });
+
+  it("branchHasCommits no cuenta lo que ya está en origin/<base> aunque la base local vaya atrasada", async () => {
+    const { dir, base } = repo();
+    git(dir, "reset", "-q", "--hard", base);
+    git(dir, "init", "-q", "--bare", join(dir, ".git", "origin.git"));
+    git(dir, "remote", "add", "origin", join(dir, ".git", "origin.git"));
+    writeFileSync(join(dir, "upstream.txt"), "upstream");
+    git(dir, "add", "upstream.txt");
+    git(dir, "commit", "-q", "-m", "upstream");
+    git(dir, "push", "-q", "origin", "HEAD:main");
+    git(dir, "fetch", "-q", "origin");
+    // HEAD es origin/main; la main local se quedó en `base`.
+    git(dir, "branch", "-f", "main", base);
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    expect(await verifier.branchHasCommits({ worktreePath: dir, baseBranch: "main" })).toBe(false);
+  });
+
+  it("branchHasCommits con una base que no existe asume que hay commits", async () => {
+    const { dir } = repo();
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    expect(await verifier.branchHasCommits({ worktreePath: dir, baseBranch: "no-existe" })).toBe(
+      true,
+    );
+  });
+
   it("uncommitted lista cambios y archivos sin seguimiento; vacío con el worktree limpio", async () => {
     const { dir } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());

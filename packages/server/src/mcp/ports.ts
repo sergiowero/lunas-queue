@@ -41,6 +41,12 @@ export interface CommitVerifier {
   missing(input: CommitCheckInput): Promise<string[]>;
   /** Archivos con cambios sin commitear: el gate debe correr sobre lo commiteado. */
   uncommitted(worktreePath: string): Promise<string[]>;
+  /**
+   * true si el branch de la tarea tiene commits que no están en la rama base (ni local ni
+   * `origin/<base>`). Si no se puede comprobar responde true: submit_result no debe completar una
+   * tarea que quizá tiene código.
+   */
+  branchHasCommits(input: { worktreePath: string; baseBranch: string }): Promise<boolean>;
   /** Sha del HEAD del worktree; null si no se puede leer. */
   head(worktreePath: string): Promise<string | null>;
   /**
@@ -120,6 +126,22 @@ export class GitCommitVerifier implements CommitVerifier {
       if (result.exitCode !== 0) missing.push(sha);
     }
     return missing;
+  }
+
+  async branchHasCommits(input: { worktreePath: string; baseBranch: string }): Promise<boolean> {
+    const result = await this.#runner.run({
+      // Commits alcanzables desde HEAD que no están en ninguna de las dos refs de la base: el
+      // worktree sale de origin/<base> (ADR 0012) y la base local puede ir atrasada o adelantada.
+      command: [
+        'refs=""',
+        `for ref in ${quote(`origin/${input.baseBranch}`)} ${quote(input.baseBranch)}; do git rev-parse --verify --quiet --end-of-options "$ref^{commit}" >/dev/null && refs="$refs $ref"; done`,
+        '[ -n "$refs" ]',
+        "git rev-list --count HEAD --not --end-of-options $refs",
+      ].join("; "),
+      cwd: input.worktreePath,
+    });
+    if (result.exitCode !== 0) return true;
+    return Number.parseInt(result.stdout.trim(), 10) !== 0;
   }
 
   async head(worktreePath: string): Promise<string | null> {

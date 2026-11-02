@@ -12,7 +12,7 @@ import {
 import { insertRun, setTaskPosition } from "@lunasq/db/test-helpers";
 import { specContentExample } from "@lunasq/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
-import { handoffFor, mcpHarness } from "./test-helpers.ts";
+import { handoffFor, mcpHarness, resultFor } from "./test-helpers.ts";
 
 const refining = { state: "draft", subState: "running" } as const;
 const implementing = { state: "in_progress", subState: "running" } as const;
@@ -289,6 +289,208 @@ describe("submit_spec", () => {
     expect(result.body).toMatchObject({ error: "transition_rejected" });
     expect(new SpecRepository(h.db).list(task.id)).toEqual([]);
     expect(runOf(h, run.id)?.endedAt).toBeNull();
+  });
+});
+
+describe("submit_result", () => {
+  it("AC-1: en refinamiento completa la tarea sin PR con Resultado, título y Run cerrado", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("refine", refining, { approved: false });
+    expect(h.taskOf(task.id)?.title).toBeNull();
+    const handoff = resultFor(run);
+
+    const result = await call("submit_result", { handoff });
+
+    expect(result).toEqual({ isError: false, body: { state: "completed" } });
+    expect(h.taskOf(task.id)).toMatchObject({
+      state: "completed",
+      subState: null,
+      resultKind: "research",
+      result: "# Hallazgos\n\nSQLite basta para un solo proceso.",
+      title: "Elegir la base de datos",
+      prUrl: null,
+      prState: null,
+    });
+    expect(runOf(h, run.id)).toMatchObject({ result: "success", handoff });
+    expect(runOf(h, run.id)?.endedAt).toBeInstanceOf(Date);
+    const events = listEvents(h.db, task.id);
+    expect(events.filter((e) => e.type === "task.titled")).toHaveLength(1);
+    expect(events.filter((e) => e.type === "task.transitioned").at(-1)).toMatchObject({
+      actor: "agent",
+      payload: {
+        command: "submit_result",
+        from: { state: "draft", subState: "running" },
+        to: { state: "completed", subState: null },
+        note: "research",
+      },
+    });
+    // Sin verificación ni entrega: no hay veredicto ni gate.
+    expect(events.some((e) => e.type === "verification.verdict_recorded")).toBe(false);
+    expect(h.testGate.calls).toHaveLength(0);
+    expect(new SpecRepository(h.db).list(task.id)).toEqual([]);
+  });
+
+  it("AC-2: en implementación sin commits sobre la base completa la tarea y conserva su título", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    const titleBefore = h.taskOf(task.id)?.title ?? null;
+    const handoff = resultFor(run, {
+      phase: "implementation",
+      resultKind: "already_implemented",
+      title: "Otro título",
+    });
+
+    const result = await call("submit_result", { handoff });
+
+    expect(result).toEqual({ isError: false, body: { state: "completed" } });
+    expect(h.commitVerifier.aheadCalls).toEqual([
+      { worktreePath: "/wt/tarea", baseBranch: "main" },
+    ]);
+    expect(h.taskOf(task.id)).toMatchObject({
+      state: "completed",
+      subState: null,
+      resultKind: "already_implemented",
+      prUrl: null,
+      prState: null,
+    });
+    // El título se fija solo si aún es null: una tarea ya titulada no lo cambia.
+    expect(h.taskOf(task.id)?.title).toBe(titleBefore ?? "Otro título");
+    expect(runOf(h, run.id)?.result).toBe("success");
+    // No se despacha verificador ni se corre el gate de tests.
+    expect(h.testGate.calls).toHaveLength(0);
+    expect(h.phaseHooks.calls).toEqual([]);
+  });
+
+  it("AC-2: una tarea ya titulada conserva su título", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    h.db.$client.prepare("update tasks set title = 'Título previo' where id = ?").run(task.id);
+
+    await call("submit_result", {
+      handoff: resultFor(run, { phase: "implementation", resultKind: "not_resolvable" }),
+    });
+
+    expect(h.taskOf(task.id)).toMatchObject({
+      title: "Título previo",
+      resultKind: "not_resolvable",
+    });
+    expect(listEvents(h.db, task.id).filter((e) => e.type === "task.titled")).toHaveLength(0);
+  });
+
+  it("AC-3: con commits sobre la base se rechaza y la tarea y el Run quedan como estaban", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    h.commitVerifier.ahead = true;
+    const eventsBefore = listEvents(h.db, task.id).length;
+
+    const result = await call("submit_result", {
+      handoff: resultFor(run, { phase: "implementation" }),
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.body).toMatchObject({ error: "branch_has_commits" });
+    expect(h.taskOf(task.id)).toMatchObject({ ...implementing, resultKind: null, result: null });
+    expect(runOf(h, run.id)?.endedAt).toBeNull();
+    expect(listEvents(h.db, task.id)).toHaveLength(eventsBefore);
+    // El agente puede seguir con submit_for_verification en el mismo Run.
+    h.commitVerifier.ahead = false;
+    expect(
+      (await call("submit_result", { handoff: resultFor(run, { phase: "implementation" }) }))
+        .isError,
+    ).toBe(false);
+  });
+
+  it("AC-3: sin worktree no se puede comprobar el branch", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    h.db.$client.prepare("update tasks set worktree_path = null where id = ?").run(task.id);
+    const result = await call("submit_result", {
+      handoff: resultFor(run, { phase: "implementation" }),
+    });
+    expect(result.body).toMatchObject({ error: "no_worktree" });
+    expect(h.taskOf(task.id)).toMatchObject(implementing);
+  });
+
+  it("AC-4: en verificación se rechaza con tool_not_allowed y la tarea no cambia", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("verify", verifying);
+    const result = await call("submit_result", {
+      handoff: resultFor(run, { phase: "implementation" }),
+    });
+    expect(result).toMatchObject({ isError: true, body: { error: "tool_not_allowed" } });
+    expect(h.taskOf(task.id)).toMatchObject({ ...verifying, resultKind: null });
+    expect(runOf(h, run.id)?.endedAt).toBeNull();
+  });
+
+  it.each([
+    ["un tipo fuera de los tres", { resultKind: "bug" }, "resultKind"],
+    ["un texto vacío", { result: "" }, "result"],
+    ["un texto de más de 20 000 caracteres", { result: "x".repeat(20_001) }, "result"],
+  ])(
+    "AC-5: %s da invalid_handoff con la ruta y el Run sigue abierto",
+    async (_n, override, path) => {
+      const h = mcpHarness();
+      const { task, run, call } = await h.ready("refine", refining, { approved: false });
+
+      const result = await call("submit_result", { handoff: resultFor(run, override) });
+
+      expect(result.isError).toBe(true);
+      expect(result.body).toMatchObject({
+        error: "invalid_handoff",
+        issues: [expect.objectContaining({ path })],
+      });
+      expect(h.taskOf(task.id)).toMatchObject({ ...refining, resultKind: null, result: null });
+      expect(runOf(h, run.id)?.endedAt).toBeNull();
+      // Corrige y reintenta en el mismo Run.
+      expect((await call("submit_result", { handoff: resultFor(run) })).isError).toBe(false);
+    },
+  );
+
+  it("AC-6: taskId, runId o fase que no son los del Run dan handoff_mismatch", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("refine", refining, { approved: false });
+
+    const other = await call("submit_result", {
+      handoff: resultFor({ id: "otro-run", taskId: "otra-tarea" }),
+    });
+    expect(other.body).toMatchObject({
+      error: "handoff_mismatch",
+      issues: [{ path: "taskId" }, { path: "runId" }],
+    });
+    const wrongPhase = await call("submit_result", {
+      handoff: resultFor(run, { phase: "implementation" }),
+    });
+    expect(wrongPhase.body).toMatchObject({
+      error: "handoff_mismatch",
+      issues: [{ path: "phase" }],
+    });
+    expect(h.taskOf(task.id)).toMatchObject({ ...refining, resultKind: null });
+    expect(runOf(h, run.id)?.endedAt).toBeNull();
+  });
+
+  it("si la tarea ya no está en running no escribe el Resultado", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("refine", refining, { approved: false });
+    setTaskPosition(h.db, task.id, { state: "needs_human", subState: null });
+
+    const result = await call("submit_result", { handoff: resultFor(run) });
+
+    expect(result.body).toMatchObject({ error: "transition_rejected" });
+    expect(h.taskOf(task.id)).toMatchObject({
+      state: "needs_human",
+      resultKind: null,
+      title: null,
+    });
+    expect(runOf(h, run.id)?.endedAt).toBeNull();
+  });
+
+  it("un reintento tras completar responde invalid_run_token y no cambia nada", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("refine", refining, { approved: false });
+    await call("submit_result", { handoff: resultFor(run) });
+    const again = await call("submit_result", { handoff: resultFor(run, { result: "otro" }) });
+    expect(again.body).toMatchObject({ error: "invalid_run_token" });
+    expect(h.taskOf(task.id)?.result).toBe("# Hallazgos\n\nSQLite basta para un solo proceso.");
   });
 });
 

@@ -125,6 +125,50 @@ describe("Reconciler", () => {
     expect(await h.reconciler.run()).toMatchObject({ closed: [], removedWorktrees: [] });
   });
 
+  it("tarea completada con Resultado: cierra el Run, detiene el agente y remueve el worktree", async () => {
+    const h = setup();
+    const { taskId, run, name } = await h.launched();
+    h.db.$client
+      .prepare(
+        "update tasks set state = 'completed', sub_state = null, result_kind = 'research', result = 'hallazgos' where id = ?",
+      )
+      .run(taskId);
+
+    const result = await h.reconciler.run();
+
+    expect(result.closed).toEqual([run.id]);
+    expect(result.removedWorktrees).toEqual([taskId]);
+    expect(await h.herdr.getAgent(name)).toBeUndefined();
+    expect(h.taskRow(taskId)).toMatchObject({ state: "completed", worktreePath: null });
+  });
+
+  it("onMessage pide pasada al entregar un Resultado", async () => {
+    const h = setup();
+    const { taskId, run } = await h.launched();
+    h.db.$client
+      .prepare(
+        "update tasks set state = 'completed', sub_state = null, result_kind = 'research', result = 'x' where id = ?",
+      )
+      .run(taskId);
+    h.reconciler.onMessage({
+      id: 1,
+      eventId: 1,
+      topic: "task.transitioned",
+      taskId,
+      actor: "agent",
+      payload: {
+        command: "submit_result",
+        from: { state: "draft", subState: "running" },
+        to: { state: "completed", subState: null },
+        verificationIteration: 0,
+        note: "research",
+      },
+      createdAt: new Date().toISOString(),
+    });
+    await vi.waitFor(() => expect(h.taskRow(taskId).worktreePath).toBeNull());
+    expect(h.runs.get(run.id)?.endedAt).not.toBeNull();
+  });
+
   it("tarea pausada: cierra el Run como cancelled, detiene el agente y conserva el worktree", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
