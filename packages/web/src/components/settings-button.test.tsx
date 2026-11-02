@@ -46,7 +46,11 @@ describe("botón de Settings del header", () => {
 
   it("un click desde /queue navega a /settings y muestra la página", async () => {
     const { user, router } = renderApp("/queue");
-    await user.click(await settingsButton());
+    const link = await settingsButton();
+    expect(screen.getByRole("navigation").contains(link)).toBe(false);
+    expect(link.getAttribute("title")).toBe("Settings");
+    expect(link.querySelector("svg")?.dataset.icon).toBe("settings");
+    await user.click(link);
     expect(router.state.location.pathname).toBe("/settings");
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeTruthy();
   });
