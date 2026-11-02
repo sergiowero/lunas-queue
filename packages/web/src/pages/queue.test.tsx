@@ -358,8 +358,16 @@ describe("global queue", () => {
       // (guards against a module-level store that would outlive the instance).
       await user.selectOptions(project(), fake.projects[0]?.id as string);
       await user.selectOptions(screen.getByLabelText("Estado del PR"), "merged");
+      await router.navigate({ to: "/queue" });
+      await screen.findByText("De uno");
+      await router.navigate({ to: "/completed" });
+      await screen.findByText("Merged de uno");
+      // Chosen filters are really held by this instance (a stateless store would show All here) ...
+      expect(project().value).toBe(fake.projects[0]?.id);
+      expect((screen.getByLabelText("Estado del PR") as HTMLSelectElement).value).toBe("merged");
       unmount();
 
+      // ... and still a fresh instance starts on All.
       renderApp("/completed", fake);
       await screen.findByText("Open de dos");
       expect(project().value).toBe("");

@@ -38,6 +38,8 @@ describe("tab filter store", () => {
     const first = renderHook(useAllTabs, { wrapper });
     act(() => first.result.current.setQueue({ projectId: "p1" }));
     act(() => first.result.current.setCompleted({ projectId: "p1", prFilter: "merged" }));
+    expect(first.result.current.queue).toEqual({ projectId: "p1" });
+    expect(first.result.current.completed).toEqual({ projectId: "p1", prFilter: "merged" });
     first.unmount();
 
     const second = renderHook(useAllTabs, { wrapper });
