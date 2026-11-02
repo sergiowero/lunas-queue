@@ -3,10 +3,10 @@ import { splitMentions } from "./mentions.ts";
 
 describe("splitMentions", () => {
   it("splits the #N mentions from the surrounding text", () => {
-    expect(splitMentions("depende de #5 y de #12.")).toEqual([
-      "depende de ",
+    expect(splitMentions("depends on #5 and on #12.")).toEqual([
+      "depends on ",
       { number: 5, text: "#5" },
-      " y de ",
+      " and on ",
       { number: 12, text: "#12" },
       ".",
     ]);

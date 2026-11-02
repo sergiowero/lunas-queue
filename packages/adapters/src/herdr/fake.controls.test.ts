@@ -17,7 +17,7 @@ async function agentSetup(fake: FakeHerdr) {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe("FakeHerdr: controles de test", () => {
+describe("FakeHerdr: test controls", () => {
   it("setAgentStatus emits the change and wakes waitAgent", async () => {
     const fake = new FakeHerdr();
     const { pane, events } = await agentSetup(fake);

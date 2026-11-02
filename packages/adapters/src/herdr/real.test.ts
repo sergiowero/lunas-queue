@@ -50,7 +50,7 @@ function scripted(
   return { exec, calls };
 }
 
-describe("RealHerdr con exec simulado", () => {
+describe("RealHerdr with a simulated exec", () => {
   it("startAgent keeps the requested kind if herdr omits it in the initial response", async () => {
     const { exec } = scripted({
       "agent get": () => error("agent_not_found"),

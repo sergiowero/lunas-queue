@@ -21,7 +21,7 @@ const breakOutbox = (db: LunasqDatabase) =>
     "create trigger outbox_broken before insert on outbox begin select raise(abort, 'outbox caído'); end",
   );
 
-describe("Outbox: encolado", () => {
+describe("Outbox: enqueueing", () => {
   it("appendEvent with publish leaves the event and its pending row in the same write", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
@@ -41,7 +41,7 @@ describe("Outbox: encolado", () => {
     ]);
   });
 
-  it("appendEvent sin publish no encola", () => {
+  it("appendEvent without publish does not enqueue", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     appendEvent(db, { taskId: t.id, type: "task.note", actor: "system" });
@@ -71,7 +71,7 @@ describe("Outbox: encolado", () => {
     expect(listEvents(db, t.id)).toEqual([]);
   });
 
-  it("transitionTask encola su evento task.transitioned", () => {
+  it("transitionTask enqueues its task.transitioned event", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const result = transitionTask(db, {

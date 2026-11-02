@@ -69,7 +69,7 @@ describe("Question", () => {
   });
 });
 
-describe("eventos de Question", () => {
+describe("Question events", () => {
   it("question.answered says whether the answer went to the live pane or to a new Run", () => {
     expect(QUESTION_ANSWERED).toBe("question.answered");
     const ok = { questionId: id, runId: other, delivery: "pane", answeredBy: "sergio" };
@@ -79,7 +79,7 @@ describe("eventos de Question", () => {
     expect(QuestionAnsweredPayload.safeParse({ ...ok, runId: null }).success).toBe(true);
   });
 
-  it("question.cancelled guarda la causa", () => {
+  it("question.cancelled stores the cause", () => {
     expect(QUESTION_CANCELLED).toBe("question.cancelled");
     expect(
       QuestionCancelledPayload.safeParse({ questionId: id, reason: "task_cancelled" }).success,

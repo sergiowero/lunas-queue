@@ -138,7 +138,7 @@ describe("transition: full table of states × commands", () => {
   });
 });
 
-describe("transition: sub-estado incoherente", () => {
+describe("transition: inconsistent sub-state", () => {
   const incoherent: [TaskState, SubState | null][] = [
     ["draft", null],
     ["in_progress", null],
@@ -166,7 +166,7 @@ describe("transition: sub-estado incoherente", () => {
   });
 });
 
-describe("transition: actores", () => {
+describe("transition: actors", () => {
   const ALL_ACTORS: Actor[] = ["human", "agent", "system"];
   const from: Record<CommandInput["type"], TaskSnapshot> = {
     submit_spec: snap("draft", "running"),
@@ -226,7 +226,7 @@ describe("transition: guards", () => {
       error: { code: "guard_failed" },
     });
 
-  it("submit_spec exige spec completa", () => {
+  it("submit_spec requires a complete spec", () => {
     rejects(snap("draft", "running"), { type: "submit_spec", specComplete: false }, "agent");
   });
 
@@ -238,7 +238,7 @@ describe("transition: guards", () => {
     rejects(snap("refined", null), { type: "approve", specApproved: false }, "human");
   });
 
-  it("submit_for_verification exige gate verde, criterios con test y commits", () => {
+  it("submit_for_verification requires a green gate, criteria with tests and commits", () => {
     for (const field of ["testGatePassed", "everyCriterionHasTest", "hasCommits"] as const) {
       rejects(
         snap("in_progress", "running"),
@@ -354,7 +354,7 @@ describe("transition: verification loop", () => {
   });
 });
 
-describe("transition: reintentos de Run", () => {
+describe("transition: Run retries", () => {
   it(`up to ${DEFAULT_MAX_RETRIES} retries return to the queue; the next failure escalates`, () => {
     expect(DEFAULT_MAX_RETRIES).toBe(3);
     for (let attempt = 1; attempt <= DEFAULT_MAX_RETRIES; attempt++) {
@@ -430,7 +430,7 @@ describe("transition: human in the loop", () => {
   });
 });
 
-describe("transition: pausa", () => {
+describe("transition: pause", () => {
   const pausable: [TaskState, SubState | null][] = SNAPSHOTS.filter(([state]) =>
     ["draft", "refined", "in_progress", "verification"].includes(state),
   );

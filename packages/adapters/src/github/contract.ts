@@ -51,7 +51,7 @@ export function gitHubContract(
         baseBranch: branch.base,
         mergedAt: null,
       });
-      const again = await gh.createPr({ ...branch, title: "otro título", body: "otro" });
+      const again = await gh.createPr({ ...branch, title: "another title", body: "another" });
       expect(again).toMatchObject({ created: false, pr: { url: pr.url, number: pr.number } });
       expect((await gh.findOpenPr(branch))?.url).toBe(pr.url);
       expect((await gh.getPr(pr.url)).url).toBe(pr.url);
@@ -59,7 +59,7 @@ export function gitHubContract(
 
     it("addLabels sets the labels, also those the repo did not have, and repeating it does not duplicate", async () => {
       const { branch, pr } = await openPr();
-      const label = { name: "lunasq:risk-low", color: "0e8a16", description: "Riesgo bajo" };
+      const label = { name: "lunasq:risk-low", color: "0e8a16", description: "Low risk" };
       const labeled = await gh.addLabels({ cwd: branch.cwd, url: pr.url, labels: [label] });
       expect(labeled.labels).toEqual(["lunasq:risk-low"]);
       const again = await gh.addLabels({ cwd: branch.cwd, url: pr.url, labels: [label] });

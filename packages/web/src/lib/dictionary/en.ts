@@ -163,6 +163,8 @@ export const en: Dictionary = {
     duration: "Duration",
     output: "Output",
     noOutput: "(no output)",
+    exitCode: (code) => `exit ${code}`,
+    timedOut: "timeout",
     loadingExecutions: "Loading executions…",
     executionsFailed: "The executions could not be loaded.",
     noExecutions: "No executions.",

@@ -111,7 +111,7 @@ describe("API inputs", () => {
   });
 });
 
-describe("eventos de spec", () => {
+describe("spec events", () => {
   it("have stable names", () => {
     expect([SPEC_VERSION_CREATED, SPEC_APPROVED, SPEC_CHANGES_REQUESTED]).toEqual([
       "spec.version_created",

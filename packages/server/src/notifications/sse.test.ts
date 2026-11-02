@@ -16,7 +16,7 @@ async function until(cond: () => boolean) {
   expect(cond()).toBe(true);
 }
 
-describe("GET /stream (SSE de notificaciones)", () => {
+describe("GET /stream (notifications SSE)", () => {
   it("emits each notification as an event with its id", async () => {
     const hub = new NotificationHub();
     const body = await open(hub);

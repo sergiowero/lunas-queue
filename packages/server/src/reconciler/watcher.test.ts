@@ -206,7 +206,7 @@ describe("RunWatcher: blocked", () => {
   });
 });
 
-describe("RunWatcher: timeout de fase", () => {
+describe("RunWatcher: phase timeout", () => {
   it("expired: needs_human with phase_timeout, immediate notification and the agent stays alive", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
@@ -377,7 +377,7 @@ describe("RunWatcher: usage limit", () => {
   });
 });
 
-describe("RunWatcher: eventos perdidos", () => {
+describe("RunWatcher: lost events", () => {
   it("a stream cut requests reconciling and re-reads the agent's state", async () => {
     const h = setup();
     const { taskId, name } = await h.launched();

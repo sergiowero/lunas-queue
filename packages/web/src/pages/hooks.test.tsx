@@ -64,7 +64,7 @@ function execution(
   } as never);
 }
 
-describe("vista de hooks", () => {
+describe("hooks view", () => {
   it("shows per point the base branch hooks with their content, policy and timeout", async () => {
     const { fake, project } = setup();
     renderApp(`/projects/${project.id}/hooks`, fake);
@@ -181,7 +181,7 @@ describe("vista de hooks", () => {
     const project = fake.addProject();
     renderApp(`/projects/${project.id}/hooks`, fake);
     expect((await screen.findByRole("alert")).textContent).toContain(
-      "no se pudo leer la rama base",
+      "the base branch could not be read",
     );
   });
 });

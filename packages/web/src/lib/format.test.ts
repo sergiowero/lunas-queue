@@ -22,13 +22,13 @@ describe("formatAgent", () => {
   });
 });
 
-describe("pausa", () => {
+describe("pause", () => {
   it("Paused has a label and its board column", () => {
     expect(es.state.paused).toBe("Paused");
     expect(BOARD_STATES).toContain("paused");
   });
 
-  it("se pausan draft, refined, in_progress y verification", () => {
+  it("draft, refined, in_progress and verification can be paused", () => {
     expect((["draft", "refined", "in_progress", "verification"] as const).every(canPause)).toBe(
       true,
     );

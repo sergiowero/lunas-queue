@@ -17,7 +17,7 @@ gitHubContract("in-memory fake", async () => {
 });
 
 // The fake's own controls, used by the poller and the delivery in their tests.
-describe("FakeGitHub: controles de test", () => {
+describe("FakeGitHub: test controls", () => {
   const input = { cwd: "/repo", head: "lunasq/t1", base: "main", title: "t", body: "b" };
 
   it("setChecks and addReview show up in getPr", async () => {

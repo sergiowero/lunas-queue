@@ -125,7 +125,7 @@ describe("contrast of the Badge's success variant", () => {
   });
 });
 
-describe("variante success del Badge", () => {
+describe("Badge success variant", () => {
   it("uses the success tokens, which exist in the light and the dark theme", () => {
     const classes = badgeVariants({ variant: "success" });
     for (const cls of ["bg-success/10", "text-success-text", "ring-success/20"]) {

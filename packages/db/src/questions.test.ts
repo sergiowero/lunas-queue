@@ -95,7 +95,7 @@ describe("QuestionRepository.answer", () => {
   });
 });
 
-describe("QuestionRepository consultas", () => {
+describe("QuestionRepository queries", () => {
   it("lists by state, task and project, the oldest first", () => {
     const { db, project, task, question, questions } = setup();
     const otherTask = insertTask(db, project.id, {

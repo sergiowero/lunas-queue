@@ -125,7 +125,7 @@ describe("TaskRepository.create", () => {
   });
 });
 
-describe("TaskRepository lectura", () => {
+describe("TaskRepository reading", () => {
   it("get returns null if it does not exist", () => {
     expect(repository().repo.get(missing)).toBeNull();
   });
@@ -206,7 +206,7 @@ describe("TaskRepository.cancel", () => {
   });
 });
 
-describe("TaskRepository aristas", () => {
+describe("TaskRepository edges", () => {
   it("adds an edge with its event on the dependent", () => {
     const { db, repo, create } = repository();
     const a = create();

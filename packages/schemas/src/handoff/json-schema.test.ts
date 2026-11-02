@@ -5,7 +5,7 @@ import { buildHandoffJsonSchemas } from "./json-schema.ts";
 
 const outDir = join(import.meta.dirname, "../../json-schema/v1");
 
-describe("JSON Schema de handoff v1", () => {
+describe("handoff v1 JSON Schema", () => {
   const generated = buildHandoffJsonSchemas();
 
   it("generates the full handoff and one per phase", () => {

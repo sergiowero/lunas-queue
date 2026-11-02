@@ -139,7 +139,7 @@ describe("RealGitHub", () => {
       cwd: "/wt/t1",
       url,
       labels: [
-        { name: "lunasq:risk-high", color: "b60205", description: "Riesgo alto" },
+        { name: "lunasq:risk-high", color: "b60205", description: "High risk" },
         { name: "-rara" },
       ],
     });
@@ -151,7 +151,7 @@ describe("RealGitHub", () => {
         "lunasq:risk-high",
         "--force",
         "--color=b60205",
-        "--description=Riesgo alto",
+        "--description=High risk",
       ],
       ["label", "create", "-rara", "--force"],
       ["pr", "edit", url, "--add-label=lunasq:risk-high", "--add-label=-rara"],

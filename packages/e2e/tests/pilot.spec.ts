@@ -100,7 +100,7 @@ async function waitForState(page: Page, id: string, predicate: (t: TaskView) => 
 
 test.describe.configure({ mode: "serial" });
 
-test.describe("piloto", () => {
+test.describe("pilot", () => {
   test("creates tasks with dependencies from the UI and shows them in the detail", async ({
     page,
   }) => {

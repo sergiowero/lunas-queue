@@ -162,6 +162,8 @@ export const es = {
     duration: "Duración",
     output: "Salida",
     noOutput: "(sin salida)",
+    exitCode: (code: number) => `exit ${code}`,
+    timedOut: "timeout",
     loadingExecutions: "Cargando ejecuciones…",
     executionsFailed: "No se pudieron cargar las ejecuciones.",
     noExecutions: "Sin ejecuciones.",

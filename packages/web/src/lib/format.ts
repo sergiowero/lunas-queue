@@ -74,8 +74,18 @@ export function formatTokens(usage: UsageTotals): string {
   return integer(total);
 }
 
+const costFormats = new Map<string, Intl.NumberFormat>();
+
+/** Cost in US dollars; the separators follow the locale of the effective language. */
 export function formatCost(cost: number | null): string {
-  return cost === null ? "—" : `$${cost.toFixed(2)}`;
+  if (cost === null) return "—";
+  const key = locale();
+  let format = costFormats.get(key);
+  if (!format) {
+    format = new Intl.NumberFormat(key, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    costFormats.set(key, format);
+  }
+  return `$${format.format(cost)}`;
 }
 
 /** Readable duration: milliseconds, seconds or minutes. */

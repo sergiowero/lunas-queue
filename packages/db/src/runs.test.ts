@@ -186,7 +186,7 @@ describe("consecutiveFailures", () => {
   });
 });
 
-describe("Questions y checklist", () => {
+describe("Questions and checklist", () => {
   it("createQuestion stores the open question and its event", () => {
     const { db, task } = mcpSetup();
     const run = insertRun(db, task.id);

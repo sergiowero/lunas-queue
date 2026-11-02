@@ -291,7 +291,7 @@ describe("task detail", () => {
     expect(
       await block.findByText(/Consumo registrado \(parcial: Copilot CLI no informa usage\)/),
     ).toBeTruthy();
-    expect(block.getByText(/360 tokens · \$0\.25/)).toBeTruthy();
+    expect(block.getByText(/360 tokens · \$0,25/)).toBeTruthy();
     expect(block.getByText("Implementación")).toBeTruthy();
     expect(block.getAllByText("No disponible")).toHaveLength(4);
   });
@@ -537,7 +537,7 @@ describe("task detail", () => {
     await user.click(approve);
     expect(await screen.findByRole("alert")).toHaveProperty(
       "textContent",
-      "la versión 1 ya está en approved",
+      "version 1 is already approved",
     );
   });
 
@@ -638,7 +638,7 @@ describe("task detail", () => {
     // Another actor takes the task out of refined: approving answers 409.
     fake.task(task.id).state = "in_progress";
     await user.click(await spec.findByRole("button", { name: "Aprobar v1" }));
-    expect((await spec.findByRole("alert")).textContent).toMatch(/no en refined/);
+    expect((await spec.findByRole("alert")).textContent).toMatch(/not refined/);
     fake.task(task.id).state = "refined";
     await user.click(await spec.findByRole("button", { name: "Editar y aprobar" }));
     const editor = spec.getByLabelText("Contenido de la spec (JSON)");
@@ -649,7 +649,7 @@ describe("task detail", () => {
 
     const alert = await spec.findByRole("alert");
     await waitFor(() => expect(alert.textContent).toMatch(/content\.domainModel/));
-    expect(alert.textContent).not.toMatch(/no en refined/);
+    expect(alert.textContent).not.toMatch(/not refined/);
   });
 
   it("cancels the task after confirming", async () => {
@@ -737,7 +737,7 @@ describe("task detail", () => {
     // The task completed while the screen was still open: the server rejects the pause.
     fake.task(task.id).state = "completed";
     await user.click(button);
-    expect((await screen.findByRole("alert")).textContent).toMatch(/pause no aplica/);
+    expect((await screen.findByRole("alert")).textContent).toMatch(/pause does not apply/);
   });
 
   it("warns if the task does not exist", async () => {

@@ -50,7 +50,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
       await h?.cleanup();
     });
 
-    describe("rama base", () => {
+    describe("base branch", () => {
       it("fetch brings the remote's new commit and resolveCommit gives its sha", async () => {
         const cwd = await h.newRepo(hooks);
         const before = await git.resolveCommit({ cwd, ref: "origin/main" });

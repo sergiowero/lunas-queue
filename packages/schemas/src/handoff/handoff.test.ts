@@ -136,7 +136,7 @@ describe("handoff: bounded size", () => {
   });
 });
 
-describe("handoff: versiones", () => {
+describe("handoff: versions", () => {
   it("the current version is 1", () => {
     expect(CURRENT_HANDOFF_VERSION).toBe(1);
   });

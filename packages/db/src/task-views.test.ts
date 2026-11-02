@@ -132,7 +132,7 @@ describe("TaskViewRepository.usage", () => {
   });
 });
 
-describe("TaskViewRepository.usage: desgloses", () => {
+describe("TaskViewRepository.usage: breakdowns", () => {
   const tokens = (n: number) => ({ ...EMPTY_USAGE, inputTokens: n, costUsd: n / 10 });
   const rec = (n: number, extra: Partial<typeof usageRecords.$inferInsert> = {}) => ({
     inputTokens: n,

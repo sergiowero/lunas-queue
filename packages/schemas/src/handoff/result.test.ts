@@ -17,7 +17,7 @@ const paths = (input: unknown) => {
   return parsed.success ? [] : parsed.errors.map((e) => e.path);
 };
 
-describe("handoff de submit_result", () => {
+describe("submit_result handoff", () => {
   it("accepts the refinement and implementation handoff", () => {
     expect(parseResultHandoff(valid)).toEqual({ success: true, data: valid });
     const implementation = { ...valid, phase: "implementation", resultKind: "already_implemented" };

@@ -53,7 +53,7 @@ describe("lunasq/hooks/config", () => {
   });
 });
 
-describe("eventos de hooks", () => {
+describe("hook events", () => {
   const executed = {
     point: "before_delivery",
     script: "10-bump-version",

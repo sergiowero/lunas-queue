@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
-import { formatDate } from "../lib/format.ts";
+import { formatCost, formatDate } from "../lib/format.ts";
 import { LANGUAGE_KEY } from "../lib/i18n.ts";
 
 const html = document.documentElement;
@@ -151,6 +151,19 @@ describe("regional formatting", () => {
       ),
     );
     expect(spanish).not.toBe(english);
+  });
+
+  it("costs use the locale of the effective language", () => {
+    document.documentElement.lang = "es";
+    const spanish = formatCost(1234.5);
+    document.documentElement.lang = "en";
+    const english = formatCost(1234.5);
+    expect(english).toBe("$1,234.50");
+    expect(spanish).toBe(
+      `$${new Intl.NumberFormat("es", { minimumFractionDigits: 2 }).format(1234.5)}`,
+    );
+    expect(spanish).not.toBe(english);
+    expect(formatCost(null)).toBe("—");
   });
 });
 

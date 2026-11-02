@@ -251,7 +251,7 @@ export class FakeApi {
 
   endRun(runId: string, patch: Partial<Json<RunView>>): void {
     const run = this.runs.find((r) => r.id === runId);
-    if (!run) throw new Error(`run ${runId} no existe`);
+    if (!run) throw new Error(`run ${runId} does not exist`);
     Object.assign(run, { endedAt: this.now(), result: "success", ...patch });
   }
 
@@ -318,7 +318,7 @@ export class FakeApi {
 
   task(id: string): Json<Task> {
     const task = this.tasks.find((t) => t.id === id);
-    if (!task) throw new Error(`tarea ${id} no existe`);
+    if (!task) throw new Error(`task ${id} does not exist`);
     return task;
   }
 
@@ -344,7 +344,7 @@ export class FakeApi {
     const run = this.runs.find((r) => r.id === id);
     if (sub !== "focus" || !run) return [404, { error: "not_found" }];
     if (!run.herdrPane || !run.herdrName) {
-      return [409, { error: "no_pane", message: "el Run no tiene un pane de herdr" }];
+      return [409, { error: "no_pane", message: "the Run has no herdr pane" }];
     }
     if (this.focusError) {
       const { status, ...error } = this.focusError;
@@ -356,7 +356,7 @@ export class FakeApi {
 
   private providerSettings(method: string, body: unknown): [number, unknown] {
     if (method === "GET") {
-      if (this.providersReadFails) return [500, { error: "internal", message: "sin conexión" }];
+      if (this.providersReadFails) return [500, { error: "internal", message: "no connection" }];
       return [200, this.providers];
     }
     if (method !== "PUT") return [404, { error: "not_found" }];
@@ -377,7 +377,7 @@ export class FakeApi {
 
   private concurrencySettings(method: string, body: unknown): [number, unknown] {
     if (method === "GET") {
-      if (this.concurrencyReadFails) return [500, { error: "internal", message: "sin conexión" }];
+      if (this.concurrencyReadFails) return [500, { error: "internal", message: "no connection" }];
       return [200, this.concurrency];
     }
     if (method !== "PUT") return [404, { error: "not_found" }];
@@ -411,7 +411,7 @@ export class FakeApi {
       if (method === "GET") return [200, this.blocked];
       const agent = this.blocked.find((b) => b.runId === id);
       if (sub !== "focus" || !agent) {
-        return [404, { error: "not_blocked", message: "el Run no tiene un agente bloqueado" }];
+        return [404, { error: "not_blocked", message: "the Run has no blocked agent" }];
       }
       if (this.focusError) {
         const { status, ...error } = this.focusError;
@@ -437,26 +437,26 @@ export class FakeApi {
         return [200, task];
       case "cancel":
         if (task.state === "completed" || task.state === "cancelled") {
-          return conflict("invalid_transition", `la tarea ya está en ${task.state}`);
+          return conflict("invalid_transition", `the task is already ${task.state}`);
         }
         this.transition(id, "cancelled", null);
         return [200, task];
       case "pause":
         if (!["draft", "refined", "in_progress", "verification"].includes(task.state)) {
-          return conflict("invalid_transition", `pause no aplica desde ${task.state}`);
+          return conflict("invalid_transition", `pause does not apply from ${task.state}`);
         }
         this.transition(id, "paused", null, {}, "pause");
         return [200, task];
       case "resume": {
         if (task.state !== "needs_human" && task.state !== "paused") {
-          return conflict("invalid_transition", `la tarea está en ${task.state}`);
+          return conflict("invalid_transition", `the task is ${task.state}`);
         }
         const entered = task.state;
         const origin = this.events
           .filter((e) => e.taskId === id && e.type === "task.transitioned")
           .map((e) => e.payload as { from: { state: TaskState }; to: { state: TaskState } })
           .findLast((p) => p.to.state === entered)?.from.state;
-        if (!origin) return conflict("no_escalation_found", `la tarea ${id} no tiene escalamiento`);
+        if (!origin) return conflict("no_escalation_found", `task ${id} has no escalation`);
         this.transition(id, origin, origin === "refined" ? null : "queued", {}, "resume");
         return [200, task];
       }
@@ -522,7 +522,7 @@ export class FakeApi {
     const hooks = this.hooks.get(projectId);
     return hooks
       ? [200, hooks]
-      : [502, { error: "hooks_unavailable", message: "no se pudo leer la rama base" }];
+      : [502, { error: "hooks_unavailable", message: "the base branch could not be read" }];
   }
 
   private question(
@@ -545,11 +545,11 @@ export class FakeApi {
     if (!question) return [404, { error: "not_found" }];
     const answer = input.data.answer;
     if (question.status !== "open") {
-      return conflict("not_open", `la pregunta ya está en ${question.status}`);
+      return conflict("not_open", `the question is already ${question.status}`);
     }
     const task = this.task(question.taskId);
     if (task.subState !== "waiting_human") {
-      return conflict("task_not_waiting", "la tarea ya no espera una respuesta");
+      return conflict("task_not_waiting", "the task no longer waits for an answer");
     }
     const delivery = this.agentAlive ? "pane" : "new_run";
     Object.assign(question, {
@@ -631,7 +631,7 @@ export class FakeApi {
       return [422, { error: "project_not_found", message: "no existe el proyecto" }];
     }
     if (input.dependsOn.some((id) => !this.tasks.some((t) => t.id === id))) {
-      return [422, { error: "dependency_not_found", message: "no existe la dependencia" }];
+      return [422, { error: "dependency_not_found", message: "the dependency does not exist" }];
     }
     const task = this.addTask(input.projectId, {
       intent: input.intent,
@@ -693,13 +693,13 @@ export class FakeApi {
     if (method === "GET") return [200, spec];
     const latest = versions.at(-1)?.version;
     if (version !== latest) {
-      return conflict("stale_version", `la versión ${version} fue superada por la ${latest}`);
+      return conflict("stale_version", `version ${version} was superseded by ${latest}`);
     }
     if (spec.approval !== "pending") {
-      return conflict("spec_not_pending", `la versión ${version} ya está en ${spec.approval}`);
+      return conflict("spec_not_pending", `version ${version} is already ${spec.approval}`);
     }
     if (task.state !== "refined") {
-      return conflict("invalid_transition", `la tarea está en ${task.state}, no en refined`);
+      return conflict("invalid_transition", `the task is ${task.state}, not refined`);
     }
     if (action === "approve") {
       Object.assign(spec, { approval: "approved", approvedBy: "human", approvedAt: this.now() });
@@ -736,12 +736,13 @@ export class FakeApi {
       return [200, { created: false }];
     }
     if (task.state !== "draft") {
-      return conflict("task_not_draft", `la tarea ${task.id} está en ${task.state}`);
+      return conflict("task_not_draft", `task ${task.id} is ${task.state}`);
     }
     const target = this.tasks.find((t) => t.id === dependsOnId);
-    if (!target) return [422, { error: "dependency_not_found", message: "no existe la tarea" }];
+    if (!target)
+      return [422, { error: "dependency_not_found", message: "the task does not exist" }];
     if (target.state === "cancelled") {
-      return conflict("dependency_cancelled", `la tarea ${dependsOnId} está cancelada`);
+      return conflict("dependency_cancelled", `task ${dependsOnId} is cancelled`);
     }
     if (dependsOnId === task.id || this.dependsOnTransitively(dependsOnId, task.id)) {
       return conflict("cycle", "la arista cierra un ciclo", { cycle: [task.id, dependsOnId] });

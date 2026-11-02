@@ -57,7 +57,7 @@ describe("ProjectRepository.create", () => {
   });
 });
 
-describe("ProjectRepository.get y list", () => {
+describe("ProjectRepository.get and list", () => {
   it("get returns null for nonexistent ids", () => {
     const { repo } = repository();
     expect(repo.get(crypto.randomUUID())).toBeNull();
@@ -152,7 +152,7 @@ projectConfigReaderContract("repositorio SQLite", (configs) => {
   return new ProjectRepository(db);
 });
 
-describe("ProjectRepository: hallazgos del review", () => {
+describe("ProjectRepository: review findings", () => {
   it("update renueva updatedAt", () => {
     const { db, repo } = repository();
     const old = new Date("2020-01-01T00:00:00Z");

@@ -78,7 +78,7 @@ describe("PauseTaskButton", () => {
     s.render(s.ui("icon", PauseTaskButton));
     const button = screen.getByRole("button", { name: "Pausar tarea Migrar" });
     await s.user.click(button);
-    expect((await screen.findByRole("alert")).textContent).toContain("pause no aplica");
+    expect((await screen.findByRole("alert")).textContent).toContain("pause does not apply");
     await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
   });
 });

@@ -14,7 +14,7 @@ const payload = {
   verificationIteration: 1,
 };
 
-describe("evento task.transitioned", () => {
+describe("task.transitioned event", () => {
   it("TaskCommand lists the state and sub-state commands", () => {
     expect(TaskCommand.options).toEqual([
       "submit_spec",

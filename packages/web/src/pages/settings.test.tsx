@@ -315,7 +315,7 @@ describe("Concurrencia section", () => {
     const { user } = renderApp("/settings", fake);
 
     const alert = await screen.findByRole("alert", {}, { timeout: 5000 });
-    expect(alert.textContent).toContain("sin conexión");
+    expect(alert.textContent).toContain("no connection");
     await user.click(await screen.findByRole("switch", { name: "Claude" }));
     await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
   });
@@ -329,7 +329,7 @@ describe("Concurrencia section", () => {
     await refresh();
 
     const alert = await screen.findByRole("alert", {}, { timeout: 5000 });
-    expect(alert.textContent).toContain("sin conexión");
+    expect(alert.textContent).toContain("no connection");
     expect((await field()) as HTMLInputElement).toHaveProperty("value", "5");
   });
 });

@@ -21,7 +21,7 @@ const specRow = async (name: string) => {
   return within(link.closest("li") as HTMLElement);
 };
 
-describe("bandeja", () => {
+describe("inbox", () => {
   it("with nothing pending it says so in each section", async () => {
     const { fake } = seeded();
     renderApp("/inbox", fake);
@@ -252,7 +252,7 @@ describe("bandeja", () => {
     await user.click(question.getByRole("button", { name: "Responder" }));
 
     const questions = await section("Preguntas abiertas");
-    expect((await questions.findByRole("alert")).textContent).toMatch(/ya está en cancelled/);
+    expect((await questions.findByRole("alert")).textContent).toMatch(/is already cancelled/);
     // The question no longer waits: it leaves the inbox without waiting for the refresh.
     expect(await questions.findByText("Ningún agente espera una respuesta.")).toBeTruthy();
   });

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Subagentes revisores de Claude Code",
+  "description": "Claude Code reviewer subagents",
   "scripts": {
     "test": "vitest run"
   }

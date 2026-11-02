@@ -123,7 +123,7 @@ describe("OutboxPublisher: no loss on crashes", () => {
   });
 });
 
-describe("OutboxPublisher: entrega", () => {
+describe("OutboxPublisher: delivery", () => {
   it("delivers in write order to the subscribers of its topic and to those of '*'", async () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
@@ -266,7 +266,7 @@ describe("OutboxPublisher: entrega", () => {
   });
 });
 
-describe("OutboxPublisher: ciclo de vida", () => {
+describe("OutboxPublisher: lifecycle", () => {
   it("after start, wake publishes what was just confirmed", async () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);

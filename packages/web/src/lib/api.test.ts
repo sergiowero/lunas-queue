@@ -62,7 +62,7 @@ describe("api.focusRun", () => {
   });
 });
 
-describe("api.pauseTask y resumeTask", () => {
+describe("api.pauseTask and resumeTask", () => {
   it("pauseTask requests POST /api/tasks/:id/pause and returns the paused task", async () => {
     const { fake, task } = seeded();
     const paused = await api.pauseTask(task.id);

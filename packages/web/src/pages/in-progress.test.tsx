@@ -207,7 +207,9 @@ describe("In progress tab", () => {
 
       const row = (text: string) =>
         within(screen.getByRole("link", { name: text }).closest("tr") as HTMLElement);
-      expect((await row("Rechazada").findByRole("alert")).textContent).toMatch(/pause no aplica/);
+      expect((await row("Rechazada").findByRole("alert")).textContent).toMatch(
+        /pause does not apply/,
+      );
       expect(row("Intacta").queryByRole("alert")).toBeNull();
       expect(
         (screen.getByRole("button", { name: "Pausar tarea Rechazada" }) as HTMLButtonElement)

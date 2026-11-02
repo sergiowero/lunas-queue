@@ -107,7 +107,7 @@ describe("GET /api/tasks", () => {
   });
 });
 
-describe("GET y PATCH /api/tasks/:id", () => {
+describe("GET and PATCH /api/tasks/:id", () => {
   it("returns the task or 404", async () => {
     const { send, create } = setup();
     const task = await create();

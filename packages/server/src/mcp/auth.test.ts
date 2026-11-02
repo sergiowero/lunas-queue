@@ -7,7 +7,7 @@ import { handoffFor, mcpHarness, resultFor } from "./test-helpers.ts";
 
 const running = { state: "in_progress", subState: "running" } as const;
 
-describe("LunasQ MCP: transporte", () => {
+describe("LunasQ MCP: transport", () => {
   it("lists the 9 tools with their inputSchema", async () => {
     const h = mcpHarness();
     const { client } = await h.connect("cualquiera");

@@ -362,7 +362,7 @@ export function herdrContract(
       });
     });
 
-    describe("agentes", () => {
+    describe("agents", () => {
       it("startAgent is idempotent by name", async () => {
         const { pane, name, agent } = await agentInNewPane();
         expect(agent.name).toBe(name);
@@ -452,7 +452,7 @@ export function herdrContract(
       });
     });
 
-    describe("eventos", () => {
+    describe("events", () => {
       it("the per-pane subscription receives the agent's state changes", async () => {
         const { pane, name } = await agentInNewPane();
         const c = collect((on) => herdr.subscribe({ paneIds: [pane.paneId] }, on));

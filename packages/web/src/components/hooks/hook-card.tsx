@@ -21,8 +21,10 @@ function ExecutionRow({ execution: e }: { execution: Execution }) {
       <TableCell>{formatDate(e.at)}</TableCell>
       <TableCell>
         <span className="inline-flex gap-1">
-          <Badge variant={e.passed ? "secondary" : "destructive"}>exit {e.exitCode}</Badge>
-          {e.timedOut && <Badge variant="destructive">timeout</Badge>}
+          <Badge variant={e.passed ? "secondary" : "destructive"}>
+            {t.hooks.exitCode(e.exitCode)}
+          </Badge>
+          {e.timedOut && <Badge variant="destructive">{t.hooks.timedOut}</Badge>}
         </span>
       </TableCell>
       <TableCell>{formatDuration(e.durationMs)}</TableCell>

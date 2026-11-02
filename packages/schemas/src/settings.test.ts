@@ -58,7 +58,7 @@ describe("ConcurrencySettings", () => {
   });
 });
 
-describe("evento settings.updated", () => {
+describe("settings.updated event", () => {
   it("carries the saved configuration", () => {
     expect(SETTINGS_UPDATED).toBe("settings.updated");
     expect(SettingsUpdatedPayload.parse({ providers: { claude: false, copilot: true } })).toEqual({

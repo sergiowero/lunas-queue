@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 
-describe("cola global", () => {
+describe("global queue", () => {
   it("shows the tasks in the server order, with score, state, project and usage", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
@@ -51,7 +51,7 @@ describe("cola global", () => {
       "Draften cola",
       "5 → 30",
       "42.5",
-      "120 · $1.50",
+      "120 · $1,50",
       "",
     ]);
     expect(body[2]?.[5]?.textContent).toBe("—");
@@ -179,7 +179,7 @@ describe("cola global", () => {
       await user.click(button);
 
       expect((await (await rowOf("Rechazada")).findByRole("alert")).textContent).toMatch(
-        /pause no aplica/,
+        /pause does not apply/,
       );
       expect((await rowOf("Intacta")).queryByRole("alert")).toBeNull();
     });

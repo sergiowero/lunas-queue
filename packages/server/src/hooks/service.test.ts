@@ -399,7 +399,7 @@ describe("HookService: commit of what the hooks leave", () => {
   });
 });
 
-describe("HookService: after_merge y on_failure", () => {
+describe("HookService: after_merge and on_failure", () => {
   it("after_merge runs on a temporary checkout of the base commit, does not commit and a failure does not escalate", async () => {
     const ctx = await setup();
     let checkout = "";
