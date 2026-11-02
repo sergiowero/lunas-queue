@@ -1,55 +1,55 @@
-# UW-23 — Fase de verificación: evidencia de revisores, tope, riesgo, rework y hooks de fase
+# UW-23 — Verification phase: reviewer evidence, cap, risk, rework and phase hooks
 
-- Estado: aceptada
-- Fecha: 2026-10-29
-- Unidad: UW-23 · Código: `packages/domain/src/verdict.ts`, `phaseProfile` y `maxVerificationIterations` en `packages/domain/src/project-config.ts`, `recordVerdict` y `latestHandoff` en `packages/db/src/runs.ts`, `VerdictRecordedPayload` y `TaskContext.rework` en `packages/schemas/src/mcp.ts`, `PhaseHooks` en `packages/server/src/mcp/ports.ts`, `submitForVerification` y `submitVerdict` en `packages/server/src/mcp/service.ts`
+- Status: accepted
+- Date: 2026-10-29
+- Unit: UW-23 · Code: `packages/domain/src/verdict.ts`, `phaseProfile` and `maxVerificationIterations` in `packages/domain/src/project-config.ts`, `recordVerdict` and `latestHandoff` in `packages/db/src/runs.ts`, `VerdictRecordedPayload` and `TaskContext.rework` in `packages/schemas/src/mcp.ts`, `PhaseHooks` in `packages/server/src/mcp/ports.ts`, `submitForVerification` and `submitVerdict` in `packages/server/src/mcp/service.ts`
 
-## Contexto
+## Context
 
-`docs/design.md` (§Verificación con subagentes y §Loop implementación ↔ verificación) define la fase: un approver en Sonnet que lanza 4 revisores y emite pass o reject. El veredicto se rechaza si reporta un revisor que no aparece en los hooks. Un reject vuelve a implementación solo con los must-fix, el loop tiene un tope de 3 iteraciones configurable y la etiqueta de riesgo llega al PR.
+`docs/design.md` (§Verification with subagents and §Implementation ↔ verification loop) defines the phase: an approver on Sonnet that launches 4 reviewers and issues pass or reject. The verdict is rejected if it reports a reviewer that does not appear in the hooks. A reject goes back to implementation with only the must-fix, the loop has a cap of 3 configurable iterations and the risk label reaches the PR.
 
-Las unidades anteriores dejaron casi todas las piezas:
+The earlier units left almost all the pieces:
 
-- UW-03: el esquema del veredicto.
-- UW-04: `verdict_rework` con su tope.
-- UW-11: el gate antes del pass.
+- UW-03: the verdict schema.
+- UW-04: `verdict_rework` with its cap.
+- UW-11: the gate before the pass.
 - UW-15: `submit_verdict`.
 - UW-19: `run_subagents`.
 
-ADR uw-10-hooks deja a UW-23 los puntos `after_implementation`, `before_verification` y `after_verification`. ADR uw-11-gate-tests advierte que un hook que commitea antes de verificar invalida el pass si el gate no vuelve a correr. El criterio de UW-23: un caso pass y uno reject recorren el loop, y la cuarta iteración termina en Needs human.
+ADR uw-10-hooks leaves the `after_implementation`, `before_verification` and `after_verification` points to UW-23. ADR uw-11-gate-tests warns that a hook that commits before verifying invalidates the pass if the gate does not run again. UW-23's criterion: a pass case and a reject case go through the loop, and the fourth iteration ends in Needs human.
 
-## Decisión
+## Decision
 
-- **Evidencia de revisores** (`checkReviewerEvidence`, domain). Compara el veredicto con `RunSubagentRepository.forRun(runId)` por `agentType`. Cuentan solo los registros del Run del approver. Reglas:
-  - Un revisor `ran` necesita al menos una ejecución con `SubagentStop`. Sin registros, el error dice «no aparece en los hooks»; con `SubagentStart` sin `SubagentStop`, «no terminó». Si se relanzó, basta una ejecución terminada.
-  - Un revisor `skipped` no puede tener una ejecución terminada, porque el approver estaría descartando un reporte. Uno que empezó y no terminó (se cayó) puede omitirse con justificación.
-  - Un must-fix o un refutado no puede tener como `source` a un revisor omitido.
-  - Los subagentes que no son revisores (p. ej. `Explore`) se ignoran.
-  - El error es `reviewer_evidence_mismatch` con issues por ruta, sin efectos: el Run sigue abierto para corregir.
-  - La comprobación corre antes del gate del pass. Si el Run ya registró un veredicto, no se repite: decide la transacción (idempotente o `verdict_already_recorded`).
-- **Approver en Sonnet.** `phaseProfile(config, "verify")` devuelve `model: "sonnet"` (`DEFAULT_VERIFY_MODEL`) si el perfil no fija modelo. El valor se resuelve al leer, como el timeout de fase (ADR 0008): llega a `--model` y a `runs.model` sin migrar proyectos. Un modelo explícito en el perfil manda.
-- **Tope configurable.** `limits.maxVerificationIterations` (entero de 1 a 20, opcional; default `DEFAULT_MAX_ITERATIONS`, 3) llega como `maxIterations` a `verdict_rework`. La semántica de ADR 0007 no cambia:
-  - Con el default caben tres reworks. La iteración es de base 0: la primera verificación tiene iteración 0, y así la reportan `verification.verdict_recorded.iteration` y `rework.iteration`.
-  - Los rejects de las verificaciones 1 a 3 vuelven a implementación.
-  - El reject de la cuarta lleva la tarea a `needs_human` con `iterations_exhausted`.
-- **Riesgo y evento.** En la transacción que guarda el veredicto (pass o reject), `recordVerdict`:
-  - fija `tasks.risk_label`;
-  - agrega `verification.verdict_recorded` (actor `agent`, publicado en el outbox) con Run, veredicto, iteración del Run, riesgo, cantidad de must-fix y de refutados, y revisores omitidos.
+- **Reviewer evidence** (`checkReviewerEvidence`, domain). Compares the verdict with `RunSubagentRepository.forRun(runId)` by `agentType`. Only the approver's Run records count. Rules:
+  - A `ran` reviewer needs at least one execution with `SubagentStop`. With no records, the error says "does not appear in the hooks"; with `SubagentStart` without `SubagentStop`, "did not finish". If it was relaunched, one finished execution is enough.
+  - A `skipped` reviewer cannot have a finished execution, because the approver would be discarding a report. One that started and did not finish (crashed) can be skipped with a justification.
+  - A must-fix or a refuted finding cannot have a skipped reviewer as its `source`.
+  - Subagents that are not reviewers (e.g. `Explore`) are ignored.
+  - The error is `reviewer_evidence_mismatch` with issues by path, without effects: the Run stays open to correct.
+  - The check runs before the pass's gate. If the Run already recorded a verdict, it is not repeated: the transaction decides (idempotent or `verdict_already_recorded`).
+- **Approver on Sonnet.** `phaseProfile(config, "verify")` returns `model: "sonnet"` (`DEFAULT_VERIFY_MODEL`) if the profile does not set a model. The value is resolved on read, like the phase timeout (ADR 0008): it reaches `--model` and `runs.model` without migrating projects. An explicit model in the profile prevails.
+- **Configurable cap.** `limits.maxVerificationIterations` (integer from 1 to 20, optional; default `DEFAULT_MAX_ITERATIONS`, 3) reaches `verdict_rework` as `maxIterations`. ADR 0007's semantics do not change:
+  - With the default, three reworks fit. The iteration is 0‑based: the first verification has iteration 0, and that is how `verification.verdict_recorded.iteration` and `rework.iteration` report it.
+  - The rejects of verifications 1 to 3 go back to implementation.
+  - The fourth's reject takes the task to `needs_human` with `iterations_exhausted`.
+- **Risk and event.** In the transaction that stores the verdict (pass or reject), `recordVerdict`:
+  - sets `tasks.risk_label`;
+  - appends `verification.verdict_recorded` (actor `agent`, published in the outbox) with Run, verdict, the Run's iteration, risk, count of must-fix and refuted findings, and skipped reviewers.
 
-  El handoff completo, con los refutados y sus motivos, sigue en el Run. Con pass, ese evento es el disparo de la entrega (UW-26), porque `verdict_pass` no se emite hasta crear el PR (ADR uw-15-mcp-tools). En un reject, la etiqueta queda como la última evaluación del approver; el siguiente veredicto la reemplaza.
-- **Rework solo con los must-fix.** `TaskContext.rework` (`{runId, iteration, mustFix} | null`) llega en implementación cuando el último veredicto guardado de la tarea es un reject. `verificationHistory` va vacío en implementación y completo en verificación: el implementador no ve reportes por revisor ni refutados. Si el último veredicto es un pass (p. ej. al volver por un conflicto en la entrega), `rework` es null.
-- **Hooks de fase** por el puerto `PhaseHooks`, que `HookService` cumple. `createApp` recibe `phaseHooks`; sin él usa `NoPhaseHooks`, que pasa sin correr nada, como un proyecto sin `lunasq/hooks/`.
-  - **`after_implementation` y `before_verification` corren dentro de `submit_for_verification`**, en ese orden, después de comprobar worktree limpio y commits, y antes del gate. Así el gate prueba el HEAD que incluye lo que commitearon los hooks, el `headSha` que compara el pass ya lo incluye y el verificador se despacha cuando terminaron. El diseño decía «después del gate»; se cambió para no correr la suite dos veces. Los dos llevan el Run del implementador; `before_verification` tiene `LUNASQ_PHASE=verify`, que fija `hookPointPhase`.
-  - **`after_verification` corre dentro de `submit_verdict`**, después del gate del pass y antes de la transacción, con `LUNASQ_PHASE_RESULT` igual al veredicto. Correrlo después del reject se descartó: la tarea ya estaría en `in_progress/queued` y el scheduler podría despachar al implementador mientras el hook escribe en el worktree.
-  - Un punto `blocked` responde `hook_blocked` con el script y el error. No se registra nada más: HookService ya escaló la tarea a `needs_human` con `hook_failed`. El Run queda abierto, como en los demás escalamientos (UW-17), y al reanudar empieza un Run nuevo de la misma fase.
-  - Antes de los hooks y del gate, las dos tools comprueban que la tarea siga en `in_progress/running` o `verification/running`. Si no, responden `transition_rejected` sin efectos. Así, reintentar después de `hook_blocked` (la tarea ya en `needs_human`) no vuelve a correr hooks ni suite en el worktree mientras lo atiende el humano.
-  - Los hooks corren con el candado `gate_in_progress` del Run, así un reintento concurrente no los lanza dos veces. Un reintento después de un rechazo sí los vuelve a correr, por eso deben ser idempotentes (ADR uw-10-hooks).
+  The full handoff, with the refuted findings and their reasons, stays in the Run. With a pass, that event is delivery's trigger (UW-26), because `verdict_pass` is not emitted until the PR is created (ADR uw-15-mcp-tools). On a reject, the label stays as the approver's latest assessment; the next verdict replaces it.
+- **Rework with only the must-fix.** `TaskContext.rework` (`{runId, iteration, mustFix} | null`) arrives in implementation when the task's last stored verdict is a reject. `verificationHistory` is empty in implementation and complete in verification: the implementer does not see per‑reviewer reports or refuted findings. If the last verdict is a pass (e.g. when coming back because of a delivery conflict), `rework` is null.
+- **Phase hooks** through the `PhaseHooks` port, which `HookService` implements. `createApp` receives `phaseHooks`; without it, it uses `NoPhaseHooks`, which passes without running anything, like a project without `lunasq/hooks/`.
+  - **`after_implementation` and `before_verification` run inside `submit_for_verification`**, in that order, after checking clean worktree and commits, and before the gate. This way the gate tests the HEAD that includes what the hooks committed, the `headSha` that the pass compares already includes it and the verifier is dispatched when they have finished. The design said "after the gate"; it was changed so as not to run the suite twice. Both carry the implementer's Run; `before_verification` has `LUNASQ_PHASE=verify`, which `hookPointPhase` sets.
+  - **`after_verification` runs inside `submit_verdict`**, after the pass's gate and before the transaction, with `LUNASQ_PHASE_RESULT` equal to the verdict. Running it after the reject was discarded: the task would already be in `in_progress/queued` and the scheduler could dispatch the implementer while the hook writes in the worktree.
+  - A `blocked` point answers `hook_blocked` with the script and the error. Nothing else is recorded: HookService already escalated the task to `needs_human` with `hook_failed`. The Run stays open, as in the other escalations (UW-17), and on resuming a new Run of the same phase starts.
+  - Before the hooks and the gate, both tools check that the task is still in `in_progress/running` or `verification/running`. If not, they answer `transition_rejected` without effects. This way, retrying after `hook_blocked` (the task already in `needs_human`) does not run hooks or the suite again in the worktree while the human is handling it.
+  - The hooks run with the Run's `gate_in_progress` lock, so a concurrent retry does not launch them twice. A retry after a rejection does run them again, which is why they must be idempotent (ADR uw-10-hooks).
 
-## Consecuencias
+## Consequences
 
-- `submit_for_verification` y `submit_verdict` pueden tardar lo que tarden los hooks más el gate. El `MCP_TOOL_TIMEOUT` que fija UW-16 debe cubrir ambos. Si un proyecto tiene hooks largos, conviene moverlos a `before_delivery` o subir ese timeout.
-- Un commit de `after_verification` con pass entra al branch después del gate de `verdict_pass`. Lo cubre el gate final de la entrega (UW-26), que corre después del rebase.
-- **UW-26** se suscribe a `verification.verdict_recorded` con `verdict: pass` para arrancar la entrega y lee la etiqueta de riesgo de `tasks.risk_label` o del handoff.
-- **UW-18**: la skill `verify-task` debe reportar como `ran` todo revisor que lanzó y terminó, también uno cuyo reporte descartó. `reviewer_evidence_mismatch` se corrige en el mismo Run. La skill `implement-task` lee `rework.mustFix`.
-- **UW-29** compone `HookService` como `phaseHooks` en `createApp`.
-- `before_implementation` (al despachar) y `on_failure` siguen pendientes; ADR uw-16-dispatcher los deja abiertos.
+- `submit_for_verification` and `submit_verdict` can take as long as the hooks plus the gate take. The `MCP_TOOL_TIMEOUT` that UW-16 sets must cover both. If a project has long hooks, it is better to move them to `before_delivery` or raise that timeout.
+- A commit from `after_verification` with a pass enters the branch after the `verdict_pass` gate. The final delivery gate (UW-26), which runs after the rebase, covers it.
+- **UW-26** subscribes to `verification.verdict_recorded` with `verdict: pass` to start delivery and reads the risk label from `tasks.risk_label` or from the handoff.
+- **UW-18**: the `verify-task` skill must report as `ran` every reviewer it launched and that finished, also one whose report it discarded. `reviewer_evidence_mismatch` is corrected in the same Run. The `implement-task` skill reads `rework.mustFix`.
+- **UW-29** composes `HookService` as `phaseHooks` in `createApp`.
+- `before_implementation` (on dispatch) and `on_failure` remain pending; ADR uw-16-dispatcher leaves them open.

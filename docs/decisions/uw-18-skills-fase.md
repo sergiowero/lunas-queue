@@ -1,53 +1,53 @@
-# UW-18 — Skills de fase
+# UW-18 — Phase skills
 
-- Estado: aceptada
-- Fecha: 2026-10-29
-- Unidad: UW-18 · Código: `assets/skills/{refine-task,implement-task,verify-task}/SKILL.md`, `packages/server/src/skills/`, `packages/server/src/mcp/ports.ts`, `packages/server/src/test-helpers/real-claude.ts`
+- Status: accepted
+- Date: 2026-10-29
+- Unit: UW-18 · Code: `assets/skills/{refine-task,implement-task,verify-task}/SKILL.md`, `packages/server/src/skills/`, `packages/server/src/mcp/ports.ts`, `packages/server/src/test-helpers/real-claude.ts`
 
-## Contexto
+## Context
 
-`docs/design.md` (§MCPs y skills) pide una skill por fase que describa el *cómo*, con el LunasQ MCP como único canal de salida, e instrucciones best effort para engram (§Brain). El dispatcher (UW-16) manda un prompt corto que nombra la skill (`phasePrompt`: `refine-task`, `implement-task`, `verify-task`). ADR uw-15-mcp-tools deja a UW-18 documentar los códigos de error, que un rechazo se corrige en el mismo Run y que `invalid_run_token` después de una tool de salida significa que la fase ya terminó. ADR uw-19-revisores pide que `verify-task` lance los revisores por nombre y sin segundo plano. El backlog listaba además `deliver-task`, con salida "PR url vía MCP".
+`docs/design.md` (§MCPs and skills) asks for one skill per phase that describes the *how*, with the LunasQ MCP as the only exit channel, and best‑effort instructions for engram (§Brain). The dispatcher (UW-16) sends a short prompt that names the skill (`phasePrompt`: `refine-task`, `implement-task`, `verify-task`). ADR uw-15-mcp-tools leaves UW-18 to document the error codes, that a rejection is fixed in the same Run and that `invalid_run_token` after an exit tool means the phase has already ended. ADR uw-19-revisores asks `verify-task` to launch the reviewers by name and not in the background. The backlog also listed `deliver-task`, with the exit "PR url via MCP".
 
-## Decisión
+## Decision
 
-- **Sin `deliver-task`.** Las decisiones posteriores al diseño dejaron la entrega sin agente. `verdict_pass` lo emite solo el sistema después de crear el PR (ADR 0007). La entrega corre dentro del Run del verificador y no se agenda (ADR 0014). El PR lo crea UW-26 con `gh` (ADR uw-14-adapter-github). No hay tool MCP de entrega, ni handoff de entrega, ni fase `deliver` en `PHASE_SKILL`. Una skill que nadie despacha no se escribe. Si en el futuro un agente resuelve conflictos de rebase, eso es implementación: `delivery_conflict` regresa la tarea a in progress. El perfil `deliver` de ADR 0008 se queda sin uso por ahora.
-- **Formato.** Una carpeta por skill con `SKILL.md`: frontmatter `name` (el de la carpeta, el que cita el prompt de fase) y `description`. `lunasq install` (UW-28) copia las carpetas a `~/.claude/skills/`.
-- **Contenido común.** Cada skill tiene estas secciones:
-  - reglas de la fase;
-  - pasos, empezando por `get_task_context` y terminando con su tool de salida;
-  - qué campos del `TaskContext` usar;
-  - un handoff de ejemplo válido en el primer bloque `json`;
-  - una tabla de códigos de error con qué hacer en cada uno;
-  - `ask_human` (registra la pregunta y el agente termina su turno) y `report_failure`;
-  - la sección de engram con los momentos de §Brain, condicionada a que el MCP esté disponible.
+- **No `deliver-task`.** The decisions after the design left delivery without an agent. `verdict_pass` is emitted only by the system after creating the PR (ADR 0007). Delivery runs inside the verifier's Run and is not scheduled (ADR 0014). The PR is created by UW-26 with `gh` (ADR uw-14-adapter-github). There is no delivery MCP tool, no delivery handoff and no `deliver` phase in `PHASE_SKILL`. A skill that nobody dispatches is not written. If in the future an agent resolves rebase conflicts, that is implementation: `delivery_conflict` sends the task back to in progress. ADR 0008's `deliver` profile goes unused for now.
+- **Format.** One folder per skill with `SKILL.md`: frontmatter `name` (the folder's, the one the phase prompt cites) and `description`. `lunasq install` (UW-28) copies the folders to `~/.claude/skills/`.
+- **Common content.** Each skill has these sections:
+  - the phase's rules;
+  - steps, starting with `get_task_context` and ending with its exit tool;
+  - which `TaskContext` fields to use;
+  - a valid example handoff in the first `json` block;
+  - a table of error codes with what to do for each;
+  - `ask_human` (records the question and the agent ends its turn) and `report_failure`;
+  - the engram section with the moments from §Brain, conditioned on the MCP being available.
 
-  Las skills no se comparten texto entre sí: cada una se lee sola.
-- **Por fase.**
-  - `refine-task` no escribe código y modela con DDD. Los criterios se escriben Given / When / Then en `given / when / outcome`. Una nueva ronda parte de `changesRequested`.
-  - `implement-task` aplica TDD por criterio y marca `update_checklist` por tarea. Entrega con el worktree limpio y los commits `<base>..HEAD`; un rework corrige los `mustFix` del último veredicto.
-  - `verify-task` lanza los 4 revisores en paralelo por nombre, sin segundo plano, y reporta los omitidos con justificación. Refuta los hallazgos serios, aplica el checklist de coherencia y hace la prueba de reversión, que deshace antes del veredicto: un pass exige el mismo `HEAD` y el worktree limpio. Un `test_gate_failed` en un pass se convierte en un reject.
-- **Pruebas.**
-  - `assets/skills/skills.test.ts` comprueba la estructura y que cada skill cite lo que su fase necesita. El paquete no depende de paquetes internos.
-  - `packages/server/src/skills/examples.test.ts` valida con `parseHandoff` el ejemplo de cada skill, así un cambio de esquema rompe la suite si la skill queda atrás.
-  - `pnpm --filter @lunasq/server test:skills` prueba el criterio contra Claude Code real. Una tarea de juguete (una calculadora en JavaScript, `node --test`) recorre refinamiento, aprobación de la spec, implementación y verificación. Cada fase corre en un `claude -p` con el `phasePrompt` del dispatcher, el MCP por `--mcp-config` y `--strict-mcp-config` (sin engram), el settings de hooks y el gate de UW-11 con un runner local. Se comprueba que cada Run dejó un handoff que pasa `parseHandoff` con la transición aplicada, que el refinador y el verificador no dejaron cambios, y que cada revisor reportado como `ran` aparece en los hooks del Run. Las fases usan `LUNASQ_SKILL_MODEL` (sonnet por defecto) y los revisores `LUNASQ_REVIEWER_MODEL` (haiku).
-- **Rama base.** Las skills comparan contra `$(git merge-base origin/<base> HEAD)`, porque el worktree sale de `origin/<base>` y la rama local puede ir atrasada (ADR 0012).
-- **Commits de la tarea.** Por la misma razón, `GitCommitVerifier.missing` (UW-15) rechaza también un SHA que ya está en `origin/<base>`, además de los que están en la base local. Así, una `main` local atrasada no hace pasar commits upstream como si fueran de la tarea.
-- `serve` y `runClaude` pasan a `src/test-helpers/real-claude.ts`, compartidos con `test:claude` de UW-19.
+  The skills do not share text with each other: each one reads on its own.
+- **Per phase.**
+  - `refine-task` writes no code and models with DDD. The criteria are written Given / When / Then in `given / when / outcome`. A new round starts from `changesRequested`.
+  - `implement-task` applies TDD per criterion and marks `update_checklist` per task. It delivers with a clean worktree and the commits `<base>..HEAD`; a rework fixes the last verdict's `mustFix`.
+  - `verify-task` launches the 4 reviewers in parallel by name, not in the background, and reports the skipped ones with a justification. It refutes serious findings, applies the coherence checklist and does the reversal test, which it undoes before the verdict: a pass requires the same `HEAD` and a clean worktree. A `test_gate_failed` on a pass becomes a reject.
+- **Tests.**
+  - `assets/skills/skills.test.ts` checks the structure and that each skill cites what its phase needs. The package does not depend on internal packages.
+  - `packages/server/src/skills/examples.test.ts` validates each skill's example with `parseHandoff`, so a schema change breaks the suite if the skill is left behind.
+  - `pnpm --filter @lunasq/server test:skills` tests the criterion against real Claude Code. A toy task (a JavaScript calculator, `node --test`) goes through refinement, spec approval, implementation and verification. Each phase runs in a `claude -p` with the dispatcher's `phasePrompt`, the MCP via `--mcp-config` and `--strict-mcp-config` (without engram), the hooks settings and UW-11's gate with a local runner. It checks that each Run left a handoff that passes `parseHandoff` with the transition applied, that the refiner and the verifier left no changes, and that each reviewer reported as `ran` appears in the Run's hooks. The phases use `LUNASQ_SKILL_MODEL` (sonnet by default) and the reviewers `LUNASQ_REVIEWER_MODEL` (haiku).
+- **Base branch.** The skills compare against `$(git merge-base origin/<base> HEAD)`, because the worktree comes from `origin/<base>` and the local branch may be behind (ADR 0012).
+- **Task commits.** For the same reason, `GitCommitVerifier.missing` (UW-15) also rejects a SHA that is already in `origin/<base>`, in addition to those in the local base. This way, a stale local `main` does not make upstream commits pass as the task's.
+- `serve` and `runClaude` move to `src/test-helpers/real-claude.ts`, shared with UW-19's `test:claude`.
 
-## Resultado
+## Result
 
-Con Claude Code 2.1.314, `pnpm --filter @lunasq/server test:skills` pasó completo (3 de 3) con las fases en sonnet y los revisores en haiku. Cada fase dejó un handoff válido y aplicó su transición: refined, verification/queued y el veredicto. El refinador no tocó el árbol ni el HEAD. El implementador dejó el checklist completo y declaró commits del branch. Los revisores reportados como `ran` aparecen en los hooks del Run, y el verificador dejó el worktree limpio y el mismo HEAD. La corrida final tardó unos 5 minutos.
+With Claude Code 2.1.314, `pnpm --filter @lunasq/server test:skills` passed completely (3 of 3) with the phases on sonnet and the reviewers on haiku. Each phase left a valid handoff and applied its transition: refined, verification/queued and the verdict. The refiner did not touch the tree or the HEAD. The implementer left the checklist complete and declared the branch's commits. The reviewers reported as `ran` appear in the Run's hooks, and the verifier left the worktree clean and the same HEAD. The final run took about 5 minutes.
 
-La revisión con contexto limpio llevó a estos cambios:
-- comparar contra `merge-base origin/<base> HEAD` y no contra la rama base local;
-- una prueba de reversión por criterio que no cuenta un fallo de import como evidencia;
-- `mem_session_summary` antes de la tool de salida;
-- un ejemplo de pass validado;
-- un `origin` en el repo de prueba.
+The review with a clean context led to these changes:
+- compare against `merge-base origin/<base> HEAD` and not against the local base branch;
+- a reversal test per criterion that does not count an import failure as evidence;
+- `mem_session_summary` before the exit tool;
+- a validated pass example;
+- an `origin` in the test repo.
 
-## Consecuencias
+## Consequences
 
-- **UW-23**: la skill ya pide reportar como `ran` solo a los revisores lanzados; `test:skills` comprueba eso mismo contra los hooks, así que la validación de UW-23 no debería romper el flujo.
-- **UW-26**: sin agente en la entrega, la descripción del PR sale de los handoffs (intent, criterios, `riskLabel`), no de una skill.
-- **UW-28**: `lunasq install` copia `assets/skills/*/` a `~/.claude/skills/`. Un proyecto puede sobrescribir una skill con una del mismo nombre en su `.claude/skills/`.
-- La prueba real no es determinista: un modelo puede tomar otro camino (por ejemplo, un reject en lugar de un pass). Por eso el test acepta cualquier veredicto válido y solo exige el handoff, la transición y la limpieza del worktree.
+- **UW-23**: the skill already asks to report as `ran` only the reviewers launched; `test:skills` checks exactly that against the hooks, so UW-23's validation should not break the flow.
+- **UW-26**: without an agent in delivery, the PR description comes from the handoffs (intent, criteria, `riskLabel`), not from a skill.
+- **UW-28**: `lunasq install` copies `assets/skills/*/` to `~/.claude/skills/`. A project can override a skill with one of the same name in its `.claude/skills/`.
+- The real test is not deterministic: a model may take another path (for example, a reject instead of a pass). That is why the test accepts any valid verdict and only requires the handoff, the transition and the worktree's cleanliness.

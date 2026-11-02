@@ -1,24 +1,24 @@
-# Tema claro y oscuro en el front end
+# Light and dark theme in the front end
 
-- Estado: aceptada
-- Fecha: 2026-10-30
-- Código: `packages/web/src/index.css`, `packages/web/src/lib/theme.ts`, `packages/web/src/components/theme-toggle.tsx`, `packages/web/src/components/layout.tsx`, `packages/web/index.html`, `packages/web/src/app.tsx`
+- Status: accepted
+- Date: 2026-10-30
+- Code: `packages/web/src/index.css`, `packages/web/src/lib/theme.ts`, `packages/web/src/components/theme-toggle.tsx`, `packages/web/src/components/layout.tsx`, `packages/web/index.html`, `packages/web/src/app.tsx`
 
-## Contexto
+## Context
 
-El front end solo tenía el tema claro de shadcn/ui. Se pidió un tema oscuro con un selector en la esquina superior derecha, con iconos de luna y sol que se intercambian al hacer click, sin dependencias nuevas.
+The front end only had shadcn/ui's light theme. A dark theme was requested with a selector in the top‑right corner, with moon and sun icons that swap on click, without new dependencies.
 
-## Decisión
+## Decision
 
-- **Tokens, no colores por componente.** `index.css` define los tokens de color en `@theme` (claro) y los redefine en `.dark` con los valores oscuros de shadcn/ui, más `color-scheme: dark` para los controles nativos. Los componentes ya usaban solo tokens (`bg-background`, `text-foreground`, `border-border`…), así que cambian solos. `@custom-variant dark` hace que `dark:` dependa de la clase y no de `prefers-color-scheme`. Un test exige que cada token claro tenga su par oscuro.
-- **Texto sobre destructivo.** El rojo oscuro de shadcn/ui es claro y el `text-white` de las variantes destructivas de `Badge` y `Button` quedaba en 2.9:1. Se agrega `--color-destructive-foreground` (blanco en claro, casi negro en oscuro) y esas variantes lo usan. Un test calcula el contraste desde los valores `oklch` de los tokens y exige el 4.5:1 de AA en ambos temas.
-- **La clase `dark` de `<html>` es el tema efectivo.** `lib/theme.ts` la lee con `useSyncExternalStore` y la cambia con `setTheme`, así el tema efectivo y la clase no pueden divergir. No hay contexto de React ni estado duplicado.
-- **Resolución.** La preferencia guardada en `localStorage` (`lunasq:theme`, `"light"` o `"dark"`) si es válida; si no, `prefers-color-scheme`; si no, claro. Un valor inválido, un `localStorage` que lanza error o un entorno sin `matchMedia` caen al siguiente paso sin romper la UI. Al cargar solo se aplica el tema resuelto; se guarda únicamente cuando la persona usa el selector, así quien sigue al sistema no queda fijado.
-- **Sin destello.** Un script inline en el `<head>` de `index.html` repite la resolución y pone la clase antes de que React monte. `App` vuelve a aplicar el tema en un `useLayoutEffect`, antes de pintar. El script y `lib/theme.ts` comparten regla y clave; un test ejecuta el script y comprueba que coinciden.
-- **Selector.** `ThemeToggle` es un `<button>` al final del header (el `ml-auto` del grupo de acciones lo lleva el botón Nueva tarea), con `aria-label` de la acción («Cambiar a tema oscuro» / «Cambiar a tema claro») y el icono SVG inline con `aria-hidden`: luna en claro y sol en oscuro, es decir, el tema al que se cambiaría.
-- **Animación del cambio.** `setTheme(theme, origin)` usa la View Transitions API para revelar el tema nuevo con un círculo que crece desde el centro del botón (`clip-path` sobre `::view-transition-new(root)`, 480 ms; centro y radio en porcentajes del viewport porque Brave no respeta los `px` ahí y el círculo salía desde arriba al centro), el mismo efecto que el web-ui de moonlight-task-queue. Sin View Transitions se aplica la clase temporal `theme-transition`, que funde colores 300 ms. Si el tema no cambia o hay `prefers-reduced-motion`, se aplica directo. `flushSync` deja el icono del botón actualizado dentro de la captura.
+- **Tokens, not per‑component colors.** `index.css` defines the color tokens in `@theme` (light) and redefines them in `.dark` with shadcn/ui's dark values, plus `color-scheme: dark` for native controls. The components already used only tokens (`bg-background`, `text-foreground`, `border-border`…), so they change on their own. `@custom-variant dark` makes `dark:` depend on the class and not on `prefers-color-scheme`. A test requires every light token to have its dark pair.
+- **Text on destructive.** shadcn/ui's dark red is light and the `text-white` of `Badge` and `Button`'s destructive variants was at 2.9:1. `--color-destructive-foreground` is added (white in light, almost black in dark) and those variants use it. A test computes the contrast from the tokens' `oklch` values and requires AA's 4.5:1 in both themes.
+- **The `dark` class on `<html>` is the effective theme.** `lib/theme.ts` reads it with `useSyncExternalStore` and changes it with `setTheme`, so the effective theme and the class cannot diverge. There is no React context or duplicated state.
+- **Resolution.** The preference saved in `localStorage` (`lunasq:theme`, `"light"` or `"dark"`) if valid; otherwise `prefers-color-scheme`; otherwise light. An invalid value, a `localStorage` that throws or an environment without `matchMedia` fall to the next step without breaking the UI. On load only the resolved theme is applied; it is saved only when the person uses the selector, so someone who follows the system is not pinned.
+- **No flash.** An inline script in `index.html`'s `<head>` repeats the resolution and sets the class before React mounts. `App` applies the theme again in a `useLayoutEffect`, before painting. The script and `lib/theme.ts` share rule and key; a test runs the script and checks that they match.
+- **Selector.** `ThemeToggle` is a `<button>` at the end of the header (the action group's `ml-auto` is carried by the Nueva tarea button), with an `aria-label` of the action («Cambiar a tema oscuro» / «Cambiar a tema claro») and the inline SVG icon with `aria-hidden`: moon in light and sun in dark, that is, the theme it would switch to.
+- **Switch animation.** `setTheme(theme, origin)` uses the View Transitions API to reveal the new theme with a circle that grows from the button's center (`clip-path` on `::view-transition-new(root)`, 480 ms; center and radius in viewport percentages because Brave does not respect `px` there and the circle came out from the top to the center), the same effect as moonlight-task-queue's web-ui. Without View Transitions the temporary class `theme-transition` is applied, which fades colors for 300 ms. If the theme does not change or there is `prefers-reduced-motion`, it is applied directly. `flushSync` leaves the button's icon updated inside the capture.
 
-## Descartado
+## Discarded
 
-- Seguir los cambios de `prefers-color-scheme` en caliente: no se pidió y añade un listener por poco valor.
-- Una librería de temas o de iconos: el alcance cabe en un módulo y dos SVG.
+- Following `prefers-color-scheme` changes live: it was not requested and adds a listener for little value.
+- A theme or icon library: the scope fits in one module and two SVGs.

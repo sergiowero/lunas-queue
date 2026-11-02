@@ -1,38 +1,38 @@
-# 0002 — Run token hacia el LunasQ MCP vía `--mcp-config` y variable de entorno
+# 0002 — Run token to the LunasQ MCP via `--mcp-config` and an environment variable
 
-- Estado: aceptada
-- Fecha: 2026-10-28
-- Unidad: UW-00 (spike b) · Código: `spikes/run-token/` (reusa `spikes/mcp-sdk/server.ts`)
+- Status: accepted
+- Date: 2026-10-28
+- Unit: UW-00 (spike b) · Code: `spikes/run-token/` (reuses `spikes/mcp-sdk/server.ts`)
 
-## Contexto
+## Context
 
-Cada llamada del agente al LunasQ MCP debe llevar el run token del Run, para que una sesión vieja no pueda mover la tarea (`docs/design.md`, MCPs y skills). `docs/tech-stack.md` proponía que el dispatcher generara un archivo de configuración MCP por Run con el token en un header y lo pasara a Claude Code con `--mcp-config`.
+Every agent call to the LunasQ MCP must carry the Run's run token, so that an old session cannot move the task (`docs/design.md`, MCPs and skills). `docs/tech-stack.md` proposed that the dispatcher generate one MCP configuration file per Run with the token in a header and pass it to Claude Code with `--mcp-config`.
 
-## Opciones
+## Options
 
-1. **Archivo por Run con token literal**: `mcp-<run>.json` con `"headers": { "X-LunasQ-Run-Token": "<token>" }`.
-2. **Archivo estable con expansión de entorno**: un solo archivo con `"X-LunasQ-Run-Token": "${LUNASQ_RUN_TOKEN}"`; el token vive solo en el entorno del pane, que el dispatcher ya inyecta (`LUNASQ_RUN_TOKEN`).
+1. **One file per Run with a literal token**: `mcp-<run>.json` with `"headers": { "X-LunasQ-Run-Token": "<token>" }`.
+2. **Stable file with environment expansion**: a single file with `"X-LunasQ-Run-Token": "${LUNASQ_RUN_TOKEN}"`; the token lives only in the pane's environment, which the dispatcher already injects (`LUNASQ_RUN_TOKEN`).
 
-## Resultado del spike
+## Spike result
 
-Servidor MCP v2 en Hono que registra el header de cada request, Claude Code 2.1.312, flags `--mcp-config <archivo> --strict-mcp-config --allowedTools mcp__lunasq__whoami --model haiku`:
+MCP v2 server on Hono that records each request's header, Claude Code 2.1.312, flags `--mcp-config <file> --strict-mcp-config --allowedTools mcp__lunasq__whoami --model haiku`:
 
-| Prueba | Resultado |
+| Test | Result |
 | --- | --- |
-| `claude -p` + opción 1 | `whoami` devuelve `run-literal-0001`; el header llega en las 6 requests (`server/discover`, `initialize`, `notifications/initialized`, GET SSE, `tools/list`, `tools/call`) |
-| `claude -p` + opción 2 con `LUNASQ_RUN_TOKEN=run-env-0002` | Igual, con `run-env-0002` en las 6 requests |
-| `herdr agent start --kind claude -- <mismos flags>` (opción 2) en un pane creado con `pane split --env LUNASQ_RUN_TOKEN=run-herdr-0003` | Los args pasan intactos a `claude`, el env del pane llega al proceso y el header `run-herdr-0003` aparece en las 6 requests |
+| `claude -p` + option 1 | `whoami` returns `run-literal-0001`; the header arrives in all 6 requests (`server/discover`, `initialize`, `notifications/initialized`, GET SSE, `tools/list`, `tools/call`) |
+| `claude -p` + option 2 with `LUNASQ_RUN_TOKEN=run-env-0002` | Same, with `run-env-0002` in the 6 requests |
+| `herdr agent start --kind claude -- <same flags>` (option 2) in a pane created with `pane split --env LUNASQ_RUN_TOKEN=run-herdr-0003` | The args pass intact to `claude`, the pane's env reaches the process and the `run-herdr-0003` header appears in the 6 requests |
 
-Evidencia: `spikes/run-token/seen-claude-p.ndjson`, `spikes/run-token/seen-herdr.ndjson`, `spikes/herdr/outputs/07–14`.
+Evidence: `spikes/run-token/seen-claude-p.ndjson`, `spikes/run-token/seen-herdr.ndjson`, `spikes/herdr/outputs/07–14`.
 
-## Decisión
+## Decision
 
-**Opción 2.** `lunasq` genera un archivo de configuración MCP estable (por proyecto o por instalación) con el header `X-LunasQ-Run-Token: ${LUNASQ_RUN_TOKEN}`. El dispatcher crea el pane del agente con `LUNASQ_RUN_TOKEN` (y el resto de variables) en su entorno y arranca Claude Code con `--mcp-config <archivo> --strict-mcp-config` en los args del perfil de fase.
+**Option 2.** `lunasq` generates a stable MCP configuration file (per project or per installation) with the header `X-LunasQ-Run-Token: ${LUNASQ_RUN_TOKEN}`. The dispatcher creates the agent's pane with `LUNASQ_RUN_TOKEN` (and the rest of the variables) in its environment and starts Claude Code with `--mcp-config <file> --strict-mcp-config` in the phase profile's args.
 
-## Consecuencias
+## Consequences
 
-- El token no se escribe en disco ni hay archivos por Run que crear, limpiar o reconciliar; el despacho sigue siendo idempotente.
-- `--strict-mcp-config` aísla al agente de otros MCP del usuario; si una fase necesita otro MCP (p. ej. engram), se agrega al mismo archivo.
-- Dependemos de la expansión `${VAR}` de Claude Code en `headers`. `lunasq doctor` y la suite de contrato de UW-16 deben cubrirla; si se rompe, la opción 1 sigue siendo válida y solo cambia quién escribe el archivo.
-- El servidor rechaza requests sin header o con token que no corresponda a un Run activo (UW-15).
-- `docs/tech-stack.md` se actualiza con esta decisión.
+- The token is not written to disk and there are no per‑Run files to create, clean up or reconcile; dispatching remains idempotent.
+- `--strict-mcp-config` isolates the agent from the user's other MCPs; if a phase needs another MCP (e.g. engram), it is added to the same file.
+- We depend on Claude Code's `${VAR}` expansion in `headers`. `lunasq doctor` and UW-16's contract suite must cover it; if it breaks, option 1 is still valid and only who writes the file changes.
+- The server rejects requests without a header or with a token that does not match an active Run (UW-15).
+- `docs/tech-stack.md` is updated with this decision.

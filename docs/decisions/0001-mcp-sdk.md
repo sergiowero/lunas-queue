@@ -1,36 +1,36 @@
-# 0001 — SDK de MCP para TypeScript: línea v2
+# 0001 — MCP SDK for TypeScript: the v2 line
 
-- Estado: aceptada
-- Fecha: 2026-10-28
-- Unidad: UW-00 (spike a) · Código: `spikes/mcp-sdk/`
+- Status: accepted
+- Date: 2026-10-28
+- Unit: UW-00 (spike a) · Code: `spikes/mcp-sdk/`
 
-## Contexto
+## Context
 
-`docs/tech-stack.md` dejaba abierto si el LunasQ MCP usaría la generación v2 del SDK oficial (paquetes `@modelcontextprotocol/server` y middleware para Hono), pre‑estable durante 2026, o la línea v1.x (`@modelcontextprotocol/sdk`). El LunasQ MCP corre con transporte Streamable HTTP montado en Hono y comparte esquemas Zod v4 con el resto del backend.
+`docs/tech-stack.md` left open whether the LunasQ MCP would use the v2 generation of the official SDK (packages `@modelcontextprotocol/server` and middleware for Hono), pre‑stable during 2026, or the v1.x line (`@modelcontextprotocol/sdk`). The LunasQ MCP runs with the Streamable HTTP transport mounted on Hono and shares Zod v4 schemas with the rest of the backend.
 
-## Opciones
+## Options
 
-1. **v2**: `@modelcontextprotocol/server` + `@modelcontextprotocol/hono` (+ `@modelcontextprotocol/client` para tests).
-2. **v1.x**: `@modelcontextprotocol/sdk@1.32.2`, que arrastra Express, Hono, ajv y `zod-to-json-schema` como dependencias directas.
+1. **v2**: `@modelcontextprotocol/server` + `@modelcontextprotocol/hono` (+ `@modelcontextprotocol/client` for tests).
+2. **v1.x**: `@modelcontextprotocol/sdk@1.32.2`, which pulls in Express, Hono, ajv and `zod-to-json-schema` as direct dependencies.
 
-## Resultado del spike
+## Spike result
 
-- En npm, `latest` de `@modelcontextprotocol/server` y `/client` es **2.4.0** (2026‑10‑23) y de `@modelcontextprotocol/hono` es **2.0.2**; ninguno es pre‑release. `server` depende de `zod ^4.2.0`; `hono` tiene peer `hono ^4.11.4` y `@modelcontextprotocol/server ^2.3.0`.
-- Un servidor con `createMcpHonoApp()` + `localhostHostValidation()` y `WebStandardStreamableHTTPServerTransport` en modo stateless (servidor y transporte por request) sobre `@hono/node-server` 2.1.5, en Node 26.13.0:
-  - `listTools` devuelve el `inputSchema` generado desde Zod como JSON Schema draft 2020‑12.
-  - `callTool` funciona; un argumento inválido vuelve como `isError: true` con el error de validación de Zod, sin excepción en el cliente.
-  - Los headers de la request están disponibles en el handler de Hono en cada llamada (base del spike b).
-- Claude Code 2.1.312 envía además `server/discover` antes de `initialize`; el SDK v2 lo atiende sin configuración extra (ver `spikes/run-token/seen-*.ndjson`). Las versiones y fechas de npm salen de `npm view <paquete> dist-tags time.modified` al 2026‑10‑28.
+- On npm, `latest` of `@modelcontextprotocol/server` and `/client` is **2.4.0** (2026‑10‑23) and of `@modelcontextprotocol/hono` is **2.0.2**; neither is a pre‑release. `server` depends on `zod ^4.2.0`; `hono` has peers `hono ^4.11.4` and `@modelcontextprotocol/server ^2.3.0`.
+- A server with `createMcpHonoApp()` + `localhostHostValidation()` and `WebStandardStreamableHTTPServerTransport` in stateless mode (server and transport per request) on `@hono/node-server` 2.1.5, on Node 26.13.0:
+  - `listTools` returns the `inputSchema` generated from Zod as JSON Schema draft 2020‑12.
+  - `callTool` works; an invalid argument comes back as `isError: true` with the Zod validation error, with no exception in the client.
+  - The request headers are available in the Hono handler on every call (basis of spike b).
+- Claude Code 2.1.312 also sends `server/discover` before `initialize`; the v2 SDK handles it without extra configuration (see `spikes/run-token/seen-*.ndjson`). The npm versions and dates come from `npm view <package> dist-tags time.modified` as of 2026‑10‑28.
 
-Salida en `spikes/mcp-sdk/output.txt`.
+Output in `spikes/mcp-sdk/output.txt`.
 
-## Decisión
+## Decision
 
-Usar **MCP SDK v2**: `@modelcontextprotocol/server` y `@modelcontextprotocol/hono` en `packages/server`, y `@modelcontextprotocol/client` como dependencia de desarrollo para los tests de contrato de UW-15. Se descarta v1.x.
+Use **MCP SDK v2**: `@modelcontextprotocol/server` and `@modelcontextprotocol/hono` in `packages/server`, and `@modelcontextprotocol/client` as a development dependency for UW-15's contract tests. v1.x is discarded.
 
-## Consecuencias
+## Consequences
 
-- Zod v4 queda alineado con el SDK (sin `zod-to-json-schema`); los esquemas de `packages/schemas` sirven directo como `inputSchema`.
-- Modo stateless por request: el run token se lee del header en cada llamada, sin sesión MCP que invalidar. Si UW-15 necesita notificaciones servidor→cliente, se revisa el modo con sesión.
-- Montar siempre `localhostHostValidation()` (protección contra DNS rebinding).
-- `docs/tech-stack.md` se actualiza con los paquetes concretos.
+- Zod v4 stays aligned with the SDK (no `zod-to-json-schema`); the schemas in `packages/schemas` serve directly as `inputSchema`.
+- Stateless mode per request: the run token is read from the header on every call, with no MCP session to invalidate. If UW-15 needs server→client notifications, the session mode is revisited.
+- Always mount `localhostHostValidation()` (protection against DNS rebinding).
+- `docs/tech-stack.md` is updated with the concrete packages.

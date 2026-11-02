@@ -1,26 +1,26 @@
-# PR en conflicto o con CI fallido después de la entrega y selección de revisores
+# PR in conflict or with failed CI after delivery, and reviewer selection
 
-- Estado: aceptada
-- Fecha: 2026-10-30
-- Código: `delivery_conflict` en `packages/domain/src/state-machine.ts`, `PrTrackingStore.recordPrConflict` (`packages/domain/src/pull-requests.ts`, `packages/db/src/task-prs.ts`), `PullRequest.mergeable` en `packages/adapters/src/github/`, `PrPoller` en `packages/server/src/github/poller.ts`, `DeliveryConflictReason` en `packages/schemas/src/delivery.ts`, `assets/skills/verify-task/SKILL.md`, `assets/agents/lunasq/`
+- Status: accepted
+- Date: 2026-10-30
+- Code: `delivery_conflict` in `packages/domain/src/state-machine.ts`, `PrTrackingStore.recordPrConflict` (`packages/domain/src/pull-requests.ts`, `packages/db/src/task-prs.ts`), `PullRequest.mergeable` in `packages/adapters/src/github/`, `PrPoller` in `packages/server/src/github/poller.ts`, `DeliveryConflictReason` in `packages/schemas/src/delivery.ts`, `assets/skills/verify-task/SKILL.md`, `assets/agents/lunasq/`
 
-## Contexto
+## Context
 
-La entrega (ADR uw-26-entrega) rebasa sobre la base antes de abrir el PR, pero después la tarea queda en Completed y nadie vuelve a mirar el branch. Con varias tareas en paralelo, mergear un PR deja a los demás en conflicto con la base, y LunasQ no lo detectaba: el humano tenía que resolverlos a mano.
+Delivery (ADR uw-26-entrega) rebases onto the base before opening the PR, but afterwards the task stays in Completed and nobody looks at the branch again. With several tasks in parallel, merging one PR leaves the others in conflict with the base, and LunasQ did not detect it: the human had to resolve them by hand.
 
-Aparte, la skill `verify-task` y las descripciones de los revisores decían «lanza los 4 revisores» y «lánzalo en toda verificación», así que el approver lanzaba casi siempre los cuatro, aunque el diseño dice que decide cuáles aplican.
+Separately, the `verify-task` skill and the reviewers' descriptions said "launch the 4 reviewers" and "launch it in every verification", so the approver almost always launched all four, even though the design says it decides which apply.
 
-## Decisión
+## Decision
 
-- **Detección.** `GitHubAdapter.getPr` lee `mergeable` y `checks.status` de `gh pr view`. El poller regresa a implementación los PR abiertos con conflictos de merge o con checks fallidos; checks `pending`, `success` o `none` no cambian el estado. No se rebasa ni se hace push desde el poller.
-- **Transición.** `delivery_conflict` aplica también desde `completed`, solo por el sistema, para conflictos de merge y CI fallido. La tarea va a `in_progress/queued` sin subir la iteración, igual que un conflicto en la entrega. `isTerminal("completed")` no cambia: mientras está en completed nada más la mueven estas condiciones del PR abierto.
-- **Registro.** `recordPrConflict` y `recordPrCiFailure` corren en una transacción IMMEDIATE: solo actúan si la tarea está en completed y el PR observado es su PR abierto. Agregan `delivery.conflict` con el Run del último verificador y `files: []`; el motivo es `pr_conflict` o `ci_failed`. Para CI, `output` enumera checks fallidos y sus URLs. Repetir el fallo no vuelve a encolar la tarea, porque ya no está en completed.
-- **Ciclo.** El implementador recibe `deliveryConflict` (la skill `implement-task` explica `pr_conflict` y `ci_failed`), integra la base ante conflictos o corrige los checks indicados, y entrega de nuevo. `createPr` devuelve el PR abierto y `recordPrOpened` del mismo PR no escribe nada. El push usa `--force-with-lease`, así que el PR se actualiza.
-- **Tope.** El conteo de conflictos de la entrega empieza de cero en el último `resume` o `verdict_pass`: un PR que queda en conflicto semanas después no hereda los conflictos de su primera entrega.
-- **Revisores.** `verify-task` pide elegir cada revisor por separado con una tabla de cuándo lanzarlo y cuándo omitirlo (seguridad solo si el diff toca una frontera de confianza; UX si cambia un flujo o sus estados; UI si cambia algo visible; código si cambia código o tests), y que la justificación de un omitido cite el diff. Aclara que reportar los 4 en el handoff no es lanzar los 4. Las descripciones de los subagentes dicen cuándo lanzarlos. La evidencia por hooks (ADR uw-23-verificacion) no cambia.
+- **Detection.** `GitHubAdapter.getPr` reads `mergeable` and `checks.status` from `gh pr view`. The poller sends back to implementation the open PRs with merge conflicts or failed checks; `pending`, `success` or `none` checks do not change the state. The poller does not rebase or push.
+- **Transition.** `delivery_conflict` also applies from `completed`, only by the system, for merge conflicts and failed CI. The task goes to `in_progress/queued` without raising the iteration, just like a conflict at delivery. `isTerminal("completed")` does not change: while it is in completed, nothing else moves it except these conditions of the open PR.
+- **Recording.** `recordPrConflict` and `recordPrCiFailure` run in an IMMEDIATE transaction: they only act if the task is in completed and the observed PR is its open PR. They append `delivery.conflict` with the last verifier's Run and `files: []`; the reason is `pr_conflict` or `ci_failed`. For CI, `output` lists the failed checks and their URLs. Repeating the failure does not enqueue the task again, because it is no longer in completed.
+- **Cycle.** The implementer receives `deliveryConflict` (the `implement-task` skill explains `pr_conflict` and `ci_failed`), integrates the base on conflicts or fixes the indicated checks, and delivers again. `createPr` returns the open PR and `recordPrOpened` of the same PR writes nothing. The push uses `--force-with-lease`, so the PR is updated.
+- **Cap.** The delivery conflict count starts from zero at the last `resume` or `verdict_pass`: a PR that falls into conflict weeks later does not inherit the conflicts of its first delivery.
+- **Reviewers.** `verify-task` asks to choose each reviewer separately with a table of when to launch and when to skip it (security only if the diff touches a trust boundary; UX if a flow or its states change; UI if something visible changes; code if code or tests change), and that the justification of a skipped one cite the diff. It clarifies that reporting the 4 in the handoff is not launching the 4. The subagents' descriptions say when to launch them. The evidence through hooks (ADR uw-23-verificacion) does not change.
 
-## Consecuencias
+## Consequences
 
-- Un PR en conflicto o con CI fallido vuelve a gastar una implementación y una verificación; es lo que antes hacía el humano a mano.
-- La detección depende del intervalo del poller (60 s por defecto) y de que GitHub haya calculado `mergeable`; un `unknown` se resuelve en la pasada siguiente.
-- Los revisores y skills instalados en `~/.claude/` se actualizan con `lunasq install`.
+- A PR in conflict or with failed CI spends one more implementation and one more verification; it is what the human used to do by hand.
+- Detection depends on the poller's interval (60 s by default) and on GitHub having computed `mergeable`; an `unknown` is resolved in the next pass.
+- The reviewers and skills installed in `~/.claude/` are updated with `lunasq install`.

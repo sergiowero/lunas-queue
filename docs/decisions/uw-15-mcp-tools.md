@@ -1,58 +1,58 @@
-# UW-15 — Tools del LunasQ MCP, run token y cierre de fase
+# UW-15 — LunasQ MCP tools, run token and phase closing
 
-- Estado: aceptada
-- Fecha: 2026-10-29
-- Unidad: UW-15 · Código: `packages/server/src/mcp/`, `packages/schemas/src/mcp.ts`, `packages/db/src/runs.ts`, `packages/db/drizzle/0003_runs_context_read.sql`
+- Status: accepted
+- Date: 2026-10-29
+- Unit: UW-15 · Code: `packages/server/src/mcp/`, `packages/schemas/src/mcp.ts`, `packages/db/src/runs.ts`, `packages/db/drizzle/0003_runs_context_read.sql`
 
-## Contexto
+## Context
 
-`docs/design.md` (§MCPs y skills) lista las 7 tools y pide que validen el run token, que `get_task_context` sea obligatoria antes de cualquier tool de salida y que un handoff inválido se rechace con sus errores. ADR 0001 fija el SDK v2 stateless en Hono y ADR 0002 el header `X-LunasQ-Run-Token`. ADR 0007 deja a quien llama los hechos de cada guard y ADR 0013 deja a UW-15 la entrada de `submit_spec`. Faltaba decidir quién cierra el Run, cómo se registra la lectura del contexto, dónde vive el checklist y qué hace el gate de tests mientras UW-11 está pendiente.
+`docs/design.md` (§MCPs and skills) lists the 7 tools and asks that they validate the run token, that `get_task_context` be mandatory before any exit tool and that an invalid handoff be rejected with its errors. ADR 0001 fixes the stateless v2 SDK on Hono and ADR 0002 the `X-LunasQ-Run-Token` header. ADR 0007 leaves each guard's facts to the caller and ADR 0013 leaves `submit_spec`'s entry to UW-15. What remained to decide was who closes the Run, how the context read is recorded, where the checklist lives and what the test gate does while UW-11 is pending.
 
-## Decisión
+## Decision
 
-- **Endpoint.** `/mcp` en `createApp`, con `createMcpHonoApp()`: valida Host y Origin para localhost. Cada request crea su `McpServer` y su transporte stateless. El run token se lee del header en cada request.
-- **Token inválido.** Sin header, con un token desconocido o con el token de un Run cerrado, el handshake y `tools/list` funcionan, pero cada `tools/call` responde `isError` con `invalid_run_token` y no tiene efectos. No se responde 401 porque los clientes MCP lo interpretan como un pedido de OAuth.
-- **Guardas.** Toda tool pasa por estas guardas, en orden:
-  1. Run activo (`ended_at IS NULL`).
-  2. Tool permitida en la fase del Run (`tool_not_allowed`): `submit_spec` en refine; `submit_result` en refine e implement; `update_checklist` y `submit_for_verification` en implement; `submit_verdict` en verify. `get_task_context`, `ask_human` y `report_failure` se aceptan en todas.
-  3. `get_task_context` ya leída (`context_required`).
-  4. En verify, si el Run ya registró un veredicto pass, solo se aceptan `get_task_context` y `submit_verdict`. Así el token, que sigue vivo para la entrega, ya no puede llevar la tarea a `waiting_human` ni cerrar el Run como fallido.
-- **Lectura del contexto.** La columna `runs.context_read_at` (migración `0003`) guarda la primera llamada a `get_task_context`; repetirla no mueve la marca. Por ser columna y no evento, la guarda es una lectura por clave del Run.
-- **Errores.** La respuesta es `isError` con un cuerpo JSON `{error, message, issues?, output?}`. `issues` usa el formato `{path, message}` de `parseHandoff` (ADR 0006).
-- **Handoff.** El `inputSchema` acepta `{handoff: objeto}` y la validación la hace `parseHandoff`: así los errores salen en español y se aplican las reglas entre campos. Después se comprueba que `phase`, `taskId` y `runId` sean los del Run (`handoff_mismatch`). Por último, los criterios se comparan contra la spec aprobada (`spec_mismatch`): `criterionTests` y `criteriaVerdicts` deben nombrar exactamente sus criterios. Un rechazo deja el Run abierto para corregir y reintentar.
-- **Quién cierra el Run.** La tool de salida, en la misma transacción `IMMEDIATE` que guarda el handoff y aplica la transición. Así el token queda viejo en el acto, y un rechazo de la máquina de estados revierte todo, incluida la versión de spec (`SpecRepository.applySubmit`).
-  - `submit_spec`, `submit_for_verification` y `submit_verdict` con reject cierran con `success`.
-  - `report_failure` cierra con `failure` y su `failure_reason`.
-  - `submit_verdict` con pass guarda el handoff con el Run abierto, porque `verdict_pass` lo emite la entrega (ADR 0007). Repetir el mismo veredicto es idempotente; uno distinto responde `verdict_already_recorded`.
-  - El dispatcher (UW-16) solo detiene y limpia el pane.
-- **`submit_result`.** Salida alternativa de refine e implement para tareas sin código (ADR 0007): handoff propio (`parseResultHandoff`), `handoff_mismatch` si ids o fase no son los del Run, y desde implement `branch_has_commits` si el branch tiene commits sobre la base (`CommitVerifier.branchHasCommits`). Escribe el Resultado, el título si falta, la transición a completed y el cierre del Run con `success` en una transacción, sin gate de tests ni hooks de fase.
-- **`submit_for_verification`.** Cobertura de criterios → worktree limpio → commits → gate de tests → transacción. Detalle:
-  - Con cambios sin commitear (`git status --porcelain`, incluidos archivos sin seguimiento) responde `dirty_worktree`, porque el gate debe correr sobre lo que va en los commits.
-  - `CommitVerifier` (puerto) comprueba que cada SHA esté en el `HEAD` del worktree y no en la rama base, ni en la local ni en `origin/<base>` cuando existe (el worktree sale de `origin/<base>` y la local puede ir atrasada; [ADR uw-18-skills-fase](uw-18-skills-fase.md)). `GitCommitVerifier` lo hace con `git merge-base` por el `ProcessRunner`.
-  - `TestGate` (puerto) corre el comando de tests del proyecto en el worktree. `ShellTestGate` es la implementación mínima hasta UW-11: sin comando de tests, el gate no pasa.
-  - Los comandos de git pasan los argumentos tras `--end-of-options`, así una rama base con forma de opción no se interpreta como opción.
-  - `ShellTestGate` corta a los 20 minutos por defecto (`DEFAULT_GATE_TIMEOUT_MS`, configurable).
-  - Mientras corre el gate de un Run, otro `submit_for_verification` del mismo Run responde `gate_in_progress` y no lanza una segunda suite. El candado vive en memoria, porque el proceso es uno solo. El gate no se cancela si el cliente abandona la llamada: `ProcessRunner` no recibe señal de aborto.
-  - El gate corre fuera de la transacción. Si mientras tanto el dispatcher cerró el Run, el cierre falla con `invalid_run_token`. Si la tarea cambió, la transición, que lleva `expected: in_progress/running`, se rechaza sin cerrar el Run.
-  - Un gate en rojo responde `test_gate_failed` con la cola de la salida (4000 caracteres).
-- **`ask_human`.** En una transacción aplica `ask_human` (running → waiting_human) y crea la Question con el evento `question.created`. Si la tarea ya espera al humano, se rechaza sin crear otra. Pausar el timeout y entregar la respuesta es de UW-22.
-- **Checklist.** Sin tabla nueva: `update_checklist` agrega el evento `checklist.updated` con el snapshot completo de la task list aprobada, y el último evento es el checklist vigente. Repetir la misma marca no agrega evento. Los ids que no están en la spec se rechazan.
-- **`report_failure`.** Aplica `run_failed` con actor `system`, el único permitido por ADR 0007: el agente declara el fallo y el sistema lo registra. `attempt` vale los Runs fallidos seguidos de la fase, desde el último `resume` de la tarea, más uno (`consecutiveFailures`).
-- **`get_task_context`.** Devuelve `TaskContext` (`@lunasq/schemas`):
-  - tarea, Run y proyecto (rama base y comando de tests);
-  - spec aprobada; en refinamiento, además, la última versión con cambios pedidos y sus comentarios;
-  - último handoff de implementación y veredictos anteriores;
-  - el Run cerrado anterior de la misma fase, con su motivo de fallo y su handoff;
-  - Questions y último checklist.
+- **Endpoint.** `/mcp` in `createApp`, with `createMcpHonoApp()`: validates Host and Origin for localhost. Each request creates its `McpServer` and its stateless transport. The run token is read from the header on every request.
+- **Invalid token.** Without a header, with an unknown token or with the token of a closed Run, the handshake and `tools/list` work, but every `tools/call` answers `isError` with `invalid_run_token` and has no effects. 401 is not answered because MCP clients interpret it as a request for OAuth.
+- **Guards.** Every tool goes through these guards, in order:
+  1. Active Run (`ended_at IS NULL`).
+  2. Tool allowed in the Run's phase (`tool_not_allowed`): `submit_spec` in refine; `submit_result` in refine and implement; `update_checklist` and `submit_for_verification` in implement; `submit_verdict` in verify. `get_task_context`, `ask_human` and `report_failure` are accepted in all.
+  3. `get_task_context` already read (`context_required`).
+  4. In verify, if the Run already recorded a pass verdict, only `get_task_context` and `submit_verdict` are accepted. This way the token, which stays alive for delivery, can no longer take the task to `waiting_human` or close the Run as failed.
+- **Context read.** The column `runs.context_read_at` (migration `0003`) stores the first call to `get_task_context`; repeating it does not move the mark. Being a column and not an event, the guard is a lookup by the Run's key.
+- **Errors.** The response is `isError` with a JSON body `{error, message, issues?, output?}`. `issues` uses `parseHandoff`'s `{path, message}` format (ADR 0006).
+- **Handoff.** The `inputSchema` accepts `{handoff: object}` and the validation is done by `parseHandoff`: this way the errors come out in English and the cross‑field rules apply. Then it is checked that `phase`, `taskId` and `runId` are the Run's (`handoff_mismatch`). Finally, the criteria are compared against the approved spec (`spec_mismatch`): `criterionTests` and `criteriaVerdicts` must name exactly its criteria. A rejection leaves the Run open to fix and retry.
+- **Who closes the Run.** The exit tool, in the same `IMMEDIATE` transaction that stores the handoff and applies the transition. This way the token goes stale immediately, and a rejection by the state machine rolls everything back, including the spec version (`SpecRepository.applySubmit`).
+  - `submit_spec`, `submit_for_verification` and `submit_verdict` with reject close with `success`.
+  - `report_failure` closes with `failure` and its `failure_reason`.
+  - `submit_verdict` with pass stores the handoff with the Run open, because `verdict_pass` is emitted by delivery (ADR 0007). Repeating the same verdict is idempotent; a different one answers `verdict_already_recorded`.
+  - The dispatcher (UW-16) only stops and cleans up the pane.
+- **`submit_result`.** Alternative exit of refine and implement for tasks without code (ADR 0007): own handoff (`parseResultHandoff`), `handoff_mismatch` if ids or phase are not the Run's, and from implement `branch_has_commits` if the branch has commits on top of the base (`CommitVerifier.branchHasCommits`). It writes the Result, the title if missing, the transition to completed and the closing of the Run with `success` in one transaction, without a test gate or phase hooks.
+- **`submit_for_verification`.** Criteria coverage → clean worktree → commits → test gate → transaction. Detail:
+  - With uncommitted changes (`git status --porcelain`, including untracked files) it answers `dirty_worktree`, because the gate must run on what goes in the commits.
+  - `CommitVerifier` (port) checks that each SHA is in the worktree's `HEAD` and not in the base branch, neither the local one nor `origin/<base>` when it exists (the worktree comes from `origin/<base>` and the local one may be behind; [ADR uw-18-skills-fase](uw-18-skills-fase.md)). `GitCommitVerifier` does it with `git merge-base` through the `ProcessRunner`.
+  - `TestGate` (port) runs the project's test command in the worktree. `ShellTestGate` is the minimal implementation until UW-11: without a test command, the gate does not pass.
+  - The git commands pass the arguments after `--end-of-options`, so a base branch shaped like an option is not interpreted as an option.
+  - `ShellTestGate` cuts at 20 minutes by default (`DEFAULT_GATE_TIMEOUT_MS`, configurable).
+  - While a Run's gate runs, another `submit_for_verification` of the same Run answers `gate_in_progress` and does not launch a second suite. The lock lives in memory, because there is only one process. The gate is not canceled if the client abandons the call: `ProcessRunner` receives no abort signal.
+  - The gate runs outside the transaction. If in the meantime the dispatcher closed the Run, the closing fails with `invalid_run_token`. If the task changed, the transition, which carries `expected: in_progress/running`, is rejected without closing the Run.
+  - A red gate answers `test_gate_failed` with the tail of the output (4000 characters).
+- **`ask_human`.** In one transaction it applies `ask_human` (running → waiting_human) and creates the Question with the `question.created` event. If the task is already waiting for the human, it is rejected without creating another. Pausing the timeout and delivering the answer belongs to UW-22.
+- **Checklist.** No new table: `update_checklist` appends the `checklist.updated` event with the full snapshot of the approved task list, and the last event is the current checklist. Repeating the same mark adds no event. Ids that are not in the spec are rejected.
+- **`report_failure`.** Applies `run_failed` with actor `system`, the only one allowed by ADR 0007: the agent declares the failure and the system records it. `attempt` is the phase's consecutive failed Runs, since the task's last `resume`, plus one (`consecutiveFailures`).
+- **`get_task_context`.** Returns `TaskContext` (`@lunasq/schemas`):
+  - task, Run and project (base branch and test command);
+  - approved spec; in refinement, also the latest version with changes requested and its comments;
+  - last implementation handoff and earlier verdicts;
+  - the previous closed Run of the same phase, with its failure reason and its handoff;
+  - Questions and last checklist.
 
-## Consecuencias
+## Consequences
 
-- El gate hereda el entorno del proceso de LunasQ, incluidos los tokens de `gh`. UW-11 debe pasarle un entorno mínimo al correrlo en el pane.
-- Las convenciones del proyecto no viajan en `get_task_context`: el agente las lee del repo (CLAUDE.md, AGENTS.md) y de su skill. El contexto solo lleva la rama base y el comando de tests.
-- Si se pierde la respuesta de una tool de salida exitosa, el reintento responde `invalid_run_token`, porque el Run ya cerró: no duplica efectos, pero no devuelve el resultado original. UW-18 debe indicar en las skills que ese error después de una tool de salida significa que la fase ya terminó.
+- The gate inherits the LunasQ process's environment, including `gh`'s tokens. UW-11 must pass it a minimal environment when running it in the pane.
+- The project's conventions do not travel in `get_task_context`: the agent reads them from the repo (CLAUDE.md, AGENTS.md) and from its skill. The context only carries the base branch and the test command.
+- If the response of a successful exit tool is lost, the retry answers `invalid_run_token`, because the Run has already closed: it does not duplicate effects, but it does not return the original result. UW-18 must state in the skills that this error after an exit tool means the phase has already ended.
 
-- UW-16 crea el Run con su token y no cierra Runs que ya cerró una tool de salida. Al ver la tarea fuera de `running`, limpia el pane.
-- UW-11 reemplaza `ShellTestGate` por la ejecución en un pane de herdr y guarda la salida. El puerto `TestGate` no cambia, salvo el campo `trigger`; también corre el gate antes de aceptar un pass ([ADR uw-11-gate-tests](uw-11-gate-tests.md)).
-- El gate es síncrono dentro de la llamada MCP: una suite más larga que el timeout de tools de Claude Code (`MCP_TOOL_TIMEOUT`) corta la llamada. UW-16 debe fijar ese timeout en el perfil de la fase o UW-11 debe acotar la suite.
-- UW-23 agrega a `submit_verdict` la validación de los revisores contra los hooks; UW-26 corre el gate final y emite `verdict_pass`.
-- UW-18 documenta en las skills los códigos de error y que un rechazo se corrige en el mismo Run.
+- UW-16 creates the Run with its token and does not close Runs that an exit tool already closed. On seeing the task outside `running`, it cleans up the pane.
+- UW-11 replaces `ShellTestGate` with execution in a herdr pane and stores the output. The `TestGate` port does not change, except for the `trigger` field; it also runs the gate before accepting a pass ([ADR uw-11-gate-tests](uw-11-gate-tests.md)).
+- The gate is synchronous inside the MCP call: a suite longer than Claude Code's tools timeout (`MCP_TOOL_TIMEOUT`) cuts the call. UW-16 must set that timeout in the phase's profile or UW-11 must bound the suite.
+- UW-23 adds to `submit_verdict` the validation of the reviewers against the hooks; UW-26 runs the final gate and emits `verdict_pass`.
+- UW-18 documents the error codes in the skills and that a rejection is fixed in the same Run.

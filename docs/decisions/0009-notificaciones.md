@@ -1,29 +1,29 @@
-# 0009 — Notificaciones: id determinístico, deduplicación en memoria y dos canales
+# 0009 — Notifications: deterministic id, in-memory deduplication and two channels
 
-- Estado: aceptada
-- Fecha: 2026-10-29
-- Unidad: UW-06 · Código: `packages/server/src/notifications/`, esquema en `packages/schemas/src/notification.ts`
+- Status: accepted
+- Date: 2026-10-29
+- Unit: UW-06 · Code: `packages/server/src/notifications/`, schema in `packages/schemas/src/notification.ts`
 
-## Contexto
+## Context
 
-`docs/design.md` (Señales, Human‑in‑the‑loop y Decisiones) pide avisar al humano por herdr y por la UI en cuatro casos: Question abierta y agente `blocked` (si siguen así después de 1 minuto), y timeout de fase y loop de verificación agotado (de inmediato). El criterio de UW-06 es que una notificación llegue por ambos canales sin duplicarse. No hay tabla de notificaciones (UW-01) y el Event log (UW-04, ADR 0007) solo registra transiciones de tarea. ADR 0004 dejó pendiente qué hacer con `[ui.toast] delivery = "off"`, el default de herdr.
+`docs/design.md` (Signals, Human‑in‑the‑loop and Decisions) asks to alert the human through herdr and the UI in four cases: open Question and `blocked` agent (if they stay that way after 1 minute), and phase timeout and exhausted verification loop (immediately). UW-06's criterion is that a notification arrives through both channels without being duplicated. There is no notifications table (UW-01) and the Event log (UW-04, ADR 0007) only records task transitions. ADR 0004 left pending what to do with `[ui.toast] delivery = "off"`, herdr's default.
 
-## Decisión
+## Decision
 
-- **`Notification`** en `@lunasq/schemas`: `id`, `kind` (`question_open | agent_blocked | phase_timeout | verification_exhausted`), `taskId`, `runId?`, `title`, `body`, `createdAt`. El `id` lo arma quien la emite a partir de la situación (p. ej. `question:<questionId>`, `blocked:<runId>:<n>`) y es la clave de deduplicación en todos los canales.
-- **`NotificationService.notify`** valida, descarta un `id` ya entregado y reparte a cada canal en paralelo. El `id` se marca antes de esperar a los canales, así dos llamadas concurrentes entregan una sola vez. Un canal que falla se reporta con `onChannelError` y no impide a los demás. Si al menos un canal entregó, el id queda como entregado y el canal que falló no se reintenta. Si ninguno entregó, se libera el id y un aviso posterior con el mismo id reintenta.
-- **Canales:** `herdrChannel` (`notification show` con `sound: request`) y `hubChannel` (hub en memoria hacia la UI).
-- **SSE** en `GET /stream` (montado bajo `/api/notifications` cuando el servidor se componga): cada notificación es un `event: notification` con `id:` igual al de la notificación. El hub guarda las últimas 100. Una reconexión con `Last-Event-ID` recibe solo lo posterior. Si ese id ya salió del buffer, recibe el buffer completo, que es todo posterior.
-- **`Escalator`**: `watch(pending, { since? })` notifica a los 60 s desde `since` (por defecto, ahora) y `resolve(id)` lo cancela. Repetir `watch` con un id vigilado no reinicia el plazo, y con un id ya escalado no hace nada hasta `resolve`. `escalated()` lista lo escalado sin resolver. `since` permite re‑armar desde la BD tras un reinicio (p. ej. con el `createdAt` de la Question). El timeout de fase y el loop agotado llaman `notify` directo.
-- **Deduplicación en memoria.** Tras un reinicio del proceso una notificación puede repetirse una vez. Se acepta en v1: es una molestia menor y no afecta el estado de ninguna tarea.
-- **Toast apagado.** Si herdr responde `shown: false`, el canal herdr lo reporta como error de canal (con el `reason`) y la UI la recibe igual. `lunasq install` no cambia la configuración de herdr; `lunasq doctor` (UW-28) avisa si `ui.toast.delivery` está en `off`.
+- **`Notification`** in `@lunasq/schemas`: `id`, `kind` (`question_open | agent_blocked | phase_timeout | verification_exhausted`), `taskId`, `runId?`, `title`, `body`, `createdAt`. The `id` is built by whoever emits it from the situation (e.g. `question:<questionId>`, `blocked:<runId>:<n>`) and is the deduplication key in all channels.
+- **`NotificationService.notify`** validates, discards an `id` already delivered and distributes to each channel in parallel. The `id` is marked before waiting for the channels, so two concurrent calls deliver only once. A channel that fails is reported with `onChannelError` and does not prevent the others. If at least one channel delivered, the id stays as delivered and the channel that failed is not retried. If none delivered, the id is released and a later notice with the same id retries.
+- **Channels:** `herdrChannel` (`notification show` with `sound: request`) and `hubChannel` (in‑memory hub towards the UI).
+- **SSE** at `GET /stream` (mounted under `/api/notifications` when the server is composed): each notification is an `event: notification` with an `id:` equal to the notification's. The hub keeps the last 100. A reconnection with `Last-Event-ID` receives only what came later. If that id has already left the buffer, it receives the whole buffer, which is all later.
+- **`Escalator`**: `watch(pending, { since? })` notifies 60 s after `since` (by default, now) and `resolve(id)` cancels it. Repeating `watch` with a watched id does not restart the deadline, and with an already escalated id it does nothing until `resolve`. `escalated()` lists what was escalated and unresolved. `since` allows re‑arming from the DB after a restart (e.g. with the Question's `createdAt`). The phase timeout and the exhausted loop call `notify` directly.
+- **In‑memory deduplication.** After a process restart a notification may repeat once. It is accepted in v1: it is a minor nuisance and does not affect any task's state.
+- **Toast off.** If herdr answers `shown: false`, the herdr channel reports it as a channel error (with the `reason`) and the UI receives it anyway. `lunasq install` does not change herdr's configuration; `lunasq doctor` (UW-28) warns if `ui.toast.delivery` is `off`.
 
-## Consecuencias
+## Consequences
 
-- UW-17 llama `watch` al ver `blocked` y `resolve` al salir de ese estado; al reconciliar, re‑arma con `since` lo que siga pendiente en la BD. Para un segundo `blocked` del mismo Run usa otro `id` (el contador `<n>`), o la deduplicación lo silencia.
-- UW-22 hace lo mismo con cada Question abierta y llama `resolve` al responderla.
-- UW-21/UW-27 consumen el stream SSE y pueden deduplicar por `id` si lo necesitan; el servidor ya no reenvía lo visto.
-- Si se necesita que la deduplicación sobreviva reinicios, se registra cada notificación en el Event log (UW-04) y el servicio consulta ahí antes de entregar.
-- El stream SSE no manda keepalive ni acota las escrituras pendientes de un cliente lento; con el volumen de v1 en `localhost` no hace falta. Si UW-21/UW-27 lo necesitan, se agrega un comentario `:` cada ~30 s.
-- La liberación de la suscripción al desconectarse el cliente solo se prueba con `app.request`. La unidad que monte `/api/notifications` sobre `@hono/node-server` agrega un test con un servidor HTTP real que desconecte al cliente.
-- El set de ids entregados crece con cada notificación del proceso; con el volumen de v1 (decenas al día) no se acota.
+- UW-17 calls `watch` on seeing `blocked` and `resolve` on leaving that state; when reconciling, it re‑arms with `since` whatever is still pending in the DB. For a second `blocked` of the same Run it uses another `id` (the `<n>` counter), or deduplication silences it.
+- UW-22 does the same with each open Question and calls `resolve` when it is answered.
+- UW-21/UW-27 consume the SSE stream and can deduplicate by `id` if they need to; the server no longer resends what was seen.
+- If deduplication needs to survive restarts, each notification is recorded in the Event log (UW-04) and the service checks there before delivering.
+- The SSE stream sends no keepalive and does not bound a slow client's pending writes; with v1's volume on `localhost` it is not needed. If UW-21/UW-27 need it, a `:` comment is added every ~30 s.
+- Releasing the subscription when the client disconnects is only tested with `app.request`. The unit that mounts `/api/notifications` on `@hono/node-server` adds a test with a real HTTP server that disconnects the client.
+- The set of delivered ids grows with each notification of the process; with v1's volume (tens per day) it is not bounded.

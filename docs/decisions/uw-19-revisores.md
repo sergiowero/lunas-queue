@@ -1,41 +1,41 @@
-# UW-19 — Subagentes revisores y registro de sus ejecuciones
+# UW-19 — Reviewer subagents and recording of their executions
 
-- Estado: aceptada
-- Fecha: 2026-10-29
-- Unidad: UW-19 · Código: `assets/agents/lunasq/`, `packages/schemas/src/subagents.ts`, `packages/db/src/run-subagents.ts`, `packages/db/drizzle/0005_run_subagents.sql`, `packages/server/src/subagents/`, `packages/server/src/dispatcher/hook-settings.ts`
+- Status: accepted
+- Date: 2026-10-29
+- Unit: UW-19 · Code: `assets/agents/lunasq/`, `packages/schemas/src/subagents.ts`, `packages/db/src/run-subagents.ts`, `packages/db/drizzle/0005_run_subagents.sql`, `packages/server/src/subagents/`, `packages/server/src/dispatcher/hook-settings.ts`
 
-## Contexto
+## Context
 
-`docs/design.md` (§Verificación con subagentes) define 4 revisores de solo lectura en Opus, con salida compacta. También pide que los hooks `SubagentStart` y `SubagentStop` le avisen a LunasQ qué subagentes corrieron en cada Run, porque UW-23 rechaza un veredicto que reporta un revisor que no aparece en esos hooks. El criterio de UW-19: los 4 se lanzan desde una sesión de prueba y LunasQ registra cada ejecución. Faltaba decidir cómo llegan los hooks a la sesión del agente, cómo se autentican y dónde se guardan.
+`docs/design.md` (§Verification with subagents) defines 4 read‑only reviewers on Opus, with compact output. It also asks that the `SubagentStart` and `SubagentStop` hooks tell LunasQ which subagents ran in each Run, because UW-23 rejects a verdict that reports a reviewer that does not appear in those hooks. UW-19's criterion: the 4 are launched from a test session and LunasQ records each execution. What remained to decide was how the hooks reach the agent's session, how they are authenticated and where they are stored.
 
-## Resultado del spike
+## Spike result
 
-Con Claude Code 2.1.312, `claude -p --settings <archivo>` y un subagente en `<repo>/.claude/agents/lunasq/`:
+With Claude Code 2.1.312, `claude -p --settings <file>` and a subagent in `<repo>/.claude/agents/lunasq/`:
 
-- Claude Code descubre los subagentes dentro de un subdirectorio de `agents/`. Así se confirma la ruta `~/.claude/agents/lunasq/` del diseño.
-- Un hook `type: "http"` con `headers: {"X-LunasQ-Run-Token": "$LUNASQ_RUN_TOKEN"}` y `allowedEnvVars: ["LUNASQ_RUN_TOKEN"]` llega con el token expandido del entorno, tanto en `SubagentStart` como en `SubagentStop`.
-- El input trae `session_id`, `agent_id` y `agent_type` (el `name` del subagente). `SubagentStop` agrega `agent_transcript_path` y `last_assistant_message`, entre otros.
-- Sin `CLAUDE_CODE_FORK_SUBAGENT=0`, la sesión lanzó el subagente en segundo plano.
+- Claude Code discovers subagents inside a subdirectory of `agents/`. This confirms the design's `~/.claude/agents/lunasq/` path.
+- A hook `type: "http"` with `headers: {"X-LunasQ-Run-Token": "$LUNASQ_RUN_TOKEN"}` and `allowedEnvVars: ["LUNASQ_RUN_TOKEN"]` arrives with the token expanded from the environment, in both `SubagentStart` and `SubagentStop`.
+- The input carries `session_id`, `agent_id` and `agent_type` (the subagent's `name`). `SubagentStop` adds `agent_transcript_path` and `last_assistant_message`, among others.
+- Without `CLAUDE_CODE_FORK_SUBAGENT=0`, the session launched the subagent in the background.
 
-## Decisión
+## Decision
 
-- **Revisores.** Cuatro archivos en `assets/agents/lunasq/`, con nombre de archivo igual al `name` y a `REVIEWER_NAMES` de `@lunasq/schemas`. Llevan `model: opus` y `tools: Read, Grep, Glob, Bash`: sin Edit, Write, NotebookEdit ni Agent.
-  - Cada uno prohíbe escribir, también por Bash, y deja la suite de tests al approver.
-  - Bash se conserva, como fija la tabla de revisores del diseño: sin él no pueden leer `git diff` ni `git log`. Por eso «solo lectura» es una garantía de herramientas (no hay Edit ni Write) y de prompt, no de sandbox. Un revisor con Bash podría escribir en el worktree o llamar al LunasQ MCP con el `LUNASQ_RUN_TOKEN` que hereda del pane. Lo acotan el gate de tests que LunasQ corre antes de aceptar un pass y la revisión humana del PR. La alternativa, quitar Bash y pasar el diff en el prompt, se descartó para v1 porque un diff grande no cabe en el contexto del revisor.
-  - La salida es una línea por hallazgo, `[<severidad>] <archivo>:<línea> · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. Las severidades son las de `Finding` del handoff de verificación (`critical`, `major`, `minor`), así el approver copia los campos sin traducir.
-  - El revisor de código lleva el checklist de coherencia de tests. En la prueba de reversión solo señala qué tests deberían fallar, porque revertir el código lo hace el approver.
-  - El MCP de navegador para UI y UX no va en v1: depende del proyecto, y un proyecto puede sobrescribir el revisor en su `.claude/agents/`.
-- **Hooks por settings estable.** `ensureHookSettings(path, url)` escribe, como `ensureMcpConfig` (ADR 0002), un solo archivo por instalación con los dos hooks `http` hacia `POST /hooks/subagent`. El token va como `$LUNASQ_RUN_TOKEN` y nunca toca disco. `agentArgs` agrega `--settings <archivo>` en todas las fases, porque un implementador también puede lanzar subagentes y registrarlos no cuesta nada. `--settings` pasa a ser un flag reservado: un perfil que lo trae falla con `profile_conflict`. `Orchestrator` recibe `hooks: {settingsPath, url}` y escribe el archivo al arrancar.
-- **`CLAUDE_CODE_FORK_SUBAGENT=0`.** Va por defecto en el entorno de cada pane, como `MCP_TOOL_TIMEOUT`, y `paneEnv` puede sobrescribirlo.
-- **Endpoint.** `POST /hooks/subagent` en `createApp`. Primero busca el Run activo por el header `X-LunasQ-Run-Token`. Con un token ausente, desconocido o de un Run cerrado, responde `{}` sin efectos y sin validar el body. Con un Run activo, valida el input con `SubagentHookInput`, que tolera campos nuevos de Claude Code, y responde 400 si no es un `SubagentStart` o `SubagentStop`. Si el Run tiene session id nativo (`--session-id` del dispatcher), ignora los hooks con otro `session_id`, así otro `claude` que herede el token no deja evidencia en el Run. No responde 401: un error del hook no detiene a Claude Code, pero ensucia la pantalla del agente, y una sesión vieja no tiene nada que corregir.
-- **Registro.** La tabla `run_subagents` tiene una fila por `(run_id, agent_id)`, con `agent_type`, `started_at`, `stopped_at` y `transcript_path`, y se borra con su Run. Es una tabla y no un evento porque UW-23 la consulta por Run y porque los hooks se repiten o se pierden: cualquiera de los dos crea la fila, el primero de cada uno fija su tiempo y repetirlo no cambia nada. Los tiempos son los del servidor, porque el input de los hooks no trae hora.
-- **Prueba real.** `pnpm --filter @lunasq/server test:claude` levanta la app en un puerto local, instala los revisores en un repo temporal y abre `claude -p` con el settings y el token en el entorno, como en un pane. Después comprueba que los 4 quedaron registrados con inicio, fin y transcript. Usa `LUNASQ_REVIEWER_MODEL=haiku` por defecto para no gastar Opus; con `opus` prueba los archivos tal cual. Pasó con los dos.
+- **Reviewers.** Four files in `assets/agents/lunasq/`, with file name equal to the `name` and to `REVIEWER_NAMES` from `@lunasq/schemas`. They carry `model: opus` and `tools: Read, Grep, Glob, Bash`: no Edit, Write, NotebookEdit or Agent.
+  - Each one forbids writing, also through Bash, and leaves the test suite to the approver.
+  - Bash is kept, as the design's reviewer table fixes: without it they cannot read `git diff` or `git log`. That is why "read‑only" is a guarantee of tools (there is no Edit or Write) and of prompt, not of sandbox. A reviewer with Bash could write to the worktree or call the LunasQ MCP with the `LUNASQ_RUN_TOKEN` it inherits from the pane. The test gate that LunasQ runs before accepting a pass and the human review of the PR bound it. The alternative, removing Bash and passing the diff in the prompt, was discarded for v1 because a large diff does not fit in the reviewer's context.
+  - The output is one line per finding, `[<severity>] <file>:<line> · <criterion> · <evidence>`, or `NO FINDINGS`. The severities are those of the verification handoff's `Finding` (`critical`, `major`, `minor`), so the approver copies the fields without translating.
+  - The code reviewer carries the test coherence checklist. In the reversal test it only points out which tests should fail, because reverting the code is done by the approver.
+  - The browser MCP for UI and UX is not in v1: it depends on the project, and a project can override the reviewer in its `.claude/agents/`.
+- **Hooks through a stable settings file.** `ensureHookSettings(path, url)` writes, like `ensureMcpConfig` (ADR 0002), a single file per installation with the two `http` hooks towards `POST /hooks/subagent`. The token goes as `$LUNASQ_RUN_TOKEN` and never touches disk. `agentArgs` adds `--settings <file>` in all phases, because an implementer can also launch subagents and recording them costs nothing. `--settings` becomes a reserved flag: a profile that brings it fails with `profile_conflict`. `Orchestrator` receives `hooks: {settingsPath, url}` and writes the file on startup.
+- **`CLAUDE_CODE_FORK_SUBAGENT=0`.** It goes by default in each pane's environment, like `MCP_TOOL_TIMEOUT`, and `paneEnv` can override it.
+- **Endpoint.** `POST /hooks/subagent` in `createApp`. First it looks up the active Run by the `X-LunasQ-Run-Token` header. With an absent, unknown or closed‑Run token, it answers `{}` with no effects and without validating the body. With an active Run, it validates the input with `SubagentHookInput`, which tolerates new Claude Code fields, and answers 400 if it is not a `SubagentStart` or `SubagentStop`. If the Run has a native session id (the dispatcher's `--session-id`), it ignores hooks with another `session_id`, so another `claude` that inherits the token leaves no evidence in the Run. It does not answer 401: a hook error does not stop Claude Code, but it clutters the agent's screen, and an old session has nothing to correct.
+- **Recording.** The `run_subagents` table has one row per `(run_id, agent_id)`, with `agent_type`, `started_at`, `stopped_at` and `transcript_path`, and is deleted with its Run. It is a table and not an event because UW-23 queries it per Run and because hooks repeat or get lost: either one creates the row, the first of each fixes its time and repeating it changes nothing. The times are the server's, because the hooks' input carries no time.
+- **Real test.** `pnpm --filter @lunasq/server test:claude` brings up the app on a local port, installs the reviewers in a temporary repo and opens `claude -p` with the settings and the token in the environment, as in a pane. Then it checks that the 4 were recorded with start, end and transcript. It uses `LUNASQ_REVIEWER_MODEL=haiku` by default so as not to spend Opus; with `opus` it tests the files as they are. It passed with both.
 
-## Consecuencias
+## Consequences
 
-- **UW-23**: `submit_verdict` compara los revisores `ran` con `RunSubagentRepository.forRun(runId)` por `agentType`. Un revisor con `started_at` pero sin `stopped_at` no terminó. La evidencia no es infalsificable: quien tenga el token y el session id del Run (la propia sesión, o un subagente con Bash) puede enviar hooks. Prueba que el approver no omitió un revisor por descuido, no que un agente malicioso no mintió.
-- **UW-24**: `transcript_path` apunta al transcript de cada subagente, para convertirlo a markdown en la evidencia.
-- **UW-28**: `lunasq install` copia `assets/agents/lunasq/` a `~/.claude/agents/lunasq/` y fija la ruta del settings y la URL del endpoint que recibe el `Orchestrator`. `doctor` puede repetir la prueba real con haiku.
-- **UW-18**: la skill `verify-task` lanza los revisores por nombre y no los pone en segundo plano.
-- El endpoint no valida Host ni Origin. Sin un token activo no tiene efectos, y el token tiene 256 bits.
-- `--settings` se suma a los settings de usuario y de proyecto, no los reemplaza. Un hook de usuario sigue corriendo junto a los de LunasQ.
+- **UW-23**: `submit_verdict` compares the `ran` reviewers with `RunSubagentRepository.forRun(runId)` by `agentType`. A reviewer with `started_at` but without `stopped_at` did not finish. The evidence is not unforgeable: whoever has the Run's token and session id (the session itself, or a subagent with Bash) can send hooks. It proves that the approver did not omit a reviewer by oversight, not that a malicious agent did not lie.
+- **UW-24**: `transcript_path` points to each subagent's transcript, to convert it to markdown in the evidence.
+- **UW-28**: `lunasq install` copies `assets/agents/lunasq/` to `~/.claude/agents/lunasq/` and sets the settings path and the endpoint URL that the `Orchestrator` receives. `doctor` can repeat the real test with haiku.
+- **UW-18**: the `verify-task` skill launches the reviewers by name and does not put them in the background.
+- The endpoint does not validate Host or Origin. Without an active token it has no effects, and the token has 256 bits.
+- `--settings` is added to the user and project settings, it does not replace them. A user hook keeps running alongside LunasQ's.

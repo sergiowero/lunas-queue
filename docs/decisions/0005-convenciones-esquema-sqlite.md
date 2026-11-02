@@ -1,30 +1,30 @@
-# 0005 — Convenciones del esquema SQLite
+# 0005 — SQLite schema conventions
 
-- Estado: aceptada
-- Fecha: 2026-10-28
-- Unidad: UW-01 · Código: `packages/db/src/schema.ts`, `packages/db/drizzle/`, `packages/schemas/src/enums.ts`
+- Status: accepted
+- Date: 2026-10-28
+- Unit: UW-01 · Code: `packages/db/src/schema.ts`, `packages/db/drizzle/`, `packages/schemas/src/enums.ts`
 
-## Contexto
+## Context
 
-UW-01 crea las nueve tablas del modelo de dominio (`docs/design.md`, Modelo de dominio y Consumo). Varias decisiones de forma no estaban escritas y las siguientes unidades (UW-04, UW-05, UW-07, UW-08, UW-12, UW-15, UW-20) las heredan.
+UW-01 creates the nine tables of the domain model (`docs/design.md`, Domain model and Consumption). Several shape decisions were not written down and the following units (UW-04, UW-05, UW-07, UW-08, UW-12, UW-15, UW-20) inherit them.
 
-## Decisión
+## Decision
 
-- **Ids.** Texto con UUID v4 (`crypto.randomUUID()`) generado en la aplicación. `events` y `outbox` usan entero autoincremental: dan un orden total que el Event log y el publicador necesitan. El id UUID no tiene default en SQL: una escritura fuera de Drizzle debe generarlo.
-- **Tiempos.** Enteros en milisegundos epoch (`timestamp_ms` en Drizzle). El default vive en SQL (`unixepoch('subsec') * 1000`), así también aplica a escrituras fuera de Drizzle; `updated_at` se renueva solo desde Drizzle al actualizar; un `UPDATE` en SQL crudo lo deja igual.
-- **Enums.** Los valores se definen una sola vez con Zod en `@lunasq/schemas` (`TaskState`, `SubState`, `Phase`, etc.). `db` los usa para el tipo de la columna y para un `CHECK … IN (…)` por columna, porque Drizzle no genera esos CHECK solo. Agregar un valor implica una migración.
-- **Prioridad.** `CHECK (typeof(priority) = 'integer' AND priority BETWEEN 0 AND 9007199254740991)`: entero sin signo hasta `Number.MAX_SAFE_INTEGER`, porque la columna se lee como `number`. Sin `typeof`, SQLite aceptaría reales. Los contadores (tokens, iteraciones, intentos del outbox) usan el mismo CHECK sin tope.
-- **JSON.** Columnas de texto en modo JSON de Drizzle, con defaults en SQL (`'{}'`, `'[]'`). Su forma la validan las unidades dueñas (perfil y límites de proyecto en UW-05, spec en UW-12, handoff en UW-03).
-- **Sub‑estado.** Nullable: solo los estados con agente lo tienen (default `queued` al nacer en Draft). La base no ata `sub_state` a `state`; esa coherencia es de la máquina de estados (UW-04).
-- **Borrado.** Un proyecto con tareas no se puede borrar (`restrict`). El Event log es append‑only: una tarea con eventos tampoco se puede borrar (`restrict`), así que en la práctica las tareas se cancelan, no se borran. Si una tarea sin eventos se borra, arrastra en cascada sus aristas, specs, runs, questions y usage; `caused_by` y `questions.run_id` quedan en NULL si su referencia desaparece.
-- **Run activo.** Índice único parcial `runs(task_id) WHERE ended_at IS NULL`: a lo sumo un Run abierto por tarea, así un despacho duplicado falla en la base. Cerrar un Run es poner `ended_at`. Cada Run guarda `model` e `iteration` (la iteración de verificación de la tarea al despachar) para separar rework de reintentos en la auditoría y en el consumo.
-- **Consumo idempotente.** `usage_records.source_ref` (id de mensaje o request en la fuente) es único por `(run_id, source, source_ref)`; reingestar el mismo lote no duplica tokens. Sin `source_ref` no se deduplica.
-- **Spec aprobada.** La base no impide dos versiones aprobadas de una misma tarea; esa regla y su índice, si hacen falta, son de UW-12.
-- **Migraciones.** drizzle-kit genera el SQL y los snapshots en `packages/db/drizzle/` (`pnpm --filter @lunasq/db db:generate`). Un test regenera contra el esquema en un directorio temporal y falla si hay cambios sin migración.
-- **Instalación sin build scripts.** Además de `better-sqlite3` (ADR 0003), `allowBuilds` declara `esbuild: false`: lo trae drizzle-kit y resuelve su binario desde el paquete `@esbuild/<plataforma>` sin postinstall.
-- **Biome.** Ignora `pnpm-lock.yaml` y `packages/db/drizzle/`: son generados y sus herramientas los reescriben en su propio formato.
+- **Ids.** Text with UUID v4 (`crypto.randomUUID()`) generated in the application. `events` and `outbox` use an autoincrement integer: they give a total order that the Event log and the publisher need. The UUID id has no SQL default: a write outside Drizzle must generate it.
+- **Times.** Integers in epoch milliseconds (`timestamp_ms` in Drizzle). The default lives in SQL (`unixepoch('subsec') * 1000`), so it also applies to writes outside Drizzle; `updated_at` is renewed only from Drizzle on update; a raw SQL `UPDATE` leaves it as is.
+- **Enums.** The values are defined once with Zod in `@lunasq/schemas` (`TaskState`, `SubState`, `Phase`, etc.). `db` uses them for the column type and for one `CHECK … IN (…)` per column, because Drizzle does not generate those CHECKs on its own. Adding a value implies a migration.
+- **Priority.** `CHECK (typeof(priority) = 'integer' AND priority BETWEEN 0 AND 9007199254740991)`: unsigned integer up to `Number.MAX_SAFE_INTEGER`, because the column is read as a `number`. Without `typeof`, SQLite would accept reals. Counters (tokens, iterations, outbox attempts) use the same CHECK without a cap.
+- **JSON.** Text columns in Drizzle's JSON mode, with SQL defaults (`'{}'`, `'[]'`). Their shape is validated by the owning units (project profile and limits in UW-05, spec in UW-12, handoff in UW-03).
+- **Sub‑state.** Nullable: only states with an agent have one (default `queued` when born in Draft). The database does not tie `sub_state` to `state`; that coherence belongs to the state machine (UW-04).
+- **Deletion.** A project with tasks cannot be deleted (`restrict`). The Event log is append‑only: a task with events cannot be deleted either (`restrict`), so in practice tasks are canceled, not deleted. If a task without events is deleted, it cascades to its edges, specs, runs, questions and usage; `caused_by` and `questions.run_id` become NULL if their reference disappears.
+- **Active Run.** Partial unique index `runs(task_id) WHERE ended_at IS NULL`: at most one open Run per task, so a duplicate dispatch fails in the database. Closing a Run means setting `ended_at`. Each Run stores `model` and `iteration` (the task's verification iteration at dispatch) to separate rework from retries in the audit and in consumption.
+- **Idempotent consumption.** `usage_records.source_ref` (message or request id in the source) is unique per `(run_id, source, source_ref)`; re‑ingesting the same batch does not duplicate tokens. Without `source_ref` there is no deduplication.
+- **Approved spec.** The database does not prevent two approved versions of the same task; that rule and its index, if needed, belong to UW-12.
+- **Migrations.** drizzle-kit generates the SQL and the snapshots in `packages/db/drizzle/` (`pnpm --filter @lunasq/db db:generate`). A test regenerates against the schema in a temporary directory and fails if there are changes without a migration.
+- **Install without build scripts.** Besides `better-sqlite3` (ADR 0003), `allowBuilds` declares `esbuild: false`: drizzle-kit brings it and resolves its binary from the `@esbuild/<platform>` package without a postinstall.
+- **Biome.** Ignores `pnpm-lock.yaml` and `packages/db/drizzle/`: they are generated and their tools rewrite them in their own format.
 
-## Consecuencias
+## Consequences
 
-- Las unidades siguientes importan tablas y `openDatabase`/`migrateDatabase` desde `@lunasq/db`, y los enums desde `@lunasq/schemas`.
-- Un cambio de esquema siempre va con su migración generada; el test de sincronía lo hace cumplir en CI.
+- The following units import tables and `openDatabase`/`migrateDatabase` from `@lunasq/db`, and the enums from `@lunasq/schemas`.
+- A schema change always comes with its generated migration; the sync test enforces it in CI.

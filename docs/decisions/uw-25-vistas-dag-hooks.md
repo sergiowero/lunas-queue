@@ -1,26 +1,26 @@
-# UW-25 — Vista DAG (retirada) y vistas de hooks
+# UW-25 — DAG view (retired) and hooks views
 
-- Estado: parcial; la vista DAG se retiró el 2026-10-31 y la vista de hooks sigue activa
-- Fecha: 2026-10-30
-- Unidad: UW-25 · Registro histórico del DAG y decisiones aún activas de hooks
+- Status: partial; the DAG view was retired on 2026-10-31 and the hooks view remains active
+- Date: 2026-10-30
+- Unit: UW-25 · Historical record of the DAG and still‑active hooks decisions
 
-## Contexto
+## Context
 
-`docs/design.md` pide una vista de DAG de dependencias y una vista de hooks por proyecto (contenido de `lunasq/hooks/` en la rama base y últimas ejecuciones por tarea). El ADR uw-10-hooks dejó `HookService.listHooks` y los eventos `hook.executed`, y dejó las rutas y la vista para esta unidad. No fijaban qué forma tiene el grafo, qué pasa con las dependencias entre proyectos ni de dónde salen las ejecuciones.
+`docs/design.md` asks for a dependency DAG view and a per‑project hooks view (content of `lunasq/hooks/` in the base branch and latest executions per task). ADR uw-10-hooks left `HookService.listHooks` and the `hook.executed` events, and left the routes and the view for this unit. They did not fix what shape the graph has, what happens with cross‑project dependencies or where the executions come from.
 
-## Decisión
+## Decision
 
-- **El grafo son las filas de `task_dependencies`.** `GET /api/graph[?projectId=]` devuelve `{ nodes, edges }`; el front end no deriva aristas de otras respuestas. Con `projectId`, los nodos son las tareas del proyecto más las de otros proyectos al otro extremo de una arista suya, para que una dependencia entre proyectos no quede con un extremo faltante. Sin él, todas las tareas. Se incluyen las terminales: una dependencia ya cumplida sigue siendo parte del historial del DAG. Nodos y aristas se leen en una sola transacción.
-- **Layout con dagre de izquierda a derecha** (`layoutGraph`, función pura con tests): la flecha va de lo que se debe terminar a lo que espera por ello. Los nodos tienen tamaño fijo conocido, así React Flow los dibuja sin medirlos. La dependencia `@dagrejs/dagre` es el dagre mantenido que `docs/tech-stack.md` ya preveía; `@xyflow/react` también estaba en el stack.
-- **Lista accesible de dependencias junto al grafo.** Repite cada arista como «A depende de B» y marca las de entre proyectos. Es el equivalente en texto del canvas, que los lectores de pantalla no recorren, y lo que los tests verifican: jsdom no mide los handles de React Flow y no dibuja las aristas del SVG.
-- **Hooks: `GET /api/projects/:id/hooks`** devuelve `HookService.listHooks` (scripts, política, timeout y contenido de la rama base, `baseRef` y `configError`). Es lectura git con `fetch`, así que un fallo (sin red, sin rama base) responde 502 `hooks_unavailable` y la vista lo muestra; sin servicio de hooks en `createApp`, 503. Un proyecto desconocido es 404.
-- **Ejecuciones: `GET /api/projects/:id/hooks/executions?limit=`** sale del Event log (`hook.executed` de las tareas del proyecto), no de una tabla nueva: es la misma fuente que usará el archivo de evidencia. La consulta (funciones de ventana sobre `json_extract` del payload) deja la ejecución más reciente de cada tarea en cada punto y script, y a lo más `limit` tareas por hook (10 por defecto, 100 como máximo). El tope es por hook y no por proyecto, para que un hook que corre poco (`after_merge`) no desaparezca detrás de los eventos de otros. Un payload que no cumple el esquema se salta. Mientras carga o si la consulta falla, la tarjeta de cada hook lo dice en vez de afirmar «Sin ejecuciones». Un script con ejecuciones que ya no está en la rama base se muestra marcado «ya no está en la rama base».
-- **Solo lectura.** Ninguna ruta edita hooks ni aristas; los hooks se cambian por PR y las aristas siguen en `PUT/DELETE /api/tasks/:id/dependencies/:dependsOnId` (UW-07).
-- **Refresco.** Un `change` del stream SSE invalida el grafo y las ejecuciones de hooks. El contenido de los hooks viene de git, no de eventos, y no se invalida: se refresca al volver a abrir la vista.
+- **The graph is the rows of `task_dependencies`.** `GET /api/graph[?projectId=]` returns `{ nodes, edges }`; the front end does not derive edges from other responses. With `projectId`, the nodes are the project's tasks plus those of other projects at the other end of one of its edges, so a cross‑project dependency is not left with a missing end. Without it, all tasks. Terminal ones are included: an already fulfilled dependency is still part of the DAG's history. Nodes and edges are read in a single transaction.
+- **Layout with dagre from left to right** (`layoutGraph`, pure function with tests): the arrow goes from what must be finished to what waits for it. The nodes have a known fixed size, so React Flow draws them without measuring them. The `@dagrejs/dagre` dependency is the maintained dagre that `docs/tech-stack.md` already foresaw; `@xyflow/react` was also in the stack.
+- **Accessible dependency list next to the graph.** It repeats each edge as «A depende de B» and marks the cross‑project ones. It is the text equivalent of the canvas, which screen readers do not traverse, and what the tests verify: jsdom does not measure React Flow's handles and does not draw the SVG edges.
+- **Hooks: `GET /api/projects/:id/hooks`** returns `HookService.listHooks` (scripts, policy, timeout and content from the base branch, `baseRef` and `configError`). It is a git read with `fetch`, so a failure (no network, no base branch) answers 502 `hooks_unavailable` and the view shows it; without a hooks service in `createApp`, 503. An unknown project is 404.
+- **Executions: `GET /api/projects/:id/hooks/executions?limit=`** comes from the Event log (`hook.executed` of the project's tasks), not from a new table: it is the same source the evidence file will use. The query (window functions over `json_extract` of the payload) leaves the most recent execution of each task at each point and script, and at most `limit` tasks per hook (10 by default, 100 at most). The cap is per hook and not per project, so a hook that runs rarely (`after_merge`) does not disappear behind other hooks' events. A payload that does not satisfy the schema is skipped. While loading or if the query fails, each hook's card says so instead of claiming «Sin ejecuciones». A script with executions that is no longer in the base branch is shown marked «ya no está en la rama base».
+- **Read‑only.** No route edits hooks or edges; hooks are changed through a PR and the edges remain in `PUT/DELETE /api/tasks/:id/dependencies/:dependsOnId` (UW-07).
+- **Refresh.** A `change` of the SSE stream invalidates the graph and the hook executions. The hooks' content comes from git, not from events, and is not invalidated: it refreshes when the view is reopened.
 
-## Consecuencias
+## Consequences
 
-- Las decisiones y consecuencias de la vista DAG describen la implementación histórica, no una funcionalidad activa.
-- Abrir la vista de hooks hace un `fetch` al remoto del proyecto, igual que cada punto de hook; con muchos proyectos y sin red la vista responde 502 por proyecto, no globalmente.
-- El grafo global crece con el número de tareas. Con cientos de nodos, el layout de dagre en el navegador será lo primero en notarse; si pasa, se filtra por proyecto (ya soportado) o se oculta lo terminado.
-- React Flow y dagre pesan unos 226 kB (74 kB comprimidos); la página de DAG se carga con `lazyRouteComponent`, así el resto de las vistas no los descarga.
+- The DAG view's decisions and consequences describe the historical implementation, not an active feature.
+- Opening the hooks view does a `fetch` to the project's remote, like each hook point; with many projects and no network the view answers 502 per project, not globally.
+- The global graph grows with the number of tasks. With hundreds of nodes, dagre's layout in the browser will be the first thing to be noticed; if it happens, it is filtered by project (already supported) or finished work is hidden.
+- React Flow and dagre weigh about 226 kB (74 kB compressed); the DAG page is loaded with `lazyRouteComponent`, so the other views do not download them.
