@@ -1,9 +1,22 @@
-import type { TaskState, UsageTotals } from "@lunasq/schemas";
+import { TASK_TITLE_MAX, type TaskState, type UsageTotals } from "@lunasq/schemas";
 import { currentLanguage, LOCALE } from "./i18n.ts";
 
 /** Name of a task in the UI: its title and, until refinement generates it, the intent. */
 export function taskLabel(task: { title: string | null; intent: string }): string {
   return task.title ?? task.intent;
+}
+
+const ELLIPSIS = "...";
+
+/**
+ * Task name for list views: `taskLabel` capped at TASK_TITLE_MAX characters. A longer label
+ * keeps its first (max - 3) characters plus «...». Presentation only: the data is untouched.
+ */
+export function cappedTaskLabel(task: { title: string | null; intent: string }): string {
+  const label = taskLabel(task);
+  const chars = Array.from(label);
+  if (chars.length <= TASK_TITLE_MAX) return label;
+  return chars.slice(0, TASK_TITLE_MAX - ELLIPSIS.length).join("") + ELLIPSIS;
 }
 
 /** A Run's agent: its kind and, if any, its model («claude · opus»). */
