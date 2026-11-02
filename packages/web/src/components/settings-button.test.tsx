@@ -34,14 +34,17 @@ describe("botón de Settings del header", () => {
     },
   );
 
-  it("queda justo antes del selector de tema, que es el último elemento del header, y empuja a la derecha con ml-auto", async () => {
+  it("queda justo antes del selector de tema, que es el último elemento del header, y después de Nueva tarea", async () => {
     renderApp("/queue");
     const link = await settingsButton();
     const theme = await screen.findByRole("button", { name: /^Cambiar a tema/ });
     expect(link.nextElementSibling).toBe(theme);
     expect(theme.parentElement?.lastElementChild).toBe(theme);
     expect(link.parentElement).toBe(theme.parentElement);
-    expect(link.className).toContain("ml-auto");
+    expect(link.className).not.toContain("ml-auto");
+    expect(link.previousElementSibling).toBe(
+      await screen.findByRole("link", { name: "Nueva tarea" }),
+    );
   });
 
   it("un click desde /queue navega a /settings y muestra la página", async () => {

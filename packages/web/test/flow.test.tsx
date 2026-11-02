@@ -13,7 +13,7 @@ describe("flujo de punta a punta desde la UI", () => {
     const project = fake.addProject({ name: "lunas-queue" });
     const { user, router, refresh } = renderApp("/queue", fake);
 
-    // Alta desde la navegación.
+    // Alta desde el botón Nueva tarea del header.
     await user.click(await screen.findByRole("link", { name: "Nueva tarea" }));
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
     await user.type(screen.getByLabelText("Intent"), "Login con email");
