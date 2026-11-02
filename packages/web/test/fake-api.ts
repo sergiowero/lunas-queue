@@ -186,6 +186,7 @@ export class FakeApi {
       state: "draft",
       subState: "queued",
       verificationIteration: 0,
+      verificationCycleStart: 0,
       branch: null,
       worktreePath: null,
       prUrl: null,
