@@ -14,7 +14,7 @@ import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Label, Textarea } from "../components/ui/input.tsx";
 import { api, type Json } from "../lib/api.ts";
-import { formatDate, taskLabel } from "../lib/format.ts";
+import { cappedTaskLabel, formatDate } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { type Inbox, type TasksById, useInbox } from "../lib/inbox.ts";
 import { invalidateInbox } from "../lib/live.ts";
@@ -43,7 +43,7 @@ function TaskLink({
     <>
       {task && <TaskNumber number={task.number} />}
       <Link id={id} to="/tasks/$taskId" params={{ taskId }} className="font-medium underline">
-        {task ? taskLabel(task) : taskId}
+        {task ? cappedTaskLabel(task) : taskId}
       </Link>
     </>
   );

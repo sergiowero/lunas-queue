@@ -11,7 +11,7 @@ import { PauseTaskButton, ResumeTaskButton } from "../components/task-actions.ts
 import { TaskNumber } from "../components/task-number.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { canPause, canResume, formatCost, formatTokens, taskLabel } from "../lib/format.ts";
+import { canPause, canResume, cappedTaskLabel, formatCost, formatTokens } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
@@ -50,7 +50,7 @@ export function QueuePage() {
   const columns = useMemo(
     () => [
       column.display({ id: "position", header: "#", cell: (c) => c.row.index + 1 }),
-      column.accessor((e) => taskLabel(e.task), {
+      column.accessor((e) => cappedTaskLabel(e.task), {
         id: "intent",
         header: t.columns.task,
         cell: (c) => (

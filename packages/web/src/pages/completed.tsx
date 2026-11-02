@@ -12,7 +12,7 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { taskLabel } from "../lib/format.ts";
+import { cappedTaskLabel } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
@@ -53,7 +53,7 @@ export function CompletedPage() {
 
   const columns = useMemo(
     () => [
-      column.accessor(taskLabel, {
+      column.accessor(cappedTaskLabel, {
         id: "intent",
         header: t.columns.task,
         cell: (cell) => (

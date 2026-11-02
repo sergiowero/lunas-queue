@@ -12,7 +12,7 @@ import { PauseTaskButton } from "../components/task-actions.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { canPause, formatAgent, taskLabel } from "../lib/format.ts";
+import { canPause, cappedTaskLabel, formatAgent } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { isInProgress } from "../lib/in-progress.ts";
 import { queries } from "../lib/queries.ts";
@@ -94,7 +94,7 @@ export function InProgressPage() {
 
   const columns = useMemo(
     () => [
-      column.accessor(taskLabel, {
+      column.accessor(cappedTaskLabel, {
         id: "intent",
         header: t.columns.task,
         cell: (c) => (

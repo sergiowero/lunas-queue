@@ -1,6 +1,14 @@
+import { TASK_TITLE_MAX } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import { es } from "./dictionary/es.ts";
-import { BOARD_STATES, canPause, canResume, formatAgent, formatTimeout } from "./format.ts";
+import {
+  BOARD_STATES,
+  canPause,
+  canResume,
+  cappedTaskLabel,
+  formatAgent,
+  formatTimeout,
+} from "./format.ts";
 
 describe("formatTimeout", () => {
   it("shows the configured timeout without rounding it", () => {
@@ -43,5 +51,33 @@ describe("pause", () => {
     for (const state of ["draft", "refined", "in_progress", "completed"] as const) {
       expect(canResume(state)).toBe(false);
     }
+  });
+});
+
+describe("cappedTaskLabel", () => {
+  const task = (title: string | null, intent: string) => ({ title, intent });
+
+  it("leaves a label of exactly the cap unchanged", () => {
+    const label = "a".repeat(TASK_TITLE_MAX);
+    expect(cappedTaskLabel(task(label, "x"))).toBe(label);
+  });
+
+  it("keeps the first 69 characters plus «...» when the label is one character over the cap", () => {
+    const capped = cappedTaskLabel(task("b".repeat(TASK_TITLE_MAX + 1), "x"));
+    expect(capped).toBe(`${"b".repeat(69)}...`);
+    expect(capped).toHaveLength(TASK_TITLE_MAX);
+  });
+
+  it("caps the intent while there is no title", () => {
+    expect(cappedTaskLabel(task(null, "c".repeat(200)))).toBe(`${"c".repeat(69)}...`);
+  });
+
+  it("leaves a short title unchanged", () => {
+    expect(cappedTaskLabel(task("Entrega lista", "x".repeat(200)))).toBe("Entrega lista");
+  });
+
+  it("does not split a character outside the BMP", () => {
+    const capped = cappedTaskLabel(task(null, "😀".repeat(80)));
+    expect(capped).toBe(`${"😀".repeat(69)}...`);
   });
 });
