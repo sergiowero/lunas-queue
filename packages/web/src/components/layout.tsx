@@ -45,7 +45,7 @@ export function Layout() {
             <BrandMark />
             LunasQ
           </Link>
-          <nav className="flex min-w-0 gap-1 overflow-x-auto">
+          <nav className="-my-2 flex min-w-0 gap-1 overflow-x-auto px-1 py-2">
             <Link to="/queue" className={nav} activeProps={active}>
               Cola
             </Link>

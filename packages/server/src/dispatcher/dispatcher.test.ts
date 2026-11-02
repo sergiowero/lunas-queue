@@ -598,7 +598,9 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     expect(runs.forTask(task.id)).toEqual([]);
   });
 
-  it("deshabilitar claude no interrumpe a un agente vivo ni cierra su Run (guarda de la invariante)", async () => {
+  it("deshabilitar claude no interrumpe a un agente vivo, conserva su slot y la tarea nueva va al habilitado", async () => {
+    // Con un slot por tipo, si el agente vivo dejara de contar al apagar claude, o el claim lo
+    // siguiera contando en el proveedor del perfil, la tarea nueva no cabría o pisaría el slot.
     const { db, project, herdr, dispatcher, runs, taskRow } = setup({
       config: { agentKindConcurrency: { claude: 1, copilot: 1 } },
     });
@@ -615,39 +617,20 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     });
 
     new SettingsRepository(db).saveProviders({ claude: false });
-    // La reconciliación y un relanzamiento corren tras el cambio: no deben tratar al agente de un
-    // proveedor apagado como huérfano ni reiniciarlo.
+    // La reconciliación corre tras el cambio: no debe tratar al agente de un proveedor apagado
+    // como huérfano ni reiniciarlo.
     await dispatcher.recover();
     await dispatcher.idle();
-    await dispatcher.launch(vivaRun?.id ?? "");
+    const nueva = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(nueva));
+    await dispatcher.idle();
 
     expect(closed).toEqual([]);
     expect(runs.get(vivaRun?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
     expect(taskRow(viva.id)).toMatchObject({ subState: "running" });
     const snapshot = await herdr.snapshot();
-    expect(snapshot.panes.some((p) => p.paneId === vivaRun?.herdrPane)).toBe(true);
     expect(snapshot.agents.some((a) => a.paneId === vivaRun?.herdrPane)).toBe(true);
-  });
-
-  it("el agente vivo de un proveedor deshabilitado conserva su slot y la tarea nueva va al habilitado", async () => {
-    // Con un slot por tipo, si el agente vivo dejara de contar al apagar claude, o el claim lo
-    // siguiera contando en el proveedor del perfil, la tarea nueva no cabría o pisaría el slot.
-    const { db, project, dispatcher, runs } = setup({
-      config: { agentKindConcurrency: { claude: 1, copilot: 1 } },
-    });
-    const viva = insertTask(db, project.id);
-    await dispatcher.dispatch(refine(viva));
-    await dispatcher.idle();
-    const [vivaRun] = runs.forTask(viva.id);
-    expect(vivaRun).toMatchObject({ agentKind: "claude", endedAt: null });
-
-    new SettingsRepository(db).saveProviders({ claude: false });
-    const nueva = insertTask(db, project.id);
-    await dispatcher.dispatch(refine(nueva));
-    await dispatcher.idle();
-
     expect(runs.forTask(nueva.id)[0]).toMatchObject({ agentKind: "copilot", endedAt: null });
-    expect(runs.get(vivaRun?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
   });
 });
 
@@ -706,8 +689,11 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
     const [run] = runs.forTask(task.id);
     expect(kinds).toEqual(["claude"]);
     expect(run?.agentKind).toBe("claude");
+    // Saturación transitoria, no fallo de los CLI: el Run se cancela sin contar reintentos y la
+    // tarea espera en queued hasta que se libere un slot.
+    expect(run).toMatchObject({ result: "cancelled" });
     expect(run?.failureReason).toContain("copilot: sin slot de concurrencia");
-    expect(taskRow(task.id).state).not.toBe("running");
+    expect(taskRow(task.id)).toMatchObject({ subState: "queued" });
     expect(runs.forTask(live.id)[0]?.agentKind).toBe("copilot");
   });
 

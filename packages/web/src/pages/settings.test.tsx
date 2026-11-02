@@ -186,6 +186,9 @@ describe("navegación con Settings", () => {
     const nav = link.closest("nav");
     expect(nav?.className).toContain("overflow-x-auto");
     expect(nav?.className).toContain("min-w-0");
+    // El relleno evita que overflow-x-auto recorte el anillo de foco de los enlaces.
+    expect(nav?.className).toMatch(/\bpy-2\b/);
+    expect(nav?.className).toMatch(/\bpx-1\b/);
     expect(link.className).toContain("shrink-0");
   });
 });

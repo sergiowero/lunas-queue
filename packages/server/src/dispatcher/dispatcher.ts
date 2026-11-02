@@ -458,6 +458,7 @@ export class PhaseDispatcher implements Dispatcher {
     }
 
     const attempted = new Set(latest.keys());
+    let saturated = false;
     for (const provider of order) {
       if (attempted.has(provider.kind) || !isEnabled(provider.kind)) continue;
       const switched = this.runs.switchAgentKind(
@@ -470,6 +471,7 @@ export class PhaseDispatcher implements Dispatcher {
       if (switched === "no_slot") {
         // El claim reservó otro proveedor: pasar a este rebasaría su límite de concurrencia.
         diagnostics.push(`${provider.kind}: sin slot de concurrencia`);
+        saturated = true;
         continue;
       }
       let run: RunRow = switched;
@@ -518,6 +520,12 @@ export class PhaseDispatcher implements Dispatcher {
       // El humano apagó todos durante el lanzamiento: no es un fallo de los CLI, el despacho se
       // pausa y la tarea espera en queued hasta que habilite uno.
       await this.pauseRun(initial.id, "todos los proveedores están deshabilitados en Settings");
+      return null;
+    }
+    if (saturated) {
+      // Un proveedor habilitado quedó sin slot: es saturación transitoria, no un fallo de los CLI.
+      // La tarea espera en queued y el scheduler la replanifica cuando se libere un slot.
+      await this.pauseRun(initial.id, `sin slot de concurrencia: ${diagnostics.join("; ")}`);
       return null;
     }
     const reason = `ningún proveedor respondió al arrancar: ${diagnostics.join("; ") || "sin diagnóstico"}`;
