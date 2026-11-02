@@ -231,22 +231,71 @@ describe("global queue", () => {
       expect(screen.queryByText("De dos")).toBeNull();
     });
 
-    it("does not leak the Queue project into In progress and Completed", async () => {
-      const { fake, one } = twoProjects();
+    it("does not leak a tab's filters into the other tabs, and each tab restores its own", async () => {
+      const { fake, one, two } = twoProjects();
+      const completed = { state: "completed", subState: null } as const;
+      fake.addTask(one.id, {
+        intent: "Ejecutando de uno",
+        state: "in_progress",
+        subState: "running",
+      });
+      fake.addTask(two.id, {
+        intent: "Ejecutando de dos",
+        state: "in_progress",
+        subState: "queued",
+      });
+      fake.addTask(one.id, { ...completed, intent: "Merged de uno", prState: "merged" });
+      fake.addTask(two.id, { ...completed, intent: "Merged de dos", prState: "merged" });
+      fake.addTask(two.id, { ...completed, intent: "Open de dos", prState: "open" });
       const { user, router } = renderApp("/queue", fake);
-      await screen.findByText("De dos");
-      await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
+      const project = () => screen.getByLabelText("Proyecto") as HTMLSelectElement;
+      const prState = () => screen.getByLabelText("Estado del PR") as HTMLSelectElement;
 
+      // Queue: project "uno".
+      await screen.findByText("De dos");
+      await user.selectOptions(project(), "uno");
+      await waitFor(() => expect(screen.queryByText("De dos")).toBeNull());
+
+      // In progress opens for the first time on All; pick "dos" there.
       await router.navigate({ to: "/in-progress" });
       await screen.findByRole("heading", { name: "En curso" });
-      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
+      await screen.findByText("Ejecutando de uno");
+      expect(project().value).toBe("");
+      expect(screen.getByText("Ejecutando de dos")).toBeTruthy();
+      await user.selectOptions(project(), "dos");
+      await waitFor(() => expect(screen.queryByText("Ejecutando de uno")).toBeNull());
+
+      // Completed opens for the first time on All / any PR state; pick "dos" and "merged".
       await router.navigate({ to: "/completed" });
       await screen.findByRole("heading", { name: "Completed" });
-      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
+      await screen.findByText("Merged de uno");
+      expect(project().value).toBe("");
+      expect(prState().value).toBe("");
+      expect(screen.getByText("Open de dos")).toBeTruthy();
+      await user.selectOptions(project(), "dos");
+      await user.selectOptions(prState(), "merged");
+      await waitFor(() => expect(screen.queryByText("Merged de uno")).toBeNull());
+      expect(screen.queryByText("Open de dos")).toBeNull();
 
+      // Back to Queue: still "uno" only.
       await router.navigate({ to: "/queue" });
       await screen.findByText("De uno");
-      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe(one.id);
+      expect(project().value).toBe(one.id);
+      expect(screen.queryByText("De dos")).toBeNull();
+
+      // Back to In progress: still "dos" only.
+      await router.navigate({ to: "/in-progress" });
+      await screen.findByText("Ejecutando de dos");
+      expect(project().value).toBe(two.id);
+      expect(screen.queryByText("Ejecutando de uno")).toBeNull();
+
+      // Back to Completed: still "dos" + "merged".
+      await router.navigate({ to: "/completed" });
+      await screen.findByText("Merged de dos");
+      expect(project().value).toBe(two.id);
+      expect(prState().value).toBe("merged");
+      expect(screen.queryByText("Merged de uno")).toBeNull();
+      expect(screen.queryByText("Open de dos")).toBeNull();
     });
 
     it("keeps the project after opening a task detail and going back", async () => {
@@ -264,12 +313,46 @@ describe("global queue", () => {
       expect(screen.queryByText("De dos")).toBeNull();
     });
 
-    it("starts with every project in a fresh app", async () => {
+    it("starts with every filter on All in each of the three tabs of a fresh app", async () => {
       const { fake } = twoProjects();
-      renderApp("/queue", fake);
+      const completed = { state: "completed", subState: null } as const;
+      fake.addTask(fake.projects[0]?.id as string, {
+        intent: "Ejecutando de uno",
+        state: "in_progress",
+        subState: "running",
+      });
+      fake.addTask(fake.projects[1]?.id as string, {
+        intent: "Ejecutando de dos",
+        state: "in_progress",
+        subState: "queued",
+      });
+      fake.addTask(fake.projects[0]?.id as string, {
+        ...completed,
+        intent: "Merged de uno",
+        prState: "merged",
+      });
+      fake.addTask(fake.projects[1]?.id as string, {
+        ...completed,
+        intent: "Open de dos",
+        prState: "open",
+      });
+      const { router } = renderApp("/queue", fake);
+      const project = () => screen.getByLabelText("Proyecto") as HTMLSelectElement;
+
       await screen.findByText("De dos");
-      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
+      expect(project().value).toBe("");
       expect(screen.getByText("De uno")).toBeTruthy();
+
+      await router.navigate({ to: "/in-progress" });
+      await screen.findByText("Ejecutando de uno");
+      expect(project().value).toBe("");
+      expect(screen.getByText("Ejecutando de dos")).toBeTruthy();
+
+      await router.navigate({ to: "/completed" });
+      await screen.findByText("Merged de uno");
+      expect(project().value).toBe("");
+      expect((screen.getByLabelText("Estado del PR") as HTMLSelectElement).value).toBe("");
+      expect(screen.getByText("Open de dos")).toBeTruthy();
     });
 
     it("falls back to All when the stored project was removed", async () => {
