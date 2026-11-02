@@ -11,6 +11,7 @@ import {
   REVIEWER_NAMES,
   VerificationHandoff,
 } from "./handoff/index.ts";
+import { QuestionOptions } from "./question.ts";
 import { SpecContent } from "./spec.ts";
 import { TaskNumber } from "./task.ts";
 
@@ -31,6 +32,7 @@ export const GetTaskContextInput = z.strictObject({});
 export const AskHumanInput = z.strictObject({
   question: Prose,
   context: Prose.optional(),
+  options: QuestionOptions.optional(),
 });
 export type AskHumanInput = z.infer<typeof AskHumanInput>;
 
@@ -139,6 +141,7 @@ export const TaskContext = z.strictObject({
       id: z.uuid(),
       question: z.string(),
       context: z.string().nullable(),
+      options: QuestionOptions.nullable(),
       status: QuestionStatus,
       answer: z.string().nullable(),
     }),

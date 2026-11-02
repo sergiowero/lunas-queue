@@ -7,6 +7,7 @@ import {
   AgentKind,
   Phase,
   PrState,
+  type QuestionOptions,
   QuestionStatus,
   ResultKind,
   RiskLabel,
@@ -251,6 +252,8 @@ export const questions = sqliteTable(
     runId: text("run_id").references(() => runs.id, { onDelete: "set null" }),
     question: text("question").notNull(),
     context: text("context"),
+    // Opciones que propuso el agente (2 a 6, inmutables); null en una pregunta abierta.
+    options: text("options", { mode: "json" }).$type<QuestionOptions>(),
     status: text("status", { enum: values(QuestionStatus) })
       .notNull()
       .default("open"),
