@@ -6,7 +6,7 @@ import { projects } from "./schema.ts";
 import { insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
 
 // A kind the schema rejects; the cast skips type checking on purpose.
-const codex = { kind: "codex" } as unknown as { kind: "claude" };
+const unsupportedKind = { kind: "gemini" } as unknown as { kind: "claude" };
 
 const input = {
   name: "lunas-queue",
@@ -41,7 +41,7 @@ describe("ProjectRepository.create", () => {
 
   it("validates the input", () => {
     const { repo } = repository();
-    expect(() => repo.create({ ...input, agentProfiles: { verify: codex } })).toThrow(
+    expect(() => repo.create({ ...input, agentProfiles: { verify: unsupportedKind } })).toThrow(
       /"invalid_value"[\s\S]*"verify"/,
     );
     expect(repo.list()).toEqual([]);
@@ -72,7 +72,7 @@ describe("ProjectRepository.get and list", () => {
 
   it("fails with invalid_row if the stored JSON does not meet the schema", () => {
     const { db, repo } = repository();
-    const row = insertProject(db, { agentProfiles: { verify: codex } });
+    const row = insertProject(db, { agentProfiles: { verify: unsupportedKind } });
     expect(errorOf(() => repo.get(row.id))).toMatchObject({ code: "invalid_row" });
   });
 });
@@ -113,7 +113,7 @@ describe("ProjectRepository.update", () => {
   it("rejects a verify profile with another kind without touching the row", () => {
     const { repo } = repository();
     const created = repo.create(input);
-    expect(() => repo.update(created.id, { agentProfiles: { verify: codex } })).toThrow(
+    expect(() => repo.update(created.id, { agentProfiles: { verify: unsupportedKind } })).toThrow(
       /"invalid_value"[\s\S]*"verify"/,
     );
     expect(repo.get(created.id)).toEqual(created);
@@ -177,7 +177,7 @@ describe("ProjectRepository: review findings", () => {
 
   it("rolls back the update if the resulting row is not valid", () => {
     const { db, repo } = repository();
-    const row = insertProject(db, { agentProfiles: { verify: { kind: "codex" } } });
+    const row = insertProject(db, { agentProfiles: { verify: { kind: "gemini" } } });
     expect(errorOf(() => repo.update(row.id, { baseBranch: "develop" }))).toMatchObject({
       code: "invalid_row",
     });
@@ -187,7 +187,7 @@ describe("ProjectRepository: review findings", () => {
 
   it("a PATCH can fix the invalid phase of a row", () => {
     const { db, repo } = repository();
-    const row = insertProject(db, { agentProfiles: { verify: { kind: "codex" } } });
+    const row = insertProject(db, { agentProfiles: { verify: { kind: "gemini" } } });
     const fixed = repo.update(row.id, { agentProfiles: { verify: { kind: "claude" } } });
     expect(fixed?.agentProfiles.verify).toEqual({ kind: "claude", args: [] });
   });

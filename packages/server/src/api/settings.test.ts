@@ -19,11 +19,11 @@ function setup() {
 }
 
 describe("GET /api/settings/providers", () => {
-  it("without saved configuration it returns claude and copilot enabled", async () => {
+  it("without saved configuration it returns all providers enabled", async () => {
     const { send } = setup();
     const res = await send("GET");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ claude: true, copilot: true });
+    expect(await res.json()).toEqual({ claude: true, copilot: true, codex: true });
   });
 });
 
@@ -32,10 +32,10 @@ describe("PUT /api/settings/providers", () => {
     const { db, send } = setup();
     const res = await send("PUT", { claude: false, copilot: true });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ claude: false, copilot: true });
-    expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: true });
+    expect(await res.json()).toEqual({ claude: false, copilot: true, codex: true });
+    expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: true, codex: true });
     expect(listPendingOutbox(db).map((e) => [e.message.topic, e.message.payload])).toEqual([
-      [SETTINGS_UPDATED, { providers: { claude: false, copilot: true } }],
+      [SETTINGS_UPDATED, { providers: { claude: false, copilot: true, codex: true } }],
     ]);
   });
 
@@ -43,15 +43,23 @@ describe("PUT /api/settings/providers", () => {
     const { send } = setup();
     await send("PUT", { claude: false });
     const res = await send("PUT", { copilot: false });
-    expect(await res.json()).toEqual({ claude: false, copilot: false });
-    expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: false });
+    expect(await res.json()).toEqual({ claude: false, copilot: false, codex: true });
+    expect(await (await send("GET")).json()).toEqual({
+      claude: false,
+      copilot: false,
+      codex: true,
+    });
   });
 
   it("sending the same configuration twice leaves the same state and a single row", async () => {
     const { db, send } = setup();
     await send("PUT", { claude: false, copilot: false });
     await send("PUT", { claude: false, copilot: false });
-    expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: false });
+    expect(await (await send("GET")).json()).toEqual({
+      claude: false,
+      copilot: false,
+      codex: true,
+    });
     expect(db.$client.prepare("select count(*) from app_settings").pluck().get()).toBe(1);
     expect(listPendingOutbox(db)).toHaveLength(1);
   });
@@ -64,12 +72,16 @@ describe("PUT /api/settings/providers", () => {
     "answers 400 invalid_input with %s and does not change what was saved",
     async (_name, body) => {
       const { db, send } = setup();
-      new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+      new SettingsRepository(db).saveProviders({ claude: false, copilot: true, codex: true });
       const before = listPendingOutbox(db).length;
       const res = await send("PUT", body);
       expect(res.status).toBe(400);
       expect(await res.json()).toMatchObject({ error: "invalid_input" });
-      expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: true });
+      expect(await (await send("GET")).json()).toEqual({
+        claude: false,
+        copilot: true,
+        codex: true,
+      });
       expect(listPendingOutbox(db)).toHaveLength(before);
     },
   );
@@ -186,7 +198,11 @@ describe("request origin for /api/settings", () => {
     const res = await send("PUT", { claude: false, copilot: false }, headers);
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "forbidden_origin" });
-    expect(new SettingsRepository(db).providers()).toEqual({ claude: true, copilot: true });
+    expect(new SettingsRepository(db).providers()).toEqual({
+      claude: true,
+      copilot: true,
+      codex: true,
+    });
     expect(listPendingOutbox(db)).toEqual([]);
   });
 
@@ -211,7 +227,11 @@ describe("request origin for /api/settings", () => {
       { incoming: { socket: { remoteAddress } } },
     );
     expect(res.status).toBe(403);
-    expect(new SettingsRepository(db).providers()).toEqual({ claude: true, copilot: true });
+    expect(new SettingsRepository(db).providers()).toEqual({
+      claude: true,
+      copilot: true,
+      codex: true,
+    });
     expect(listPendingOutbox(db)).toEqual([]);
   });
 

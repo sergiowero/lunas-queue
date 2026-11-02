@@ -33,7 +33,7 @@ import { specRoutes } from "./api/specs.ts";
 import { changeStreamRoutes, DEFAULT_CHANGE_STREAM_INTERVAL_MS } from "./api/stream.ts";
 import { taskRoutes } from "./api/tasks.ts";
 import { queueRoutes, taskViewRoutes } from "./api/views.ts";
-import type { CopilotReviewerExecutor } from "./mcp/copilot-reviewer.ts";
+import type { CopilotReviewerExecutor, ReviewerExecutor } from "./mcp/copilot-reviewer.ts";
 import {
   type CommitVerifier,
   GitCommitVerifier,
@@ -88,6 +88,7 @@ export interface AppDeps {
    */
   telemetry?: boolean;
   copilotReviewers?: CopilotReviewerExecutor;
+  codexReviewers?: ReviewerExecutor;
   /** Scheduler configuration: the queue shows the same score it dispatches with. */
   scheduler?: SchedulerConfigInput;
   /** Reading the evidence in the repo when the worktree no longer exists; real git by default. */
@@ -105,6 +106,7 @@ export function createApp({
   commitVerifier,
   phaseHooks,
   copilotReviewers,
+  codexReviewers,
   hooks,
   questions,
   blocked,
@@ -123,6 +125,7 @@ export function createApp({
     commitVerifier: commitVerifier ?? new GitCommitVerifier(runner),
     phaseHooks: phaseHooks ?? new NoPhaseHooks(),
     ...(copilotReviewers && { copilotReviewers }),
+    ...(codexReviewers && { codexReviewers }),
   });
   const tasks = new TaskRepository(db);
   const runs = new RunRepository(db);

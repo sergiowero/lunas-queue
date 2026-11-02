@@ -10,10 +10,12 @@ import { join } from "node:path";
 import {
   AgentProviderError,
   agentProviders,
+  CODEX_TRUST_ACCEPT_KEYS,
   COPILOT_TRUST_ACCEPT_KEYS,
   type HerdrAdapter,
   type HerdrAgent,
   isHerdrError,
+  showsCodexTrustDialog,
   showsCopilotTrustDialog,
   showsTrustDialog,
   TRUST_ACCEPT_KEYS,
@@ -546,6 +548,7 @@ export class PhaseDispatcher implements Dispatcher {
         selected.kind === "copilot" ? await this.writeCopilotMcpConfig(run) : this.mcpConfigPath;
       return agentProviders.get(selected.kind).args(selected, {
         mcpConfigPath,
+        ...(this.mcpUrl && { mcpUrl: this.mcpUrl }),
         settingsPath: this.hookSettingsPath,
         sessionId: run.agentSession ?? run.id,
       });
@@ -662,11 +665,13 @@ export class PhaseDispatcher implements Dispatcher {
   private async unblockStart(name: string, agent: HerdrAgent, fresh: boolean): Promise<HerdrAgent> {
     const screen = await this.herdr.readAgent({ name, lines: SCREEN_LINES });
     const acceptKeys =
-      agent.kind === "copilot" && showsCopilotTrustDialog(screen)
-        ? COPILOT_TRUST_ACCEPT_KEYS
-        : showsTrustDialog(screen)
-          ? TRUST_ACCEPT_KEYS
-          : undefined;
+      agent.kind === "codex" && showsCodexTrustDialog(screen)
+        ? CODEX_TRUST_ACCEPT_KEYS
+        : agent.kind === "copilot" && showsCopilotTrustDialog(screen)
+          ? COPILOT_TRUST_ACCEPT_KEYS
+          : showsTrustDialog(screen)
+            ? TRUST_ACCEPT_KEYS
+            : undefined;
     if (!acceptKeys) {
       if (!fresh) return agent;
       throw new DispatchError(

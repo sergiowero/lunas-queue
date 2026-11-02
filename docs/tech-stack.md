@@ -34,7 +34,7 @@ All of LunasQ is a Node.js process on `localhost`: it receives the UI over HTTP 
 ```mermaid
 flowchart TB
     BR["Browser<br/>React front end"]
-    CC["Claude Code<br/>in herdr panes, one per phase"]
+    CC["Claude Code · Copilot CLI · Codex CLI<br/>in herdr panes, one per phase"]
     subgraph P["lunasq process · Node.js 26"]
         API["API + SSE<br/>Hono, serves the front end"]
         MCP["LunasQ MCP<br/>Streamable HTTP"]
@@ -80,7 +80,7 @@ Each component of the design is solved with pieces from the same base, with no a
 | GitHub adapter | `gh` CLI with `--json` output via `child_process` | Uses the machine's authenticated `gh` session |
 | Evidence file | Own markdown generator; secret redaction with gitleaks‑style patterns | Writes to `lunasq/tasks/{id}.md` of the worktree |
 | LunasQ's own logs | pino | Structured JSON, rotation per file |
-| CLI and installer | `lunasq` binary published as the npm package `lunasq` (`lunasq start`, `lunasq install`, `lunasq doctor`), built with esbuild into a single bundle ([ADR uw-28-instalador](decisions/uw-28-instalador.md)) | `install` checks herdr, Claude Code, Copilot CLI and `gh`; installs skills in `~/.claude/` and `~/.copilot/`, and registers the LunasQ MCP in Copilot's configuration |
+| CLI and installer | `lunasq` binary published as the npm package `lunasq` (`lunasq start`, `lunasq install`, `lunasq doctor`), built with esbuild into a single bundle ([ADR uw-28-instalador](decisions/uw-28-instalador.md)) | `install` checks herdr, at least one of Claude Code, Copilot CLI or Codex CLI, and `gh`; installs provider assets and registers MCP configuration where required |
 
 **Front end**
 
@@ -104,7 +104,7 @@ Monorepo with pnpm workspaces; the rule is that the domain depends on nothing ex
 | `packages/schemas` | Shared Zod schemas: entities, per‑phase handoffs, events; JSON Schema generation | — |
 | `packages/domain` | State machine, guards, scheduler rules (ready set, score, limits), dependency rules | `schemas` |
 | `packages/db` | Drizzle schema, migrations, repositories, outbox | `schemas`, `domain` |
-| `packages/adapters` | herdr adapter (real and fake), `gh` adapter, git adapter (reading the base branch and commits), process runner (also in a herdr pane), hook executor and test gate | `schemas` |
+| `packages/adapters` | herdr adapter (real and fake), agent CLI provider registry, `gh` adapter, git adapter (reading the base branch and commits), process runner (also in a herdr pane), hook executor and test gate | `schemas` |
 | `packages/server` | Hono: API, SSE, LunasQ MCP, OTLP endpoints; scheduler, dispatcher and reconciliation; evidence generator | `domain`, `db`, `adapters`, `schemas` |
 | `packages/web` | React + Vite front end; compiled to statics (`dist/app`) that `server` serves with `@hono/node-server` | `schemas` (types only) |
 | `packages/cli` | `lunasq` binary: `start`, `install`, `doctor`; the process `start` launches is composed by `server` (`startRuntime`) | `server` |
@@ -112,7 +112,7 @@ Monorepo with pnpm workspaces; the rule is that the domain depends on nothing ex
 | `assets/skills` | Phase skills: `refine-task`, `implement-task`, `verify-task` ([ADR uw-18-skills-fase](decisions/uw-18-skills-fase.md)) | — |
 | `assets/agents` | Definitions of the 4 reviewer subagents | — |
 
-The assets are versioned with the code. `lunasq install` copies skills to `~/.claude/` and `~/.copilot/`; the four reviewers and their hooks are installed only for Claude Code. Verification parity for Copilot is still pending. The integration tests against real herdr and `gh` live in `packages/adapters` and run apart from the unit suite.
+The assets are versioned with the code. `lunasq install` copies skills to `~/.claude/` and `~/.copilot/`; Claude uses native reviewer subagents and hooks, while Copilot and Codex use LunasQ-managed reviewer executors. Codex MCP configuration is supplied per Run through CLI `--config` overrides and does not modify the user's global Codex config. The integration tests against real herdr and `gh` live in `packages/adapters` and run apart from the unit suite.
 
 ## External integrations
 
@@ -120,9 +120,10 @@ LunasQ embeds none of these tools: it invokes them as processes or configures th
 
 | Tool | How it integrates | What `lunasq install` configures |
 | --- | --- | --- |
-| herdr | CLI with JSON output and Unix socket (NDJSON) for events; minimum version 0.9.5, protocol 22 ([ADR 0004](decisions/0004-herdr-version-y-cli.md)) | Checks the version; installs herdr's official integration for Claude Code |
+| herdr | CLI with JSON output and Unix socket (NDJSON) for events; minimum version 0.9.5, protocol 22 ([ADR 0004](decisions/0004-herdr-version-y-cli.md)); supports Claude, Copilot and Codex agent kinds | Checks the version; installs herdr's official integration for Claude Code when that provider is available |
 | Claude Code | Started by herdr with `agent start --kind claude`; the dispatcher adds the MCP file and a stable `--settings` with subagent HTTP hooks | Writes MCP/settings in `~/.lunasq/`; copies skills and reviewers to `~/.claude/` |
-| GitHub Copilot CLI | Started by herdr with `agent start --kind copilot`; always with `--autopilot` (reserved together with `--mode` and `--plan`, [ADR 0016](decisions/0016-proveedores-agente.md)), `--allow-all-tools`, `--session-id` and `--additional-mcp-config` per Run with its MCP token; it does not pass `--trust-folder` | Registers the MCP in `~/.copilot/mcp-config.json` idempotently and preserving other entries; copies skills to `~/.copilot/`. Automatic reviewer capture is not implemented yet |
+| GitHub Copilot CLI | Started by herdr with `agent start --kind copilot`; always with `--autopilot` (reserved together with `--mode` and `--plan`, [ADR 0016](decisions/0016-proveedores-agente.md)), `--allow-all-tools`, `--session-id` and `--additional-mcp-config` per Run with its MCP token; it does not pass `--trust-folder` | Registers the MCP in `~/.copilot/mcp-config.json` idempotently and preserving other entries; copies skills to `~/.copilot/`; verification reviewers run in separate read-only CLI executions |
+| OpenAI Codex CLI | Started by herdr with `agent start --kind codex`; minimum version 0.122.0; per-Run model/reasoning overrides, `workspace-write`, no approval prompts, and an HTTP MCP server configured with `--config` and the run-token environment variable; verification reviewers use `codex exec --sandbox read-only --ignore-user-config` | Checks `codex --version`; no global MCP configuration or credentials are written |
 | GitHub | `gh` CLI with `--json` | Checks that `gh` is authenticated |
 | git | Worktrees via herdr; `LunasQ-Task` and `LunasQ-Run` trailers in commit messages | — |
 | OpenTelemetry | Claude Code exports metrics and events over OTLP/HTTP JSON to `localhost` | Telemetry variables in each pane's environment |

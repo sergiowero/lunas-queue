@@ -6,6 +6,7 @@ import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, sep } from "node:path";
 import type { RunRow, RunSubagentRow } from "@lunasq/db";
+import type { AgentKind } from "@lunasq/schemas";
 
 export type TranscriptRequest = {
   run: RunRow;
@@ -112,48 +113,66 @@ export class ClaudeTranscriptSource implements TranscriptSource {
   }
 }
 
-export class CopilotReviewerTranscriptSource implements TranscriptSource {
+export class AgentReviewerTranscriptSource implements TranscriptSource {
   readonly #claude: TranscriptSource;
-  readonly #evidencePath: string;
+  readonly #evidencePaths: Partial<Record<Exclude<AgentKind, "claude">, string>>;
   readonly #maxBytes: number;
 
-  constructor(options: { claude: TranscriptSource; evidencePath: string; maxBytes?: number }) {
+  constructor(options: {
+    claude: TranscriptSource;
+    evidencePaths: Partial<Record<Exclude<AgentKind, "claude">, string>>;
+    maxBytes?: number;
+  }) {
     this.#claude = options.claude;
-    this.#evidencePath = options.evidencePath;
+    this.#evidencePaths = options.evidencePaths;
     this.#maxBytes = options.maxBytes ?? DEFAULT_TRANSCRIPT_MAX_BYTES;
   }
 
   async forRun(request: TranscriptRequest): Promise<RawTranscript[]> {
-    if (request.run.agentKind !== "copilot") return this.#claude.forRun(request);
+    if (request.run.agentKind === "claude") return this.#claude.forRun(request);
+    const kind = request.run.agentKind;
+    const evidencePath = this.#evidencePaths[kind];
 
     const out: RawTranscript[] = [
       {
-        title: "Copilot CLI session",
+        title: `${kind === "codex" ? "Codex" : "Copilot"} CLI session`,
         jsonl: null,
         note: "LunasQ captures each reviewer's executions and answers separately",
       },
     ];
     for (const subagent of request.subagents) {
       const title = `Subagent ${subagent.agentType} (${subagent.agentId})`;
-      if (!subagent.agentId.startsWith("copilot-") || !subagent.transcriptPath) {
+      if (!evidencePath || !subagent.agentId.startsWith(`${kind}-`) || !subagent.transcriptPath) {
         out.push({
           title,
           jsonl: null,
-          note: "no transcript for a completed Copilot execution",
+          note: `no transcript for a completed ${kind} execution`,
         });
         continue;
       }
       out.push({
         title,
-        ...(await this.#readReviewer(subagent.transcriptPath, request.run.id, subagent.agentId)),
+        ...(await this.#readReviewer(
+          subagent.transcriptPath,
+          request.run.id,
+          subagent.agentId,
+          evidencePath,
+          kind,
+        )),
       });
     }
     return out;
   }
 
-  async #readReviewer(path: string, runId: string, agentId: string): Promise<Read> {
-    const expectedDir = join(this.#evidencePath, runId);
-    const root = await realpath(this.#evidencePath).catch(() => null);
+  async #readReviewer(
+    path: string,
+    runId: string,
+    agentId: string,
+    evidencePath: string,
+    kind: Exclude<AgentKind, "claude">,
+  ): Promise<Read> {
+    const expectedDir = join(evidencePath, runId);
+    const root = await realpath(evidencePath).catch(() => null);
     const [dirInfo, fileInfo] = await Promise.all([
       lstat(expectedDir).catch(() => null),
       lstat(path).catch(() => null),
@@ -173,11 +192,11 @@ export class CopilotReviewerTranscriptSource implements TranscriptSource {
     ) {
       return {
         jsonl: null,
-        note: "the Copilot transcript is outside the Run's private directory",
+        note: `the ${kind} transcript is outside the Run's private directory`,
       };
     }
     if (basename(realFile) !== `${agentId}.jsonl`) {
-      return { jsonl: null, note: "the Copilot transcript name does not match the reviewer" };
+      return { jsonl: null, note: `the ${kind} transcript name does not match the reviewer` };
     }
     const info = await stat(realFile).catch(() => null);
     if (!info?.isFile()) return { jsonl: null, note: `${path} not found` };

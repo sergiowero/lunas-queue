@@ -37,7 +37,7 @@ describe("domain enums", () => {
   });
 
   it("lists the supported agent providers", () => {
-    expect(AgentKind.options).toEqual(["claude", "copilot"]);
+    expect(AgentKind.options).toEqual(["claude", "copilot", "codex"]);
   });
 
   it("the other enums have the values of the design", () => {

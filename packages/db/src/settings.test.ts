@@ -6,9 +6,9 @@ import { SettingsRepository } from "./settings.ts";
 import { migratedDatabase } from "./test-helpers.ts";
 
 describe("SettingsRepository: agent providers", () => {
-  it("a database with no saved configuration has claude and copilot enabled", () => {
+  it("a database with no saved configuration has every provider enabled", () => {
     const repo = new SettingsRepository(migratedDatabase());
-    expect(repo.providers()).toEqual({ claude: true, copilot: true });
+    expect(repo.providers()).toEqual({ claude: true, copilot: true, codex: true });
   });
 
   it("saves the configuration and returns it on later reads", () => {
@@ -16,27 +16,28 @@ describe("SettingsRepository: agent providers", () => {
     expect(repo.saveProviders({ claude: false, copilot: true })).toEqual({
       claude: false,
       copilot: true,
+      codex: true,
     });
-    expect(repo.providers()).toEqual({ claude: false, copilot: true });
+    expect(repo.providers()).toEqual({ claude: false, copilot: true, codex: true });
   });
 
   it("saving the same configuration twice leaves a single row and the same state", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
-    repo.saveProviders({ claude: false, copilot: false });
-    repo.saveProviders({ claude: false, copilot: false });
-    expect(repo.providers()).toEqual({ claude: false, copilot: false });
+    repo.saveProviders({ claude: false, copilot: false, codex: false });
+    repo.saveProviders({ claude: false, copilot: false, codex: false });
+    expect(repo.providers()).toEqual({ claude: false, copilot: false, codex: false });
     expect(db.select().from(appSettings).all()).toHaveLength(1);
   });
 
   it("saving what is already in force does not publish another settings.updated", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
-    repo.saveProviders({ claude: false, copilot: true });
-    repo.saveProviders({ claude: false, copilot: true });
+    repo.saveProviders({ claude: false, copilot: true, codex: true });
+    repo.saveProviders({ claude: false, copilot: true, codex: true });
     expect(listPendingOutbox(db)).toHaveLength(1);
     expect(db.select().from(events).all()).toHaveLength(1);
-    repo.saveProviders({ claude: true, copilot: true });
+    repo.saveProviders({ claude: true, copilot: true, codex: true });
     expect(listPendingOutbox(db)).toHaveLength(2);
   });
 
@@ -45,18 +46,26 @@ describe("SettingsRepository: agent providers", () => {
     const repo = new SettingsRepository(db);
     // Two clients with an old view: each one changes only its provider.
     repo.saveProviders({ claude: false });
-    expect(repo.saveProviders({ copilot: false })).toEqual({ claude: false, copilot: false });
-    expect(repo.providers()).toEqual({ claude: false, copilot: false });
-    expect(repo.saveProviders({ copilot: true })).toEqual({ claude: false, copilot: true });
+    expect(repo.saveProviders({ copilot: false })).toEqual({
+      claude: false,
+      copilot: false,
+      codex: true,
+    });
+    expect(repo.providers()).toEqual({ claude: false, copilot: false, codex: true });
+    expect(repo.saveProviders({ copilot: true })).toEqual({
+      claude: false,
+      copilot: true,
+      codex: true,
+    });
     expect(listPendingOutbox(db)).toHaveLength(3);
   });
 
   it("saving the defaults without prior configuration publishes nothing", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
-    repo.saveProviders({ claude: true, copilot: true });
+    repo.saveProviders({ claude: true, copilot: true, codex: true });
     expect(listPendingOutbox(db)).toEqual([]);
-    expect(repo.providers()).toEqual({ claude: true, copilot: true });
+    expect(repo.providers()).toEqual({ claude: true, copilot: true, codex: true });
   });
 
   it("records settings.updated in the outbox with no associated task", () => {
@@ -68,7 +77,7 @@ describe("SettingsRepository: agent providers", () => {
       topic: SETTINGS_UPDATED,
       taskId: null,
       actor: "human",
-      payload: { providers: { claude: true, copilot: false } },
+      payload: { providers: { claude: true, copilot: false, codex: true } },
     });
     expect(db.select().from(events).all()).toHaveLength(1);
   });
@@ -78,7 +87,11 @@ describe("SettingsRepository: agent providers", () => {
     db.insert(appSettings)
       .values({ key: "providers", value: { copilot: false } })
       .run();
-    expect(new SettingsRepository(db).providers()).toEqual({ claude: true, copilot: false });
+    expect(new SettingsRepository(db).providers()).toEqual({
+      claude: true,
+      copilot: false,
+      codex: true,
+    });
   });
 });
 
@@ -136,7 +149,7 @@ describe("SettingsRepository: concurrency", () => {
     const repo = new SettingsRepository(migratedDatabase());
     repo.saveProviders({ claude: false });
     repo.saveConcurrency({ globalConcurrency: 2 });
-    expect(repo.providers()).toEqual({ claude: false, copilot: true });
+    expect(repo.providers()).toEqual({ claude: false, copilot: true, codex: true });
   });
 
   it("a corrupt saved value falls back to the default instead of breaking the read", () => {

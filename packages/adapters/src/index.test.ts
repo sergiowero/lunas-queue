@@ -9,6 +9,7 @@ describe("@lunasq/adapters", () => {
   it("builds CLI-specific arguments and orders the fallback with the primary first", () => {
     const context = {
       mcpConfigPath: "/cfg/mcp.json",
+      mcpUrl: "http://localhost:4321/mcp",
       settingsPath: "/cfg/settings.json",
       sessionId: "sess-1",
     };
@@ -57,9 +58,35 @@ describe("@lunasq/adapters", () => {
       "--additional-mcp-config",
       "@/cfg/mcp.json",
     ]);
+    expect(
+      agentProviders
+        .get("codex")
+        .args({ kind: "codex", model: "gpt-5.4", effort: "high", args: [] }, context),
+    ).toEqual([
+      "--model",
+      "gpt-5.4",
+      "--config",
+      'model_reasoning_effort="high"',
+      "--sandbox",
+      "workspace-write",
+      "--ask-for-approval",
+      "never",
+      "--config",
+      'mcp_servers.lunasq.url="http://localhost:4321/mcp"',
+      "--config",
+      'mcp_servers.lunasq.env_http_headers={"X-LunasQ-Run-Token"="LUNASQ_RUN_TOKEN"}',
+      "--config",
+      'mcp_servers.lunasq.default_tools_approval_mode="approve"',
+    ]);
     expect(agentProviders.fallbackOrder("copilot").map((provider) => provider.kind)).toEqual([
       "copilot",
       "claude",
+      "codex",
+    ]);
+    expect(agentProviders.fallbackOrder("codex").map((provider) => provider.kind)).toEqual([
+      "codex",
+      "claude",
+      "copilot",
     ]);
   });
 

@@ -49,13 +49,13 @@ It is meant for queueing many tasks from several repos, letting them advance in 
 - **Dependencies as a DAG.** A task waits for its dependencies' PRs to be merged; cycles are rejected. The scheduler orders by priority, *aging* and unblock boost.
 - **One worktree per task.** Each task has its own branch (`lunasq/<id>`) and checkout in all phases, so several tasks of the same repo run in parallel without stepping on each other.
 - **MCP as the output channel.** Agents report spec, checklist and verdicts with tools of the LunasQ MCP, validated with a run token; nothing is inferred by reading the terminal.
-- **Verification with reviewers.** The approver chooses among four read‑only subagents (code, security, UI, UX) and justifies the ones it skips.
+- **Verification with reviewers.** The approver chooses among four read‑only reviewers (code, security, UI, UX) and justifies the ones it skips; Claude uses native subagents and Copilot/Codex use isolated read-only CLI executions.
 - **Per‑phase hooks.** Project scripts in `lunasq/hooks/` that LunasQ runs before and after each phase (version bump, test deploys, notices).
 - **Question inbox.** Agents ask asynchronously with `ask_human`; you answer in the UI and the agent resumes with your answer.
-- **Claude Code and Copilot CLI providers.** The agent is chosen per phase and project, with a fallback to the other if one fails to start.
+- **Claude Code, Copilot CLI and Codex CLI providers.** The agent is chosen per phase and project, with fallback across enabled providers if one fails to start; Settings can disable a CLI that is unavailable.
 - **Idempotent and reconcilable.** The database is the source of truth; herdr is ephemeral state that a reconciliation loop compares and corrects.
 - **Traceability.** Append‑only Event log, `LunasQ-Task` and `LunasQ-Run` trailers on every commit and an evidence file in `lunasq/tasks/<id>.md`.
-- **Visible consumption.** Tokens and cost per Run via local OTLP telemetry.
+- **Visible consumption.** Claude tokens and cost per Run via local OTLP; Copilot/Codex usage is marked partial when unavailable.
 - **Spanish and English UI.** The interface defaults to Spanish; the ES/EN button in the header switches the language and remembers the choice. The repo, the API and the MCP are English only.
 
 ## Architecture
@@ -81,11 +81,12 @@ Principles: the database is the truth, reconciliation instead of fire‑once, st
 | Node.js 26 | Pinned in [.node-version](.node-version) | Runtime |
 | pnpm 11 | Pinned in `packageManager` of `package.json` | Monorepo manager |
 | [herdr](https://herdr.dev) | ≥ 0.9.5, with its server running | Runs and observes the agents |
-| [Claude Code](https://claude.com/claude-code) | ≥ 2.1.312 | Default agent |
+| [Claude Code](https://claude.com/claude-code) | ≥ 2.1.312 (optional if another provider is installed) | Default agent |
 | `gh` | Authenticated (`gh auth status`) | PRs and merge detection |
 | GitHub Copilot CLI | ≥ 1.0.0 (optional) | Alternative agent |
+| [OpenAI Codex CLI](https://developers.openai.com/codex/cli) | ≥ 0.122.0 (optional) | Alternative agent and verification provider |
 
-`pnpm lunasq doctor` checks all of this and tells you what is missing.
+At least one provider CLI must be installed. `pnpm lunasq doctor` checks this and tells you what is missing; unavailable providers can be disabled from Settings.
 
 ## Quick start
 
@@ -134,6 +135,8 @@ LunasQ keeps everything of its own in `~/.lunasq/` (change it with `LUNASQ_HOME`
 | `mcp.json` | Stable LunasQ MCP configuration for Claude Code |
 | `lunasq.db` | SQLite database (WAL mode) with tasks, specs, Runs and Event log |
 | `claude-settings.json` | Settings with the reviewer subagents' hooks |
+
+Codex receives its authenticated LunasQ MCP configuration per Run; LunasQ does not edit Codex's global configuration.
 
 | Variable | Effect |
 | --- | --- |
@@ -205,6 +208,6 @@ The working rules in the repo (architecture, boundaries, idempotency) are in [AG
 
 ## Project status and v1 scope
 
-LunasQ is under active development. v1 covers the complete flow described above, with Claude Code and GitHub Copilot CLI as agents, a single machine and a single user.
+LunasQ is under active development. v1 covers the complete flow described above, with Claude Code, GitHub Copilot CLI and OpenAI Codex CLI as agents, a single machine and a single user.
 
 **Out of scope in v1:** automatic merge, direct commits to `main`, production deployment done by LunasQ (it can be configured with project hooks), lanes by task size, acceptance tests hidden from the builder, multi‑user with roles and automatic intake from GitHub issues (planned for v2). The full roadmap is in [docs/design.md](docs/design.md).

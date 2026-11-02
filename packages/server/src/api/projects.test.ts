@@ -37,16 +37,14 @@ describe("POST /api/projects", () => {
     expect(project.agentProfiles).toMatchObject({ verify: { kind: "claude", args: [] } });
   });
 
-  it("answers 400 with issues if the verify profile is not claude", async () => {
+  it("accepts Codex as a verification provider", async () => {
     const { send } = setup();
     const res = await send("POST", "/api/projects", {
       ...input,
       agentProfiles: { verify: { kind: "codex" } },
     });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { issues: { path: unknown[] }[] };
-    expect(body).toMatchObject({ error: "invalid_input" });
-    expect(body.issues[0]?.path).toEqual(["agentProfiles", "verify", "kind"]);
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ agentProfiles: { verify: { kind: "codex" } } });
   });
 
   it("answers 400 if the body is not JSON", async () => {
@@ -102,13 +100,14 @@ describe("PATCH /api/projects/:id", () => {
     });
   });
 
-  it("answers 400 if the verify profile is not claude", async () => {
+  it("accepts Codex as an updated verification provider", async () => {
     const { send } = setup();
     const project = await created(send);
     const res = await send("PATCH", `/api/projects/${project.id}`, {
       agentProfiles: { verify: { kind: "codex" } },
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ agentProfiles: { verify: { kind: "codex" } } });
   });
 
   it("answers 404 if it does not exist", async () => {
@@ -170,7 +169,7 @@ describe("errors and per-phase PATCH", () => {
 
   it("an invalid row answers 500 in JSON", async () => {
     const { db, send } = setup();
-    const row = insertProject(db, { agentProfiles: { verify: { kind: "codex" } } });
+    const row = insertProject(db, { agentProfiles: { verify: { kind: "gemini" } } });
     const res = await send("GET", `/api/projects/${row.id}`);
     expect(res.status).toBe(500);
     expect(await res.json()).toMatchObject({ error: "invalid_row" });

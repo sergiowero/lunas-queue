@@ -78,8 +78,8 @@ describe("live updates over SSE", () => {
     const claude = await screen.findByRole("switch", { name: "Claude" });
     expect(claude.getAttribute("aria-checked")).toBe("true");
 
-    // Another tab turns off both providers: here only the global change arrives.
-    fake.providers = { claude: false, copilot: false };
+    // Another tab turns off all providers: here only the global change arrives.
+    fake.providers = { claude: false, copilot: false, codex: false };
     FakeEventSource.instances[0]?.emit("change", JSON.stringify({ taskIds: [], settings: true }));
     await waitFor(() =>
       expect(screen.getByRole("switch", { name: "Claude" }).getAttribute("aria-checked")).toBe(

@@ -4,8 +4,8 @@ import { join } from "node:path";
 import type { RunRow, RunSubagentRow } from "@lunasq/db";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  AgentReviewerTranscriptSource,
   ClaudeTranscriptSource,
-  CopilotReviewerTranscriptSource,
   projectDirName,
 } from "./sources.ts";
 
@@ -58,7 +58,7 @@ describe("ClaudeTranscriptSource", () => {
     expect(main).toEqual({ title: "Agent session", jsonl: '{"type":"user"}\n' });
   });
 
-  describe("CopilotReviewerTranscriptSource", () => {
+  describe("AgentReviewerTranscriptSource", () => {
     it("reads the real transcript LunasQ stored for a completed execution", async () => {
       const evidencePath = join(root, "copilot-reviewers");
       const runDir = join(evidencePath, "run-1");
@@ -69,9 +69,9 @@ describe("ClaudeTranscriptSource", () => {
         transcript,
         `${JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "NO FINDINGS" }] } })}\n`,
       );
-      const source = new CopilotReviewerTranscriptSource({
+      const source = new AgentReviewerTranscriptSource({
         claude: new ClaudeTranscriptSource({ claudeDir }),
-        evidencePath,
+        evidencePaths: { copilot: evidencePath },
       });
       const out = await source.forRun({
         run: run({ agentKind: "copilot" }),
@@ -96,9 +96,9 @@ describe("ClaudeTranscriptSource", () => {
       mkdirSync(evidencePath);
       const secret = join(root, "secret.jsonl");
       writeFileSync(secret, "no incluir");
-      const source = new CopilotReviewerTranscriptSource({
+      const source = new AgentReviewerTranscriptSource({
         claude: new ClaudeTranscriptSource({ claudeDir }),
-        evidencePath,
+        evidencePaths: { copilot: evidencePath },
       });
       const out = await source.forRun({
         run: run({ agentKind: "copilot" }),
@@ -114,6 +114,37 @@ describe("ClaudeTranscriptSource", () => {
 
       expect(out[1]?.jsonl).toBeNull();
       expect(out[1]?.note).toMatch(/outside the Run.s private directory/);
+    });
+
+    it("reads Codex reviewer transcripts only from the Codex evidence directory", async () => {
+      const codexEvidencePath = join(root, "codex-reviewers");
+      const copilotEvidencePath = join(root, "copilot-reviewers");
+      const runDir = join(codexEvidencePath, "run-1");
+      mkdirSync(runDir, { recursive: true });
+      const agentId = "codex-session-1";
+      const transcript = join(runDir, `${agentId}.jsonl`);
+      writeFileSync(transcript, '{"type":"assistant","text":"NO FINDINGS"}\n');
+      const source = new AgentReviewerTranscriptSource({
+        claude: new ClaudeTranscriptSource({ claudeDir }),
+        evidencePaths: { codex: codexEvidencePath, copilot: copilotEvidencePath },
+      });
+      const out = await source.forRun({
+        run: run({ agentKind: "codex" }),
+        worktreePath: worktree,
+        subagents: [
+          subagent({
+            agentId,
+            stoppedAt: new Date(),
+            transcriptPath: transcript,
+          }),
+        ],
+      });
+
+      expect(out[0]?.title).toBe("Codex CLI session");
+      expect(out[1]).toMatchObject({
+        title: `Subagent lunasq-code-reviewer (${agentId})`,
+        jsonl: expect.stringContaining("NO FINDINGS"),
+      });
     });
   });
 

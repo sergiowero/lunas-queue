@@ -444,7 +444,8 @@ describe("runs", () => {
     const set = (col: string, value: string) =>
       db.$client.prepare(`update runs set ${col} = ? where id = ?`).run(value, r.id);
     expect(() => set("phase", "deploy")).toThrow(CHECK);
-    expect(() => set("agent_kind", "codex")).toThrow(CHECK);
+    expect(() => set("agent_kind", "gemini")).toThrow(CHECK);
+    expect(() => set("agent_kind", "codex")).not.toThrow();
     expect(() => set("result", "ok")).toThrow(CHECK);
     expect(() => set("result", "failure")).not.toThrow();
     expect(() => set("agent_session_source", "otra")).toThrow(CHECK);
@@ -459,6 +460,31 @@ describe("runs", () => {
     expect(r.launchedAt).toBeNull();
     const migration = readFileSync(join(migrationsFolder, "0004_dispatcher.sql"), "utf8");
     expect(migration).not.toMatch(/DROP TABLE/);
+  });
+
+  it("the Codex provider migration preserves Runs and their usage", () => {
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-drizzle-before-codex-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8"));
+      journal.entries = journal.entries.filter(
+        (e: { tag: string }) => e.tag !== "0015_agent_kind_codex",
+      );
+      writeFileSync(journalFile, JSON.stringify(journal));
+      const { db } = freshDatabase();
+      migrate(db, { migrationsFolder: previous });
+      const task = insertTask(db, insertProject(db).id);
+      const run = insertRun(db, task.id);
+      db.insert(usageRecords).values({ runId: run.id, model: "gpt-5.4", source: "otel" }).run();
+
+      migrateDatabase(db);
+
+      expect(db.select().from(usageRecords).all()).toHaveLength(1);
+      expect(() => db.$client.prepare("update runs set agent_kind = 'codex'").run()).not.toThrow();
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
   });
 
   it("stores handoff as JSON and requires an existing task", () => {

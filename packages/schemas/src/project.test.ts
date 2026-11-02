@@ -63,10 +63,25 @@ describe("AgentProfiles", () => {
     ]);
   });
 
+  it("accepts Codex CLI as a provider in any phase", () => {
+    const profiles = AgentProfiles.parse({
+      refine: { kind: "codex", effort: "xhigh" },
+      implement: { kind: "codex", model: "gpt-5.4" },
+      verify: { kind: "codex" },
+      deliver: { kind: "codex" },
+    });
+    expect(Object.values(profiles).map((profile) => profile.kind)).toEqual([
+      "codex",
+      "codex",
+      "codex",
+      "codex",
+    ]);
+  });
+
   it.each(["refine", "implement", "verify", "deliver"])(
     "rejects an unknown kind in %s",
     (phase) => {
-      const result = AgentProfiles.safeParse({ [phase]: { kind: "codex" } });
+      const result = AgentProfiles.safeParse({ [phase]: { kind: "gemini" } });
       expect(result.success).toBe(false);
       expect(result.error?.issues[0]?.path).toEqual([phase, "kind"]);
     },
@@ -141,7 +156,7 @@ describe("ProjectCreate", () => {
     ["empty branch", { baseBranch: "" }],
     ["empty name", { name: " " }],
     ["empty test command", { testCommand: "" }],
-    ["verify with another kind", { agentProfiles: { verify: { kind: "codex" } } }],
+    ["verify with another kind", { agentProfiles: { verify: { kind: "gemini" } } }],
   ])("rejects %s", (_label, overrides) => {
     expect(ProjectCreate.safeParse({ ...validCreate, ...overrides }).success).toBe(false);
   });
@@ -164,7 +179,7 @@ describe("ProjectUpdate", () => {
   });
 
   it("validates the verify profile", () => {
-    const result = ProjectUpdate.safeParse({ agentProfiles: { verify: { kind: "codex" } } });
+    const result = ProjectUpdate.safeParse({ agentProfiles: { verify: { kind: "gemini" } } });
     expect(result.success).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ import type { AgentKind, AgentProfile } from "@lunasq/schemas";
 
 export type AgentProviderContext = {
   mcpConfigPath: string;
+  mcpUrl?: string;
   settingsPath: string;
   sessionId: string;
 };
@@ -61,6 +62,27 @@ const RESERVED_COPILOT_FLAGS = [
   "--autopilot",
   "--mode",
   "--plan",
+];
+const RESERVED_CODEX_FLAGS = [
+  "--model",
+  "-m",
+  "--config",
+  "-c",
+  "--sandbox",
+  "-s",
+  "--ask-for-approval",
+  "-a",
+  "--approve-for-me",
+  "--dangerously-bypass-approvals-and-sandbox",
+  "--dangerously-bypass-hook-trust",
+  "--worktree",
+  "--cd",
+  "-C",
+  "--add-dir",
+  "--profile",
+  "-p",
+  "--ignore-user-config",
+  "--strict-config",
 ];
 
 function assertNoReservedArgs(args: string[], flags: string[]): void {
@@ -138,4 +160,38 @@ const copilotProvider: AgentProvider = {
   },
 };
 
-export const agentProviders = new AgentProviderRegistry([claudeProvider, copilotProvider]);
+const codexProvider: AgentProvider = {
+  kind: "codex",
+  capabilities: { usage: "unavailable", reviewerExecution: "lunasq-runner" },
+  args(profile, context) {
+    assertNoReservedArgs(profile.args, RESERVED_CODEX_FLAGS);
+    assertNoOptionTerminator(profile.args);
+    assertEffortNotDuplicated(profile);
+    if (!context.mcpUrl) {
+      throw new AgentProviderError("the LunasQ MCP URL is missing to configure Codex CLI");
+    }
+    return [
+      ...(profile.model === undefined ? [] : ["--model", profile.model]),
+      ...(profile.effort === undefined
+        ? []
+        : ["--config", `model_reasoning_effort=${JSON.stringify(profile.effort)}`]),
+      ...profile.args,
+      "--sandbox",
+      "workspace-write",
+      "--ask-for-approval",
+      "never",
+      "--config",
+      `mcp_servers.lunasq.url=${JSON.stringify(context.mcpUrl)}`,
+      "--config",
+      'mcp_servers.lunasq.env_http_headers={"X-LunasQ-Run-Token"="LUNASQ_RUN_TOKEN"}',
+      "--config",
+      'mcp_servers.lunasq.default_tools_approval_mode="approve"',
+    ];
+  },
+};
+
+export const agentProviders = new AgentProviderRegistry([
+  claudeProvider,
+  copilotProvider,
+  codexProvider,
+]);

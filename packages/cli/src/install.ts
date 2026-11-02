@@ -1,5 +1,5 @@
 // `lunasq install`: leaves the machine ready in a single command (ADR uw-28-instalador). It verifies
-// herdr, Claude Code and gh (it does not install them), installs the herdr integration for Claude Code,
+// herdr, an agent provider and gh (it does not install them), installs the herdr integration for Claude Code,
 // copies skills and subagents, writes the configuration and the stable files for Claude Code,
 // creates the database and ends with `doctor`. Repeating it changes nothing that is already up to date.
 import { mkdir } from "node:fs/promises";

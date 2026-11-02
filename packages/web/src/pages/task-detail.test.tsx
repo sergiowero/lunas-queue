@@ -266,7 +266,7 @@ describe("task detail", () => {
     expect(details?.open).toBe(false);
   });
 
-  it("shows recorded consumption and explains that Copilot's usage is not available", async () => {
+  it("shows recorded consumption and explains that Copilot and Codex usage is not available", async () => {
     const { fake, task } = seeded();
     const run = fake.startRun(task.id, "implement");
     const copilotRun = fake.startRun(task.id, "verify");
@@ -289,7 +289,9 @@ describe("task detail", () => {
     renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Usage");
     expect(
-      await block.findByText(/Consumo registrado \(parcial: Copilot CLI no informa usage\)/),
+      await block.findByText(
+        /Consumo registrado \(parcial: Copilot y Codex CLI no informan usage\)/,
+      ),
     ).toBeTruthy();
     expect(block.getByText(/360 tokens · \$0,25/)).toBeTruthy();
     expect(block.getByText("Implementación")).toBeTruthy();

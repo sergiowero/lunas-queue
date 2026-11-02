@@ -108,6 +108,23 @@ describe("project creation", () => {
     });
   });
 
+  it("allows choosing Codex as a phase's provider", async () => {
+    const fake = new FakeApi();
+    const { user, dialog } = await openDialog(fake);
+    const form = within(dialog);
+
+    await user.type(form.getByLabelText("Nombre"), "codex-project");
+    await user.type(form.getByLabelText("Repositorio"), "owner/codex-project");
+    await user.type(form.getByLabelText("Ruta local"), "/repos/codex-project");
+    await user.selectOptions(form.getByLabelText("Proveedor de implement"), "codex");
+    await user.click(form.getByRole("button", { name: "Crear proyecto" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
+      agentProfiles: { implement: { kind: "codex", args: [] } },
+    });
+  });
+
   it("shows the server's error and leaves the popup open", async () => {
     const fake = new FakeApi();
     fake.addProject({ name: "repetido", localPath: "/repos/otro" });

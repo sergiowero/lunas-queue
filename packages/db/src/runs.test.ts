@@ -298,7 +298,7 @@ describe("claimRun: enabled providers", () => {
   it("with all providers disabled it rejects and the task stays in queued without a Run", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id);
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: false, codex: false });
 
     const res = claim(decisionFor(task));
 
@@ -312,7 +312,7 @@ describe("claimRun: enabled providers", () => {
   it("with the primary disabled it creates the Run with the effective provider, without the primary's model", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id, { state: "in_progress" });
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: true, codex: false });
 
     const res = claim(decisionFor(task, "implement", { state: "in_progress", subState: "queued" }));
 
@@ -326,7 +326,7 @@ describe("claimRun: enabled providers", () => {
     const res = claim(decisionFor(task));
     if (!res.ok) throw new Error(res.error.message);
 
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: false, codex: false });
 
     expect(new RunRepository(db).get(res.run.id)).toMatchObject({ endedAt: null, result: null });
     expect(

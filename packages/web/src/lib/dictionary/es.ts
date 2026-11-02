@@ -39,10 +39,10 @@ export const es = {
   dispatch: {
     unknownTitle: "Estado del despacho desconocido:",
     unknownBody:
-      "No se pudo leer la configuración de proveedores; si ambos están deshabilitados, las tareas esperan en cola.",
+      "No se pudo leer la configuración de proveedores; si todos están deshabilitados, las tareas esperan en cola.",
     pausedTitle: "Despacho en pausa:",
     pausedBody:
-      "Claude y Copilot están deshabilitados, así que las tareas esperan en cola. Los agentes vivos siguen corriendo.",
+      "Claude, Copilot y Codex están deshabilitados, así que las tareas esperan en cola. Los agentes vivos siguen corriendo.",
     goToSettings: "Ir a Settings",
   },
   state: {
@@ -106,7 +106,7 @@ export const es = {
   },
   usage: {
     title: "Usage",
-    partial: "Consumo registrado (parcial: Copilot CLI no informa usage): ",
+    partial: "Consumo registrado (parcial: Copilot y Codex CLI no informan usage): ",
     summary: (tokens: string, cost: string) => `${tokens} tokens · ${cost}`,
     none: "Sin consumo registrado todavía.",
     phase: "Fase",
@@ -444,14 +444,16 @@ export const es = {
     providers: {
       claude: "Claude",
       copilot: "Copilot",
+      codex: "Codex",
     },
     providerDescriptions: {
       claude: "Claude Code",
       copilot: "GitHub Copilot CLI",
+      codex: "OpenAI Codex CLI",
     },
     providersTitle: "Proveedores de agente",
     providersHelp:
-      "Deshabilita un proveedor cuando se agote su límite de uso: no recibirá despachos nuevos y se aplica el fallback al otro. Con ambos deshabilitados, las tareas esperan en cola. Los agentes que ya corren no se interrumpen.",
+      "Deshabilita un proveedor si no está disponible o se agota su límite de uso: no recibirá despachos nuevos y se aplica el fallback a otro proveedor habilitado. Con todos deshabilitados, las tareas esperan en cola. Los agentes que ya corren no se interrumpen.",
     providersSavedUnread:
       "El cambio se guardó, pero no se pudo leer el estado; los interruptores muestran el último estado leído, que puede no reflejarlo: ",
     providersUpdateFailed:

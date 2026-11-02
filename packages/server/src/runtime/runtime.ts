@@ -28,10 +28,11 @@ import { DeliveryService } from "../delivery/service.ts";
 import { subscribeDelivery } from "../delivery/subscribe.ts";
 import { Orchestrator } from "../dispatcher/orchestrator.ts";
 import { EvidenceService } from "../evidence/service.ts";
-import { ClaudeTranscriptSource, CopilotReviewerTranscriptSource } from "../evidence/sources.ts";
+import { AgentReviewerTranscriptSource, ClaudeTranscriptSource } from "../evidence/sources.ts";
 import { PrPoller } from "../github/poller.ts";
 import { subscribeAfterMergeHooks } from "../hooks/after-merge.ts";
 import { HookService } from "../hooks/service.ts";
+import { CodexCliReviewerExecutor } from "../mcp/codex-reviewer.ts";
 import { CopilotCliReviewerExecutor } from "../mcp/copilot-reviewer.ts";
 import { OutboxPublisher } from "../outbox/publisher.ts";
 import { SUBAGENT_HOOK_PATH } from "../subagents/routes.ts";
@@ -139,12 +140,17 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const git = opts.adapters?.git ?? new RealGit();
   const processes = opts.adapters?.processes ?? new ShellProcessRunner();
   const copilotEvidencePath = join(dirname(opts.dbPath), "copilot-reviewers");
+  const codexEvidencePath = join(dirname(opts.dbPath), "codex-reviewers");
   const copilotReviewers = new CopilotCliReviewerExecutor({
     processes,
     agentsPath:
       opts.copilotAgentsPath ??
       join(process.env.COPILOT_HOME ?? join(homedir(), ".copilot"), "agents", "lunasq"),
     evidencePath: copilotEvidencePath,
+  });
+  const codexReviewers = new CodexCliReviewerExecutor({
+    processes,
+    evidencePath: codexEvidencePath,
   });
   const urls = runtimeUrls(url);
   const paneEnv = opts.telemetry === false ? {} : telemetryEnv(url);
@@ -156,9 +162,9 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const evidence = new EvidenceService({
     db,
     git,
-    transcripts: new CopilotReviewerTranscriptSource({
+    transcripts: new AgentReviewerTranscriptSource({
       claude: new ClaudeTranscriptSource(),
-      evidencePath: copilotEvidencePath,
+      evidencePaths: { copilot: copilotEvidencePath, codex: codexEvidencePath },
     }),
   });
   const orchestrator = new Orchestrator({
@@ -188,6 +194,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const app = createApp({
     db,
     copilotReviewers,
+    codexReviewers,
     telemetry: opts.telemetry !== false,
     ...(opts.scheduler && { scheduler: opts.scheduler }),
     ...(opts.webRoot && { webRoot: opts.webRoot }),

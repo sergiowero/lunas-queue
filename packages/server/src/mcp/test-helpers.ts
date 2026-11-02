@@ -16,7 +16,7 @@ import {
   setTaskPosition,
 } from "@lunasq/db/test-helpers";
 import { type Phase, type StatePosition, TEST_GATE_EXECUTED } from "@lunasq/schemas";
-import type { CopilotReviewerExecutor } from "./copilot-reviewer.ts";
+import type { CopilotReviewerExecutor, ReviewerExecutor } from "./copilot-reviewer.ts";
 
 type Position = StatePosition & { verificationIteration?: number };
 
@@ -165,6 +165,7 @@ export interface McpHarnessOptions {
   worktreePath?: string;
   deliverable?: "code" | "docs";
   copilotReviewers?: CopilotReviewerExecutor;
+  codexReviewers?: ReviewerExecutor;
 }
 
 export function mcpHarness(options: McpHarnessOptions = {}) {
@@ -182,6 +183,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
     commitVerifier,
     phaseHooks,
     ...(options.copilotReviewers && { copilotReviewers: options.copilotReviewers }),
+    ...(options.codexReviewers && { codexReviewers: options.codexReviewers }),
   });
 
   async function connect(token?: string) {
@@ -237,7 +239,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
   async function session(
     phase: Phase,
     position: Position,
-    opts: { approved?: boolean; agentKind?: "claude" | "copilot" } = {},
+    opts: { approved?: boolean; agentKind?: "claude" | "copilot" | "codex" } = {},
   ) {
     const t = task(position, opts);
     const run = insertRun(db, t.id, { phase, agentKind: opts.agentKind ?? "claude" });
@@ -271,7 +273,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
   async function ready(
     phase: Phase,
     position: Position,
-    opts: { approved?: boolean; agentKind?: "claude" | "copilot" } = {},
+    opts: { approved?: boolean; agentKind?: "claude" | "copilot" | "codex" } = {},
   ) {
     const s = await session(phase, position, opts);
     const context = await s.call("get_task_context");

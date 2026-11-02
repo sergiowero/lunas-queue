@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  showsCodexTrustDialog,
   showsUsageLimit,
   TRUST_DIALOG_MARKER,
   USAGE_LIMIT_PATTERN,
@@ -13,6 +14,8 @@ const WAIT_SCREEN =
 const WRAP_UP_SCREEN = "trabajo en curso…\n❯ claude\nUsage limit reached · wrapping up";
 const AGENTS_OWN_WORK = "❯ corrijo el bug de usage limit que quedó descrito en la tarea";
 const TRUST_SCREEN = ` Quick safety check\n ${TRUST_DIALOG_MARKER}`;
+const CODEX_TRUST_SCREEN =
+  "You are in /worktree\nDo you trust the contents of this directory?\n› 1. Yes, continue\n  2. No, quit";
 
 const withLimit: readonly string[] = [
   WAIT_SCREEN,
@@ -37,6 +40,13 @@ describe("showsUsageLimit", () => {
 
   it("does not flag the trust dialog or the agent's own work", () => {
     for (const screen of withoutLimit) expect(showsUsageLimit(screen)).toBe(false);
+  });
+});
+
+describe("showsCodexTrustDialog", () => {
+  it("recognizes Codex's untrusted-directory prompt but not ordinary blocked screens", () => {
+    expect(showsCodexTrustDialog(CODEX_TRUST_SCREEN)).toBe(true);
+    expect(showsCodexTrustDialog("Permission needed to run command?")).toBe(false);
   });
 });
 

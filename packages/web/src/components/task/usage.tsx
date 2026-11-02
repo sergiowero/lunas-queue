@@ -37,8 +37,8 @@ export function UsagePanel({ taskId }: { taskId: string }) {
       agentKind: run.agentKind,
       usage: recorded.get(run.id)?.usage,
     })) ?? data?.byRun.map((entry) => ({ ...entry, agentKind: undefined }));
-  const unavailableCopilot = runRows?.some(
-    (run) => run.agentKind === "copilot" && run.usage === undefined,
+  const unavailableProvider = runRows?.some(
+    (run) => run.agentKind !== undefined && run.agentKind !== "claude" && run.usage === undefined,
   );
   const pageCount = Math.ceil((runRows?.length ?? 0) / PAGE_SIZE);
   const page = Math.min(selectedPage ?? Math.max(0, pageCount - 1), Math.max(0, pageCount - 1));
@@ -50,7 +50,7 @@ export function UsagePanel({ taskId }: { taskId: string }) {
       ) : (
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">
-            {`${unavailableCopilot ? t.usage.partial : ""}${t.usage.summary(formatTokens(data.total), formatCost(data.total.costUsd))}`}
+            {`${unavailableProvider ? t.usage.partial : ""}${t.usage.summary(formatTokens(data.total), formatCost(data.total.costUsd))}`}
           </p>
           {runRows?.length === 0 ? (
             <Muted>{t.usage.none}</Muted>
