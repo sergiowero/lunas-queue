@@ -282,12 +282,19 @@ describe("global queue", () => {
       await screen.findByRole("heading", { name: "En curso" });
 
       fake.projects.splice(fake.projects.indexOf(empty), 1);
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      fake.requests.length = 0;
       await router.navigate({ to: "/queue" });
 
+      // The filter is still stored on return (the cached project list still has it) ...
+      await waitFor(() =>
+        expect(fake.requests.map((r) => r.path)).toContain(`/api/queue?projectId=${empty.id}`),
+      );
+      // ... and falls back to All once the refreshed list no longer has the project.
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
       await screen.findByText("De dos");
       expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
       expect(screen.getByText("De uno")).toBeTruthy();
+      expect(fake.requests.at(-1)?.path).toBe("/api/queue");
     });
   });
 });
