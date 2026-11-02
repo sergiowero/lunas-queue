@@ -8,6 +8,7 @@ export * from "./envelope.ts";
 export type { HandoffError } from "./errors.ts";
 export * from "./implementation.ts";
 export * from "./refinement.ts";
+export * from "./result.ts";
 export * from "./verification.ts";
 
 export const HandoffV1 = z.discriminatedUnion(

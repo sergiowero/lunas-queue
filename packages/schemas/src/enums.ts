@@ -35,6 +35,13 @@ export type PrState = z.infer<typeof PrState>;
 export const RiskLabel = z.enum(["low", "medium", "high"]);
 export type RiskLabel = z.infer<typeof RiskLabel>;
 
+/**
+ * Tipo de Resultado de una tarea sin código (ADR 0007): una investigación o síntesis, un pedido
+ * que ya está implementado en el repo o uno que no tiene resolución.
+ */
+export const ResultKind = z.enum(["research", "already_implemented", "not_resolvable"]);
+export type ResultKind = z.infer<typeof ResultKind>;
+
 export const RunResult = z.enum(["success", "failure", "cancelled"]);
 export type RunResult = z.infer<typeof RunResult>;
 

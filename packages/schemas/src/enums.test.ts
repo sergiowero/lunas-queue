@@ -5,6 +5,7 @@ import {
   Phase,
   PrState,
   QuestionStatus,
+  ResultKind,
   RiskLabel,
   RunResult,
   SpecApproval,
@@ -52,5 +53,9 @@ describe("enums del dominio", () => {
   it("rechaza valores fuera del enum", () => {
     expect(TaskState.safeParse("new").success).toBe(false);
     expect(TaskState.parse("draft")).toBe("draft");
+  });
+
+  it("ResultKind distingue investigación, ya implementada y sin resolución", () => {
+    expect(ResultKind.options).toEqual(["research", "already_implemented", "not_resolvable"]);
   });
 });

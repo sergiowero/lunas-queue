@@ -101,6 +101,8 @@ describe("Task", () => {
     prUrl: null,
     prState: null,
     riskLabel: null,
+    resultKind: null,
+    result: null,
     causedBy: null,
     createdAt: now,
     updatedAt: now,
@@ -115,6 +117,25 @@ describe("Task", () => {
     expect(Task.safeParse(withoutNumber).success).toBe(false);
     expect(Task.safeParse({ ...row, number: 0 }).success).toBe(false);
     expect(Task.safeParse({ ...row, number: 1.5 }).success).toBe(false);
+  });
+
+  it("una tarea completada con Resultado lleva su tipo y su texto", () => {
+    const withResult = {
+      ...row,
+      state: "completed",
+      subState: null,
+      resultKind: "research",
+      result: "# Hallazgos",
+    };
+    expect(Task.parse(withResult)).toEqual(withResult);
+  });
+
+  it("exige resultKind y result (null si la tarea no tiene Resultado)", () => {
+    const { resultKind: _k, ...withoutKind } = row;
+    const { result: _r, ...withoutResult } = row;
+    expect(Task.safeParse(withoutKind).success).toBe(false);
+    expect(Task.safeParse(withoutResult).success).toBe(false);
+    expect(Task.safeParse({ ...row, resultKind: "otro" }).success).toBe(false);
   });
 
   it("rechaza un estado fuera del enum", () => {

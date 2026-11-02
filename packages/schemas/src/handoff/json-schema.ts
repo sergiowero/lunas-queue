@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ImplementationHandoff } from "./implementation.ts";
 import { HANDOFF_MAX_BYTES, HandoffV1 } from "./index.ts";
 import { RefinementHandoff } from "./refinement.ts";
+import { ResultHandoff } from "./result.ts";
 import { VerificationHandoff } from "./verification.ts";
 
 export type JsonSchema = Record<string, unknown> & { $schema: string; $id: string };
@@ -11,6 +12,8 @@ const schemas = {
   "refinement.json": RefinementHandoff,
   "implementation.json": ImplementationHandoff,
   "verification.json": VerificationHandoff,
+  // Handoff de submit_result: tiene su propio sobre, fuera de handoff.json.
+  "result.json": ResultHandoff,
 };
 
 // El JSON Schema describe la estructura; las reglas entre campos solo viven en Zod.

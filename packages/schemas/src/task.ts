@@ -1,7 +1,7 @@
 // Task y sus aristas del DAG (docs/design.md §Modelo de dominio y §Scheduler, ADR 0010).
 // Estado, sub-estado e iteración no se capturan aquí: solo los mueve la máquina de estados.
 import { z } from "zod";
-import { PrState, RiskLabel, SubState, TaskState } from "./enums.ts";
+import { PrState, ResultKind, RiskLabel, SubState, TaskState } from "./enums.ts";
 
 const unique = <T>(items: T[]): T[] => [...new Set(items)];
 
@@ -69,6 +69,9 @@ export const Task = z.strictObject({
   prUrl: z.string().nullable(),
   prState: PrState.nullable(),
   riskLabel: RiskLabel.nullable(),
+  // Resultado de una tarea completada sin código (submit_result); null si se entregó con PR.
+  resultKind: ResultKind.nullable(),
+  result: z.string().nullable(),
   causedBy: z.uuid().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),

@@ -84,6 +84,8 @@ describe("QueueEntry", () => {
       prUrl: null,
       prState: null,
       riskLabel: null,
+      resultKind: null,
+      result: null,
       causedBy: null,
       createdAt: now,
       updatedAt: now,
