@@ -657,7 +657,7 @@ Resumen de lo ya decidido; cada punto está reflejado en su sección.
 | Agentes | Uno por fase, con handoff estructurado entre fases |
 | Perfil de agente | Por proyecto y fase: kind, modelo y args; sin override por tarea en v1 |
 | Aislamiento | Worktree siempre, por tarea; script de bootstrap por proyecto; sin caché de dependencias en v1 |
-| Concurrencia | Límites configurables; global con default de 5; por proyecto y por tipo de agente opcionales |
+| Concurrencia | Límites configurables; global con default de 5 y ajustable desde Settings (1 a 50); por proyecto y por tipo de agente opcionales |
 | Preemption | No; una tarea solo toma slots libres |
 | Prioridad | Entero sin signo; mayor número = mayor prioridad |
 | Identificación de tareas | UUID como identidad; número #N secuencial global para personas (herdr, notificaciones, UI, menciones) |
