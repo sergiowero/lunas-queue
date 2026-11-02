@@ -8,7 +8,7 @@ const SECTION = /<!-- lunasq:run:start (\S+) -->\n[\s\S]*?\n<!-- lunasq:run:end 
 
 export function evidenceHeader(input: { taskId: string; intent: string }): string {
   const intent = redactSecrets(input.intent)
-    .replaceAll("<!-- lunasq:", "<!-- lunasq-escapado:")
+    .replaceAll("<!-- lunasq:", "<!-- lunasq-escaped:")
     .trim()
     .replace(/\s*\n\s*/g, " ");
   return [

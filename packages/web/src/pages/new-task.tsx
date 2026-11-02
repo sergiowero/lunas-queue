@@ -111,7 +111,7 @@ export function NewTaskPage() {
         </Select>
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor="task-intent">Intent</Label>
+        <Label htmlFor="task-intent">{t.newTask.intent}</Label>
         <Textarea
           id="task-intent"
           required
@@ -123,7 +123,7 @@ export function NewTaskPage() {
       </div>
       <div className="flex gap-4">
         <div className="flex flex-1 flex-col gap-1">
-          <Label htmlFor="task-tags">Tags</Label>
+          <Label htmlFor="task-tags">{t.newTask.tags}</Label>
           <Input
             id="task-tags"
             value={tags}

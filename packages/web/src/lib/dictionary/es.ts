@@ -469,6 +469,8 @@ export const es = {
     title: "Nueva tarea",
     project: "Proyecto",
     chooseProject: "Elige un proyecto",
+    intent: "Intención",
+    tags: "Etiquetas",
     intentPlaceholder: "Qué debe lograr la tarea y por qué",
     priority: "Prioridad",
     dependsOn: "Depende de",

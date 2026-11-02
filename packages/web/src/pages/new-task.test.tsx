@@ -34,8 +34,8 @@ describe("task creation", () => {
     const { user, router } = renderApp("/tasks/new", fake);
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
-    await user.type(screen.getByLabelText("Intent"), "Login con email");
-    await user.type(screen.getByLabelText("Tags"), "auth, ui ,");
+    await user.type(screen.getByLabelText("Intención"), "Login con email");
+    await user.type(screen.getByLabelText("Etiquetas"), "auth, ui ,");
     await user.clear(screen.getByLabelText("Prioridad"));
     await user.type(screen.getByLabelText("Prioridad"), "250");
     await user.selectOptions(await screen.findByLabelText("Depende de"), optionOf("Base de datos"));
@@ -136,7 +136,7 @@ describe("task creation", () => {
     const { user } = renderApp("/tasks/new", fake);
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
-    await user.type(screen.getByLabelText("Intent"), "Pantalla");
+    await user.type(screen.getByLabelText("Intención"), "Pantalla");
     await user.selectOptions(await screen.findByLabelText("Depende de"), optionOf("API"));
     await user.selectOptions(screen.getByLabelText("Depende de"), optionOf("Base de datos"));
     await user.click(screen.getByRole("button", { name: "Crear tarea" }));
@@ -157,7 +157,7 @@ describe("task creation", () => {
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "web");
     const select = await screen.findByLabelText("Depende de");
     expect(select.querySelector('optgroup[label="api · otro proyecto"]')).not.toBeNull();
-    await user.type(screen.getByLabelText("Intent"), "Pantalla de login");
+    await user.type(screen.getByLabelText("Intención"), "Pantalla de login");
     await user.selectOptions(select, optionOf("Endpoint de login"));
     const list = screen.getByRole("list", { name: "Dependencias elegidas" });
     expect(within(list).getByText("otro proyecto")).toBeTruthy();
@@ -191,7 +191,7 @@ describe("task creation", () => {
     const { user, queryClient } = renderApp("/tasks/new", fake);
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "uno");
-    await screen.findByLabelText("Intent");
+    await screen.findByLabelText("Intención");
     // Waits for the candidates to be loaded: without this the absence would be trivial.
     await waitFor(() =>
       expect(queryClient.getQueryState(queries.tasks().queryKey)?.status).toBe("success"),
@@ -229,7 +229,7 @@ describe("task creation", () => {
     fake.addProject({ name: "uno" });
     const { user, router } = renderApp("/tasks/new", fake);
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "uno");
-    await user.type(screen.getByLabelText("Intent"), "   ");
+    await user.type(screen.getByLabelText("Intención"), "   ");
     await user.click(screen.getByRole("button", { name: "Crear tarea" }));
     expect(await screen.findByRole("alert")).toHaveProperty(
       "textContent",

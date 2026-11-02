@@ -79,9 +79,12 @@ export function QueuePage() {
       }),
       column.accessor(priority, { id: "priority", header: t.columns.priority }),
       column.accessor(score, { id: "score", header: t.queue.score }),
-      column.accessor((e) => `${formatTokens(e.usage)} · ${formatCost(e.usage.costUsd)}`, {
+      // Display column: token and cost formats follow the language (see runs.tsx).
+      column.display({
         id: "usage",
         header: t.queue.usage,
+        cell: (c) =>
+          `${formatTokens(c.row.original.usage)} · ${formatCost(c.row.original.usage.costUsd)}`,
       }),
       column.display({ id: "actions", header: t.columns.actions, cell: ActionsCell }),
     ],

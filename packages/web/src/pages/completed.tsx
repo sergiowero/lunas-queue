@@ -75,29 +75,29 @@ export function CompletedPage() {
       }),
       column.accessor("priority", { header: t.columns.priority }),
       // Without a PR: a completed task with a Result shows its type instead of the PR.
-      column.accessor(
-        (task) => (task.resultKind ? t.resultKind[task.resultKind] : (task.prState ?? "—")),
-        {
-          id: "pr",
-          header: t.completedPage.pr,
-          cell: (cell) => {
-            const task = cell.row.original;
-            return task.prUrl ? (
-              <a
-                href={task.prUrl}
-                target="_blank"
-                rel="noreferrer"
-                className={buttonVariants({ variant: "outline", size: "sm" })}
-              >
-                {t.completedPage.prButton(String(cell.getValue()))}
-                <ExternalLinkIcon />
-              </a>
-            ) : (
-              cell.getValue()
-            );
-          },
+      // A display column: the label depends on the language and TanStack Table would cache
+      // an accessor's value per row.
+      column.display({
+        id: "pr",
+        header: t.completedPage.pr,
+        cell: (cell) => {
+          const task = cell.row.original;
+          const label = task.resultKind ? t.resultKind[task.resultKind] : (task.prState ?? "—");
+          return task.prUrl ? (
+            <a
+              href={task.prUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              {t.completedPage.prButton(label)}
+              <ExternalLinkIcon />
+            </a>
+          ) : (
+            label
+          );
         },
-      ),
+      }),
     ],
     [names, t],
   );

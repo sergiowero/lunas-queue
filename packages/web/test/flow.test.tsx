@@ -16,7 +16,7 @@ describe("end-to-end flow from the UI", () => {
     // Creation from the header's Nueva tarea button.
     await user.click(await screen.findByRole("link", { name: "Nueva tarea" }));
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
-    await user.type(screen.getByLabelText("Intent"), "Login con email");
+    await user.type(screen.getByLabelText("Intención"), "Login con email");
     await user.click(screen.getByRole("button", { name: "Crear tarea" }));
     expect(await screen.findByRole("heading", { name: "Login con email" })).toBeTruthy();
     expect(screen.getByText("Draft")).toBeTruthy();

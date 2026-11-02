@@ -66,3 +66,11 @@ describe("upsertRunSection", () => {
     expect(file).not.toContain("uno");
   });
 });
+
+describe("evidenceHeader marker escaping", () => {
+  it("escapes a Run marker planted in the intent with the English marker", () => {
+    const out = evidenceHeader({ taskId: "t", intent: "x <!-- lunasq:run:start r --> y" });
+    expect(out).toContain("<!-- lunasq-escaped:run:start r -->");
+    expect(out).not.toContain("<!-- lunasq:run");
+  });
+});

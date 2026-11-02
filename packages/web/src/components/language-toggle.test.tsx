@@ -153,3 +153,47 @@ describe("regional formatting", () => {
     expect(spanish).not.toBe(english);
   });
 });
+
+describe("language-dependent table cells follow a language switch", () => {
+  it("the phase of a Run is translated after the switch", async () => {
+    const fake = new FakeApi();
+    const task = fake.addTask(fake.addProject().id);
+    fake.startRun(task.id, "implement");
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const runsCell = async (name: string) => {
+      const runs = await screen.findByRole("region", { name: "Runs" });
+      return within(runs).queryByRole("cell", { name });
+    };
+    await waitFor(async () => expect(await runsCell("Implementación")).toBeTruthy());
+    await user.click(await toggle("Cambiar a inglés"));
+    await waitFor(async () => expect(await runsCell("Implementation")).toBeTruthy());
+    expect(await runsCell("Implementación")).toBeNull();
+  });
+
+  it("the result type of a completed task without a PR is translated after the switch", async () => {
+    const fake = new FakeApi();
+    fake.addTask(fake.addProject().id, {
+      intent: "Hecha",
+      state: "completed",
+      subState: null,
+      resultKind: "research",
+    });
+    const { user } = renderApp("/completed", fake);
+    const row = await screen.findByRole("row", { name: /Hecha/ });
+    const before = within(row).getAllByRole("cell")[3]?.textContent;
+    await user.click(await toggle("Cambiar a inglés"));
+    const after = within(await screen.findByRole("row", { name: /Hecha/ })).getAllByRole("cell")[3]
+      ?.textContent;
+    expect(after).toBeTruthy();
+    expect(after).not.toBe(before);
+  });
+
+  it("the New task labels Intent and Tags come from the dictionary", async () => {
+    const { user } = renderApp("/tasks/new");
+    expect(await screen.findByLabelText("Intención")).toBeTruthy();
+    expect(screen.getByLabelText("Etiquetas")).toBeTruthy();
+    await user.click(await toggle("Cambiar a inglés"));
+    expect(await screen.findByLabelText("Intent")).toBeTruthy();
+    expect(screen.getByLabelText("Tags")).toBeTruthy();
+  });
+});

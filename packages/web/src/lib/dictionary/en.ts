@@ -466,6 +466,8 @@ export const en: Dictionary = {
     title: "New task",
     project: "Project",
     chooseProject: "Choose a project",
+    intent: "Intent",
+    tags: "Tags",
     intentPlaceholder: "What the task must achieve and why",
     priority: "Priority",
     dependsOn: "Depends on",

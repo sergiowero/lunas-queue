@@ -39,7 +39,7 @@ async function taskId(page: Page, intent: string): Promise<string> {
 async function createTask(page: Page, intent: string, dependsOn: string[] = []) {
   await page.goto("/tasks/new");
   await page.getByLabel("Proyecto").selectOption({ label: "Piloto" });
-  await page.getByLabel("Intent").fill(intent);
+  await page.getByLabel("Intención").fill(intent);
   for (const dependency of dependsOn) {
     await page.getByLabel("Depende de").selectOption({ value: await taskId(page, dependency) });
     await expect(

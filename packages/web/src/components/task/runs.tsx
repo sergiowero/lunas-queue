@@ -38,7 +38,13 @@ export function RunsPanel({ taskId }: { taskId: string }) {
   const t = useT();
   const columns = useMemo(
     () => [
-      column.accessor((r) => t.phase[r.phase], { id: "phase", header: t.runs.phase }),
+      // Display columns for language-dependent values: TanStack Table caches an accessor's
+      // value per row while `data` does not change, so it would keep the old language.
+      column.display({
+        id: "phase",
+        header: t.runs.phase,
+        cell: (c) => t.phase[c.row.original.phase],
+      }),
       column.accessor("iteration", { header: t.runs.iteration }),
       column.accessor(formatAgent, { id: "agent", header: t.runs.agent }),
       column.display({
@@ -46,8 +52,16 @@ export function RunsPanel({ taskId }: { taskId: string }) {
         header: t.runs.pane,
         cell: (c) => <PaneFocusButton run={c.row.original} />,
       }),
-      column.accessor((r) => formatDate(r.startedAt), { id: "started", header: t.runs.started }),
-      column.accessor((r) => formatDate(r.endedAt), { id: "ended", header: t.runs.ended }),
+      column.display({
+        id: "started",
+        header: t.runs.started,
+        cell: (c) => formatDate(c.row.original.startedAt),
+      }),
+      column.display({
+        id: "ended",
+        header: t.runs.ended,
+        cell: (c) => formatDate(c.row.original.endedAt),
+      }),
       column.accessor("result", {
         header: t.runs.result,
         cell: (c) => {
