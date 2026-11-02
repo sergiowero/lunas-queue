@@ -13,7 +13,7 @@ function setup() {
 const code = { agentId: "a1", agentType: "lunasq-code-reviewer" };
 
 describe("RunSubagentRepository", () => {
-  it("registra inicio y fin de un subagente del Run", () => {
+  it("records the start and end of a subagent of the Run", () => {
     const { run, repo } = setup();
     repo.recordStart(run.id, code);
     expect(repo.forRun(run.id)).toEqual([
@@ -30,7 +30,7 @@ describe("RunSubagentRepository", () => {
     expect(row?.transcriptPath).toBe("/tmp/agent-a1.jsonl");
   });
 
-  it("repetir un hook no duplica la ejecución ni mueve sus tiempos", () => {
+  it("repeating a hook does not duplicate the execution nor move its times", () => {
     const { run, repo } = setup();
     repo.recordStart(run.id, code);
     repo.recordStop(run.id, code);
@@ -40,7 +40,7 @@ describe("RunSubagentRepository", () => {
     expect(repo.forRun(run.id)).toEqual([first]);
   });
 
-  it("un fin sin inicio (hook perdido) también deja la ejecución registrada", () => {
+  it("an end without a start (lost hook) also leaves the execution recorded", () => {
     const { run, repo } = setup();
     repo.recordStop(run.id, code);
     expect(repo.forRun(run.id)).toEqual([
@@ -50,7 +50,7 @@ describe("RunSubagentRepository", () => {
     expect(repo.forRun(run.id)[0]?.startedAt).toBeInstanceOf(Date);
   });
 
-  it("separa por Run y ordena por llegada; el mismo agent_id en otro Run es otra ejecución", () => {
+  it("separates by Run and orders by arrival; the same agent_id in another Run is another execution", () => {
     const { db, task, run, repo } = setup();
     const other = insertRun(db, task.id, { phase: "verify", endedAt: new Date() });
     const ux = { agentId: "a2", agentType: "lunasq-ux-reviewer" };
@@ -64,7 +64,7 @@ describe("RunSubagentRepository", () => {
     expect(repo.forRun(other.id)).toHaveLength(1);
   });
 
-  it("la ejecución se borra con su Run y exige un Run existente", () => {
+  it("the execution is deleted with its Run and requires an existing Run", () => {
     const { db, run, repo } = setup();
     expect(() => repo.recordStart("no-existe", code)).toThrow();
     repo.recordStart(run.id, code);

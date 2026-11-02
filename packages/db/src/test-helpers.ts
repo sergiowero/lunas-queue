@@ -15,7 +15,7 @@ afterEach(() => {
   }
 });
 
-/** Base de datos en un archivo temporal, sin migrar. Se cierra y borra al terminar cada test. */
+/** Database in a temporary file, not migrated. It is closed and deleted at the end of each test. */
 export function freshDatabase(): { db: LunasqDatabase; file: string } {
   const dir = mkdtempSync(join(tmpdir(), "lunasq-db-"));
   const file = join(dir, "lunasq.db");
@@ -24,7 +24,7 @@ export function freshDatabase(): { db: LunasqDatabase; file: string } {
   return { db, file };
 }
 
-/** Base de datos temporal con las migraciones aplicadas. */
+/** Temporary database with the migrations applied. */
 export function migratedDatabase(): LunasqDatabase {
   const { db } = freshDatabase();
   migrateDatabase(db);
@@ -49,7 +49,7 @@ export function insertProject(
     })
     .returning()
     .all();
-  if (!row) throw new Error("insert de project sin fila");
+  if (!row) throw new Error("project insert without a row");
   return row;
 }
 
@@ -63,10 +63,10 @@ export function insertTask(
     .values({ projectId, intent: "Hacer algo", priority: 100, ...overrides })
     .returning({ id: tasks.id })
     .all();
-  if (!row) throw new Error("insert de task sin fila");
-  // Relee la fila: RETURNING no ve el número que asigna el trigger tasks_assign_number.
+  if (!row) throw new Error("task insert without a row");
+  // Re-reads the row: RETURNING does not see the number the tasks_assign_number trigger assigns.
   const task = db.select().from(tasks).where(eq(tasks.id, row.id)).get();
-  if (!task) throw new Error("task insertada sin fila");
+  if (!task) throw new Error("task inserted without a row");
   return task;
 }
 
@@ -87,11 +87,11 @@ export function insertRun(
     })
     .returning()
     .all();
-  if (!row) throw new Error("insert de run sin fila");
+  if (!row) throw new Error("run insert without a row");
   return row;
 }
 
-/** Coloca la tarea en un estado sin recorrer la máquina de estados: solo para preparar tests. */
+/** Puts the task in a state without going through the state machine: only to prepare tests. */
 export function setTaskPosition(
   db: LunasqDatabase,
   taskId: string,

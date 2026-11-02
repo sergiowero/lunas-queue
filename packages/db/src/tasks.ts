@@ -1,6 +1,6 @@
-// Repositorio de tareas y del DAG de dependencias (ADR 0010). Las escrituras corren en
-// transacciones IMMEDIATE y dejan su evento en el Event log; el estado solo cambia con
-// transitionTask (ADR 0007). Implementa el puerto de lectura del DAG para el scheduler.
+// Task repository and dependency DAG (ADR 0010). Writes run in
+// IMMEDIATE transactions and leave their event in the Event log; state only changes with
+// transitionTask (ADR 0007). Implements the DAG read port for the scheduler.
 import {
   DependencyGraph,
   type DependencyGraphReader,
@@ -45,7 +45,7 @@ export type TaskRepositoryErrorCode =
 
 export class TaskRepositoryError extends Error {
   readonly code: TaskRepositoryErrorCode;
-  /** Con code `cycle`: el camino que cerraría la arista, de la dependiente a sí misma. */
+  /** With code `cycle`: the path the edge would close, from the dependent to itself. */
   readonly cycle: string[] | undefined;
 
   constructor(
@@ -70,7 +70,7 @@ export type TaskListFilter = TaskListQuery;
 function toTask(row: Row): Task {
   const result = Task.safeParse(row);
   if (!result.success) {
-    throw new TaskRepositoryError("invalid_row", `tarea inválida en ${row.id}`, undefined, {
+    throw new TaskRepositoryError("invalid_row", `invalid task in ${row.id}`, undefined, {
       cause: result.error,
     });
   }
@@ -90,7 +90,7 @@ export class TaskRepository implements DependencyGraphReader {
     this.db = db;
   }
 
-  /** Valida `input` (lanza ZodError si no cumple) y crea la tarea en draft con sus aristas. */
+  /** Validates `input` (throws ZodError if it does not comply) and creates the task in draft with its edges. */
   create(input: TaskCreate): Task {
     const { dependsOn, causedBy, ...values } = TaskCreate.parse(input);
     return this.#write((tx) => {
@@ -99,9 +99,10 @@ export class TaskRepository implements DependencyGraphReader {
         .from(projects)
         .where(eq(projects.id, values.projectId))
         .get();
-      if (!project) throw new TaskRepositoryError("project_not_found", "no existe el proyecto");
+      if (!project)
+        throw new TaskRepositoryError("project_not_found", "the project does not exist");
       if (causedBy && !findRow(tx, causedBy)) {
-        throw new TaskRepositoryError("caused_by_not_found", `no existe la tarea ${causedBy}`);
+        throw new TaskRepositoryError("caused_by_not_found", `task ${causedBy} does not exist`);
       }
       const found =
         dependsOn.length === 0
@@ -116,14 +117,11 @@ export class TaskRepository implements DependencyGraphReader {
         if (!target) {
           throw new TaskRepositoryError(
             "dependency_not_found",
-            `no existe la tarea ${dependsOnId}`,
+            `task ${dependsOnId} does not exist`,
           );
         }
         if (target.state === "cancelled") {
-          throw new TaskRepositoryError(
-            "dependency_cancelled",
-            `la tarea ${dependsOnId} está cancelada`,
-          );
+          throw new TaskRepositoryError("dependency_cancelled", `task ${dependsOnId} is canceled`);
         }
         return { dependsOnId, crossProject: target.projectId !== values.projectId };
       });
@@ -139,7 +137,7 @@ export class TaskRepository implements DependencyGraphReader {
         })
         .returning()
         .get();
-      // Una tarea nueva no tiene dependientes: sus aristas no pueden cerrar un ciclo.
+      // A new task has no dependents: its edges cannot close a cycle.
       if (dependsOn.length > 0) {
         tx.insert(taskDependencies)
           .values(dependsOn.map((dependsOnId) => ({ taskId: row.id, dependsOnId })))
@@ -164,7 +162,7 @@ export class TaskRepository implements DependencyGraphReader {
     return row ? toTask(row) : null;
   }
 
-  /** Mayor prioridad primero; los empates, por antigüedad. */
+  /** Highest priority first; ties by age. */
   list(filter: TaskListFilter = {}): Task[] {
     return this.db
       .select()
@@ -180,7 +178,7 @@ export class TaskRepository implements DependencyGraphReader {
       .map(toTask);
   }
 
-  /** Reemplaza los campos presentes y registra task.updated con los que cambiaron. */
+  /** Replaces the present fields and records task.updated with those that changed. */
   update(taskId: string, patch: TaskUpdate): Task | null {
     const values = TaskUpdate.parse(patch);
     return this.#write((tx) => {
@@ -197,14 +195,14 @@ export class TaskRepository implements DependencyGraphReader {
       }
       if (Object.keys(to).length === 0) return toTask(current);
       const [row] = tx.update(tasks).set(to).where(eq(tasks.id, taskId)).returning().all();
-      if (!row) throw new Error("update de task sin fila");
+      if (!row) throw new Error("task update without a row");
       const payload = { from, to } as TaskUpdatedPayload;
       appendEvent(tx, { taskId, type: TASK_UPDATED, actor: "human", payload });
       return toTask(row);
     });
   }
 
-  /** Cancela con la máquina de estados; detener el agente vivo es del dispatcher (UW-16/17). */
+  /** Cancels with the state machine; stopping the live agent is up to the dispatcher (UW-16/17). */
   cancel(taskId: string, note?: string): TransitionTaskResult {
     return transitionTask(this.db, {
       taskId,
@@ -214,8 +212,8 @@ export class TaskRepository implements DependencyGraphReader {
   }
 
   /**
-   * Pausa con la máquina de estados; detener el agente vivo es del dispatcher (UW-16/17).
-   * `deliveryInProgress`: el Run del verificador sigue abierto con el handoff guardado.
+   * Pauses with the state machine; stopping the live agent is up to the dispatcher (UW-16/17).
+   * `deliveryInProgress`: the verifier's Run stays open with the handoff saved.
    */
   pause(taskId: string, deliveryInProgress: boolean): TransitionTaskResult {
     return transitionTask(this.db, {
@@ -225,42 +223,39 @@ export class TaskRepository implements DependencyGraphReader {
     });
   }
 
-  /** Reanuda una tarea en needs_human o paused hacia el estado desde el que se escaló o pausó. */
+  /** Resumes a task in needs_human or paused to the state from which it was escalated or paused. */
   resume(taskId: string): TransitionTaskResult {
     return transitionTask(this.db, { taskId, actor: "human", command: { type: "resume" } });
   }
 
   /**
-   * `taskId` pasa a depender de `dependsOnId`. Idempotente: si la arista ya existe devuelve
-   * `created: false` sin escribir. null si `taskId` no existe.
+   * `taskId` starts depending on `dependsOnId`. Idempotent: if the edge already exists it returns
+   * `created: false` without writing. null if `taskId` does not exist.
    */
   addDependency(taskId: string, dependsOnId: string): { created: boolean } | null {
     return this.#write((tx) => {
       const task = findRow(tx, taskId);
       if (!task) return null;
       if (edgeExists(tx, taskId, dependsOnId)) return { created: false };
-      // Las dependencias se validan antes de refinar (docs/design.md §Máquina de estados).
+      // Dependencies are validated before refining (docs/design.md §State machine).
       if (task.state !== "draft") {
         throw new TaskRepositoryError(
           "task_not_draft",
-          `la tarea ${taskId} está en ${task.state}; solo se agregan dependencias en draft`,
+          `task ${taskId} is in ${task.state}; dependencies are only added in draft`,
         );
       }
       const target = findRow(tx, dependsOnId);
       if (!target) {
-        throw new TaskRepositoryError("dependency_not_found", `no existe la tarea ${dependsOnId}`);
+        throw new TaskRepositoryError("dependency_not_found", `task ${dependsOnId} does not exist`);
       }
       if (target.state === "cancelled") {
-        throw new TaskRepositoryError(
-          "dependency_cancelled",
-          `la tarea ${dependsOnId} está cancelada`,
-        );
+        throw new TaskRepositoryError("dependency_cancelled", `task ${dependsOnId} is canceled`);
       }
       const cycle = loadGraph(tx).findCycle({ taskId, dependsOnId });
       if (cycle) {
         throw new TaskRepositoryError(
           "cycle",
-          `la arista cierra un ciclo: ${cycle.join(" → ")}`,
+          `the edge closes a cycle: ${cycle.join(" → ")}`,
           cycle,
         );
       }
@@ -274,7 +269,7 @@ export class TaskRepository implements DependencyGraphReader {
     });
   }
 
-  /** Quita la arista si existe. null si `taskId` no existe. */
+  /** Removes the edge if it exists. null if `taskId` does not exist. */
   removeDependency(taskId: string, dependsOnId: string): { removed: boolean } | null {
     return this.#write((tx) => {
       const task = findRow(tx, taskId);
@@ -297,9 +292,9 @@ export class TaskRepository implements DependencyGraphReader {
     });
   }
 
-  /** Dependencias y dependientes directos de una tarea. null si no existe. */
+  /** Direct dependencies and dependents of a task. null if it does not exist. */
   dependencies(taskId: string): TaskDependencies | null {
-    // Una sola transacción: las tres lecturas ven el mismo estado.
+    // A single transaction: the three reads see the same state.
     return this.db.transaction((tx) => this.#dependencies(tx, taskId));
   }
 
@@ -351,21 +346,21 @@ export class TaskRepository implements DependencyGraphReader {
     };
   }
 
-  /** DAG completo, incluidas las aristas entre proyectos. */
+  /** Full DAG, including edges between projects. */
   snapshot(): DependencyGraph {
     return loadGraph(this.db);
   }
 
-  // IMMEDIATE toma el lock de escritura antes de leer: dos aristas que juntas cerrarían un
-  // ciclo no pueden validarse a la vez.
+  // IMMEDIATE takes the write lock before reading: two edges that together would close a
+  // cycle cannot be validated at the same time.
   #write<T>(fn: (tx: Tx) => T): T {
     return this.db.transaction(fn, { behavior: "immediate" });
   }
 }
 
 /**
- * Fija el título de la tarea si aún no tiene, dentro de la transacción de quien llama. Los
- * refinamientos siguientes no lo cambian. Devuelve si lo escribió.
+ * Sets the task's title if it does not have one yet, inside the caller's transaction. Later
+ * refinements do not change it. Returns whether it wrote it.
  */
 export function applyTaskTitle(tx: Tx, taskId: string, title: string): boolean {
   const parsed = TaskTitle.parse(title);
@@ -385,16 +380,16 @@ export type CompleteWithResultInput = {
   taskId: string;
   resultKind: ResultKind;
   result: string;
-  /** Título del handoff: solo se fija si la tarea aún no tiene (primer refinamiento). */
+  /** Handoff title: only set if the task does not have one yet (first refinement). */
   title: string;
-  /** Posición que quien llama vio; si ya cambió, se rechaza con stale_state. */
+  /** Position the caller saw; if it already changed, it is rejected with stale_state. */
   expected?: StatePosition;
 };
 
 /**
- * Completa la tarea con un Resultado en vez de un PR (submit_result, ADR 0007), dentro de la
- * transacción IMMEDIATE de quien llama: aplica el comando, guarda el tipo y el texto y fija el
- * título si falta. Un rechazo de la máquina de estados no escribe nada.
+ * Completes the task with a Result instead of a PR (submit_result, ADR 0007), inside the
+ * caller's IMMEDIATE transaction: it applies the command, saves the type and text and sets the
+ * title if missing. A state machine rejection writes nothing.
  */
 export function completeTaskWithResult(
   tx: Tx,
@@ -413,23 +408,23 @@ export function completeTaskWithResult(
     .where(eq(tasks.id, input.taskId))
     .returning()
     .all();
-  if (!task) throw new Error(`la tarea ${input.taskId} desapareció al guardar su Resultado`);
+  if (!task) throw new Error(`task ${input.taskId} disappeared when saving its Result`);
   applyTaskTitle(tx, input.taskId, input.title);
   return { ...moved, task: findRow(tx, input.taskId) ?? task };
 }
 
 /**
- * La columna admite NULL solo para que el trigger tasks_assign_number complete los inserts que no
- * lo traen; una fila leída siempre lo tiene.
+ * The column allows NULL only so the tasks_assign_number trigger can complete the inserts that do not
+ * bring it; a row that is read always has it.
  */
 export function requireTaskNumber(value: number | null): number {
-  if (value === null) throw new TaskRepositoryError("invalid_row", "tarea sin número");
+  if (value === null) throw new TaskRepositoryError("invalid_row", "task without a number");
   return value;
 }
 
 /**
- * Siguiente número de tarea (#N). Dentro de la transacción IMMEDIATE de create, así dos
- * creaciones no leen el mismo máximo; el índice único rechaza cualquier repetido (ADR 0015).
+ * Next task number (#N). Inside create's IMMEDIATE transaction, so two
+ * creations do not read the same maximum; the unique index rejects any repeated one (ADR 0015).
  */
 function nextTaskNumber(db: Reader): number {
   const row = db
@@ -441,7 +436,7 @@ function nextTaskNumber(db: Reader): number {
 
 function assertNotTerminal(task: Row): void {
   if (isTerminal(task.state)) {
-    throw new TaskRepositoryError("task_terminal", `la tarea ${task.id} está en ${task.state}`);
+    throw new TaskRepositoryError("task_terminal", `task ${task.id} is in ${task.state}`);
   }
 }
 

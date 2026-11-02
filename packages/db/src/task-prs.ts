@@ -1,7 +1,7 @@
-// PR de las tareas (ADR uw-14-adapter-github). Solo toca `pr_url` y `pr_state`: el estado de la
-// tarea cambia únicamente por task-transitions (ADR 0007), también cuando un PR en conflicto la
-// reabre (ADR pr-en-conflicto). Cada cambio deja su evento publicado en
-// el outbox, así el scheduler recalcula el ready set cuando un PR se mergea o se cierra.
+// Tasks' PRs (ADR uw-14-adapter-github). It only touches `pr_url` and `pr_state`: the task's
+// state changes only through task-transitions (ADR 0007), also when a PR in conflict
+// reopens it (ADR pr-en-conflicto). Each change leaves its event published in
+// the outbox, so the scheduler recalculates the ready set when a PR is merged or closed.
 import {
   type ObservedPrState,
   type PrTrackingStore,
@@ -59,17 +59,17 @@ export class TaskPrRepository implements PrTrackingStore {
         .from(tasks)
         .where(eq(tasks.id, taskId))
         .get();
-      if (!row) throw new TaskPrError("task_not_found", `no existe la tarea ${taskId}`);
+      if (!row) throw new TaskPrError("task_not_found", `task ${taskId} does not exist`);
       if (row.prUrl === url && row.prState === "open") return false;
       if (row.prState === "merged") {
-        throw new TaskPrError("pr_already_merged", `el PR de ${taskId} ya se mergeó: ${row.prUrl}`);
-      }
-      // Reemplazar un PR abierto lo sacaría del poller: si un humano lo mergea, nadie lo vería.
-      if (row.prState === "open") {
         throw new TaskPrError(
-          "pr_already_open",
-          `la tarea ${taskId} ya tiene abierto ${row.prUrl}`,
+          "pr_already_merged",
+          `the PR of ${taskId} was already merged: ${row.prUrl}`,
         );
+      }
+      // Replacing an open PR would take it out of the poller: if a human merges it, nobody would see it.
+      if (row.prState === "open") {
+        throw new TaskPrError("pr_already_open", `task ${taskId} already has ${row.prUrl} open`);
       }
       tx.update(tasks).set({ prUrl: url, prState: "open" }).where(eq(tasks.id, taskId)).run();
       appendEvent(
@@ -93,7 +93,7 @@ export class TaskPrRepository implements PrTrackingStore {
         .from(tasks)
         .where(eq(tasks.id, taskId))
         .get();
-      // Un PR distinto del actual (uno viejo de la tarea) no cambia nada.
+      // A PR different from the current one (an old one of the task) changes nothing.
       if (!row || row.prUrl !== observed.url) return false;
       const to = prStateChange(row.prState, observed.state);
       if (!to) return false;
@@ -145,7 +145,7 @@ export class TaskPrRepository implements PrTrackingStore {
       if (row?.state !== "completed" || row.prUrl !== url || row.prState !== "open") {
         return false;
       }
-      // El Run del verificador que dio el pass entregado: el evento lo exige y lo audita.
+      // The Run of the verifier that gave the delivered pass: the event requires it and audits it.
       const verifier = tx
         .select({ id: runs.id })
         .from(runs)
@@ -177,8 +177,8 @@ export class TaskPrRepository implements PrTrackingStore {
     });
   }
 
-  // IMMEDIATE toma el lock de escritura antes de leer: dos pollers (servidor y CLI) no registran
-  // el mismo merge dos veces.
+  // IMMEDIATE takes the write lock before reading: two pollers (server and CLI) do not record
+  // the same merge twice.
   #write<T>(fn: (tx: Parameters<Parameters<LunasqDatabase["transaction"]>[0]>[0]) => T): T {
     return this.db.transaction(fn, { behavior: "immediate" });
   }

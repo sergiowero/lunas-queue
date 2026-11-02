@@ -26,7 +26,7 @@ function setup() {
 }
 
 describe("QuestionRepository.answer", () => {
-  it("con el agente vivo guarda la respuesta y deja la tarea en running", () => {
+  it("with the agent alive stores the answer and leaves the task in running", () => {
     const { db, task, question, questions } = setup();
     const result = questions.answer(question.id, {
       answer: "Sí",
@@ -49,7 +49,7 @@ describe("QuestionRepository.answer", () => {
     });
   });
 
-  it("sin agente vivo la tarea vuelve a queued y la entrega es un Run nuevo", () => {
+  it("without a live agent the task goes back to queued and the delivery is a new Run", () => {
     const { db, task, question, questions } = setup();
     const result = questions.answer(question.id, { answer: "Sí", agentAlive: false });
     expect(result).toMatchObject({ ok: true, task: { subState: "queued" } });
@@ -58,7 +58,7 @@ describe("QuestionRepository.answer", () => {
     });
   });
 
-  it("publica task.transitioned en el outbox, que despierta al scheduler", () => {
+  it("publishes task.transitioned in the outbox, which wakes the scheduler", () => {
     const { db, question, questions } = setup();
     questions.answer(question.id, { answer: "Sí", agentAlive: true });
     const topics = db
@@ -69,7 +69,7 @@ describe("QuestionRepository.answer", () => {
     expect(topics).toContain(TASK_TRANSITIONED);
   });
 
-  it("responder dos veces: la segunda se rechaza y no cambia nada", () => {
+  it("answering twice: the second is rejected and changes nothing", () => {
     const { db, task, question, questions } = setup();
     questions.answer(question.id, { answer: "Sí", agentAlive: true });
     const events = listEvents(db, task.id).length;
@@ -79,7 +79,7 @@ describe("QuestionRepository.answer", () => {
     expect(listEvents(db, task.id)).toHaveLength(events);
   });
 
-  it("si la tarea ya no espera al humano rechaza y revierte todo", () => {
+  it("if the task no longer waits for the human it rejects and rolls everything back", () => {
     const { db, task, question, questions } = setup();
     setTaskPosition(db, task.id, { state: "needs_human", subState: null });
     const result = questions.answer(question.id, { answer: "Sí", agentAlive: true });
@@ -87,7 +87,7 @@ describe("QuestionRepository.answer", () => {
     expect(questions.get(question.id)?.status).toBe("open");
   });
 
-  it("una pregunta inexistente responde not_found", () => {
+  it("a nonexistent question answers not_found", () => {
     const { questions } = setup();
     expect(
       questions.answer("00000000-0000-4000-8000-000000000009", { answer: "x", agentAlive: true }),
@@ -96,7 +96,7 @@ describe("QuestionRepository.answer", () => {
 });
 
 describe("QuestionRepository consultas", () => {
-  it("lista por estado, tarea y proyecto, las más viejas primero", () => {
+  it("lists by state, task and project, the oldest first", () => {
     const { db, project, task, question, questions } = setup();
     const otherTask = insertTask(db, project.id, {
       state: "in_progress",
@@ -115,7 +115,7 @@ describe("QuestionRepository consultas", () => {
     expect(questions.list({ status: "answered" }).map((q) => q.id)).toEqual([question.id]);
   });
 
-  it("openForTask devuelve la pregunta abierta de la tarea", () => {
+  it("openForTask returns the open question of the task", () => {
     const { task, question, questions } = setup();
     expect(questions.openForTask(task.id)?.id).toBe(question.id);
     questions.answer(question.id, { answer: "Sí", agentAlive: true });
@@ -124,7 +124,7 @@ describe("QuestionRepository consultas", () => {
 });
 
 describe("QuestionRepository.cancelOpen", () => {
-  it("cancela las abiertas de la tarea y deja el evento", () => {
+  it("cancels the task's open questions and leaves the event", () => {
     const { db, task, question, questions } = setup();
     const cancelled = questions.cancelOpen(task.id, "task_cancelled");
     expect(cancelled.map((q) => q.id)).toEqual([question.id]);
@@ -135,7 +135,7 @@ describe("QuestionRepository.cancelOpen", () => {
     });
   });
 
-  it("repetirlo no duplica eventos ni toca las respondidas", () => {
+  it("repeating it does not duplicate events nor touch the answered ones", () => {
     const { db, task, question, questions } = setup();
     questions.answer(question.id, { answer: "Sí", agentAlive: true });
     expect(questions.cancelOpen(task.id, "task_cancelled")).toEqual([]);

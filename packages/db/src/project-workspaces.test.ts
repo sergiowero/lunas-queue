@@ -4,7 +4,7 @@ import { ProjectRepository } from "./projects.ts";
 import { insertProject, migratedDatabase } from "./test-helpers.ts";
 
 describe("ProjectWorkspaceRepository", () => {
-  it("guarda el workspace de herdr del proyecto sin tocar su configuración", () => {
+  it("stores the project's herdr workspace without touching its configuration", () => {
     const db = migratedDatabase();
     const project = insertProject(db);
     const repo = new ProjectWorkspaceRepository(db);

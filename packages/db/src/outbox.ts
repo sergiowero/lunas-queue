@@ -1,6 +1,6 @@
-// Outbox de eventos (docs/design.md §Componentes, ADR 0011): la fila se escribe en la misma
-// transacción que su evento, así una caída después del commit no pierde nada. El publicador
-// de @lunasq/server lee los pendientes en orden y los marca al entregarlos.
+// Event outbox (docs/design.md §Components, ADR 0011): the row is written in the same
+// transaction as its event, so a crash after the commit loses nothing. The publisher
+// of @lunasq/server reads the pending ones in order and marks them when delivered.
 import type { OutboxMessage } from "@lunasq/schemas";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
@@ -11,7 +11,7 @@ type Writer = Pick<LunasqDatabase, "insert">;
 
 export type PendingOutboxEntry = { message: OutboxMessage; attempts: number };
 
-/** Encola un evento ya escrito. Repetirlo con el mismo evento no duplica la fila. */
+/** Enqueues an already written event. Repeating it with the same event does not duplicate the row. */
 export function enqueueOutbox(db: Writer, event: Pick<EventRow, "id" | "type">): void {
   db.insert(outbox)
     .values({ eventId: event.id, topic: event.type })
@@ -19,7 +19,7 @@ export function enqueueOutbox(db: Writer, event: Pick<EventRow, "id" | "type">):
     .run();
 }
 
-/** Mensajes sin publicar en orden de escritura, armados desde su evento. */
+/** Unpublished messages in write order, built from their event. */
 export function listPendingOutbox(
   db: LunasqDatabase,
   opts: { limit?: number } = {},
@@ -47,7 +47,7 @@ export function listPendingOutbox(
   }));
 }
 
-/** Marca un mensaje como publicado; devuelve false si ya lo estaba. */
+/** Marks a message as published; returns false if it already was. */
 export function markOutboxPublished(db: LunasqDatabase, id: number, at = new Date()): boolean {
   const result = db
     .update(outbox)
@@ -57,7 +57,7 @@ export function markOutboxPublished(db: LunasqDatabase, id: number, at = new Dat
   return result.changes > 0;
 }
 
-/** Registra una entrega fallida y devuelve los intentos acumulados. */
+/** Records a failed delivery and returns the accumulated attempts. */
 export function recordOutboxFailure(db: LunasqDatabase, id: number): number {
   const row = db
     .update(outbox)

@@ -5,7 +5,7 @@ import { ProjectRepository, ProjectRepositoryError } from "./projects.ts";
 import { projects } from "./schema.ts";
 import { insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
 
-// Un kind que el esquema rechaza; el cast salta la verificación de tipos a propósito.
+// A kind the schema rejects; the cast skips type checking on purpose.
 const codex = { kind: "codex" } as unknown as { kind: "claude" };
 
 const input = {
@@ -27,11 +27,11 @@ function errorOf(fn: () => unknown): ProjectRepositoryError {
     if (error instanceof ProjectRepositoryError) return error;
     throw error;
   }
-  throw new Error("no lanzó");
+  throw new Error("it did not throw");
 }
 
 describe("ProjectRepository.create", () => {
-  it("guarda el proyecto con defaults y lo devuelve validado", () => {
+  it("stores the project with defaults and returns it validated", () => {
     const { repo } = repository();
     const project = repo.create(input);
     expect(project).toMatchObject({ ...input, limits: {}, testCommand: null, bootstrap: null });
@@ -39,7 +39,7 @@ describe("ProjectRepository.create", () => {
     expect(repo.get(project.id)).toEqual(project);
   });
 
-  it("valida la entrada", () => {
+  it("validates the input", () => {
     const { repo } = repository();
     expect(() => repo.create({ ...input, agentProfiles: { verify: codex } })).toThrow(
       /"invalid_value"[\s\S]*"verify"/,
@@ -47,7 +47,7 @@ describe("ProjectRepository.create", () => {
     expect(repo.list()).toEqual([]);
   });
 
-  it("traduce nombre o ruta repetidos a conflict con el campo", () => {
+  it("translates a repeated name or path to conflict with the field", () => {
     const { repo } = repository();
     repo.create(input);
     const byName = errorOf(() => repo.create({ ...input, localPath: "/repos/otra" }));
@@ -58,19 +58,19 @@ describe("ProjectRepository.create", () => {
 });
 
 describe("ProjectRepository.get y list", () => {
-  it("get devuelve null para ids inexistentes", () => {
+  it("get returns null for nonexistent ids", () => {
     const { repo } = repository();
     expect(repo.get(crypto.randomUUID())).toBeNull();
     expect(repo.get("no-es-uuid")).toBeNull();
   });
 
-  it("lee filas antiguas con JSON vacío aplicando los defaults", () => {
+  it("reads old rows with empty JSON applying the defaults", () => {
     const { db, repo } = repository();
     const row = insertProject(db);
     expect(repo.get(row.id)?.agentProfiles.refine).toEqual({ kind: "claude", args: [] });
   });
 
-  it("falla con invalid_row si el JSON guardado no cumple el esquema", () => {
+  it("fails with invalid_row if the stored JSON does not meet the schema", () => {
     const { db, repo } = repository();
     const row = insertProject(db, { agentProfiles: { verify: codex } });
     expect(errorOf(() => repo.get(row.id))).toMatchObject({ code: "invalid_row" });
@@ -78,7 +78,7 @@ describe("ProjectRepository.get y list", () => {
 });
 
 describe("ProjectRepository.update", () => {
-  it("reemplaza solo los campos presentes", () => {
+  it("replaces only the present fields", () => {
     const { repo } = repository();
     const created = repo.create({
       ...input,
@@ -99,18 +99,18 @@ describe("ProjectRepository.update", () => {
     expect(updated?.agentProfiles.implement.model).toBe("opus");
   });
 
-  it("un patch vacío devuelve el proyecto sin cambios", () => {
+  it("an empty patch returns the project unchanged", () => {
     const { repo } = repository();
     const created = repo.create(input);
     expect(repo.update(created.id, {})).toEqual(created);
   });
 
-  it("devuelve null si el proyecto no existe", () => {
+  it("returns null if the project does not exist", () => {
     const { repo } = repository();
     expect(repo.update(crypto.randomUUID(), { baseBranch: "develop" })).toBeNull();
   });
 
-  it("rechaza un perfil de verify con otro kind sin tocar la fila", () => {
+  it("rejects a verify profile with another kind without touching the row", () => {
     const { repo } = repository();
     const created = repo.create(input);
     expect(() => repo.update(created.id, { agentProfiles: { verify: codex } })).toThrow(
@@ -119,7 +119,7 @@ describe("ProjectRepository.update", () => {
     expect(repo.get(created.id)).toEqual(created);
   });
 
-  it("traduce un nombre repetido a conflict", () => {
+  it("translates a repeated name to conflict", () => {
     const { repo } = repository();
     repo.create(input);
     const other = repo.create({ ...input, name: "otro", localPath: "/repos/otro" });
@@ -129,7 +129,7 @@ describe("ProjectRepository.update", () => {
 });
 
 describe("ProjectRepository.delete", () => {
-  it("borra un proyecto sin tareas", () => {
+  it("deletes a project without tasks", () => {
     const { repo } = repository();
     const created = repo.create(input);
     expect(repo.delete(created.id)).toBe(true);
@@ -137,7 +137,7 @@ describe("ProjectRepository.delete", () => {
     expect(repo.delete(created.id)).toBe(false);
   });
 
-  it("falla con has_tasks si el proyecto tiene tareas", () => {
+  it("fails with has_tasks if the project has tasks", () => {
     const { db, repo } = repository();
     const created = repo.create(input);
     insertTask(db, created.id);
@@ -162,7 +162,7 @@ describe("ProjectRepository: hallazgos del review", () => {
     expect(updated?.createdAt).toEqual(old);
   });
 
-  it("el PATCH de agentProfiles mezcla por fase", () => {
+  it("the PATCH of agentProfiles merges per phase", () => {
     const { repo } = repository();
     const created = repo.create({
       ...input,
@@ -175,7 +175,7 @@ describe("ProjectRepository: hallazgos del review", () => {
     expect(updated?.agentProfiles.verify.model).toBe("sonnet");
   });
 
-  it("revierte el update si la fila resultante no es válida", () => {
+  it("rolls back the update if the resulting row is not valid", () => {
     const { db, repo } = repository();
     const row = insertProject(db, { agentProfiles: { verify: { kind: "codex" } } });
     expect(errorOf(() => repo.update(row.id, { baseBranch: "develop" }))).toMatchObject({
@@ -185,21 +185,21 @@ describe("ProjectRepository: hallazgos del review", () => {
     expect(stored?.baseBranch).toBe(row.baseBranch);
   });
 
-  it("un PATCH puede corregir la fase inválida de una fila", () => {
+  it("a PATCH can fix the invalid phase of a row", () => {
     const { db, repo } = repository();
     const row = insertProject(db, { agentProfiles: { verify: { kind: "codex" } } });
     const fixed = repo.update(row.id, { agentProfiles: { verify: { kind: "claude" } } });
     expect(fixed?.agentProfiles.verify).toEqual({ kind: "claude", args: [] });
   });
 
-  it("list falla con invalid_row si alguna fila no es válida", () => {
+  it("list fails with invalid_row if any row is not valid", () => {
     const { db, repo } = repository();
     repo.create(input);
     insertProject(db, { limits: { concurrency: 0 } });
     expect(errorOf(() => repo.list())).toMatchObject({ code: "invalid_row" });
   });
 
-  it("la unicidad de localPath usa la ruta normalizada", () => {
+  it("uniqueness of localPath uses the normalized path", () => {
     const { repo } = repository();
     repo.create(input);
     const error = errorOf(() =>

@@ -42,11 +42,11 @@ function errorOf(fn: () => unknown): TaskRepositoryError {
     if (error instanceof TaskRepositoryError) return error;
     throw error;
   }
-  throw new Error("no lanzó");
+  throw new Error("it did not throw");
 }
 
 describe("TaskRepository.create", () => {
-  it("crea la tarea en draft/queued y registra task.created", () => {
+  it("creates the task in draft/queued and records task.created", () => {
     const { db, create, project } = repository();
     const task = create({ tags: ["auth"] });
     expect(task).toMatchObject({
@@ -74,7 +74,7 @@ describe("TaskRepository.create", () => {
     });
   });
 
-  it("crea las aristas iniciales en la misma operación", () => {
+  it("creates the initial edges in the same operation", () => {
     const { repo, create } = repository();
     const a = create();
     const b = create();
@@ -83,7 +83,7 @@ describe("TaskRepository.create", () => {
     expect(repo.snapshot().dependenciesOf(c.id)).toEqual([a.id, b.id]);
   });
 
-  it("acepta dependencias de otro proyecto", () => {
+  it("accepts dependencies from another project", () => {
     const { db, repo, create } = repository();
     const other = insertProject(db);
     const a = create({ projectId: other.id });
@@ -102,16 +102,16 @@ describe("TaskRepository.create", () => {
   });
 
   it.each<[string, string, Partial<TaskCreate>]>([
-    ["el proyecto no existe", "project_not_found", { projectId: missing }],
-    ["una dependencia no existe", "dependency_not_found", { dependsOn: [missing] }],
-    ["causedBy no existe", "caused_by_not_found", { causedBy: missing }],
-  ])("falla si %s y no escribe nada", (_, code, overrides) => {
+    ["the project does not exist", "project_not_found", { projectId: missing }],
+    ["a dependency does not exist", "dependency_not_found", { dependsOn: [missing] }],
+    ["causedBy does not exist", "caused_by_not_found", { causedBy: missing }],
+  ])("fails if %s and writes nothing", (_, code, overrides) => {
     const { db, create } = repository();
     expect(errorOf(() => create(overrides)).code).toBe(code);
     expect(db.select().from(tasks).all()).toEqual([]);
   });
 
-  it("rechaza depender de una tarea cancelada sin escribir nada", () => {
+  it("refuses to depend on a canceled task without writing anything", () => {
     const { db, repo, create } = repository();
     const a = create();
     repo.cancel(a.id);
@@ -119,18 +119,18 @@ describe("TaskRepository.create", () => {
     expect(db.select().from(tasks).all()).toHaveLength(1);
   });
 
-  it("valida la entrada", () => {
+  it("validates the input", () => {
     const { create } = repository();
     expect(() => create({ priority: -1 })).toThrow();
   });
 });
 
 describe("TaskRepository lectura", () => {
-  it("get devuelve null si no existe", () => {
+  it("get returns null if it does not exist", () => {
     expect(repository().repo.get(missing)).toBeNull();
   });
 
-  it("list filtra por proyecto y estado y ordena por prioridad y antigüedad", () => {
+  it("list filters by project and state and orders by priority and age", () => {
     const { db, repo, create } = repository();
     const other = insertProject(db);
     const low = create({ priority: 100 });
@@ -144,7 +144,7 @@ describe("TaskRepository lectura", () => {
     expect(repo.list({ state: "cancelled" }).map((t) => t.id)).toEqual([low.id]);
   });
 
-  it("una fila inválida da invalid_row", () => {
+  it("an invalid row gives invalid_row", () => {
     const { db, repo, project } = repository();
     const row = insertTask(db, project.id, { tags: [42] as unknown as string[] });
     expect(errorOf(() => repo.get(row.id)).code).toBe("invalid_row");
@@ -152,7 +152,7 @@ describe("TaskRepository lectura", () => {
 });
 
 describe("TaskRepository.update", () => {
-  it("cambia solo los campos enviados y registra antes y después", () => {
+  it("changes only the fields sent and records before and after", () => {
     const { db, repo, create } = repository();
     const task = create({ tags: ["a"] });
     const updated = repo.update(task.id, { priority: 900, tags: ["a"] });
@@ -164,7 +164,7 @@ describe("TaskRepository.update", () => {
     });
   });
 
-  it("sin cambios no registra evento", () => {
+  it("without changes it records no event", () => {
     const { db, repo, create } = repository();
     const task = create();
     expect(repo.update(task.id, { priority: 100 })).toMatchObject({ priority: 100 });
@@ -172,7 +172,7 @@ describe("TaskRepository.update", () => {
     expect(listEvents(db, task.id)).toHaveLength(1);
   });
 
-  it("devuelve null si no existe y rechaza tareas terminales", () => {
+  it("returns null if it does not exist and rejects terminal tasks", () => {
     const { repo, create } = repository();
     expect(repo.update(missing, { priority: 1 })).toBeNull();
     const task = create();
@@ -182,7 +182,7 @@ describe("TaskRepository.update", () => {
 });
 
 describe("TaskRepository.cancel", () => {
-  it("pasa la tarea a cancelled con su evento task.transitioned", () => {
+  it("moves the task to cancelled with its task.transitioned event", () => {
     const { db, repo, create } = repository();
     const task = create();
     const result = repo.cancel(task.id, "ya no aplica");
@@ -194,7 +194,7 @@ describe("TaskRepository.cancel", () => {
     });
   });
 
-  it("cancelar dos veces se rechaza sin duplicar el evento", () => {
+  it("canceling twice is rejected without duplicating the event", () => {
     const { db, repo, create } = repository();
     const task = create();
     repo.cancel(task.id);
@@ -207,7 +207,7 @@ describe("TaskRepository.cancel", () => {
 });
 
 describe("TaskRepository aristas", () => {
-  it("agrega una arista con su evento en la dependiente", () => {
+  it("adds an edge with its event on the dependent", () => {
     const { db, repo, create } = repository();
     const a = create();
     const b = create();
@@ -219,7 +219,7 @@ describe("TaskRepository aristas", () => {
     });
   });
 
-  it("repetir la arista es idempotente: no duplica fila ni evento", () => {
+  it("repeating the edge is idempotent: it duplicates neither row nor event", () => {
     const { db, repo, create } = repository();
     const a = create();
     const b = create();
@@ -229,7 +229,7 @@ describe("TaskRepository aristas", () => {
     expect(listEvents(db, b.id)).toHaveLength(2);
   });
 
-  it("rechaza una arista que cierra un ciclo, con el camino, sin escribir nada", () => {
+  it("rejects an edge that closes a cycle, with the path, without writing anything", () => {
     const { db, repo, create } = repository();
     const a = create();
     const b = create({ dependsOn: [a.id] });
@@ -241,14 +241,14 @@ describe("TaskRepository aristas", () => {
     expect(listEvents(db, a.id)).toHaveLength(1);
   });
 
-  it("rechaza que una tarea dependa de sí misma", () => {
+  it("rejects a task depending on itself", () => {
     const { repo, create } = repository();
     const a = create();
     const error = errorOf(() => repo.addDependency(a.id, a.id));
     expect(error).toMatchObject({ code: "cycle", cycle: [a.id, a.id] });
   });
 
-  it("solo agrega aristas a una tarea en draft", () => {
+  it("only adds edges to a task in draft", () => {
     const { db, repo, create } = repository();
     const a = create();
     const b = create();
@@ -256,7 +256,7 @@ describe("TaskRepository aristas", () => {
     expect(errorOf(() => repo.addDependency(b.id, a.id)).code).toBe("task_not_draft");
   });
 
-  it("rechaza depender de una tarea cancelada o inexistente", () => {
+  it("rejects depending on a canceled or nonexistent task", () => {
     const { repo, create } = repository();
     const a = create();
     const b = create();
@@ -265,14 +265,14 @@ describe("TaskRepository aristas", () => {
     expect(errorOf(() => repo.addDependency(b.id, a.id)).code).toBe("dependency_cancelled");
   });
 
-  it("devuelve null si la dependiente no existe", () => {
+  it("returns null if the dependent does not exist", () => {
     const { repo, create } = repository();
     expect(repo.addDependency(missing, create().id)).toBeNull();
     expect(repo.removeDependency(missing, create().id)).toBeNull();
     expect(repo.dependencies(missing)).toBeNull();
   });
 
-  it("quita una arista con su evento; quitarla otra vez no hace nada", () => {
+  it("removes an edge with its event; removing it again does nothing", () => {
     const { db, repo, create } = repository();
     const a = create();
     const b = create({ dependsOn: [a.id] });
@@ -286,7 +286,7 @@ describe("TaskRepository aristas", () => {
     ]);
   });
 
-  it("no quita aristas de una tarea terminal", () => {
+  it("does not remove edges from a terminal task", () => {
     const { repo, create } = repository();
     const a = create();
     const b = create({ dependsOn: [a.id] });
@@ -294,7 +294,7 @@ describe("TaskRepository aristas", () => {
     expect(errorOf(() => repo.removeDependency(b.id, a.id)).code).toBe("task_terminal");
   });
 
-  it("dependencies lista dependencias y dependientes directos con su estado", () => {
+  it("dependencies lists direct dependencies and dependents with their state", () => {
     const { repo, create } = repository();
     const a = create({ intent: "Base" });
     const b = create({ dependsOn: [a.id] });
@@ -316,21 +316,21 @@ describe("TaskRepository aristas", () => {
     expect(deps?.dependents.map((l) => [l.taskId, l.number])).toEqual([[c.id, c.number]]);
   });
 
-  it("agregar una arista toma el lock de escritura antes de leer el DAG", () => {
+  it("adding an edge takes the write lock before reading the DAG", () => {
     const { db: first, file } = freshDatabase();
     migrateDatabase(first);
     const project = insertProject(first);
     const a = insertTask(first, project.id);
     const b = insertTask(first, project.id);
-    // Segunda conexión, como la de otro proceso, que registra cada consulta que ejecuta.
+    // Second connection, like another process's, which logs every query it runs.
     const queries: string[] = [];
     const client = new Database(file);
     client.pragma("busy_timeout = 0");
     const second = drizzle({ client, schema, logger: { logQuery: (q) => queries.push(q) } });
     try {
       first.$client.prepare("BEGIN IMMEDIATE").run();
-      // IMMEDIATE falla al empezar, sin leer nada; una transacción diferida leería el DAG
-      // antes de chocar con el otro escritor.
+      // IMMEDIATE fails at the start, without reading anything; a deferred transaction would read the DAG
+      // before colliding with the other writer.
       expect(() => new TaskRepository(second).addDependency(b.id, a.id)).toThrow(/locked|busy/i);
       expect(queries).toEqual([]);
       first.$client.prepare("ROLLBACK").run();
@@ -340,7 +340,7 @@ describe("TaskRepository aristas", () => {
     }
   });
 
-  it("dos aristas que juntas cerrarían un ciclo: la segunda se rechaza", () => {
+  it("two edges that together would close a cycle: the second is rejected", () => {
     const { repo, create } = repository();
     const a = create();
     const b = create();
@@ -365,7 +365,7 @@ dependencyGraphReaderContract("TaskRepository", (edges) => {
 });
 
 describe("applyTaskTitle", () => {
-  it("fija el título una sola vez y registra task.titled", () => {
+  it("sets the title only once and records task.titled", () => {
     const { db, repo, create } = repository();
     const task = create();
     expect(task.title).toBeNull();
@@ -379,7 +379,7 @@ describe("applyTaskTitle", () => {
     expect(titled[0]).toMatchObject({ actor: "agent", payload: { title: "Primer título" } });
   });
 
-  it("rechaza un título vacío o de más de 72 caracteres", () => {
+  it("rejects an empty title or one longer than 72 characters", () => {
     const { db, create } = repository();
     const task = create();
     expect(() => db.transaction((tx) => applyTaskTitle(tx, task.id, "  "))).toThrow();
@@ -400,7 +400,7 @@ describe("completeTaskWithResult", () => {
     ...extra,
   });
 
-  it("completa la tarea con Resultado, fija el título y deja los eventos, sin PR", () => {
+  it("completes the task with a Result, sets the title and leaves the events, without a PR", () => {
     const { db, repo, create } = repository();
     const task = create();
     db.update(tasks).set({ subState: "running" }).where(eq(tasks.id, task.id)).run();
@@ -433,7 +433,7 @@ describe("completeTaskWithResult", () => {
     });
   });
 
-  it("no cambia el título que la tarea ya tiene", () => {
+  it("does not change the title the task already has", () => {
     const { db, repo, create } = repository();
     const task = create();
     db.update(tasks)
@@ -462,9 +462,9 @@ describe("completeTaskWithResult", () => {
     expect(listEvents(db, task.id).filter((e) => e.type === TASK_TITLED)).toHaveLength(0);
   });
 
-  it("si la máquina de estados rechaza, no escribe Resultado ni título", () => {
+  it("if the state machine rejects, it writes neither Result nor title", () => {
     const { db, repo, create } = repository();
-    const task = create(); // draft/queued: submit_result solo aplica desde running
+    const task = create(); // draft/queued: submit_result only applies from running
 
     const { expected: _, ...withoutExpected } = input(task.id);
     const result = db.transaction((tx) => completeTaskWithResult(tx, withoutExpected), {
@@ -481,8 +481,8 @@ describe("completeTaskWithResult", () => {
   });
 });
 
-describe("número de tarea", () => {
-  it("una tarea nueva recibe el siguiente número global y conserva su UUID como id", () => {
+describe("task number", () => {
+  it("a new task gets the next global number and keeps its UUID as id", () => {
     const { db, repo, create } = repository();
     for (let i = 0; i < 3; i++) create();
     const other = insertProject(db);
@@ -492,7 +492,7 @@ describe("número de tarea", () => {
     expect(repo.get(task.id)?.number).toBe(4);
   });
 
-  it("dos creaciones seguidas tienen números consecutivos y la base rechaza un número repetido", () => {
+  it("two consecutive creations have consecutive numbers and the database rejects a repeated number", () => {
     const { db, project, create } = repository();
     const first = create();
     const second = create();
@@ -502,7 +502,7 @@ describe("número de tarea", () => {
     );
   });
 
-  it("el número no cambia al editar ni al transicionar, y la base no deja cambiarlo", () => {
+  it("the number does not change on edit or transition, and the database does not allow changing it", () => {
     const { db, repo, create } = repository();
     for (let i = 0; i < 6; i++) create();
     const task = create();
@@ -515,10 +515,10 @@ describe("número de tarea", () => {
     expect(repo.get(task.id)?.number).toBe(7);
     expect(() =>
       db.$client.prepare("update tasks set number = 99 where id = ?").run(task.id),
-    ).toThrow(/el número de una tarea no cambia/);
+    ).toThrow(/a task number does not change/);
   });
 
-  it("no reutiliza el número de una tarea cancelada", () => {
+  it("does not reuse the number of a canceled task", () => {
     const { repo, create } = repository();
     create();
     const last = create();
@@ -526,7 +526,7 @@ describe("número de tarea", () => {
     expect(create().number).toBe(last.number + 1);
   });
 
-  it("task.created registra el número asignado", () => {
+  it("task.created records the assigned number", () => {
     const { db, create } = repository();
     const task = create();
     expect(listEvents(db, task.id)[0]?.payload).toMatchObject({ number: task.number });

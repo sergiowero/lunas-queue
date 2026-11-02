@@ -1,9 +1,9 @@
--- Editada a mano: drizzle-kit recrea `tasks` para agregar `result_kind` con su CHECK (SQLite no
--- agrega un CHECK de tabla con ALTER) y no recrea los triggers de 0008, que se agregan al final.
--- El DROP borraría en cascada Runs, aristas, eventos y usage si las claves foráneas estuvieran
--- activas: PRAGMA foreign_keys no actúa dentro de la transacción de la migración, así que
--- migrateDatabase las apaga antes y verifica foreign_key_check después (client.ts). El INSERT ... SELECT omite las columnas
--- nuevas: la tabla vieja no las tiene.
+-- Edited by hand: drizzle-kit recreates `tasks` to add `result_kind` with its CHECK (SQLite does not
+-- add a table CHECK with ALTER) and does not recreate the triggers of 0008, which are added at the end.
+-- The DROP would cascade-delete Runs, edges, events and usage if foreign keys were
+-- active: PRAGMA foreign_keys has no effect inside the migration transaction, so
+-- migrateDatabase turns them off beforehand and runs foreign_key_check afterwards (client.ts). The INSERT ... SELECT omits the
+-- new columns: the old table does not have them.
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 CREATE TABLE `__new_tasks` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -55,5 +55,5 @@ END;
 CREATE TRIGGER `tasks_number_immutable` BEFORE UPDATE OF `number` ON `tasks`
 WHEN OLD.`number` IS NOT NULL AND NEW.`number` IS NOT OLD.`number`
 BEGIN
-  SELECT RAISE(ABORT, 'el número de una tarea no cambia');
+  SELECT RAISE(ABORT, 'a task number does not change');
 END;

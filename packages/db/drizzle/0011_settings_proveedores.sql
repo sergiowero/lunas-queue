@@ -4,10 +4,10 @@ CREATE TABLE `app_settings` (
 	`updated_at` integer DEFAULT (cast(unixepoch('subsec') * 1000 as integer)) NOT NULL
 );
 --> statement-breakpoint
--- Drizzle ejecuta la migración dentro de una transacción, donde PRAGMA foreign_keys no tiene efecto:
--- si las llaves foráneas están activas, DROP TABLE events dispara el ON DELETE CASCADE de outbox.
--- Se respalda el outbox y se restaura; migrateDatabase las apaga y entonces las filas siguen ahí,
--- por eso la restauración ignora las que ya existen.
+-- Drizzle runs the migration inside a transaction, where PRAGMA foreign_keys has no effect:
+-- if foreign keys are active, DROP TABLE events fires the ON DELETE CASCADE of outbox.
+-- The outbox is backed up and restored; migrateDatabase turns them off and then the rows are still there,
+-- which is why the restore ignores the ones that already exist.
 CREATE TABLE `__outbox_backup` AS SELECT * FROM `outbox`;--> statement-breakpoint
 CREATE TABLE `__new_events` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -26,13 +26,13 @@ ALTER TABLE `__new_events` RENAME TO `events`;--> statement-breakpoint
 INSERT OR IGNORE INTO `outbox` SELECT * FROM `__outbox_backup`;--> statement-breakpoint
 DROP TABLE `__outbox_backup`;--> statement-breakpoint
 CREATE INDEX `events_task_idx` ON `events` (`task_id`,`id`);--> statement-breakpoint
--- Reconstruir events borra sus triggers: se recrean los de append-only (migración 0001, ADR 0007).
+-- Rebuilding events drops its triggers: the append-only ones are recreated (migration 0001, ADR 0007).
 CREATE TRIGGER `events_no_update` BEFORE UPDATE ON `events`
 BEGIN
-  SELECT RAISE(ABORT, 'events es append-only: no se puede modificar un evento');
+  SELECT RAISE(ABORT, 'events is append-only: an event cannot be modified');
 END;
 --> statement-breakpoint
 CREATE TRIGGER `events_no_delete` BEFORE DELETE ON `events`
 BEGIN
-  SELECT RAISE(ABORT, 'events es append-only: no se puede borrar un evento');
+  SELECT RAISE(ABORT, 'events is append-only: an event cannot be deleted');
 END;

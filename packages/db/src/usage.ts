@@ -1,6 +1,6 @@
-// UsageRecords que escribe el usage collector (docs/design.md §Consumo, ADR uw-20-usage-collector).
-// La ingesta es idempotente: Claude Code reenvía un lote si no recibe el 2xx, y el mismo
-// `source_ref` de un Run y una fuente no se guarda dos veces (ADR 0005).
+// UsageRecords written by the usage collector (docs/design.md §Usage, ADR uw-20-usage-collector).
+// Ingestion is idempotent: Claude Code resends a batch if it does not receive the 2xx, and the same
+// `source_ref` of a Run and a source is not stored twice (ADR 0005).
 import type { UsageSource } from "@lunasq/schemas";
 import type { LunasqDatabase } from "./client.ts";
 import { usageRecords } from "./schema.ts";
@@ -11,12 +11,12 @@ export type UsageInput = {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
-  /** USD estimado por el agente; null si no lo reporta. */
+  /** USD estimated by the agent; null if it does not report it. */
   costUsd: number | null;
   source: UsageSource;
-  /** Id del request en la fuente; sin él no se deduplica. */
+  /** Request id at the source; without it there is no deduplication. */
   sourceRef: string | null;
-  /** Subagente que hizo la llamada; null para la sesión principal. */
+  /** Subagent that made the call; null for the main session. */
   agentId: string | null;
 };
 
@@ -27,7 +27,7 @@ export class UsageRepository {
     this.db = db;
   }
 
-  /** Guarda los registros nuevos del Run en una transacción y devuelve cuántos eran nuevos. */
+  /** Stores the Run's new records in a transaction and returns how many were new. */
   record(runId: string, inputs: UsageInput[]): number {
     if (inputs.length === 0) return 0;
     return this.db.transaction((tx) => {

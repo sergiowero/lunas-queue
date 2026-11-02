@@ -1,5 +1,5 @@
-// Repositorio de proyectos: valida con los esquemas de @lunasq/schemas lo que entra y lo que sale
-// de las columnas JSON, e implementa el puerto de lectura del dominio (ADR 0008).
+// Projects repository: validates with the @lunasq/schemas schemas what enters and what leaves
+// the JSON columns, and implements the domain read port (ADR 0008).
 import type { ProjectConfigReader } from "@lunasq/domain";
 import { Project, ProjectCreate, ProjectUpdate } from "@lunasq/schemas";
 import { asc, eq } from "drizzle-orm";
@@ -43,7 +43,7 @@ function sqliteMessage(error: unknown): string {
   return String(error);
 }
 
-/** Traduce las violaciones de restricciones de SQLite a errores del repositorio. */
+/** Translates SQLite constraint violations into repository errors. */
 function translate(error: unknown): never {
   const code = sqliteCode(error);
   if (code === "SQLITE_CONSTRAINT_UNIQUE") {
@@ -52,7 +52,7 @@ function translate(error: unknown): never {
       if (message.includes(column)) {
         throw new ProjectRepositoryError(
           "conflict",
-          `ya existe un proyecto con ese ${field}`,
+          `a project with that ${field} already exists`,
           field,
           {
             cause: error,
@@ -61,9 +61,9 @@ function translate(error: unknown): never {
       }
     }
   }
-  // ON DELETE RESTRICT falla con SQLITE_CONSTRAINT_TRIGGER, no con _FOREIGNKEY.
+  // ON DELETE RESTRICT fails with SQLITE_CONSTRAINT_TRIGGER, not with _FOREIGNKEY.
   if (code?.startsWith("SQLITE_CONSTRAINT") && /FOREIGN KEY/.test(sqliteMessage(error))) {
-    throw new ProjectRepositoryError("has_tasks", "el proyecto tiene tareas", undefined, {
+    throw new ProjectRepositoryError("has_tasks", "the project has tasks", undefined, {
       cause: error,
     });
   }
@@ -71,13 +71,13 @@ function translate(error: unknown): never {
 }
 
 function toProject(row: Row): Project {
-  // El workspace de herdr no es configuración: lo guarda el dispatcher (ProjectWorkspaceRepository).
+  // The herdr workspace is not configuration: the dispatcher stores it (ProjectWorkspaceRepository).
   const { herdrWorkspaceId: _herdrWorkspaceId, ...config } = row;
   const result = Project.safeParse(config);
   if (!result.success) {
     throw new ProjectRepositoryError(
       "invalid_row",
-      `configuración inválida en ${row.id}`,
+      `invalid configuration in ${row.id}`,
       undefined,
       {
         cause: result.error,
@@ -94,12 +94,12 @@ export class ProjectRepository implements ProjectConfigReader {
     this.db = db;
   }
 
-  /** Valida `input` (lanza ZodError si no cumple) y guarda el proyecto. */
+  /** Validates `input` (throws ZodError if it does not meet it) and stores the project. */
   create(input: ProjectCreate): Project {
     const values = ProjectCreate.parse(input);
     try {
       const [row] = this.db.insert(projects).values(values).returning().all();
-      if (!row) throw new Error("insert de project sin fila");
+      if (!row) throw new Error("project insert without a row");
       return toProject(row);
     } catch (error) {
       translate(error);
@@ -111,14 +111,14 @@ export class ProjectRepository implements ProjectConfigReader {
     return row ? toProject(row) : null;
   }
 
-  /** Falla con invalid_row si alguna fila no es válida: nadie despacha con una lista parcial. */
+  /** Fails with invalid_row if any row is not valid: nobody dispatches with a partial list. */
   list(): Project[] {
     return this.db.select().from(projects).orderBy(asc(projects.name)).all().map(toProject);
   }
 
   /**
-   * Reemplaza los campos presentes en `patch` y mezcla `agentProfiles` por fase; null borra
-   * testCommand y bootstrap. Si el resultado no es válido, la escritura se revierte.
+   * Replaces the fields present in `patch` and merges `agentProfiles` per phase; null deletes
+   * testCommand and bootstrap. If the result is not valid, the write is rolled back.
    */
   update(projectId: string, patch: ProjectUpdate): Project | null {
     const { agentProfiles, ...values } = ProjectUpdate.parse(patch);
@@ -136,7 +136,7 @@ export class ProjectRepository implements ProjectConfigReader {
           .where(eq(projects.id, projectId))
           .returning()
           .all();
-        if (!row) throw new Error("update de project sin fila");
+        if (!row) throw new Error("project update without a row");
         return toProject(row);
       });
     } catch (error) {
@@ -144,7 +144,7 @@ export class ProjectRepository implements ProjectConfigReader {
     }
   }
 
-  /** Devuelve false si no existía; lanza has_tasks si el proyecto tiene tareas. */
+  /** Returns false if it did not exist; throws has_tasks if the project has tasks. */
   delete(projectId: string): boolean {
     try {
       return this.db.delete(projects).where(eq(projects.id, projectId)).run().changes > 0;

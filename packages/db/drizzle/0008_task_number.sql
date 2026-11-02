@@ -1,6 +1,6 @@
--- Editada a mano, como 0004: drizzle-kit recrea `tasks` y el DROP borraría en cascada sus Runs,
--- aristas y usage. ADD COLUMN con CHECK conserva las filas; el snapshot sigue igual al esquema.
--- Drizzle no genera triggers ni el backfill (ADR 0015).
+-- Edited by hand, like 0004: drizzle-kit recreates `tasks` and the DROP would cascade-delete its Runs,
+-- edges and usage. ADD COLUMN with CHECK keeps the rows; the snapshot stays equal to the schema.
+-- Drizzle generates neither triggers nor the backfill (ADR 0015).
 ALTER TABLE `tasks` ADD `number` integer CONSTRAINT "tasks_number_positive" CHECK("number" is null or (typeof("number") = 'integer' and "number" > 0));--> statement-breakpoint
 UPDATE `tasks` SET `number` = (
   SELECT `n` FROM (
@@ -17,5 +17,5 @@ END;
 CREATE TRIGGER `tasks_number_immutable` BEFORE UPDATE OF `number` ON `tasks`
 WHEN OLD.`number` IS NOT NULL AND NEW.`number` IS NOT OLD.`number`
 BEGIN
-  SELECT RAISE(ABORT, 'el número de una tarea no cambia');
+  SELECT RAISE(ABORT, 'a task number does not change');
 END;

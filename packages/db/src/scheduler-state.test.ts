@@ -25,7 +25,7 @@ schedulerStateReaderContract("SchedulerStateRepository", (seeds, edges) => {
   }
   const idOf = (name: string) => {
     const id = ids.get(name);
-    if (!id) throw new Error(`sin tarea ${name}`);
+    if (!id) throw new Error(`no task ${name}`);
     return id;
   };
   if (edges.length > 0) {
@@ -49,14 +49,14 @@ describe("SchedulerStateRepository: readySince", () => {
     return { db, project, repo, readySince };
   }
 
-  it("sin transiciones es la creación de la tarea", () => {
+  it("without transitions it is the task's creation", () => {
     const { db, project, readySince } = setup();
     const createdAt = new Date("2026-10-01T00:00:00Z");
     const task = insertTask(db, project.id, { createdAt });
     expect(readySince(task.id)).toBe(createdAt.getTime());
   });
 
-  it("es la última transición de la tarea", () => {
+  it("it is the task's last transition", () => {
     const { db, project, readySince } = setup();
     const task = insertTask(db, project.id, { createdAt: new Date("2026-10-01T00:00:00Z") });
     const run = (command: Parameters<typeof transitionTask>[1]["command"]) => {
@@ -69,7 +69,7 @@ describe("SchedulerStateRepository: readySince", () => {
     expect(readySince(task.id)).toBe(last.createdAt.getTime());
   });
 
-  it("otros eventos, como editar la prioridad, no reinician el aging", () => {
+  it("other events, such as editing the priority, do not reset the aging", () => {
     const { db, project, readySince } = setup();
     const createdAt = new Date("2026-10-01T00:00:00Z");
     const task = insertTask(db, project.id, { createdAt });
@@ -77,7 +77,7 @@ describe("SchedulerStateRepository: readySince", () => {
     expect(readySince(task.id)).toBe(createdAt.getTime());
   });
 
-  it("cuenta desde que cambió por última vez una dependencia (su merge)", () => {
+  it("counts from the last time a dependency changed (its merge)", () => {
     const { db, project, readySince } = setup();
     const createdAt = new Date("2026-10-01T00:00:00Z");
     const mergedAt = new Date("2026-10-20T00:00:00Z");
@@ -92,7 +92,7 @@ describe("SchedulerStateRepository: readySince", () => {
     expect(readySince(task.id)).toBe(mergedAt.getTime());
   });
 
-  it("cuenta desde que una dependencia se completó con Resultado", () => {
+  it("counts from when a dependency was completed with a Result", () => {
     const { db, project, readySince } = setup();
     const createdAt = new Date("2026-10-01T00:00:00Z");
     const completedAt = new Date("2026-10-22T00:00:00Z");
@@ -108,7 +108,7 @@ describe("SchedulerStateRepository: readySince", () => {
     expect(readySince(task.id)).toBe(completedAt.getTime());
   });
 
-  it("ignora los cambios de una dependencia que todavía no se mergea", () => {
+  it("ignores changes of a dependency that is not merged yet", () => {
     const { db, project, readySince } = setup();
     const createdAt = new Date("2026-10-01T00:00:00Z");
     const dep = insertTask(db, project.id, { state: "in_progress", subState: "running" });
@@ -121,7 +121,7 @@ describe("SchedulerStateRepository: readySince", () => {
     expect(readySince(task.id)).toBe(createdAt.getTime());
   });
 
-  it("lee también las aristas entre proyectos", () => {
+  it("also reads edges between projects", () => {
     const { db, project, repo } = setup();
     const other = insertProject(db);
     const dep = insertTask(db, other.id);
@@ -141,7 +141,7 @@ describe("SchedulerStateRepository: retry", () => {
   }
   const at = (s: number) => new Date(Date.UTC(2026, 9, 29, 12, 0, s));
 
-  it("cuenta los Runs fallidos seguidos de la fase pendiente y el fin del último", () => {
+  it("counts the consecutive failed Runs of the pending phase and the end of the last one", () => {
     const { db, project, retry } = setup();
     const task = insertTask(db, project.id, { state: "in_progress", subState: "queued" });
     insertRun(db, task.id, { startedAt: at(0), endedAt: at(1), result: "failure" });
@@ -149,7 +149,7 @@ describe("SchedulerStateRepository: retry", () => {
     expect(retry(task.id)).toEqual({ failures: 2, lastFailedAt: at(3) });
   });
 
-  it("un Run exitoso posterior corta la racha", () => {
+  it("a later successful Run breaks the streak", () => {
     const { db, project, retry } = setup();
     const task = insertTask(db, project.id, { state: "in_progress", subState: "queued" });
     insertRun(db, task.id, { startedAt: at(0), endedAt: at(1), result: "failure" });
@@ -157,7 +157,7 @@ describe("SchedulerStateRepository: retry", () => {
     expect(retry(task.id)).toBeUndefined();
   });
 
-  it("los fallos de otra fase no cuentan", () => {
+  it("failures of another phase do not count", () => {
     const { db, project, retry } = setup();
     const task = insertTask(db, project.id, { state: "in_progress", subState: "queued" });
     insertRun(db, task.id, {
@@ -169,7 +169,7 @@ describe("SchedulerStateRepository: retry", () => {
     expect(retry(task.id)).toBeUndefined();
   });
 
-  it("solo aplica a tareas en queued", () => {
+  it("only applies to tasks in queued", () => {
     const { db, project, retry } = setup();
     const task = insertTask(db, project.id, { state: "in_progress", subState: "running" });
     insertRun(db, task.id, { startedAt: at(0), endedAt: at(1), result: "failure" });
@@ -177,7 +177,7 @@ describe("SchedulerStateRepository: retry", () => {
   });
 });
 
-describe("SchedulerStateRepository: proveedor del agente vivo", () => {
+describe("SchedulerStateRepository: live agent's provider", () => {
   function setup() {
     const db = migratedDatabase();
     const project = insertProject(db);
@@ -187,7 +187,7 @@ describe("SchedulerStateRepository: proveedor del agente vivo", () => {
     return { db, project, agentKind };
   }
 
-  it("es el proveedor del Run abierto, que puede ser un fallback del perfil", () => {
+  it("is the provider of the open Run, which may be a profile fallback", () => {
     const { db, project, agentKind } = setup();
     const task = insertTask(db, project.id, { state: "in_progress", subState: "running" });
     insertRun(db, task.id, { agentKind: "claude", endedAt: new Date(), result: "failure" });
@@ -195,7 +195,7 @@ describe("SchedulerStateRepository: proveedor del agente vivo", () => {
     expect(agentKind(task.id)).toBe("copilot");
   });
 
-  it("una tarea sin Run abierto no lo tiene", () => {
+  it("a task without an open Run does not have one", () => {
     const { db, project, agentKind } = setup();
     const task = insertTask(db, project.id, { state: "in_progress", subState: "queued" });
     insertRun(db, task.id, { agentKind: "copilot", endedAt: new Date(), result: "failure" });

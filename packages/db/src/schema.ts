@@ -1,6 +1,6 @@
-// Esquema SQLite de LunasQ (docs/design.md §Modelo de dominio, §Consumo, §Auditoría).
-// Convenciones: ids de texto UUID salvo events/outbox (autoincrement, orden total),
-// tiempos en milisegundos epoch, JSON en columnas de texto y enums con CHECK.
+// LunasQ SQLite schema (docs/design.md §Domain model, §Usage, §Audit).
+// Conventions: UUID text ids except events/outbox (autoincrement, total order),
+// times in epoch milliseconds, JSON in text columns and enums with CHECK.
 import { randomUUID } from "node:crypto";
 import {
   Actor,
@@ -37,7 +37,7 @@ const id = () =>
   text("id")
     .primaryKey()
     .$defaultFn(() => randomUUID());
-// Los defaults viven en SQL para que también apliquen a escrituras fuera de Drizzle.
+// Defaults live in SQL so they also apply to writes outside Drizzle.
 const nowMs = sql`(cast(unixepoch('subsec') * 1000 as integer))`;
 const createdAt = () => integer("created_at", { mode: "timestamp_ms" }).notNull().default(nowMs);
 const updatedAt = () =>
@@ -46,14 +46,14 @@ const updatedAt = () =>
     .default(nowMs)
     .$onUpdateFn(() => new Date());
 
-/** Valores de un enum Zod como tupla no vacía, la forma que pide `text({ enum })` de Drizzle. */
+/** Values of a Zod enum as a non-empty tuple, the shape Drizzle's `text({ enum })` requires. */
 function values<T extends string>(e: { options: readonly T[] }): [T, ...T[]] {
   const [first, ...rest] = e.options;
-  if (first === undefined) throw new Error("enum vacío");
+  if (first === undefined) throw new Error("empty enum");
   return [first, ...rest];
 }
 
-/** CHECK que limita una columna a los valores de un enum de @lunasq/schemas (NULL pasa). */
+/** CHECK that limits a column to the values of an @lunasq/schemas enum (NULL passes). */
 function inEnum(name: string, column: AnySQLiteColumn, values: readonly string[]) {
   const list = values.map((v) => `'${v}'`).join(", ");
   return check(name, sql`${column} in (${sql.raw(list)})`);
@@ -63,7 +63,7 @@ const isInteger = (column: AnySQLiteColumn): SQL => sql`typeof(${column}) = 'int
 
 const nonNegative = (name: string, column: AnySQLiteColumn) => check(name, sql`${column} >= 0`);
 
-/** Contadores: enteros no negativos (sin el typeof, SQLite aceptaría reales). */
+/** Counters: non-negative integers (without the typeof, SQLite would accept reals). */
 const unsignedInt = (name: string, column: AnySQLiteColumn) =>
   check(name, sql`${isInteger(column)} and ${column} >= 0`);
 
@@ -73,7 +73,7 @@ export const projects = sqliteTable("projects", {
   repo: text("repo").notNull(),
   baseBranch: text("base_branch").notNull(),
   localPath: text("local_path").notNull().unique(),
-  // Perfil de agente por fase y límites; su forma la valida UW-05 con Zod.
+  // Agent profile per phase and limits; its shape is validated by UW-05 with Zod.
   agentProfiles: text("agent_profiles", { mode: "json" })
     .$type<Record<string, unknown>>()
     .notNull()
@@ -81,7 +81,7 @@ export const projects = sqliteTable("projects", {
   limits: text("limits", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
   testCommand: text("test_command"),
   bootstrap: text("bootstrap"),
-  // Workspace de herdr del proyecto; herdr es efímero, así que es una pista que se revalida.
+  // The project's herdr workspace; herdr is ephemeral, so it is a hint that gets revalidated.
   herdrWorkspaceId: text("herdr_workspace_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -91,22 +91,22 @@ export const tasks = sqliteTable(
   "tasks",
   {
     id: id(),
-    // Número de tarea (#N): secuencial y global, inmutable y sin reuso; lo asigna el trigger
-    // tasks_assign_number de la migración 0008 si el insert no lo trae (ADR 0015).
+    // Task number (#N): sequential and global, immutable and never reused; assigned by the
+    // tasks_assign_number trigger of migration 0008 if the insert does not bring it (ADR 0015).
     number: integer("number"),
     projectId: text("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "restrict" }),
     intent: text("intent").notNull(),
-    // Lo fija el primer refinamiento y no vuelve a cambiar.
+    // Set by the first refinement and never changes again.
     title: text("title"),
     tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default([]),
-    // Entero sin signo: mayor número = mayor prioridad.
+    // Unsigned integer: higher number = higher priority.
     priority: integer("priority").notNull(),
     state: text("state", { enum: values(TaskState) })
       .notNull()
       .default("draft"),
-    // Solo los estados con agente tienen sub-estado; la coherencia con state es de UW-04.
+    // Only the states with an agent have a sub-state; consistency with state is UW-04's.
     subState: text("sub_state", { enum: values(SubState) }).default("queued"),
     verificationIteration: integer("verification_iteration").notNull().default(0),
     branch: text("branch"),
@@ -114,7 +114,7 @@ export const tasks = sqliteTable(
     prUrl: text("pr_url"),
     prState: text("pr_state", { enum: values(PrState) }),
     riskLabel: text("risk_label", { enum: values(RiskLabel) }),
-    // Resultado de una tarea completada sin código (submit_result, ADR 0007); sin PR.
+    // Result of a task completed without code (submit_result, ADR 0007); no PR.
     resultKind: text("result_kind", { enum: values(ResultKind) }),
     result: text("result"),
     causedBy: text("caused_by").references((): AnySQLiteColumn => tasks.id, {
@@ -124,7 +124,7 @@ export const tasks = sqliteTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    // Tope en Number.MAX_SAFE_INTEGER: la columna se lee como number en JS.
+    // Capped at Number.MAX_SAFE_INTEGER: the column is read as a number in JS.
     check(
       "tasks_priority_unsigned",
       sql`${isInteger(t.priority)} and ${t.priority} between 0 and ${sql.raw(String(Number.MAX_SAFE_INTEGER))}`,
@@ -171,7 +171,7 @@ export const specs = sqliteTable(
       .notNull()
       .references(() => tasks.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
-    // Contenido validado con SpecContent al escribir; los criterios son direccionables por id.
+    // Content validated with SpecContent on write; the criteria are addressable by id.
     domainModel: text("domain_model", { mode: "json" }).$type<SpecContent["domainModel"]>(),
     requirements: text("requirements", { mode: "json" }).$type<SpecContent["requirements"]>(),
     acceptanceCriteria: text("acceptance_criteria", { mode: "json" })
@@ -182,7 +182,7 @@ export const specs = sqliteTable(
     approval: text("approval", { enum: values(SpecApproval) })
       .notNull()
       .default("pending"),
-    // Autor de la versión: el refinador o el humano que la editó (ADR 0013).
+    // Author of the version: the refiner or the human who edited it (ADR 0013).
     createdBy: text("created_by", { enum: values(Actor) })
       .notNull()
       .default("agent"),
@@ -196,7 +196,7 @@ export const specs = sqliteTable(
     check("specs_version_positive", sql`${t.version} >= 1`),
     inEnum("specs_approval_enum", t.approval, values(SpecApproval)),
     inEnum("specs_created_by_enum", t.createdBy, values(Actor)),
-    // La aprobación se liga a una sola versión por tarea.
+    // The approval is tied to a single version per task.
     uniqueIndex("specs_one_approved_per_task").on(t.taskId).where(sql`${t.approval} = 'approved'`),
   ],
 );
@@ -211,23 +211,23 @@ export const runs = sqliteTable(
     phase: text("phase", { enum: values(Phase) }).notNull(),
     agentKind: text("agent_kind", { enum: values(AgentKind) }).notNull(),
     model: text("model"),
-    // Iteración de verificación de la tarea al despachar: separa rework de reintentos.
+    // The task's verification iteration at dispatch: separates rework from retries.
     iteration: integer("iteration").notNull().default(0),
     herdrWorkspace: text("herdr_workspace"),
     herdrPane: text("herdr_pane"),
     herdrName: text("herdr_name"),
-    // Session id nativo del agente o nombre de sesión, y de dónde salió.
+    // Agent's native session id or session name, and where it came from.
     agentSession: text("agent_session"),
     agentSessionSource: text("agent_session_source", { enum: values(SessionSource) }),
     runToken: text("run_token").notNull().unique(),
     startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull().default(nowMs),
-    // El prompt de fase ya se envió: retomar el despacho no lo repite.
+    // The phase prompt was already sent: resuming the dispatch does not repeat it.
     launchedAt: integer("launched_at", { mode: "timestamp_ms" }),
     endedAt: integer("ended_at", { mode: "timestamp_ms" }),
     result: text("result", { enum: values(RunResult) }),
     failureReason: text("failure_reason"),
     handoff: text("handoff", { mode: "json" }),
-    // Primera llamada a get_task_context: sin ella el LunasQ MCP rechaza las tools de salida.
+    // First call to get_task_context: without it the LunasQ MCP rejects the exit tools.
     contextReadAt: integer("context_read_at", { mode: "timestamp_ms" }),
   },
   (t) => [
@@ -237,7 +237,7 @@ export const runs = sqliteTable(
     inEnum("runs_agent_session_source_enum", t.agentSessionSource, values(SessionSource)),
     unsignedInt("runs_iteration_unsigned", t.iteration),
     index("runs_task_idx").on(t.taskId),
-    // Solo el Run activo puede mover la tarea: a lo sumo uno sin ended_at por tarea.
+    // Only the active Run can move the task: at most one without ended_at per task.
     uniqueIndex("runs_one_active_per_task").on(t.taskId).where(sql`${t.endedAt} is null`),
   ],
 );
@@ -252,7 +252,7 @@ export const questions = sqliteTable(
     runId: text("run_id").references(() => runs.id, { onDelete: "set null" }),
     question: text("question").notNull(),
     context: text("context"),
-    // Opciones que propuso el agente (2 a 6, inmutables); null en una pregunta abierta.
+    // Options proposed by the agent (2 to 6, immutable); null on an open question.
     options: text("options", { mode: "json" }).$type<QuestionOptions>(),
     status: text("status", { enum: values(QuestionStatus) })
       .notNull()
@@ -270,8 +270,8 @@ export const questions = sqliteTable(
   ],
 );
 
-// Subagentes que lanzó la sesión de un Run, según los hooks SubagentStart y SubagentStop
-// (ADR uw-19-revisores). Un hook se puede perder o repetir: cualquiera de los dos crea la fila.
+// Subagents launched by a Run's session, according to the SubagentStart and SubagentStop hooks
+// (ADR uw-19-revisores). A hook can be lost or repeated: either of the two creates the row.
 export const runSubagents = sqliteTable(
   "run_subagents",
   {
@@ -279,7 +279,7 @@ export const runSubagents = sqliteTable(
     runId: text("run_id")
       .notNull()
       .references(() => runs.id, { onDelete: "cascade" }),
-    // agent_id de Claude Code: único dentro de la sesión.
+    // Claude Code's agent_id: unique within the session.
     agentId: text("agent_id").notNull(),
     agentType: text("agent_type").notNull(),
     startedAt: integer("started_at", { mode: "timestamp_ms" }),
@@ -301,13 +301,13 @@ export const usageRecords = sqliteTable(
     outputTokens: integer("output_tokens").notNull().default(0),
     cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
     cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
-    // Estimado en USD; NULL cuando el agente no lo reporta y aún no se calcula.
+    // Estimated in USD; NULL when the agent does not report it and it is not computed yet.
     costUsd: real("cost_usd"),
     source: text("source", { enum: values(UsageSource) }).notNull(),
-    // Id del mensaje o request en la fuente; deduplica reingestas de OTel o transcript.
+    // Message or request id at the source; deduplicates OTel or transcript re-ingestions.
     sourceRef: text("source_ref"),
-    // agent_id del subagente que hizo la llamada (evento api_request de Claude Code); NULL si fue la
-    // sesión principal. Se une con run_subagents para el desglose por revisor.
+    // agent_id of the subagent that made the call (Claude Code api_request event); NULL if it was the
+    // main session. It joins with run_subagents for the per-reviewer breakdown.
     agentId: text("agent_id"),
     pricingVersion: text("pricing_version"),
     createdAt: createdAt(),
@@ -328,8 +328,8 @@ export const events = sqliteTable(
   "events",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    // Append-only: una tarea con eventos no se puede borrar. Null en los eventos globales
-    // (settings.updated), que no pertenecen a ninguna tarea.
+    // Append-only: a task with events cannot be deleted. Null on global events
+    // (settings.updated), which do not belong to any task.
     taskId: text("task_id").references(() => tasks.id, { onDelete: "restrict" }),
     type: text("type").notNull(),
     actor: text("actor", { enum: values(Actor) }).notNull(),
@@ -342,7 +342,7 @@ export const events = sqliteTable(
   ],
 );
 
-/** Configuración global clave/valor (p. ej. "providers": AgentProviderSettings). */
+/** Global key/value configuration (e.g. "providers": AgentProviderSettings). */
 export const appSettings = sqliteTable("app_settings", {
   key: text("key").primaryKey(),
   value: text("value", { mode: "json" }).notNull(),

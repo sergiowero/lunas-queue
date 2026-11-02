@@ -32,7 +32,7 @@ function userTables(db: ReturnType<typeof openDatabase>): string[] {
 }
 
 describe("openDatabase", () => {
-  it("abre en WAL con llaves foráneas activas y busy_timeout", () => {
+  it("opens in WAL with foreign keys active and busy_timeout", () => {
     const { db } = freshDatabase();
     expect(db.$client.pragma("journal_mode", { simple: true })).toBe("wal");
     expect(db.$client.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -40,8 +40,8 @@ describe("openDatabase", () => {
   });
 });
 
-describe("migraciones", () => {
-  it("aplican en limpio sobre una base vacía y crean todas las tablas", () => {
+describe("migrations", () => {
+  it("apply cleanly on an empty database and create all the tables", () => {
     const { db } = freshDatabase();
     expect(userTables(db)).toEqual([]);
     migrateDatabase(db);
@@ -50,7 +50,7 @@ describe("migraciones", () => {
     expect(db.$client.pragma("integrity_check", { simple: true })).toBe("ok");
   });
 
-  it("son idempotentes: aplicar dos veces no cambia nada", () => {
+  it("are idempotent: applying twice changes nothing", () => {
     const { db, file } = freshDatabase();
     migrateDatabase(db);
     const applied = db.$client.prepare("select count(*) from __drizzle_migrations").pluck().get();
@@ -68,9 +68,9 @@ describe("migraciones", () => {
     }
   });
 
-  it("la migración de settings conserva las filas del outbox y de events de una base ya en uso", () => {
+  it("the settings migration keeps the outbox and events rows of a database already in use", () => {
     const { db } = freshDatabase();
-    // Base en el estado anterior a la migración 0011: el journal se recorta a las once primeras.
+    // Database in the state before migration 0011: the journal is trimmed to the first eleven.
     const previous = mkdtempSync(join(tmpdir(), "lunasq-migrations-"));
     try {
       cpSync(migrationsFolder, previous, { recursive: true });
@@ -109,9 +109,9 @@ describe("migraciones", () => {
     expect(sqlite.pragma("foreign_key_check")).toEqual([]);
   });
 
-  it("la migración de opciones deja las preguntas existentes con options nulo y respondibles", () => {
+  it("the options migration leaves existing questions with null options and answerable", () => {
     const { db } = freshDatabase();
-    // Base anterior a la migración 0012: el journal se recorta a las doce primeras.
+    // Database before migration 0012: the journal is trimmed to the first twelve.
     const previous = mkdtempSync(join(tmpdir(), "lunasq-migrations-"));
     try {
       cpSync(migrationsFolder, previous, { recursive: true });
@@ -146,13 +146,13 @@ describe("migraciones", () => {
     ).toMatchObject({ ok: true, question: { options: null, answer: "Sí" } });
   });
 
-  it("están sincronizadas con el esquema de Drizzle", () => {
+  it("are in sync with the Drizzle schema", () => {
     const out = mkdtempSync(join(tmpdir(), "lunasq-drizzle-"));
     try {
       cpSync(migrationsFolder, out, { recursive: true });
       const before = readdirSync(out).sort();
       const cwd = join(import.meta.dirname, "..");
-      // drizzle-kit antepone "./" a --out, así que la ruta debe ser relativa.
+      // drizzle-kit prepends "./" to --out, so the path must be relative.
       const result = spawnSync(
         "pnpm",
         [

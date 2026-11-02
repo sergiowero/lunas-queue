@@ -24,7 +24,7 @@ function setup() {
   const db = migratedDatabase();
   const project = insertProject(db);
   const repo = new SpecRepository(db);
-  // El refinador corre: la tarea está en draft/running.
+  // The refiner is running: the task is in draft/running.
   const refining = () => insertTask(db, project.id, { state: "draft", subState: "running" });
   const taskRow = (id: string) => db.select().from(tasks).where(eq(tasks.id, id)).get();
   const eventTypes = (id: string) => listEvents(db, id).map((e) => e.type);
@@ -32,16 +32,16 @@ function setup() {
 }
 
 function ok(result: SpecResult) {
-  if (!result.ok) throw new Error(`se esperaba ok: ${result.error.code} ${result.error.message}`);
+  if (!result.ok) throw new Error(`ok expected: ${result.error.code} ${result.error.message}`);
   return result;
 }
 
 function failed(result: SpecResult) {
-  if (result.ok) throw new Error("se esperaba un rechazo");
+  if (result.ok) throw new Error("a rejection was expected");
   return result.error;
 }
 
-/** Contenido distinto al del ejemplo, para las versiones siguientes. */
+/** Content different from the example, for the following versions. */
 function revised(): SpecContent {
   const content = specContentExample();
   content.requirements.push("El cliente recibe un correo al cancelar");
@@ -49,7 +49,7 @@ function revised(): SpecContent {
 }
 
 describe("SpecRepository.submit", () => {
-  it("crea la versión 1 de autor agente y pasa la tarea a refined", () => {
+  it("creates version 1 with agent author and moves the task to refined", () => {
     const { db, repo, refining, taskRow, eventTypes } = setup();
     const task = refining();
     const { spec, task: moved } = ok(repo.submit(task.id, specContentExample()));
@@ -72,20 +72,20 @@ describe("SpecRepository.submit", () => {
     });
   });
 
-  it("numera las versiones de cada tarea en orden", () => {
+  it("numbers the versions of each task in order", () => {
     const { db, repo, refining } = setup();
     const task = refining();
     const other = refining();
     ok(repo.submit(task.id, specContentExample()));
     ok(repo.requestChanges(task.id, 1, "Falta el caso de pedido enviado"));
-    // La reconciliación despacha otra vez al refinador.
+    // The reconciliation dispatches the refiner again.
     setRunning(db, task.id);
     expect(ok(repo.submit(task.id, revised())).spec.version).toBe(2);
     expect(ok(repo.submit(other.id, specContentExample())).spec.version).toBe(1);
     expect(repo.list(task.id)?.map((s) => s.version)).toEqual([1, 2]);
   });
 
-  it("valida el contenido antes de escribir", () => {
+  it("validates the content before writing", () => {
     const { db, repo, refining } = setup();
     const task = refining();
     expect(() => repo.submit(task.id, { ...specContentExample(), criteria: [] })).toThrow(
@@ -94,7 +94,7 @@ describe("SpecRepository.submit", () => {
     expect(db.select().from(specs).all()).toEqual([]);
   });
 
-  it("si la transición se rechaza no queda versión ni evento", () => {
+  it("if the transition is rejected, no version or event is left", () => {
     const { db, repo, eventTypes } = setup();
     const project = insertProject(db);
     const queued = insertTask(db, project.id, { state: "draft", subState: "queued" });
@@ -103,7 +103,7 @@ describe("SpecRepository.submit", () => {
     expect(eventTypes(queued.id)).toEqual([]);
   });
 
-  it("tarea inexistente", () => {
+  it("nonexistent task", () => {
     const { repo } = setup();
     expect(failed(repo.submit(missing, specContentExample())).code).toBe("task_not_found");
   });
@@ -117,7 +117,7 @@ describe("SpecRepository.approve", () => {
     return { ...ctx, task };
   }
 
-  it("liga la aprobación a la versión exacta y pasa la tarea a in_progress/queued", () => {
+  it("ties the approval to the exact version and moves the task to in_progress/queued", () => {
     const { db, repo, task, taskRow, eventTypes } = submitted();
     const { spec } = ok(repo.approve(task.id, 1));
     expect(spec).toMatchObject({ version: 1, approval: "approved", approvedBy: "human" });
@@ -132,7 +132,7 @@ describe("SpecRepository.approve", () => {
     });
   });
 
-  it("solo se aprueba la última versión: una vieja responde stale_version sin escribir", () => {
+  it("only the latest version is approved: an old one answers stale_version without writing", () => {
     const { db, repo, task, taskRow, eventTypes } = submitted();
     ok(repo.requestChanges(task.id, 1, "Falta el caso de pedido enviado"));
     setRunning(db, task.id);
@@ -147,7 +147,7 @@ describe("SpecRepository.approve", () => {
     expect(repo.approved(task.id)?.content).toEqual(revised());
   });
 
-  it("repetir la aprobación no duplica efectos", () => {
+  it("repeating the approval does not duplicate effects", () => {
     const { repo, task, eventTypes } = submitted();
     ok(repo.approve(task.id, 1));
     const before = eventTypes(task.id);
@@ -155,16 +155,16 @@ describe("SpecRepository.approve", () => {
     expect(eventTypes(task.id)).toEqual(before);
   });
 
-  it("si la transición se rechaza la spec sigue pending", () => {
+  it("if the transition is rejected the spec stays pending", () => {
     const { db, repo, task } = submitted();
-    // Otro proceso canceló la tarea mientras el humano revisaba.
+    // Another process canceled the task while the human was reviewing.
     db.update(tasks).set({ state: "cancelled", subState: null }).where(eq(tasks.id, task.id)).run();
     expect(failed(repo.approve(task.id, 1)).code).toBe("invalid_transition");
     expect(repo.get(task.id, 1)).toMatchObject({ approval: "pending", approvedAt: null });
     expect(repo.approved(task.id)).toBeNull();
   });
 
-  it("versión o tarea inexistentes", () => {
+  it("nonexistent version or task", () => {
     const { repo, task } = submitted();
     expect(failed(repo.approve(task.id, 7)).code).toBe("spec_not_found");
     expect(failed(repo.approve(missing, 1)).code).toBe("task_not_found");
@@ -172,7 +172,7 @@ describe("SpecRepository.approve", () => {
 });
 
 describe("SpecRepository.requestChanges", () => {
-  it("regresa la tarea a draft/queued con los comentarios en la versión y en el evento", () => {
+  it("sends the task back to draft/queued with the comments in the version and in the event", () => {
     const { db, repo, refining, taskRow, eventTypes } = setup();
     const task = refining();
     ok(repo.submit(task.id, specContentExample()));
@@ -191,11 +191,11 @@ describe("SpecRepository.requestChanges", () => {
       actor: "human",
       payload: { specId: spec.id, version: 1, comments: "Falta el caso de pedido enviado" },
     });
-    // El cambio de estado sale por el outbox hacia scheduler y dispatcher.
+    // The state change goes out through the outbox to the scheduler and dispatcher.
     expect(db.select().from(outbox).all()).toHaveLength(2);
   });
 
-  it("sin comentarios se rechaza sin escribir", () => {
+  it("without comments it is rejected without writing", () => {
     const { repo, refining, taskRow } = setup();
     const task = refining();
     ok(repo.submit(task.id, specContentExample()));
@@ -205,7 +205,7 @@ describe("SpecRepository.requestChanges", () => {
     expect(taskRow(task.id)).toMatchObject({ state: "refined" });
   });
 
-  it("no aplica a una versión ya aprobada", () => {
+  it("does not apply to an already approved version", () => {
     const { repo, refining } = setup();
     const task = refining();
     ok(repo.submit(task.id, specContentExample()));
@@ -215,7 +215,7 @@ describe("SpecRepository.requestChanges", () => {
 });
 
 describe("SpecRepository.editAndApprove", () => {
-  it("crea la versión siguiente de autor humano y la aprueba en un paso", () => {
+  it("creates the next version with human author and approves it in one step", () => {
     const { db, repo, refining, taskRow, eventTypes } = setup();
     const task = refining();
     ok(repo.submit(task.id, specContentExample()));
@@ -241,7 +241,7 @@ describe("SpecRepository.editAndApprove", () => {
     });
   });
 
-  it("parte de la última versión pendiente", () => {
+  it("starts from the latest pending version", () => {
     const { db, repo, refining } = setup();
     const task = refining();
     ok(repo.submit(task.id, specContentExample()));
@@ -252,7 +252,7 @@ describe("SpecRepository.editAndApprove", () => {
     expect(db.select().from(specs).all()).toHaveLength(2);
   });
 
-  it("si la transición se rechaza no queda la versión editada", () => {
+  it("if the transition is rejected, the edited version is not left", () => {
     const { db, repo, refining } = setup();
     const task = refining();
     ok(repo.submit(task.id, specContentExample()));
@@ -261,7 +261,7 @@ describe("SpecRepository.editAndApprove", () => {
     expect(repo.list(task.id)?.map((s) => s.version)).toEqual([1]);
   });
 
-  it("valida el contenido editado", () => {
+  it("validates the edited content", () => {
     const { repo, refining } = setup();
     const task = refining();
     ok(repo.submit(task.id, specContentExample()));
@@ -271,21 +271,21 @@ describe("SpecRepository.editAndApprove", () => {
   });
 });
 
-describe("SpecRepository: concurrencia", () => {
-  it("las escrituras toman el lock de escritura antes de leer", () => {
+describe("SpecRepository: concurrency", () => {
+  it("writes take the write lock before reading", () => {
     const { db: first, file } = freshDatabase();
     migrateDatabase(first);
     const project = insertProject(first);
     const task = insertTask(first, project.id, { state: "draft", subState: "running" });
     ok(new SpecRepository(first).submit(task.id, specContentExample()));
-    // Segunda conexión, como la de otro proceso, que registra cada consulta que ejecuta.
+    // Second connection, like another process's, which logs every query it runs.
     const queries: string[] = [];
     const client = new Database(file);
     client.pragma("busy_timeout = 0");
     const second = drizzle({ client, schema, logger: { logQuery: (q) => queries.push(q) } });
     try {
       first.$client.prepare("BEGIN IMMEDIATE").run();
-      // Sin IMMEDIATE, dos aprobaciones leerían la misma versión pendiente a la vez.
+      // Without IMMEDIATE, two approvals would read the same pending version at once.
       expect(() => new SpecRepository(second).approve(task.id, 1)).toThrow(/locked|busy/i);
       expect(() => new SpecRepository(second).submit(task.id, revised())).toThrow(/locked|busy/i);
       expect(queries).toEqual([]);
@@ -297,8 +297,8 @@ describe("SpecRepository: concurrencia", () => {
   });
 });
 
-describe("SpecRepository: lecturas y diff", () => {
-  it("list y get devuelven null si la tarea o la versión no existen", () => {
+describe("SpecRepository: reads and diff", () => {
+  it("list and get return null if the task or the version do not exist", () => {
     const { repo, refining } = setup();
     const task = refining();
     expect(repo.list(task.id)).toEqual([]);
@@ -307,7 +307,7 @@ describe("SpecRepository: lecturas y diff", () => {
     expect(repo.approved(task.id)).toBeNull();
   });
 
-  it("diff contra la versión anterior por defecto, o contra la indicada", () => {
+  it("diff against the previous version by default, or against the given one", () => {
     const { repo, refining } = setup();
     const task = refining();
     ok(repo.submit(task.id, specContentExample()));
@@ -324,7 +324,7 @@ describe("SpecRepository: lecturas y diff", () => {
   });
 });
 
-// El dispatcher (UW-16) despacha otra vez al refinador: draft/queued → draft/running.
+// The dispatcher (UW-16) dispatches the refiner again: draft/queued → draft/running.
 function setRunning(db: LunasqDatabase, taskId: string) {
   const result = transitionTask(db, { taskId, actor: "system", command: { type: "dispatch" } });
   if (!result.ok) throw new Error(result.error.message);

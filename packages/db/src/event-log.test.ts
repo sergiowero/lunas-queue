@@ -7,7 +7,7 @@ import { insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
 const APPEND_ONLY = /append-only/;
 
 describe("Event log", () => {
-  it("appendEvent guarda tipo, actor y payload; listEvents los devuelve en orden", () => {
+  it("appendEvent stores type, actor and payload; listEvents returns them in order", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const other = insertTask(db, insertProject(db).id);
@@ -25,7 +25,7 @@ describe("Event log", () => {
     expect(listEvents(db, t.id).map((e) => e.id)).toEqual([first.id, second.id]);
   });
 
-  it("no se puede modificar un evento", () => {
+  it("an event cannot be modified", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const e = appendEvent(db, { taskId: t.id, type: "task.created", actor: "human" });
@@ -38,7 +38,7 @@ describe("Event log", () => {
     expect(listEvents(db, t.id)[0]?.type).toBe("task.created");
   });
 
-  it("no se puede borrar un evento", () => {
+  it("an event cannot be deleted", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const e = appendEvent(db, { taskId: t.id, type: "task.created", actor: "human" });

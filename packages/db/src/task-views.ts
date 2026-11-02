@@ -1,5 +1,5 @@
-// Lecturas que alimentan el detalle de tarea y la cola del front end (UW-21, ADR uw-21-front-end):
-// Runs sin su token, Event log y usage agregado. Solo lee; nada aquí cambia estado.
+// Reads that feed the task detail and the front end queue (UW-21, ADR uw-21-front-end):
+// Runs without their token, Event log and aggregated usage. Read-only; nothing here changes state.
 import {
   AgentKind,
   EMPTY_USAGE,
@@ -26,8 +26,8 @@ const {
   ...runColumns
 } = getTableColumns(runs);
 
-// SUM devuelve NULL sin filas; los tokens se leen como 0. El costo solo se suma si todos los
-// registros lo traen: un total parcial se leería como completo.
+// SUM returns NULL without rows; tokens are read as 0. The cost is only summed if all the
+// records bring it: a partial total would read as complete.
 const totals = {
   inputTokens: sql<number>`coalesce(sum(${usageRecords.inputTokens}), 0)`,
   outputTokens: sql<number>`coalesce(sum(${usageRecords.outputTokens}), 0)`,
@@ -38,7 +38,7 @@ const totals = {
   >`case when count(${usageRecords.costUsd}) = count(*) then sum(${usageRecords.costUsd}) end`,
 };
 
-// El rework son los Runs de implementación de una iteración de verificación posterior a la primera.
+// Rework is the implementation Runs of a verification iteration after the first.
 const PHASE_ORDER: UsagePhase[] = ["refine", "implement", "rework", "verify", "deliver"];
 const usagePhase = sql<UsagePhase>`case when ${runs.phase} = 'implement' and ${runs.iteration} > 0 then 'rework' else ${runs.phase} end`;
 
@@ -59,7 +59,7 @@ export class TaskViewRepository {
     this.db = db;
   }
 
-  /** Runs de la tarea del más viejo al más nuevo; null si la tarea no existe. */
+  /** Runs of the task from oldest to newest; null if the task does not exist. */
   runs(taskId: string): RunView[] | null {
     if (!this.exists(taskId)) return null;
     return this.db
@@ -71,13 +71,13 @@ export class TaskViewRepository {
       .map((row) => RunView.parse(row));
   }
 
-  /** Event log de la tarea en orden de escritura; null si la tarea no existe. */
+  /** The task's Event log in write order; null if the task does not exist. */
   events(taskId: string): EventView[] | null {
     if (!this.exists(taskId)) return null;
     return listEvents(this.db, taskId).map((row) => EventView.parse(row));
   }
 
-  /** Usage por Run (solo los Runs con registros) y total; null si la tarea no existe. */
+  /** Usage per Run (only Runs with records) and total; null if the task does not exist. */
   usage(taskId: string): TaskUsage | null {
     if (!this.exists(taskId)) return null;
     const byRun = this.db
@@ -109,7 +109,7 @@ export class TaskViewRepository {
       .groupBy(usageRecords.model)
       .orderBy(asc(usageRecords.model))
       .all();
-    // Solo los revisores de verificación: se unen por el agent_id que registraron los hooks.
+    // Only the verification reviewers: joined by the agent_id the hooks recorded.
     const byReviewer = grouped(
       runSubagents.agentType,
       inArray(runSubagents.agentType, [...REVIEWER_NAMES]),
@@ -146,7 +146,7 @@ export class TaskViewRepository {
     };
   }
 
-  /** Usage total por tarea, para la columna de la cola; las tareas sin registros no aparecen. */
+  /** Total usage per task, for the queue column; tasks without records do not appear. */
   usageByTask(): Map<string, UsageTotals> {
     const rows = this.db
       .select({ taskId: runs.taskId, ...totals })
@@ -157,7 +157,7 @@ export class TaskViewRepository {
     return new Map(rows.map(({ taskId, ...usage }) => [taskId, toTotals(usage)]));
   }
 
-  /** Id del último evento escrito; 0 sin eventos. Es el cursor del stream de cambios. */
+  /** Id of the last written event; 0 without events. It is the change stream's cursor. */
   lastEventId(): number {
     return (
       this.db
@@ -168,9 +168,9 @@ export class TaskViewRepository {
   }
 
   /**
-   * Tareas con eventos después de `afterId`, en orden de su primer evento nuevo, y el id del
-   * último. Todo cambio de una tarea deja evento (ADR 0007), así que basta para invalidar la UI.
-   * `settingsChanged` avisa de un settings.updated, que es global y no aparece en `taskIds`.
+   * Tasks with events after `afterId`, in order of their first new event, and the id of the
+   * last one. Every task change leaves an event (ADR 0007), so it is enough to invalidate the UI.
+   * `settingsChanged` reports a settings.updated, which is global and does not appear in `taskIds`.
    */
   changesSince(afterId: number): {
     lastId: number;
@@ -185,17 +185,17 @@ export class TaskViewRepository {
       .all();
     return {
       lastId: rows.at(-1)?.id ?? afterId,
-      // Los eventos globales (settings.updated) no pertenecen a ninguna tarea.
+      // Global events (settings.updated) do not belong to any task.
       taskIds: [...new Set(rows.flatMap((r) => (r.taskId === null ? [] : [r.taskId])))],
       settingsChanged: rows.some((r) => r.type === SETTINGS_UPDATED),
     };
   }
 
   /**
-   * Últimas ejecuciones de hooks (hook.executed) del proyecto: la más reciente de cada tarea en
-   * cada script, y a lo más `perHook` tareas (las más recientes) por punto y script, así un hook
-   * que corre poco no se pierde tras las ejecuciones de otros. Las más nuevas primero. Un payload
-   * que no cumple el esquema se salta: el Event log es append-only y no se corrige.
+   * Latest hook executions (hook.executed) of the project: the most recent of each task in
+   * each script, and at most `perHook` tasks (the most recent) per point and script, so a hook
+   * that runs rarely is not lost behind the executions of others. Newest first. A payload
+   * that does not meet the schema is skipped: the Event log is append-only and is not corrected.
    */
   hookExecutions(projectId: string, perHook: number): HookExecutionView[] {
     const hook = (alias: string) =>

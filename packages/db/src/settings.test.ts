@@ -5,13 +5,13 @@ import { appSettings, events } from "./schema.ts";
 import { SettingsRepository } from "./settings.ts";
 import { migratedDatabase } from "./test-helpers.ts";
 
-describe("SettingsRepository: proveedores de agente", () => {
-  it("una base sin configuración guardada tiene claude y copilot habilitados", () => {
+describe("SettingsRepository: agent providers", () => {
+  it("a database with no saved configuration has claude and copilot enabled", () => {
     const repo = new SettingsRepository(migratedDatabase());
     expect(repo.providers()).toEqual({ claude: true, copilot: true });
   });
 
-  it("guarda la configuración y la devuelve en lecturas posteriores", () => {
+  it("saves the configuration and returns it on later reads", () => {
     const repo = new SettingsRepository(migratedDatabase());
     expect(repo.saveProviders({ claude: false, copilot: true })).toEqual({
       claude: false,
@@ -20,7 +20,7 @@ describe("SettingsRepository: proveedores de agente", () => {
     expect(repo.providers()).toEqual({ claude: false, copilot: true });
   });
 
-  it("guardar la misma configuración dos veces deja una sola fila y el mismo estado", () => {
+  it("saving the same configuration twice leaves a single row and the same state", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
     repo.saveProviders({ claude: false, copilot: false });
@@ -29,7 +29,7 @@ describe("SettingsRepository: proveedores de agente", () => {
     expect(db.select().from(appSettings).all()).toHaveLength(1);
   });
 
-  it("guardar lo que ya está vigente no publica otro settings.updated", () => {
+  it("saving what is already in force does not publish another settings.updated", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
     repo.saveProviders({ claude: false, copilot: true });
@@ -40,10 +40,10 @@ describe("SettingsRepository: proveedores de agente", () => {
     expect(listPendingOutbox(db)).toHaveLength(2);
   });
 
-  it("un cambio parcial conserva los demás proveedores, aunque otro cambio sea más nuevo", () => {
+  it("a partial change keeps the other providers, even if another change is newer", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
-    // Dos clientes con una vista vieja: cada uno cambia solo su proveedor.
+    // Two clients with an old view: each one changes only its provider.
     repo.saveProviders({ claude: false });
     expect(repo.saveProviders({ copilot: false })).toEqual({ claude: false, copilot: false });
     expect(repo.providers()).toEqual({ claude: false, copilot: false });
@@ -51,7 +51,7 @@ describe("SettingsRepository: proveedores de agente", () => {
     expect(listPendingOutbox(db)).toHaveLength(3);
   });
 
-  it("guardar los defaults sin configuración previa no publica nada", () => {
+  it("saving the defaults without prior configuration publishes nothing", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
     repo.saveProviders({ claude: true, copilot: true });
@@ -59,7 +59,7 @@ describe("SettingsRepository: proveedores de agente", () => {
     expect(repo.providers()).toEqual({ claude: true, copilot: true });
   });
 
-  it("registra settings.updated en el outbox sin tarea asociada", () => {
+  it("records settings.updated in the outbox with no associated task", () => {
     const db = migratedDatabase();
     new SettingsRepository(db).saveProviders({ claude: true, copilot: false }, "human");
     const [pending, ...rest] = listPendingOutbox(db);
@@ -73,7 +73,7 @@ describe("SettingsRepository: proveedores de agente", () => {
     expect(db.select().from(events).all()).toHaveLength(1);
   });
 
-  it("un valor guardado corrupto se lee como todos habilitados solo para los campos ausentes", () => {
+  it("a corrupt saved value is read as all enabled only for the missing fields", () => {
     const db = migratedDatabase();
     db.insert(appSettings)
       .values({ key: "providers", value: { copilot: false } })
@@ -82,14 +82,14 @@ describe("SettingsRepository: proveedores de agente", () => {
   });
 });
 
-describe("SettingsRepository: concurrencia", () => {
-  it("sin valor guardado devuelve el default recibido", () => {
+describe("SettingsRepository: concurrency", () => {
+  it("with no saved value it returns the default received", () => {
     const repo = new SettingsRepository(migratedDatabase());
     expect(repo.concurrency(5)).toEqual({ globalConcurrency: 5 });
     expect(repo.concurrency(8)).toEqual({ globalConcurrency: 8 });
   });
 
-  it("guarda el límite, lo devuelve y publica settings.updated con globalConcurrency", () => {
+  it("saves the limit, returns it and publishes settings.updated with globalConcurrency", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
     expect(repo.saveConcurrency({ globalConcurrency: 2 })).toEqual({ globalConcurrency: 2 });
@@ -105,7 +105,7 @@ describe("SettingsRepository: concurrencia", () => {
     expect(db.select().from(events).all()).toHaveLength(1);
   });
 
-  it("guardar el valor vigente no escribe ni publica otro evento", () => {
+  it("saving the value in force neither writes nor publishes another event", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
     repo.saveConcurrency({ globalConcurrency: 2 });
@@ -115,7 +115,7 @@ describe("SettingsRepository: concurrencia", () => {
     expect(db.select().from(appSettings).all()).toHaveLength(1);
   });
 
-  it("guardar sin valor previo el límite que ya rige por default tampoco publica", () => {
+  it("saving, with no prior value, the limit that already applies by default also publishes nothing", () => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
     repo.saveConcurrency({ globalConcurrency: 5 }, "human", 5);
@@ -123,7 +123,7 @@ describe("SettingsRepository: concurrencia", () => {
     expect(db.select().from(appSettings).all()).toEqual([]);
   });
 
-  it.each([[0], [51], [1.5], ["4"]])("rechaza %s y conserva lo guardado", (value) => {
+  it.each([[0], [51], [1.5], ["4"]])("rejects %s and keeps what was saved", (value) => {
     const db = migratedDatabase();
     const repo = new SettingsRepository(db);
     repo.saveConcurrency({ globalConcurrency: 3 });
@@ -132,14 +132,14 @@ describe("SettingsRepository: concurrencia", () => {
     expect(listPendingOutbox(db)).toHaveLength(1);
   });
 
-  it("guardar el límite no toca la configuración de proveedores", () => {
+  it("saving the limit does not touch the provider configuration", () => {
     const repo = new SettingsRepository(migratedDatabase());
     repo.saveProviders({ claude: false });
     repo.saveConcurrency({ globalConcurrency: 2 });
     expect(repo.providers()).toEqual({ claude: false, copilot: true });
   });
 
-  it("un valor guardado corrupto cae al default en vez de romper la lectura", () => {
+  it("a corrupt saved value falls back to the default instead of breaking the read", () => {
     const db = migratedDatabase();
     db.insert(appSettings)
       .values({ key: "concurrency", value: { globalConcurrency: 0 } })

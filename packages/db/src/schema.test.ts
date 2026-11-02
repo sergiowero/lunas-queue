@@ -29,9 +29,9 @@ const FK = /FOREIGN KEY constraint failed/;
 const NOT_NULL = /NOT NULL constraint failed/;
 
 /**
- * Inserta una tarea y un Run con SQL directo en una base migrada solo hasta cierta migración:
- * Drizzle inserta todas las columnas del esquema actual y las migraciones posteriores aún no
- * existen.
+ * Inserts a task and a Run with direct SQL into a database migrated only up to a certain migration:
+ * Drizzle inserts all the columns of the current schema and the later migrations do not
+ * exist yet.
  */
 function rawTaskWithRun(db: ReturnType<typeof freshDatabase>["db"], projectId: string) {
   db.$client
@@ -49,7 +49,7 @@ function rawTaskWithRun(db: ReturnType<typeof freshDatabase>["db"], projectId: s
 }
 
 describe("projects", () => {
-  it("genera id, timestamps y defaults de configuración", () => {
+  it("generates id, timestamps and configuration defaults", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     expect(p.id).toMatch(/^[0-9a-f-]{36}$/);
@@ -58,14 +58,14 @@ describe("projects", () => {
     expect(p.limits).toEqual({});
   });
 
-  it("name y local_path son únicos", () => {
+  it("name and local_path are unique", () => {
     const db = migratedDatabase();
     insertProject(db, { name: "lunas", localPath: "/repos/lunas" });
     expect(() => insertProject(db, { name: "lunas" })).toThrow(UNIQUE);
     expect(() => insertProject(db, { localPath: "/repos/lunas" })).toThrow(UNIQUE);
   });
 
-  it("no se puede borrar un proyecto con tareas", () => {
+  it("a project with tasks cannot be deleted", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     insertTask(db, p.id);
@@ -74,8 +74,8 @@ describe("projects", () => {
 });
 
 describe("tasks", () => {
-  it("la migración del número numera las tareas existentes desde 1 en orden de creación", () => {
-    // Base con las migraciones previas a 0008_task_number: las tareas no tienen número.
+  it("the number migration numbers existing tasks from 1 in creation order", () => {
+    // Database with the migrations prior to 0008_task_number: the tasks have no number.
     const previous = mkdtempSync(join(tmpdir(), "lunasq-drizzle-"));
     try {
       cpSync(migrationsFolder, previous, { recursive: true });
@@ -89,7 +89,7 @@ describe("tasks", () => {
       const raw = db.$client.prepare(
         "insert into tasks (id, project_id, intent, priority, created_at, updated_at) values (?, ?, 'x', 1, ?, 0)",
       );
-      // Insertadas fuera de orden; dos con el mismo created_at se desempatan por rowid.
+      // Inserted out of order; two with the same created_at are broken by rowid.
       raw.run("c", p.id, 300);
       raw.run("a", p.id, 100);
       raw.run("b1", p.id, 200);
@@ -113,14 +113,14 @@ describe("tasks", () => {
     }
   });
 
-  it("la migración del número no recrea tasks", () => {
-    // Recrear la tabla borraría en cascada Runs, aristas y usage.
+  it("the number migration does not recreate tasks", () => {
+    // Recreating the table would cascade-delete Runs, edges and usage.
     const migration = readFileSync(join(migrationsFolder, "0008_task_number.sql"), "utf8");
     expect(migration).not.toMatch(/DROP TABLE/);
   });
 
-  it("la migración de paused recrea tasks conservando filas, Runs, número y triggers", () => {
-    // Base con las migraciones previas a 0010_task_paused: el CHECK de state no acepta paused.
+  it("the paused migration recreates tasks keeping rows, Runs, number and triggers", () => {
+    // Database with the migrations prior to 0010_task_paused: the state CHECK does not accept paused.
     const previous = mkdtempSync(join(tmpdir(), "lunasq-drizzle-"));
     try {
       cpSync(migrationsFolder, previous, { recursive: true });
@@ -146,16 +146,16 @@ describe("tasks", () => {
         number: numberBefore,
       });
       expect(db.$client.prepare("select count(*) from runs").pluck().get()).toBe(1);
-      // Sin la migración el CHECK rechaza paused: la aserción falla aquí, no con un error suelto.
+      // Without the migration the CHECK rejects paused: the assertion fails here, not with a loose error.
       let paused: ReturnType<typeof insertTask> | undefined;
       expect(() => {
         paused = insertTask(db, p.id, { state: "paused", subState: null });
       }).not.toThrow();
       expect(paused?.state).toBe("paused");
-      // Los triggers de tasks se recrean: el número se asigna y no cambia.
+      // The tasks triggers are recreated: the number is assigned and does not change.
       expect(paused?.number).toBe((numberBefore ?? 0) + 1);
       expect(() => db.update(tasks).set({ number: 99 }).where(eq(tasks.id, t.id)).run()).toThrow(
-        /el número de una tarea no cambia/,
+        /a task number does not change/,
       );
       expect(() => insertTask(db, p.id, { state: "otro" as never })).toThrow(CHECK);
       expect(db.$client.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -166,8 +166,8 @@ describe("tasks", () => {
     }
   });
 
-  it("la migración del Resultado recrea tasks conservando filas, Runs, número y triggers", () => {
-    // Base con las migraciones previas a 0012_task_result: tasks no tiene result_kind ni result.
+  it("the Result migration recreates tasks keeping rows, Runs, number and triggers", () => {
+    // Database with the migrations prior to 0012_task_result: tasks has no result_kind or result.
     const previous = mkdtempSync(join(tmpdir(), "lunasq-drizzle-"));
     try {
       cpSync(migrationsFolder, previous, { recursive: true });
@@ -190,10 +190,10 @@ describe("tasks", () => {
         result: null,
       });
       expect(db.$client.prepare("select count(*) from runs").pluck().get()).toBe(1);
-      // Los triggers de tasks se recrean: el número se asigna y no cambia.
+      // The tasks triggers are recreated: the number is assigned and does not change.
       expect(insertTask(db, p.id).number).toBe((t.number ?? 0) + 1);
       expect(() => db.update(tasks).set({ number: 99 }).where(eq(tasks.id, t.id)).run()).toThrow(
-        /el número de una tarea no cambia/,
+        /a task number does not change/,
       );
       expect(db.$client.pragma("foreign_keys", { simple: true })).toBe(1);
       expect(db.$client.pragma("foreign_key_check")).toEqual([]);
@@ -202,7 +202,7 @@ describe("tasks", () => {
     }
   });
 
-  it("result_kind solo acepta valores del enum y result guarda el texto", () => {
+  it("result_kind only accepts enum values and result stores the text", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     const task = insertTask(db, p.id, {
@@ -215,7 +215,7 @@ describe("tasks", () => {
     expect(() => insertTask(db, p.id, { resultKind: "otro" as never })).toThrow(CHECK);
   });
 
-  it("número: entero positivo y único, asignado si el insert no lo trae", () => {
+  it("number: positive and unique integer, assigned if the insert does not bring it", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     expect(insertTask(db, p.id).number).toBe(1);
@@ -225,7 +225,7 @@ describe("tasks", () => {
     expect(() => insertTask(db, p.id, { number: 0 })).toThrow(CHECK);
   });
 
-  it("nace en draft/queued con iteración 0", () => {
+  it("is born in draft/queued with iteration 0", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     expect(t.state).toBe("draft");
@@ -234,14 +234,14 @@ describe("tasks", () => {
     expect(t.tags).toEqual([]);
   });
 
-  it("prioridad es entero sin signo: acepta 0 y enteros grandes", () => {
+  it("priority is an unsigned integer: accepts 0 and large integers", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     expect(insertTask(db, p.id, { priority: 0 }).priority).toBe(0);
     expect(insertTask(db, p.id, { priority: 2 ** 31 }).priority).toBe(2 ** 31);
   });
 
-  it("prioridad no pasa de Number.MAX_SAFE_INTEGER", () => {
+  it("priority does not exceed Number.MAX_SAFE_INTEGER", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     expect(insertTask(db, p.id, { priority: Number.MAX_SAFE_INTEGER }).priority).toBe(
@@ -256,7 +256,7 @@ describe("tasks", () => {
     ).toThrow(CHECK);
   });
 
-  it("prioridad rechaza negativos, no enteros y NULL", () => {
+  it("priority rejects negatives, non-integers and NULL", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     expect(() => insertTask(db, p.id, { priority: -1 })).toThrow(CHECK);
@@ -268,7 +268,7 @@ describe("tasks", () => {
     expect(() => raw.run("t-null", p.id, null)).toThrow(NOT_NULL);
   });
 
-  it("estado, sub-estado, PR y riesgo solo aceptan valores del enum", () => {
+  it("state, sub-state, PR and risk only accept enum values", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const set = (col: string, value: string) =>
@@ -280,18 +280,18 @@ describe("tasks", () => {
     expect(() => set("state", "in_progress")).not.toThrow();
   });
 
-  it("iteración de verificación no puede ser negativa", () => {
+  it("verification iteration cannot be negative", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     expect(() => insertTask(db, p.id, { verificationIteration: -1 })).toThrow(CHECK);
   });
 
-  it("project_id debe existir", () => {
+  it("project_id must exist", () => {
     const db = migratedDatabase();
     expect(() => insertTask(db, "no-existe")).toThrow(FK);
   });
 
-  it("caused_by apunta a otra tarea y queda en NULL si esa se borra", () => {
+  it("caused_by points to another task and stays NULL if that one is deleted", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     const origin = insertTask(db, p.id);
@@ -303,7 +303,7 @@ describe("tasks", () => {
 });
 
 describe("task_dependencies", () => {
-  it("la arista es única y no admite self-loop", () => {
+  it("the edge is unique and does not allow self-loops", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     const a = insertTask(db, p.id);
@@ -317,7 +317,7 @@ describe("task_dependencies", () => {
     ).toThrow(CHECK);
   });
 
-  it("ambos extremos deben existir y la arista se borra con cualquiera de ellos", () => {
+  it("both ends must exist and the edge is deleted with either of them", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     const a = insertTask(db, p.id);
@@ -340,12 +340,12 @@ describe("task_dependencies", () => {
 describe("specs", () => {
   const criterion = {
     id: "AC-1",
-    given: "dos tareas que dependen entre sí",
-    when: "se agrega la arista que cierra el ciclo",
-    outcome: "la arista se rechaza",
+    given: "two tasks that depend on each other",
+    when: "the edge that closes the cycle is added",
+    outcome: "the edge is rejected",
   };
 
-  it("versión única por tarea, iniciando en pending", () => {
+  it("a single version per task, starting at pending", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     const t = insertTask(db, p.id);
@@ -367,7 +367,7 @@ describe("specs", () => {
     expect(() => db.insert(specs).values({ taskId: t.id, version: 1 }).run()).toThrow(UNIQUE);
   });
 
-  it("una sola versión aprobada por tarea", () => {
+  it("a single approved version per task", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     const t = insertTask(db, p.id);
@@ -380,7 +380,7 @@ describe("specs", () => {
     ).toThrow(UNIQUE);
   });
 
-  it("autor del enum de actores", () => {
+  it("author from the actors enum", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     expect(() =>
@@ -392,7 +392,7 @@ describe("specs", () => {
     ).toThrow(CHECK);
   });
 
-  it("versión positiva y aprobación del enum", () => {
+  it("positive version and approval from the enum", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     expect(() => db.insert(specs).values({ taskId: t.id, version: 0 }).run()).toThrow(CHECK);
@@ -407,7 +407,7 @@ describe("specs", () => {
 });
 
 describe("runs", () => {
-  it("guarda modelo e iteración, con iteración 0 por defecto y no negativa", () => {
+  it("stores model and iteration, with iteration 0 by default and non-negative", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const r = insertRun(db, t.id, { model: "claude-opus-5-5" });
@@ -417,7 +417,7 @@ describe("runs", () => {
     expect(() => insertRun(db, t.id, { iteration: 0.5 })).toThrow(CHECK);
   });
 
-  it("una tarea tiene a lo sumo un Run activo (sin ended_at)", () => {
+  it("a task has at most one active Run (no ended_at)", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     const t = insertTask(db, p.id);
@@ -430,14 +430,14 @@ describe("runs", () => {
     expect(() => insertRun(db, t.id)).not.toThrow();
   });
 
-  it("run_token es único", () => {
+  it("run_token is unique", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     insertRun(db, t.id, { runToken: "abc" });
     expect(() => insertRun(db, t.id, { runToken: "abc" })).toThrow(UNIQUE);
   });
 
-  it("fase, tipo de agente y resultado solo aceptan valores del enum", () => {
+  it("phase, agent type and result only accept enum values", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const r = insertRun(db, t.id);
@@ -451,8 +451,8 @@ describe("runs", () => {
     expect(() => set("agent_session_source", "native")).not.toThrow();
   });
 
-  it("la migración del dispatcher conserva los Runs y su usage", () => {
-    // Las columnas nuevas entran con ADD COLUMN: recrear `runs` borraría usage en cascada.
+  it("the dispatcher migration keeps the Runs and their usage", () => {
+    // The new columns come in with ADD COLUMN: recreating `runs` would cascade-delete usage.
     const db = migratedDatabase();
     const r = insertRun(db, insertTask(db, insertProject(db).id).id);
     expect(r.agentSessionSource).toBeNull();
@@ -461,7 +461,7 @@ describe("runs", () => {
     expect(migration).not.toMatch(/DROP TABLE/);
   });
 
-  it("guarda handoff como JSON y requiere una tarea existente", () => {
+  it("stores handoff as JSON and requires an existing task", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const r = insertRun(db, t.id, { handoff: { summary: "listo", tests: ["a.test.ts"] } });
@@ -471,7 +471,7 @@ describe("runs", () => {
 });
 
 describe("questions", () => {
-  it("nace abierta, run_id queda en NULL si se borra el Run", () => {
+  it("is born open, run_id stays NULL if the Run is deleted", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const r = insertRun(db, t.id);
@@ -485,7 +485,7 @@ describe("questions", () => {
     expect(db.select().from(questions).get()?.runId).toBeNull();
   });
 
-  it("estado del enum y llaves existentes", () => {
+  it("enum state and existing keys", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     expect(() => db.insert(questions).values({ taskId: "x", question: "?" }).run()).toThrow(FK);
@@ -503,7 +503,7 @@ describe("questions", () => {
 });
 
 describe("usage_records", () => {
-  it("pertenece a un Run, con tokens no negativos y fuente del enum", () => {
+  it("belongs to a Run, with non-negative tokens and enum source", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const r = insertRun(db, t.id);
@@ -548,8 +548,8 @@ describe("usage_records", () => {
   });
 });
 
-describe("usage_records: deduplicación", () => {
-  it("source_ref es único por Run y fuente; sin source_ref no se deduplica", () => {
+describe("usage_records: deduplication", () => {
+  it("source_ref is unique per Run and source; without source_ref it is not deduplicated", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const r = insertRun(db, t.id);
@@ -572,8 +572,8 @@ describe("usage_records: deduplicación", () => {
   });
 });
 
-describe("events y outbox", () => {
-  it("eventos con id creciente, actor del enum y payload JSON", () => {
+describe("events and outbox", () => {
+  it("events with increasing id, enum actor and JSON payload", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const [e1] = db
@@ -600,7 +600,7 @@ describe("events y outbox", () => {
     ).toThrow(CHECK);
   });
 
-  it("un solo mensaje de outbox por evento, pendiente hasta publicarse", () => {
+  it("a single outbox message per event, pending until published", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const [e] = db
@@ -608,7 +608,7 @@ describe("events y outbox", () => {
       .values({ taskId: t.id, type: "task.created", actor: "human" })
       .returning()
       .all();
-    if (!e) throw new Error("sin evento");
+    if (!e) throw new Error("no event");
     const [m] = db
       .insert(outbox)
       .values({ eventId: e.id, topic: "task.state_changed" })
@@ -621,8 +621,8 @@ describe("events y outbox", () => {
   });
 });
 
-describe("borrado de una tarea", () => {
-  it("arrastra specs, runs, questions, usage y aristas cuando no tiene eventos", () => {
+describe("deleting a task", () => {
+  it("takes specs, runs, questions, usage and edges with it when it has no events", () => {
     const db = migratedDatabase();
     const p = insertProject(db);
     const t = insertTask(db, p.id);
@@ -641,7 +641,7 @@ describe("borrado de una tarea", () => {
     expect(db.$client.prepare("select count(*) from runs").pluck().get()).toBe(0);
   });
 
-  it("el Event log es append-only: una tarea con eventos no se puede borrar", () => {
+  it("the Event log is append-only: a task with events cannot be deleted", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     db.insert(events).values({ taskId: t.id, type: "task.created", actor: "human" }).run();

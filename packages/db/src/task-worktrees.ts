@@ -1,5 +1,5 @@
-// Branch y worktree de las tareas (UW-09, ADR 0012). Solo toca esas dos columnas: estado,
-// sub-estado e iteración cambian únicamente por task-transitions (ADR 0007).
+// Branch and worktree of the tasks (UW-09, ADR 0012). It only touches those two columns: state,
+// sub-state and iteration change only through task-transitions (ADR 0007).
 import type { TaskWorktreeRecord, TaskWorktreeStore } from "@lunasq/domain";
 import { and, eq, isNotNull, or } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
@@ -40,12 +40,12 @@ export class TaskWorktreeRepository implements TaskWorktreeStore {
       .where(eq(tasks.id, taskId))
       .returning({ id: tasks.id })
       .all();
-    if (updated.length === 0) throw new Error(`tarea ${taskId} no existe`);
+    if (updated.length === 0) throw new Error(`task ${taskId} does not exist`);
   }
 
   /**
-   * Tareas que ya no usan su worktree y lo conservan: canceladas, o completadas con el PR mergeado o con
-   * un Resultado (docs/design.md §Ciclo de vida del worktree). La reconciliación las remueve.
+   * Tasks that no longer use their worktree and keep it: canceled, or completed with the PR merged or with
+   * a Result (docs/design.md §Worktree lifecycle). Reconciliation removes them.
    */
   releasable(): TaskWorktreeRecord[] {
     return this.db
@@ -54,7 +54,7 @@ export class TaskWorktreeRepository implements TaskWorktreeStore {
       .where(
         and(
           isNotNull(tasks.worktreePath),
-          // La misma regla que worktreeReleased (domain): cancelada, o completada y mergeada o con
+          // The same rule as worktreeReleased (domain): canceled, or completed and merged or with
           // Resultado.
           or(
             eq(tasks.state, "cancelled"),
