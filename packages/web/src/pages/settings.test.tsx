@@ -286,6 +286,27 @@ describe("sección Concurrencia", () => {
     );
   }, 15000);
 
+  it("si un guardado falla después de uno que se guardó sin releerse, el aviso indica el valor guardado", async () => {
+    const fake = new FakeApi();
+    const { user } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "3");
+    fake.concurrencyReadFails = true;
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByText(/El límite se guardó/, {}, { timeout: 5000 });
+
+    fake.concurrencyError = { status: 500, error: "internal", message: "disco lleno" };
+    await user.clear(input);
+    await user.type(input, "4");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    const alert = await screen.findByText(/No se pudo guardar el límite/, {}, { timeout: 5000 });
+    expect(alert.textContent).toContain("sigue vigente 3");
+    expect(alert.textContent).not.toContain("sigue vigente 5");
+    expect(fake.concurrency).toEqual({ globalConcurrency: 3 });
+  }, 20000);
+
   it("si falla la lectura muestra un aviso y la sección de proveedores sigue funcionando", async () => {
     const fake = new FakeApi();
     fake.concurrencyReadFails = true;

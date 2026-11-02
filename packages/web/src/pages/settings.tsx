@@ -84,9 +84,9 @@ function ConcurrencySection() {
   // null: el campo sigue al valor leído; un texto: lo que el humano está escribiendo.
   const [draft, setDraft] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
-  // Límite que el PUT guardó cuando la relectura posterior falló: el servidor ya lo tiene, pero la
-  // caché sigue con el valor anterior.
-  const [savedUnread, setSavedUnread] = useState<number | null>(null);
+  // Último límite que un PUT guardó y que ninguna lectura posterior llegó a leer: el servidor ya lo
+  // tiene, pero la caché sigue con un valor anterior.
+  const [unread, setUnread] = useState<{ value: number; at: number } | null>(null);
   const update = useMutation({
     mutationFn: (input: ConcurrencySettings) => api.updateConcurrencySettings(input),
     // Se vuelve a leer en vez de pisar la caché con la respuesta del PUT, y el campo solo vuelve a
@@ -98,9 +98,10 @@ function ConcurrencySection() {
       await queryClient.invalidateQueries({ queryKey });
       if (queryClient.getQueryState(queryKey)?.status === "error") {
         setDraft(String(saved.globalConcurrency));
-        setSavedUnread(saved.globalConcurrency);
+        setUnread({ value: saved.globalConcurrency, at: Date.now() });
       } else {
         setDraft(null);
+        setUnread(null);
       }
     },
   });
@@ -117,9 +118,12 @@ function ConcurrencySection() {
       return;
     }
     setInvalid(false);
-    setSavedUnread(null);
     update.mutate(parsed.data);
   }
+
+  // Una lectura posterior al PUT ya refleja lo guardado: entonces rige settings.data.
+  const savedUnread = unread && (settings.dataUpdatedAt ?? 0) < unread.at ? unread.value : null;
+  const effective = savedUnread ?? settings.data?.globalConcurrency;
 
   return (
     <Card>
@@ -174,10 +178,9 @@ function ConcurrencySection() {
             {settings.error.message}
           </p>
         )}
-        {update.error && settings.data && (
+        {update.error && effective !== undefined && (
           <p role="alert" className="text-sm text-destructive">
-            No se pudo guardar el límite; sigue vigente {settings.data.globalConcurrency}:{" "}
-            {update.error.message}
+            No se pudo guardar el límite; sigue vigente {effective}: {update.error.message}
           </p>
         )}
       </CardContent>
