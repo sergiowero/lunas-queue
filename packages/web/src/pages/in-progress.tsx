@@ -7,13 +7,12 @@ import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { PaneFocusButton } from "../components/pane-focus-button.tsx";
-import { Loading, QueryError } from "../components/status.tsx";
+import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
 import { PauseTaskButton } from "../components/task-actions.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
-import { Badge } from "../components/ui/badge.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { canPause, formatAgent, SUB_STATE_LABEL, taskLabel } from "../lib/format.ts";
+import { canPause, formatAgent, taskLabel } from "../lib/format.ts";
 import { isInProgress } from "../lib/in-progress.ts";
 import { queries } from "../lib/queries.ts";
 
@@ -106,12 +105,12 @@ export function InProgressPage() {
         ),
       }),
       column.accessor((t) => names.get(t.projectId) ?? "…", { id: "project", header: "Proyecto" }),
-      column.accessor("subState", {
-        header: "Sub-estado",
-        cell: (c) => {
-          const subState = c.getValue();
-          return subState ? <Badge variant="outline">{SUB_STATE_LABEL[subState]}</Badge> : "—";
-        },
+      column.accessor(stateText, {
+        id: "state",
+        header: "Estado",
+        cell: (c) => (
+          <StateBadges state={c.row.original.state} subState={c.row.original.subState} />
+        ),
       }),
       column.accessor("priority", { header: "Prioridad" }),
       // Columnas de display: TanStack Table cachea el valor de los accessors por fila mientras

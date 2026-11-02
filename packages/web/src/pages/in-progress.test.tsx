@@ -18,7 +18,7 @@ describe("pestaña En curso", () => {
     expect(await screen.findByRole("heading", { name: "En curso" })).toBeTruthy();
   });
 
-  it("lista las tareas In progress y las que tienen un agente corriendo, con proyecto, sub-estado y prioridad", async () => {
+  it("lista las tareas In progress y las que tienen un agente corriendo, con proyecto, estado y prioridad", async () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
@@ -62,7 +62,7 @@ describe("pestaña En curso", () => {
     expect(cells).toContainEqual([
       `#${running.number}Corriendo en uno`,
       "uno",
-      "corriendo",
+      "In progresscorriendo",
       "300",
       "—",
       "—",
@@ -71,7 +71,7 @@ describe("pestaña En curso", () => {
     expect(cells).toContainEqual([
       `#${waiting.number}Esperando en dos`,
       "dos",
-      "esperando humano",
+      "In progressesperando humano",
       "50",
       "—",
       "—",
@@ -82,6 +82,73 @@ describe("pestaña En curso", () => {
     expect(screen.queryByText("Borrador")).toBeNull();
     expect(screen.queryByText("Verificando en espera")).toBeNull();
     expect(screen.queryByText("Terminada")).toBeNull();
+  });
+
+  it("la columna Estado muestra el estado de la tarea (no solo el sub-estado), igual que la pestaña Cola", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject();
+    fake.addTask(project.id, { intent: "Refinando", state: "draft", subState: "running" });
+    fake.addTask(project.id, {
+      intent: "Implementando",
+      state: "in_progress",
+      subState: "waiting_human",
+    });
+    fake.addTask(project.id, {
+      intent: "Verificando",
+      state: "verification",
+      subState: "running",
+    });
+    renderApp("/in-progress", fake);
+
+    await screen.findByRole("link", { name: "Refinando" });
+    await waitFor(() => expect(screen.queryAllByText("…")).toHaveLength(0));
+    const stateCell = (intent: string) =>
+      within(screen.getByRole("link", { name: intent }).closest("tr") as HTMLElement).getAllByRole(
+        "cell",
+      )[2] as HTMLElement;
+    expect(within(stateCell("Refinando")).getByText("Draft")).toBeTruthy();
+    expect(stateCell("Refinando").textContent).toBe("Draftcorriendo");
+    expect(within(stateCell("Implementando")).getByText("In progress")).toBeTruthy();
+    expect(stateCell("Implementando").textContent).toBe("In progressesperando humano");
+    expect(within(stateCell("Verificando")).getByText("Verification")).toBeTruthy();
+    expect(stateCell("Verificando").textContent).toBe("Verificationcorriendo");
+  });
+
+  it("la celda Estado de una tarea es idéntica en En curso y en Cola", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject();
+    fake.addTask(project.id, { intent: "En ambas", state: "verification", subState: "running" });
+    fake.queue = fake.tasks.map((task) => ({
+      task,
+      ready: false,
+      score: null,
+      effectivePriority: null,
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        costUsd: null,
+      },
+    }));
+    const { user, router } = renderApp("/queue", fake);
+    const stateText = async () => {
+      const row = (await screen.findByRole("link", { name: "En ambas" })).closest("tr");
+      const header = screen
+        .getAllByRole("columnheader")
+        .findIndex((h) => h.textContent === "Estado");
+      return within(row as HTMLElement).getAllByRole("cell")[header]?.textContent;
+    };
+    const inQueue = await stateText();
+
+    await user.click(
+      within(await screen.findByRole("navigation")).getByRole("link", { name: /^En curso/ }),
+    );
+    await waitFor(() => expect(router.state.location.pathname).toBe("/in-progress"));
+    await waitFor(() => expect(screen.queryAllByText("…")).toHaveLength(0));
+
+    expect(inQueue).toBe("Verificationcorriendo");
+    expect(await stateText()).toBe(inQueue);
   });
 
   describe("botón de pausa por fila", () => {
@@ -199,7 +266,7 @@ describe("pestaña En curso", () => {
       expect(headers).toEqual([
         "Tarea",
         "Proyecto",
-        "Sub-estado",
+        "Estado",
         "Prioridad",
         "Iteración",
         "Agente",
@@ -224,7 +291,7 @@ describe("pestaña En curso", () => {
       expect(await rowOf("Con run")).toEqual([
         `#${task.number}Con run`,
         "uno",
-        "corriendo",
+        "In progresscorriendo",
         "10",
         "1",
         "claude · opus",
@@ -282,7 +349,7 @@ describe("pestaña En curso", () => {
       expect(await rowOf("Sin runs")).toEqual([
         `#${task.number}Sin runs`,
         "uno",
-        "en cola",
+        "In progressen cola",
         "5",
         "—",
         "—",
