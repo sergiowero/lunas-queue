@@ -2,6 +2,7 @@
 // Shape and defaults in docs/decisions/0008-config-proyecto.md.
 import { z } from "zod";
 import { AgentKind, Phase } from "./enums.ts";
+import { MAX_VERIFICATION_ITERATIONS } from "./settings.ts";
 
 const nonEmpty = z.string().trim().min(1);
 
@@ -45,8 +46,8 @@ export const ProjectLimits = z.strictObject({
   phaseTimeoutMinutes: z
     .partialRecord(Phase, positiveInt.max(MAX_PHASE_TIMEOUT_MINUTES))
     .optional(),
-  // Reworks of the verification loop before needs_human; without a value, 3 (ADR 0007).
-  maxVerificationIterations: positiveInt.max(20).optional(),
+  // Reworks of the verification loop before needs_human; without a value, the global cap from Settings applies (default 5).
+  maxVerificationIterations: positiveInt.max(MAX_VERIFICATION_ITERATIONS).optional(),
 });
 export type ProjectLimits = z.infer<typeof ProjectLimits>;
 

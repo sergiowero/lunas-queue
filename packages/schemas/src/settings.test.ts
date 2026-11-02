@@ -5,6 +5,7 @@ import {
   ConcurrencySettings,
   SETTINGS_UPDATED,
   SettingsUpdatedPayload,
+  VerificationSettings,
 } from "./index.ts";
 
 describe("AgentProviderSettings", () => {
@@ -60,6 +61,28 @@ describe("ConcurrencySettings", () => {
   });
 });
 
+describe("VerificationSettings", () => {
+  it("accepts integers from 1 to 20", () => {
+    expect(VerificationSettings.parse({ maxVerificationIterations: 1 })).toEqual({
+      maxVerificationIterations: 1,
+    });
+    expect(VerificationSettings.parse({ maxVerificationIterations: 20 })).toEqual({
+      maxVerificationIterations: 20,
+    });
+  });
+
+  it.each([
+    ["zero", { maxVerificationIterations: 0 }],
+    ["more than 20", { maxVerificationIterations: 21 }],
+    ["a decimal", { maxVerificationIterations: 2.5 }],
+    ["a text", { maxVerificationIterations: "4" }],
+    ["an unknown field", { maxVerificationIterations: 2, other: 1 }],
+    ["an empty body", {}],
+  ])("rejects %s", (_name, input) => {
+    expect(() => VerificationSettings.parse(input)).toThrow();
+  });
+});
+
 describe("settings.updated event", () => {
   it("carries the saved configuration", () => {
     expect(SETTINGS_UPDATED).toBe("settings.updated");
@@ -95,5 +118,14 @@ describe("settings.updated event", () => {
     });
     expect(() => SettingsUpdatedPayload.parse({ globalConcurrency: 0 })).toThrow();
     expect(() => SettingsUpdatedPayload.parse({ globalConcurrency: 3, otro: 1 })).toThrow();
+  });
+
+  it("admits maxVerificationIterations alone and keeps old payloads valid", () => {
+    expect(SettingsUpdatedPayload.parse({ maxVerificationIterations: 8 })).toEqual({
+      maxVerificationIterations: 8,
+    });
+    expect(SettingsUpdatedPayload.parse({ globalConcurrency: 3 })).toEqual({ globalConcurrency: 3 });
+    expect(() => SettingsUpdatedPayload.parse({ maxVerificationIterations: 21 })).toThrow();
+    expect(() => SettingsUpdatedPayload.parse({})).toThrow();
   });
 });
