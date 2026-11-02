@@ -71,7 +71,7 @@ export interface RuntimeOptions {
 }
 
 export interface Runtime {
-  /** `http://<host>:<puerto>`, sin `/` final. */
+  /** `http://<host>:<port>`, without a trailing `/`. */
   url: string;
   /** Extra variables the dispatcher puts on each agent pane. */
   paneEnv: Record<string, string>;

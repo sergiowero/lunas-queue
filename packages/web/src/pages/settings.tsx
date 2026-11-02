@@ -207,42 +207,40 @@ function ProvidersSection() {
     settings.dataUpdatedAt < update.submittedAt;
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle>{t.settings.providersTitle}</CardTitle>
-          <p className="text-sm text-muted-foreground">{t.settings.providersHelp}</p>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {AgentKind.options.map((kind) => (
-            <div key={kind} className="flex items-center justify-between gap-4">
-              <div className="flex flex-col">
-                <span className="font-medium">{t.settings.providers[kind]}</span>
-                <span className="text-sm text-muted-foreground">
-                  {t.settings.providerDescriptions[kind]}
-                </span>
-              </div>
-              <Switch
-                label={t.settings.providers[kind]}
-                checked={current[kind]}
-                disabled={update.isPending}
-                onChange={(checked) => update.mutate({ [kind]: checked })}
-              />
+    <Card>
+      <CardHeader>
+        <CardTitle>{t.settings.providersTitle}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t.settings.providersHelp}</p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {AgentKind.options.map((kind) => (
+          <div key={kind} className="flex items-center justify-between gap-4">
+            <div className="flex flex-col">
+              <span className="font-medium">{t.settings.providers[kind]}</span>
+              <span className="text-sm text-muted-foreground">
+                {t.settings.providerDescriptions[kind]}
+              </span>
             </div>
-          ))}
-          {settings.error && (
-            <p role="alert" className="text-sm text-destructive">
-              {savedButUnread ? t.settings.providersSavedUnread : t.settings.providersUpdateFailed}
-              {errorText(settings.error)}
-            </p>
-          )}
-          {update.error && (
-            <p role="alert" className="text-sm text-destructive">
-              {t.settings.saveFailed(errorText(update.error))}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </>
+            <Switch
+              label={t.settings.providers[kind]}
+              checked={current[kind]}
+              disabled={update.isPending}
+              onChange={(checked) => update.mutate({ [kind]: checked })}
+            />
+          </div>
+        ))}
+        {settings.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {savedButUnread ? t.settings.providersSavedUnread : t.settings.providersUpdateFailed}
+            {errorText(settings.error)}
+          </p>
+        )}
+        {update.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {t.settings.saveFailed(errorText(update.error))}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

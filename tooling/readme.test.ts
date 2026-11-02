@@ -176,9 +176,7 @@ describe("README.md", () => {
       const pkg = packages.get(filter);
       if (!pkg) return [`${line} (package «${filter}» does not exist)`];
       // `pnpm --filter x exec ...` was discarded above (script undefined); only scripts here.
-      return script in (pkg.scripts ?? {})
-        ? []
-        : [`${line} (no script «${script}» in ${filter})`];
+      return script in (pkg.scripts ?? {}) ? [] : [`${line} (no script «${script}» in ${filter})`];
     });
     expect(missing, `nonexistent commands:\n${missing.join("\n")}`).toEqual([]);
   });

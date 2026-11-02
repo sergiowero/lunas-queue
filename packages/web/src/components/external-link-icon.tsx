@@ -1,4 +1,4 @@
-/** Icono convencional de enlace externo (caja con flecha); decorativo. */
+/** Conventional external-link icon (box with arrow); decorative. */
 export function ExternalLinkIcon() {
   return (
     <svg

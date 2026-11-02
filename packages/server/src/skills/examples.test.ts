@@ -1,5 +1,5 @@
 // The example handoff of each phase skill (assets/skills) passes `parseHandoff`: if the schema
-// cambia, la skill que copia el agente no se queda atrás. La prueba con Claude Code real está en
+// changes, the skill the agent copies does not fall behind. The test with real Claude Code is in
 // real.integration.test.ts.
 import { readFileSync } from "node:fs";
 import { parseHandoff, parseResultHandoff } from "@lunasq/schemas";

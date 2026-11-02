@@ -1,5 +1,5 @@
 // Fires the after_merge hooks when the poller records the merge of a task's PR
-// (task.pr_state_changed con to = merged, ADR uw-14-adapter-github).
+// (task.pr_state_changed with to = merged, ADR uw-14-adapter-github).
 import { TASK_PR_STATE_CHANGED, TaskPrStateChangedPayload } from "@lunasq/schemas";
 import type { OutboxPublisher } from "../outbox/publisher.ts";
 import type { HookService } from "./service.ts";

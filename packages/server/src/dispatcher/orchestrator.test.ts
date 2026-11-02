@@ -438,7 +438,7 @@ describe("Orchestrator: questions", () => {
     const result = await orchestrator.questions.answer(question.id, { answer: "Sí" });
     expect(result).toMatchObject({ ok: true, delivery: "new_run" });
 
-    // Sin llamar al scheduler: la respuesta lo despierta, no el tick de 60 s.
+    // Without calling the scheduler: the answer wakes it, not the 60 s tick.
     const runs = new RunRepository(db);
     await vi.waitFor(() => expect(runs.forTask(task.id)).toHaveLength(2));
     await orchestrator.dispatcher.idle();

@@ -24,7 +24,7 @@ describe("test_gate.executed", () => {
       }),
     ).toThrow();
     expect(() => TestGateExecutedPayload.parse({ ...executed, headSha: "HEAD" })).toThrow();
-    // Repos con object format SHA-256.
+    // Repos with the SHA-256 object format.
     const sha256 = "b".repeat(64);
     expect(TestGateExecutedPayload.parse({ ...executed, headSha: sha256 }).headSha).toBe(sha256);
   });
