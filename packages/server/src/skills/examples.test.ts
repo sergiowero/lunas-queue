@@ -2,7 +2,7 @@
 // cambia, la skill que copia el agente no se queda atrás. La prueba con Claude Code real está en
 // real.integration.test.ts.
 import { readFileSync } from "node:fs";
-import { parseHandoff } from "@lunasq/schemas";
+import { parseHandoff, parseResultHandoff } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 
 const skillsDir = new URL("../../../../assets/skills/", import.meta.url);
@@ -22,6 +22,16 @@ describe("handoff de ejemplo de las skills de fase", () => {
     ["verify-task", "verification"],
   ])("%s trae un handoff %s válido", (skill, phase) => {
     const result = parseHandoff(jsonBlocks(skill)[0]);
+    expect(result.success ? [] : result.errors).toEqual([]);
+    expect(result.success && result.data.phase).toBe(phase);
+  });
+
+  it.each([
+    ["refine-task", "refinement"],
+    ["implement-task", "implementation"],
+  ])("%s trae un handoff de submit_result %s válido", (skill, phase) => {
+    const example = jsonBlocks(skill).find((block) => "resultKind" in block);
+    const result = parseResultHandoff(example);
     expect(result.success ? [] : result.errors).toEqual([]);
     expect(result.success && result.data.phase).toBe(phase);
   });

@@ -14,7 +14,7 @@
 - **Token inválido.** Sin header, con un token desconocido o con el token de un Run cerrado, el handshake y `tools/list` funcionan, pero cada `tools/call` responde `isError` con `invalid_run_token` y no tiene efectos. No se responde 401 porque los clientes MCP lo interpretan como un pedido de OAuth.
 - **Guardas.** Toda tool pasa por estas guardas, en orden:
   1. Run activo (`ended_at IS NULL`).
-  2. Tool permitida en la fase del Run (`tool_not_allowed`): `submit_spec` en refine; `update_checklist` y `submit_for_verification` en implement; `submit_verdict` en verify. `get_task_context`, `ask_human` y `report_failure` se aceptan en todas.
+  2. Tool permitida en la fase del Run (`tool_not_allowed`): `submit_spec` en refine; `submit_result` en refine e implement; `update_checklist` y `submit_for_verification` en implement; `submit_verdict` en verify. `get_task_context`, `ask_human` y `report_failure` se aceptan en todas.
   3. `get_task_context` ya leída (`context_required`).
   4. En verify, si el Run ya registró un veredicto pass, solo se aceptan `get_task_context` y `submit_verdict`. Así el token, que sigue vivo para la entrega, ya no puede llevar la tarea a `waiting_human` ni cerrar el Run como fallido.
 - **Lectura del contexto.** La columna `runs.context_read_at` (migración `0003`) guarda la primera llamada a `get_task_context`; repetirla no mueve la marca. Por ser columna y no evento, la guarda es una lectura por clave del Run.
@@ -25,6 +25,7 @@
   - `report_failure` cierra con `failure` y su `failure_reason`.
   - `submit_verdict` con pass guarda el handoff con el Run abierto, porque `verdict_pass` lo emite la entrega (ADR 0007). Repetir el mismo veredicto es idempotente; uno distinto responde `verdict_already_recorded`.
   - El dispatcher (UW-16) solo detiene y limpia el pane.
+- **`submit_result`.** Salida alternativa de refine e implement para tareas sin código (ADR 0007): handoff propio (`parseResultHandoff`), `handoff_mismatch` si ids o fase no son los del Run, y desde implement `branch_has_commits` si el branch tiene commits sobre la base (`CommitVerifier.branchHasCommits`). Escribe el Resultado, el título si falta, la transición a completed y el cierre del Run con `success` en una transacción, sin gate de tests ni hooks de fase.
 - **`submit_for_verification`.** Cobertura de criterios → worktree limpio → commits → gate de tests → transacción. Detalle:
   - Con cambios sin commitear (`git status --porcelain`, incluidos archivos sin seguimiento) responde `dirty_worktree`, porque el gate debe correr sobre lo que va en los commits.
   - `CommitVerifier` (puerto) comprueba que cada SHA esté en el `HEAD` del worktree y no en la rama base, ni en la local ni en `origin/<base>` cuando existe (el worktree sale de `origin/<base>` y la local puede ir atrasada; [ADR uw-18-skills-fase](uw-18-skills-fase.md)). `GitCommitVerifier` lo hace con `git merge-base` por el `ProcessRunner`.

@@ -181,6 +181,18 @@ describe("@lunasq/assets-skills", () => {
     expect(body).toMatch(/no (escribas|edites) código/i);
   });
 
+  it.each([
+    ["refine-task", ["submit_result", "research", "already_implemented", "not_resolvable"]],
+    [
+      "implement-task",
+      ["submit_result", "branch_has_commits", "already_implemented", "not_resolvable"],
+    ],
+  ])("%s explica cuándo cerrar una tarea sin código con submit_result", (skill, pieces) => {
+    const { body } = parseSkill(skill);
+    for (const piece of pieces) expect(body, piece).toContain(piece);
+    expect(body).toMatch(/sin (verificación|PR)/i);
+  });
+
   it("implement-task sigue TDD, marca el checklist y entrega commits sobre un worktree limpio", () => {
     const { body } = parseSkill("implement-task");
     for (const piece of [
