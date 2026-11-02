@@ -67,13 +67,13 @@ describe("diffSpecContent", () => {
   it("the domain model is compared by field and by key", () => {
     const before = specContentExample();
     const after = specContentExample();
-    after.domainModel.boundedContext = "Billing";
-    after.domainModel.glossary = [{ term: "Pending order", definition: "Another definition" }];
+    after.domainModel.boundedContext = "Facturación";
+    after.domainModel.glossary = [{ term: "Pedido pendiente", definition: "Another definition" }];
     after.domainModel.aggregates.push({ name: "Invoice", entities: [] });
     after.domainModel.events = [];
     const { domainModel } = diffSpecContent(before, after);
-    expect(domainModel.boundedContext).toEqual({ from: "Orders", to: "Billing" });
-    expect(domainModel.glossary.changed.map((c) => c.key)).toEqual(["Pending order"]);
+    expect(domainModel.boundedContext).toEqual({ from: "Pedidos", to: "Facturación" });
+    expect(domainModel.glossary.changed.map((c) => c.key)).toEqual(["Pedido pendiente"]);
     expect(domainModel.aggregates.added).toEqual([{ name: "Invoice", entities: [] }]);
     expect(domainModel.events.removed).toEqual(before.domainModel.events);
   });
@@ -83,7 +83,7 @@ describe("diffSpecContent", () => {
     const diff = diffSpecContent(null, after);
     expect(diff.criteria.added).toEqual(after.criteria);
     expect(diff.requirements.added).toEqual(after.requirements);
-    expect(diff.domainModel.boundedContext).toEqual({ from: "", to: "Orders" });
+    expect(diff.domainModel.boundedContext).toEqual({ from: "", to: "Pedidos" });
     expect(diff.domainModel.glossary.added).toEqual(after.domainModel.glossary);
   });
 });
