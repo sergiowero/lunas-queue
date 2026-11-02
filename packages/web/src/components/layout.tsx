@@ -1,4 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
+import { useInProgressCount } from "../lib/in-progress.ts";
 import { useInbox } from "../lib/inbox.ts";
 import { useLiveUpdates } from "../lib/live.ts";
 import { DispatchPausedBanner } from "./dispatch-paused-banner.tsx";
@@ -38,6 +39,7 @@ function BrandMark() {
 export function Layout() {
   useLiveUpdates();
   const { count } = useInbox();
+  const inProgressCount = useInProgressCount();
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-border bg-surface/80 backdrop-blur-xl">
@@ -50,8 +52,22 @@ export function Layout() {
             <Link to="/queue" className={nav} activeProps={active}>
               Cola
             </Link>
-            <Link to="/in-progress" className={nav} activeProps={active}>
+            <Link
+              to="/in-progress"
+              className={nav}
+              activeProps={active}
+              aria-label={
+                inProgressCount > 0
+                  ? `En curso, ${inProgressCount} ${inProgressCount === 1 ? "tarea" : "tareas"}`
+                  : undefined
+              }
+            >
               En curso
+              {inProgressCount > 0 && (
+                <Badge variant="secondary" className="ml-1.5">
+                  {inProgressCount}
+                </Badge>
+              )}
             </Link>
             <Link to="/completed" className={nav} activeProps={active}>
               Completed
