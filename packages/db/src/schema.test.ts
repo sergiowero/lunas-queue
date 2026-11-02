@@ -469,7 +469,7 @@ describe("runs", () => {
       const journalFile = join(previous, "meta", "_journal.json");
       const journal = JSON.parse(readFileSync(journalFile, "utf8"));
       journal.entries = journal.entries.filter(
-        (e: { tag: string }) => e.tag !== "0014_agent_kind_codex",
+        (e: { tag: string }) => e.tag !== "0015_agent_kind_codex",
       );
       writeFileSync(journalFile, JSON.stringify(journal));
       const { db } = freshDatabase();

@@ -18,7 +18,7 @@ LunasQ already supports Claude Code and GitHub Copilot CLI as per-project, per-p
 
 ## Consequences
 
-- The SQLite `runs.agent_kind` CHECK is expanded by migration `0014_agent_kind_codex.sql`; the migration preserves Run identifiers and usage records. The Settings schema default keeps databases with older saved provider objects readable.
+- The SQLite `runs.agent_kind` CHECK is expanded by migration `0015_agent_kind_codex.sql`; the migration preserves Run identifiers and usage records. The Settings schema default keeps databases with older saved provider objects readable.
 - Codex profiles may select a model and reasoning effort, but supported effort values depend on that Codex model. Codex's native reviewer hooks and usage reporting are not required for parity with LunasQ's verification gates.
 - No npm dependency or Codex-specific global asset is added. Codex behavior stays behind the existing provider registry, CLI doctor, and herdr terminal adapter. The reviewer executor ignores Codex user/project configuration to prevent unrelated MCP servers or hooks from expanding its permissions.
 
