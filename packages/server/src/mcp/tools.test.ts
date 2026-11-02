@@ -1268,7 +1268,7 @@ describe("run_reviewer: verifiable Copilot CLI executions", () => {
     const reviewer = {
       run: vi.fn(async () => ({
         transcriptPath: "/lunasq/copilot-reviewers/run/copilot-session.jsonl",
-        output: "SIN HALLAZGOS",
+        output: "NO FINDINGS",
       })),
     };
     const h = mcpHarness({ copilotReviewers: reviewer });
@@ -1278,7 +1278,7 @@ describe("run_reviewer: verifiable Copilot CLI executions", () => {
       instructions: "Revisa AC-1 y el diff de src/auth.ts",
     });
 
-    expect(result).toEqual({ isError: false, body: { output: "SIN HALLAZGOS" } });
+    expect(result).toEqual({ isError: false, body: { output: "NO FINDINGS" } });
     expect(reviewer.run).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreePath: task.worktreePath,

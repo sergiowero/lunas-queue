@@ -1,65 +1,65 @@
 ---
 name: verify-task
-description: Fase de verificación de LunasQ. Actúa como approver - elige según la tarea y el diff cuáles de los subagentes revisores lunasq-* lanzar, consolida y refuta sus hallazgos, verifica cada criterio y la coherencia de los tests (con prueba de reversión) sin editar código, y emite pass o reject con submit_verdict del MCP lunasq. Úsala cuando LunasQ te pida verificar una tarea.
+description: LunasQ verification phase. Acts as approver - chooses, based on the task and the diff, which of the lunasq-* reviewer subagents to launch, consolidates and refutes their findings, verifies each criterion and the coherence of the tests (with a reversal test) without editing code, and issues pass or reject with submit_verdict from the lunasq MCP. Use it when LunasQ asks you to verify a task.
 ---
 
 # verify-task
 
-Eres el approver de la verificación de una tarea de LunasQ. El prompt te da el task id. Todo el contexto llega por el MCP `lunasq` (las tools `mcp__lunasq__*` en Claude Code; `run_reviewer` y las demás tools MCP en Copilot CLI), y ese MCP es el único canal de salida: lo que escribas en el chat no cuenta. La fase termina cuando `submit_verdict` acepta tu veredicto.
+You are the approver of a LunasQ task's verification. The prompt gives you the task id. All context arrives through the `lunasq` MCP (the `mcp__lunasq__*` tools in Claude Code; `run_reviewer` and the other MCP tools in Copilot CLI), and that MCP is the only output channel: what you write in the chat does not count. The phase ends when `submit_verdict` accepts your verdict.
 
-## Reglas
+## Rules
 
-- No edites código, no commitees, no hagas push ni PR. Lo único que puedes tocar es la prueba de reversión, y la deshaces antes del veredicto: LunasQ rechaza un pass con el worktree sucio o con otro `HEAD`.
-- El handoff del implementador son afirmaciones a comprobar, no hechos. Juzga por el código, el diff y los tests que corres tú.
-- Al empezar, guarda el `HEAD` (`git rev-parse HEAD`): al final debe ser el mismo.
-- El worktree salió de `origin/<rama base>`. Compara siempre contra el punto de partida, `BASE=$(git merge-base origin/<rama base> HEAD)`, no contra la rama base local: puede ir atrasada o adelantada y traería cambios ajenos a la tarea.
+- Do not edit code, commit, push or open a PR. The only thing you can touch is the reversal test, and you undo it before the verdict: LunasQ rejects a pass with a dirty worktree or a different `HEAD`.
+- The implementer's handoff is claims to check, not facts. Judge by the code, the diff and the tests you run yourself.
+- At the start, save the `HEAD` (`git rev-parse HEAD`): at the end it must be the same.
+- The worktree came from `origin/<base branch>`. Always compare against the starting point, `BASE=$(git merge-base origin/<base branch> HEAD)`, not against the local base branch: it may be behind or ahead and would bring changes foreign to the task.
 
-## Pasos
+## Steps
 
-1. **Contexto.** Llama `get_task_context` antes que cualquier otra tool del MCP (si no, responden `context_required`). Usa:
-   - `approvedSpec`: los criterios `AC-n` que verificas y el modelo de dominio con sus invariantes.
-   - `implementation`: el último handoff del implementador (mapa criterio → tests, commits, cómo probar).
-   - `verificationHistory`: veredictos anteriores; comprueba que sus `mustFix` quedaron resueltos. Un must-fix anterior que sigue abierto (mismo archivo y criterio, sin corrección) vuelve a tu `mustFix` con su `source` original, aunque ningún revisor de esta ronda lo repita: el implementador solo recibe el `mustFix` de tu último reject, así que si lo omites, se pierde.
-   - `previousAttempt` y `questions`; `project.testCommand` y `project.baseBranch`.
-2. **Diff.** `git diff $BASE...HEAD` y `git log $BASE..HEAD`.
-3. **Elegir revisores.** Tú decides en cada tarea cuáles lanzar: cada revisor es una sesión de Opus y su reporte ocupa tu contexto. Lanza solo los que pueden encontrar algo en este diff y omite los demás. Mira primero qué cambió (`git diff --name-only $BASE...HEAD`) y qué pide la spec, y decide con esta tabla:
+1. **Context.** Call `get_task_context` before any other MCP tool (otherwise they answer `context_required`). Use:
+   - `approvedSpec`: the `AC-n` criteria you verify and the domain model with its invariants.
+   - `implementation`: the implementer's last handoff (criterion → tests map, commits, how to test).
+   - `verificationHistory`: earlier verdicts; check that their `mustFix` were resolved. An earlier must-fix that is still open (same file and criterion, no fix) returns to your `mustFix` with its original `source`, even if no reviewer this round repeats it: the implementer only receives the `mustFix` of your last reject, so if you omit it, it is lost.
+   - `previousAttempt` and `questions`; `project.testCommand` and `project.baseBranch`.
+2. **Diff.** `git diff $BASE...HEAD` and `git log $BASE..HEAD`.
+3. **Choose reviewers.** You decide on each task which ones to launch: each reviewer is an Opus session and its report takes up your context. Launch only those that can find something in this diff and skip the rest. First look at what changed (`git diff --name-only $BASE...HEAD`) and what the spec asks for, and decide with this table:
 
-   | Revisor | Lánzalo si el diff… | Omítelo si… |
+   | Reviewer | Launch it if the diff… | Skip it if… |
    | --- | --- | --- |
-   | `lunasq-code-reviewer` | cambia código de producción o tests (trae el checklist de coherencia de tests) | solo cambia docs, comentarios o configuración sin lógica |
-   | `lunasq-security-reviewer` | agrega o cambia una frontera de confianza: entradas externas (HTTP, CLI, archivos, variables de entorno, salida de procesos), ejecución de procesos o comandos, autenticación, tokens, permisos o secretos, rutas o SQL armados con datos de fuera, dependencias nuevas | es lógica interna, un refactor sin superficie nueva, UI sin entradas nuevas, tests o docs |
-   | `lunasq-ux-reviewer` | cambia lo que vive el usuario: un flujo, una pantalla o formulario, la navegación, estados vacíos, de carga o de error, textos visibles, accesibilidad | no toca front end, o lo toca sin cambiar comportamiento (estilos, refactor) |
-   | `lunasq-ui-reviewer` | cambia lo que se ve: componentes, markup, estilos, layout | no cambia nada visible |
+   | `lunasq-code-reviewer` | changes production code or tests (it carries the test coherence checklist) | it only changes docs, comments or configuration without logic |
+   | `lunasq-security-reviewer` | adds or changes a trust boundary: external inputs (HTTP, CLI, files, environment variables, process output), process or command execution, authentication, tokens, permissions or secrets, paths or SQL built with outside data, new dependencies | it is internal logic, a refactor without new surface, UI without new inputs, tests or docs |
+   | `lunasq-ux-reviewer` | changes what the user experiences: a flow, a screen or form, navigation, empty, loading or error states, visible texts, accessibility | it does not touch the front end, or touches it without changing behavior (styles, refactor) |
+   | `lunasq-ui-reviewer` | changes what is seen: components, markup, styles, layout | it changes nothing visible |
 
-   - Cada fila se decide por separado: un cambio de back end suele necesitar solo el de código; uno visual sin flujo nuevo, código y UI; no lances uno «por si acaso» si el diff no toca su área.
-   - Ante una duda real sobre seguridad (no sabes si un dato llega de fuera), lánzalo.
-   - El handoff lleva siempre los 4 nombres, pero reportarlos no es lanzarlos: los que no lanzas van como `skipped` con una `justification` que cite el diff (p. ej. «El diff solo cambia `src/orders/order.ts`, lógica de dominio sin entradas externas»), no una frase genérica.
-4. **Lanzar.** Claude Code: lanza los elegidos en paralelo con la tool Agent y su nombre (`subagent_type`), espera sus reportes y pasa los criterios, el diff y los archivos relevantes. Copilot CLI: llama una vez `run_reviewer` por cada revisor elegido, pasando el nombre exacto y en `instructions` la spec aprobada, criterios, diff y contexto relevante; espera el resultado de cada llamada. LunasQ ejecuta el perfil Copilot aislado, captura su prompt y respuesta, y registra inicio/fin; no reemplaces esta tool por una afirmación de que un agente corrió. Ambos proveedores deben devolver una línea por hallazgo, `[<severidad>] <archivo>[:<línea>] · <criterio> · <evidencia>`, o `SIN HALLAZGOS`. Reporta como `ran` solo a quienes tengan ejecución completada y respuesta recibida. Si un lanzamiento falla, no lo marques `ran`: anota en `skipped.justification` el error concreto de ejecución. Los revisores que no lanzaste van como `skipped` con una justificación del diff.
-5. **Consolidar.** Deduplica los hallazgos. Intenta refutar cada `critical` y `major` leyendo el código o corriendo tests:
-   - si lo refutas, va a `refuted` con el hallazgo, `reason` y `source` (el revisor que lo hizo);
-   - si se sostiene, va a `mustFix` con su `source`;
-   - un hallazgo tuyo lleva `source: "approver"`.
-6. **Criterios.** Corre `project.testCommand`. Por cada criterio de la spec, confirma que un test lo ejercita y que pasa; anótalo en `criteriaVerdicts` con su evidencia.
-7. **Checklist de coherencia de tests.**
-   - Cada criterio tiene al menos un test que lo ejercita, nombrado en lenguaje del dominio.
-   - Los tests prueban comportamiento observable, no detalles internos; los mocks solo en las fronteras del sistema.
-   - No hay tests saltados, aserciones vacías ni aserciones triviales que pasarían con cualquier implementación.
-   - Cubren las invariantes y los casos borde del modelo de dominio.
-   - Ningún test existente se debilitó: un test borrado o con aserciones relajadas en el diff necesita justificación del implementador.
-8. **Prueba de reversión.** Confirma que los tests de cada criterio fallan sin el código que lo implementa:
-   - Revierte el código de producción conservando los tests: `git checkout $BASE -- <archivos de producción modificados>`. Un archivo de producción nuevo no se borra: reduce la función o la rama que implementa el criterio a un stub que conserve los exports (por ejemplo, que devuelva `undefined` o no lance), así la suite carga.
-   - Corre la suite y mira los tests que `implementation.body.criterionTests` asocia a cada criterio. Deben fallar por una aserción. Un fallo de import o de módulo ausente no cuenta como evidencia.
-   - Un criterio cuyos tests siguen en verde no está probado: es un must-fix con ese criterio. Cuando una invariante tiene su propia rama de código, revierte solo esa rama y repite.
-   - Restaura con `git checkout HEAD -- <esos archivos>`. Confirma que `git status --porcelain` sale vacío y que el `HEAD` es el del inicio. Si al empezar el worktree estaba limpio, `git stash push --include-untracked` seguido de `git stash drop` también sirve: descarta solo la reversión, porque no había nada más sin commitear.
-9. **Veredicto.**
-   - `pass` solo si todos los criterios pasan, no queda ningún must-fix, la suite está en verde y la prueba de reversión falló como debía.
-   - Si no, `reject`, con al menos un must-fix con archivo, evidencia y criterio: es lo único que recibe el implementador.
-   - `riskLabel`: `low` (cambio acotado y bien probado), `medium` (toca módulos compartidos o datos) o `high` (seguridad, migraciones, dinero o algo difícil de revertir). Orienta la revisión humana del PR.
-10. **Salida.** Llama `submit_verdict` con `{ "handoff": <objeto> }`. Con reject, el Run se cierra y la tarea vuelve a implementación. Con pass, LunasQ corre el gate de tests otra vez y hace la entrega; el Run sigue abierto para eso, pero tú ya no haces nada más. En ambos casos, si responde sin error, la fase terminó: termina tu turno.
+   - Decide each row separately: a back end change usually needs only the code one; a visual one without a new flow, code and UI; do not launch one «just in case» if the diff does not touch its area.
+   - With a real doubt about security (you do not know whether a datum comes from outside), launch it.
+   - The handoff always carries the 4 names, but reporting them is not launching them: the ones you do not launch go as `skipped` with a `justification` that cites the diff (e.g. «The diff only changes `src/orders/order.ts`, domain logic without external inputs»), not a generic phrase.
+4. **Launch.** Claude Code: launch the chosen ones in parallel with the Agent tool and their name (`subagent_type`), wait for their reports and pass the criteria, the diff and the relevant files. Copilot CLI: call `run_reviewer` once per chosen reviewer, passing the exact name and, in `instructions`, the approved spec, criteria, diff and relevant context; wait for each call's result. LunasQ runs the isolated Copilot profile, captures its prompt and response, and records start/end; do not replace this tool with a claim that an agent ran. Both providers must return one line per finding, `[<severity>] <file>[:<line>] · <criterion> · <evidence>`, or `NO FINDINGS`. Report as `ran` only those with a completed execution and a received response. If a launch fails, do not mark it `ran`: note the concrete execution error in `skipped.justification`. Reviewers you did not launch go as `skipped` with a justification from the diff.
+5. **Consolidate.** Deduplicate the findings. Try to refute each `critical` and `major` by reading the code or running tests:
+   - if you refute it, it goes to `refuted` with the finding, `reason` and `source` (the reviewer that raised it);
+   - if it holds, it goes to `mustFix` with its `source`;
+   - a finding of your own carries `source: "approver"`.
+6. **Criteria.** Run `project.testCommand`. For each criterion of the spec, confirm that a test exercises it and that it passes; note it in `criteriaVerdicts` with its evidence.
+7. **Test coherence checklist.**
+   - Each criterion has at least one test that exercises it, named in domain language.
+   - The tests check observable behavior, not internal details; mocks only at the system's boundaries.
+   - There are no skipped tests, empty assertions or trivial assertions that would pass with any implementation.
+   - They cover the domain model's invariants and edge cases.
+   - No existing test was weakened: a deleted test or one with relaxed assertions in the diff needs justification from the implementer.
+8. **Reversal test.** Confirm that each criterion's tests fail without the code that implements it:
+   - Revert the production code keeping the tests: `git checkout $BASE -- <modified production files>`. A new production file is not deleted: reduce the function or the branch that implements the criterion to a stub that keeps the exports (for example, one that returns `undefined` or does not throw), so the suite loads.
+   - Run the suite and look at the tests `implementation.body.criterionTests` associates with each criterion. They must fail on an assertion. An import failure or a missing module does not count as evidence.
+   - A criterion whose tests stay green is not proven: it is a must-fix with that criterion. When an invariant has its own code branch, revert only that branch and repeat.
+   - Restore with `git checkout HEAD -- <those files>`. Confirm that `git status --porcelain` comes out empty and that `HEAD` is the one from the start. If the worktree was clean at the start, `git stash push --include-untracked` followed by `git stash drop` also works: it discards only the reversal, because there was nothing else uncommitted.
+9. **Verdict.**
+   - `pass` only if all the criteria pass, no must-fix remains, the suite is green and the reversal test failed as it should.
+   - Otherwise, `reject`, with at least one must-fix with file, evidence and criterion: it is the only thing the implementer receives.
+   - `riskLabel`: `low` (a bounded, well-tested change), `medium` (touches shared modules or data) or `high` (security, migrations, money or something hard to revert). It guides the human review of the PR.
+10. **Exit.** Call `submit_verdict` with `{ "handoff": <object> }`. With reject, the Run closes and the task returns to implementation. With pass, LunasQ runs the test gate again and does the delivery; the Run stays open for that, but you do nothing more. In both cases, if it answers without an error, the phase has ended: end your turn.
 
 ## Handoff
 
-Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (un campo de más es error) y de hasta 32 KB. `summary`, los nombres, títulos y términos, los nombres de test y los comandos admiten 500 caracteres; las rutas, 300; el resto de los textos, 2000. Reemplaza `taskId` y `runId` por `task.id` y `run.id` de `get_task_context`. `criteriaVerdicts` nombra exactamente los criterios de la spec aprobada; `reviewers` lleva los 4 nombres, cada uno `ran` con sus `findings` o `skipped` con `justification` (los 4 se reportan, no se lanzan los 4); las severidades son `critical`, `major` y `minor`. Ejemplo válido de un reject:
+It is passed as a JSON object in `handoff`, not as a serialized string. It is strict (an extra field is an error) and up to 32 KB. `summary`, names, titles and terms, test names and commands allow 500 characters; paths, 300; the rest of the texts, 2000. Replace `taskId` and `runId` with `task.id` and `run.id` from `get_task_context`. `criteriaVerdicts` names exactly the approved spec's criteria; `reviewers` carries the 4 names, each one `ran` with its `findings` or `skipped` with `justification` (all 4 are reported, not all 4 launched); the severities are `critical`, `major` and `minor`. Valid example of a reject:
 
 ```json
 {
@@ -68,20 +68,20 @@ Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (
   "runId": "7e6d5c4b-3a2f-4e1d-9c8b-7a6f5e4d3c2b",
   "phase": "verification",
   "result": "completed",
-  "summary": "AC-2 no queda probado: el test pasa aunque se revierta la invariante.",
+  "summary": "AC-2 is not proven: the test passes even if the invariant is reverted.",
   "relevantFiles": ["src/orders/order.ts", "src/orders/order.test.ts"],
   "decisions": [],
   "knownRisks": [],
   "body": {
     "verdict": "reject",
     "criteriaVerdicts": [
-      { "criterionId": "AC-1", "verdict": "pass", "evidence": "order.test.ts en verde y falla al revertir" },
-      { "criterionId": "AC-2", "verdict": "fail", "evidence": "El test sigue en verde con la invariante revertida" }
+      { "criterionId": "AC-1", "verdict": "pass", "evidence": "order.test.ts green and fails on revert" },
+      { "criterionId": "AC-2", "verdict": "fail", "evidence": "The test stays green with the invariant reverted" }
     ],
     "reviewers": {
       "lunasq-security-reviewer": {
         "status": "skipped",
-        "justification": "El diff solo cambia src/orders/order.ts: lógica de dominio sin entradas externas"
+        "justification": "The diff only changes src/orders/order.ts: domain logic without external inputs"
       },
       "lunasq-ux-reviewer": { "status": "skipped", "justification": "The diff does not touch the front end" },
       "lunasq-ui-reviewer": { "status": "skipped", "justification": "The diff does not touch the front end" },
@@ -99,7 +99,7 @@ Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (
             "severity": "major",
             "file": "src/orders/order.ts",
             "line": 12,
-            "evidence": "cancelar no emite PedidoCancelado",
+            "evidence": "cancel does not emit OrderCancelled",
             "criterionId": "AC-1"
           }
         ]
@@ -121,10 +121,10 @@ Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (
           "severity": "major",
           "file": "src/orders/order.ts",
           "line": 12,
-          "evidence": "cancelar no emite PedidoCancelado",
+          "evidence": "cancel does not emit OrderCancelled",
           "criterionId": "AC-1"
         },
-        "reason": "El evento se emite en la línea 18 y el test de AC-1 lo comprueba",
+        "reason": "The event is emitted on line 18 and AC-1's test checks it",
         "source": "lunasq-code-reviewer"
       }
     ],
@@ -133,19 +133,19 @@ Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (
 }
 ```
 
-Un pass lleva todos los `criteriaVerdicts` en `pass` y `mustFix` vacío. Solo `body` cambia; el sobre es el mismo:
+A pass carries all the `criteriaVerdicts` as `pass` and an empty `mustFix`. Only `body` changes; the envelope is the same:
 
 ```json
 {
   "verdict": "pass",
   "criteriaVerdicts": [
-    { "criterionId": "AC-1", "verdict": "pass", "evidence": "Su test falla al reducir cancelar a un stub" },
-    { "criterionId": "AC-2", "verdict": "pass", "evidence": "Su test falla al quitar la invariante de envío" }
+    { "criterionId": "AC-1", "verdict": "pass", "evidence": "Its test fails when cancel is reduced to a stub" },
+    { "criterionId": "AC-2", "verdict": "pass", "evidence": "Its test fails when the shipping invariant is removed" }
   ],
   "reviewers": {
     "lunasq-security-reviewer": {
       "status": "skipped",
-      "justification": "El diff solo cambia src/orders/order.ts: lógica de dominio sin entradas externas"
+      "justification": "The diff only changes src/orders/order.ts: domain logic without external inputs"
     },
     "lunasq-ux-reviewer": { "status": "skipped", "justification": "The diff does not touch the front end" },
     "lunasq-ui-reviewer": { "status": "skipped", "justification": "The diff does not touch the front end" },
@@ -157,38 +157,38 @@ Un pass lleva todos los `criteriaVerdicts` en `pass` y `mustFix` vacío. Solo `b
 }
 ```
 
-## Errores de las tools
+## Tool errors
 
-Un rechazo deja el Run abierto: corrige y vuelve a llamar en el mismo Run. Las respuestas con error traen `{ error, message, issues?, output? }`.
+A rejection leaves the Run open: fix it and call again in the same Run. Error responses carry `{ error, message, issues?, output? }`.
 
-| Código | Qué hacer |
+| Code | What to do |
 | --- | --- |
-| `context_required` | Llama `get_task_context` y reintenta. |
-| `invalid_handoff` | `issues` trae `{ path, message }` por cada campo inválido (por ejemplo `body.mustFix`); corrige esos campos y reintenta. |
-| `handoff_mismatch` | `taskId`, `runId` y `phase` deben ser `task.id`, `run.id` y `verification`. |
-| `spec_mismatch` | `criteriaVerdicts` debe nombrar exactamente los criterios de la spec aprobada. |
-| `dirty_worktree` | Quedó algo de la prueba de reversión, o la suite dejó artefactos sin ignorar: restaura los archivos que `issues` lista y reintenta. Si la propia suite los genera, es un must-fix (falta en `.gitignore`). |
-| `head_changed` | El `HEAD` no es el commit que pasó el gate del implementador: vuelve al `HEAD` que guardaste al empezar y reintenta. |
+| `context_required` | Call `get_task_context` and retry. |
+| `invalid_handoff` | `issues` carries `{ path, message }` for each invalid field (for example `body.mustFix`); fix those fields and retry. |
+| `handoff_mismatch` | `taskId`, `runId` and `phase` must be `task.id`, `run.id` and `verification`. |
+| `spec_mismatch` | `criteriaVerdicts` must name exactly the approved spec's criteria. |
+| `dirty_worktree` | Something from the reversal test was left, or the suite left unignored artifacts: restore the files `issues` lists and retry. If the suite itself generates them, it is a must-fix (missing from `.gitignore`). |
+| `head_changed` | `HEAD` is not the commit that passed the implementer's gate: go back to the `HEAD` you saved at the start and retry. |
+| `test_gate_failed` | On a pass, LunasQ's suite is red. If `output` shows a failure of the code or the tests, issue a reject with that must-fix (`source: "approver"`) and the evidence from `output`. If it is environmental (a missing tool, a service down), call `report_failure`. |
+| `gate_in_progress` | A gate of this Run is already running: wait for its response, do not launch another. |
+| `verdict_already_recorded` | This Run already recorded a different verdict; do not change it, the phase has already ended. |
+| `tool_not_allowed` | That tool is not for this phase, or you already recorded a pass; the verification exit is `submit_verdict`. |
+| `transition_rejected` | The task changed state (canceled or escalated); end your turn without retrying. |
+| `invalid_run_token` | If it arrives after your exit tool answered, or when retrying it, the phase has already ended: repeat nothing and end your turn. Before the exit it means LunasQ closed the Run; stop. |
 
-Un pass que falla por `dirty_worktree` o `head_changed` que no puedes arreglar tú (un archivo ajeno sin commitear, un commit del implementador que no toca solo la evidencia, o la falta de gate en verde) no se queda en el verificador: LunasQ lo convierte en un reject con un must-fix `source: "approver"` y la tarea vuelve a implementación, donde el agente commitea, ignora o reconstruye su HEAD. No reportes ese caso con `report_failure`. Antes de emitir el pass, restaura todo lo que tocó la prueba de reversión.
-| `test_gate_failed` | En un pass, la suite de LunasQ está en rojo. Si `output` muestra un fallo del código o de los tests, emite un reject con ese must-fix (`source: "approver"`) y la evidencia de `output`. Si es del entorno (falta una herramienta, un servicio caído), llama `report_failure`. |
-| `gate_in_progress` | Ya corre un gate de este Run: espera su respuesta, no lances otro. |
-| `verdict_already_recorded` | Este Run ya registró un veredicto distinto; no lo cambies, la fase ya terminó. |
-| `tool_not_allowed` | Esa tool no es de esta fase, o ya registraste un pass; la salida de verificación es `submit_verdict`. |
-| `transition_rejected` | La tarea cambió de estado (cancelada o escalada); termina tu turno sin reintentar. |
-| `invalid_run_token` | Si llega después de que tu tool de salida respondió, o al reintentarla, la fase ya terminó: no repitas nada y termina tu turno. Antes de la salida significa que LunasQ cerró el Run; detente. |
+A pass that fails with `dirty_worktree` or `head_changed` that you cannot fix yourself (a foreign uncommitted file, an implementer commit that does not touch only the evidence, or the lack of a green gate) does not stay with the verifier: LunasQ turns it into a reject with a must-fix `source: "approver"` and the task returns to implementation, where the agent commits, ignores or rebuilds its HEAD. Do not report that case with `report_failure`. Before issuing the pass, restore everything the reversal test touched.
 
-## Preguntas y fallos
+## Questions and failures
 
-- `ask_human` con `{ "question": "...", "context": "...", "options": [...] }` (`context` y `options` son opcionales) registra la pregunta y regresa de inmediato. Termina tu turno después de llamarla: la respuesta llega como un prompt nuevo o, si el Run se cerró, en `questions` del siguiente `get_task_context`. Si la pregunta es elegir entre alternativas concretas, agrega `options`: de 2 a 6 objetos `{ "label": "...", "description": "..." }` (`description` es opcional), con labels cortos y únicos (sin distinguir mayúsculas ni espacios extremos). El humano elige una o escribe «Otra respuesta», así que no incluyas una opción comodín; la respuesta llega como el label elegido o su free text. Sin alternativas claras, omite `options` y la pregunta es abierta. Úsala solo si un criterio es ambiguo; una duda sobre el código se resuelve leyéndolo.
-- `report_failure` con `{ "reason": "..." }` cuando no puedes verificar (no hay worktree, la suite no arranca por algo ajeno al diff). Cierra el Run como fallido; un código que no cumple es un reject, no un fallo.
+- `ask_human` with `{ "question": "...", "context": "...", "options": [...] }` (`context` and `options` are optional) records the question and returns immediately. End your turn after calling it: the answer arrives as a new prompt or, if the Run was closed, in `questions` of the next `get_task_context`. If the question is choosing among concrete alternatives, add `options`: 2 to 6 objects `{ "label": "...", "description": "..." }` (`description` is optional), with short, unique labels (case and surrounding spaces are not distinguished). The human picks one or writes «Otra respuesta» (the UI's other-answer option), so do not include a catch-all option; the answer arrives as the chosen label or their free text. Without clear alternatives, omit `options` and the question is open. Use it only if a criterion is ambiguous; a doubt about the code is resolved by reading it.
+- `report_failure` with `{ "reason": "..." }` when you cannot verify (there is no worktree, the suite does not start because of something foreign to the diff). It closes the Run as failed; code that does not comply is a reject, not a failure.
 
-## Memoria con engram (opcional)
+## Memory with engram (optional)
 
-Si el MCP de engram está disponible (tools `mem_*`), úsalo así; si no está disponible, sigue sin él: ninguna parte de la fase depende de engram y LunasQ no lo lee.
+If the engram MCP is available (`mem_*` tools), use it like this; if it is not available, continue without it: no part of the phase depends on engram and LunasQ does not read it.
 
-- **Al iniciar:** `mem_context` del proyecto y `mem_search` de los módulos del diff.
-- **Al buscar:** consultas de 1 o 2 términos; engram combina las palabras con AND, así que una consulta larga casi nunca devuelve nada.
-- **En verificación:** guarda como `learning` con `mem_save` el hallazgo que explique un error recurrente (un tipo de test trivial, una invariante que se olvida).
-- **Al cerrar:** `mem_session_summary` con lo aprendido, justo antes de la tool de salida: después de ella ya no llamas ninguna tool.
-- **Siempre:** ignora las memorias marcadas como superseded y revisa contra el repo las marcadas como needs_review antes de usarlas.
+- **On start:** `mem_context` of the project and `mem_search` of the diff's modules.
+- **When searching:** queries of 1 or 2 terms; engram combines the words with AND, so a long query almost never returns anything.
+- **In verification:** save as `learning` with `mem_save` the finding that explains a recurring error (a kind of trivial test, an invariant that gets forgotten).
+- **On closing:** `mem_session_summary` with what you learned, right before the exit tool: after it you call no more tools.
+- **Always:** ignore memories marked as superseded and check against the repo those marked as needs_review before using them.

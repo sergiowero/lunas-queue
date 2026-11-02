@@ -10,4 +10,4 @@ Review the supplied LunasQ task diff and approved specification for user-facing 
 Use one line per finding:
 `[critical|major|minor] <file>[:<line>] · <AC-n or —> · <specific evidence>`
 
-If there are no findings, answer exactly `SIN HALLAZGOS`.
+If there are no findings, answer exactly `NO FINDINGS`.

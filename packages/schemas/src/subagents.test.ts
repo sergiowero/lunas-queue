@@ -18,7 +18,7 @@ const stop = {
   hook_event_name: "SubagentStop",
   stop_hook_active: false,
   agent_transcript_path: "/Users/u/.claude/projects/p/db6d30cd/subagents/agent-a5b9.jsonl",
-  last_assistant_message: "SIN HALLAZGOS",
+  last_assistant_message: "NO FINDINGS",
   background_tasks: [],
   session_crons: [],
 };
