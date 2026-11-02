@@ -314,7 +314,7 @@ describe("transition: verification loop", () => {
   });
 
   it(`with ${DEFAULT_MAX_ITERATIONS} iterations by default, the next rework goes to needs_human`, () => {
-    expect(DEFAULT_MAX_ITERATIONS).toBe(3);
+    expect(DEFAULT_MAX_ITERATIONS).toBe(5);
     let task = snap("verification", "running", 0);
     for (let i = 1; i <= DEFAULT_MAX_ITERATIONS; i++) {
       const result = transition(task, passing.verdict_rework, "agent");
@@ -325,7 +325,7 @@ describe("transition: verification loop", () => {
     const exhausted = transition(task, passing.verdict_rework, "agent");
     expect(exhausted).toMatchObject({
       ok: true,
-      next: snap("needs_human", null, 3),
+      next: snap("needs_human", null, DEFAULT_MAX_ITERATIONS),
       event: { payload: { command: "verdict_rework", reason: "iterations_exhausted" } },
     });
   });
@@ -418,6 +418,26 @@ describe("transition: human in the loop", () => {
         "human",
       ),
     ).toMatchObject({ ok: true, next: snap("in_progress", "queued", 0) });
+  });
+
+  it("after resetIteration, a rejection gets a full cycle of reworks before escalating again", () => {
+    const resumed = transition(
+      snap("needs_human", null, DEFAULT_MAX_ITERATIONS),
+      { type: "resume", resumeTo: "verification", resetIteration: true },
+      "human",
+    );
+    if (!resumed.ok) throw new Error(resumed.error.message);
+    let task = snap("verification", "running", resumed.next.verificationIteration);
+    expect(task.verificationIteration).toBe(0);
+    for (let i = 1; i <= DEFAULT_MAX_ITERATIONS; i++) {
+      const result = transition(task, passing.verdict_rework, "agent");
+      expect(result).toMatchObject({ ok: true, next: { state: "in_progress" } });
+      task = snap("verification", "running", i);
+    }
+    expect(transition(task, passing.verdict_rework, "agent")).toMatchObject({
+      ok: true,
+      next: { state: "needs_human" },
+    });
   });
 
   it("cancel stores the note in the event", () => {

@@ -22,9 +22,12 @@ export function phaseProfile(config: Project, phase: Phase): AgentProfile {
   return profile;
 }
 
-/** Reworks that the verification loop allows before moving to needs_human. */
-export function maxVerificationIterations(config: Project): number {
-  return config.limits.maxVerificationIterations ?? DEFAULT_MAX_ITERATIONS;
+/**
+ * Reworks that the verification loop allows before moving to needs_human: the project cap if
+ * defined, otherwise the global cap saved in Settings, otherwise DEFAULT_MAX_ITERATIONS.
+ */
+export function maxVerificationIterations(config: Project, globalCap?: number): number {
+  return config.limits.maxVerificationIterations ?? globalCap ?? DEFAULT_MAX_ITERATIONS;
 }
 
 export function phaseTimeoutMs(config: Project, phase: Phase): number {
