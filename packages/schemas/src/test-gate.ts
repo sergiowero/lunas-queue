@@ -7,7 +7,7 @@ export const TEST_GATE_EXECUTED = "test_gate.executed";
 /** How much of the output goes into the event: the end, which is where the error is. */
 export const TEST_GATE_OUTPUT_LIMIT = 16 * 1024;
 
-/** When the gate runs: when verification is requested, before accepting a pass and on delivery (UW-26). */
+/** When the gate runs: when verification is requested, before accepting a pass and on delivery. */
 export const TestGateTrigger = z.enum(["submit_for_verification", "verdict_pass", "delivery"]);
 export type TestGateTrigger = z.infer<typeof TestGateTrigger>;
 

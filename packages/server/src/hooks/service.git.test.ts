@@ -1,5 +1,5 @@
 // HookService with real git and processes: bare remote repo, project checkout and the task's
-// worktree on its branch. It tests UW-10's criterion without fakes in what decides what runs.
+// worktree on its branch. It tests the hooks criterion without fakes in what decides what runs.
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,

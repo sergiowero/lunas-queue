@@ -303,7 +303,7 @@ describe("EvidenceService.recordRun", () => {
     for (const r of runs) expect(md).toContain(`## Run ${r.id}`);
   });
 
-  it("leaves the file uncommitted and the worktree clean for the UW-15/23 checks", async () => {
+  it("leaves the file uncommitted and the worktree clean for the delivery checks", async () => {
     await service.recordRun(closedRun().id);
     expect(git(wt, "status", "--porcelain", "--untracked-files=all")).toContain("lunasq/tasks/");
     expect(await new RealGit().isDirty(wt)).toBe(false);

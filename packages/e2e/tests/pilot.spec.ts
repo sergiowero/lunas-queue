@@ -1,4 +1,4 @@
-// End-to-end pilot (UW-29): three tasks with dependencies (A ← B ← C) on a real git repo,
+// End-to-end pilot: three tasks with dependencies (A ← B ← C) on a real git repo,
 // with a rework, a question and per-phase hooks. Humans do from the UI what falls to them
 // (create, answer, approve the spec); the merge is done by the test, as GitHub would.
 import { expect, type Page, test } from "@playwright/test";

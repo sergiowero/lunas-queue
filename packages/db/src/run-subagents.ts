@@ -1,5 +1,5 @@
 // Subagent executions per Run (ADR uw-19-revisores): written by the Claude Code SubagentStart and
-// SubagentStop hooks and UW-23 compares them with the reviewers the verdict reports.
+// SubagentStop hooks and verification compares them with the reviewers the verdict reports.
 // Both hooks are idempotent and the first one wins: repeating them does not move the times.
 import { asc, eq, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";

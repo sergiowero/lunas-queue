@@ -1,4 +1,4 @@
-// Spike UW-00/c: better-sqlite3 on Node 26 — WAL, synchronous transaction and Drizzle.
+// Spike: better-sqlite3 on Node 26 — WAL, synchronous transaction and Drizzle.
 import { strict as assert } from "node:assert";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";

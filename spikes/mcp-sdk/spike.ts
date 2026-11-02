@@ -1,4 +1,4 @@
-// Spike UW-00/a: servidor MCP v2 en Hono + cliente Streamable HTTP.
+// Spike: servidor MCP v2 en Hono + cliente Streamable HTTP.
 import { strict as assert } from "node:assert";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { startServer, TOKEN_HEADER } from "./server.ts";

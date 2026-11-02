@@ -23,7 +23,7 @@ import { SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
 import type { OutboxPublisher } from "../outbox/publisher.ts";
 
 /**
- * Port toward the dispatcher (UW-16). `dispatch` resolves when the claim was confirmed (the
+ * Port toward the dispatcher. `dispatch` resolves when the claim was confirmed (the
  * task is already in running) or rejects if it could not be; this way the next pass sees the slot taken.
  * The claim must validate the limits again: the plan was computed earlier.
  */

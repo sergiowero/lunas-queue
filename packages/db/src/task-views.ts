@@ -1,4 +1,4 @@
-// Reads that feed the task detail and the front end queue (UW-21, ADR uw-21-front-end):
+// Reads that feed the task detail and the front end queue (ADR uw-21-front-end):
 // Runs without their token, Event log and aggregated usage. Read-only; nothing here changes state.
 import {
   AgentKind,

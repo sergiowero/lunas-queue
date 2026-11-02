@@ -91,7 +91,7 @@ export function isDispatchError(err: unknown, code?: DispatchErrorCode): err is 
 }
 
 /**
- * Whoever observes the live agents (UW-17: herdr signals, nudges, phase timeout). The
+ * Whoever observes the live agents (herdr signals, nudges, phase timeout). The
  * dispatcher only reports when each Run starts and when it ends.
  */
 export interface RunObserver {
@@ -100,7 +100,7 @@ export interface RunObserver {
 }
 
 /**
- * Whoever records a closed Run (the evidence file, UW-24). The dispatcher calls it
+ * Whoever records a closed Run (the evidence file). The dispatcher calls it
  * for each Run it closes or already finds closed; it must be idempotent.
  */
 export interface RunEvidenceSink {
@@ -204,7 +204,7 @@ export class PhaseDispatcher implements Dispatcher {
 
   /**
    * Resumes the claimed Runs that never got to send their prompt (after a crash). Skips those
-   * already being launched: reconciliation (UW-17) calls it on each pass.
+   * already being launched: reconciliation calls it on each pass.
    */
   async recover(): Promise<void> {
     for (const run of this.runs.active()) {
@@ -248,7 +248,7 @@ export class PhaseDispatcher implements Dispatcher {
 
   /**
    * Phase close: saves result, handoff and session identity and closes the pane. Called by
-   * whoever applies the end-of-phase or cancellation transition (UW-15). Idempotent.
+   * whoever applies the end-of-phase or cancellation transition. Idempotent.
    */
   closeRun(runId: string, input: Omit<CloseRunInput, "session">) {
     return this.closeLocks.run(runId, async () => {

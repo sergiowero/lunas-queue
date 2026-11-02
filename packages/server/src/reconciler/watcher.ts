@@ -399,7 +399,7 @@ export class RunWatcher implements RunObserver {
 
   /**
    * The pane closed or the agent left: failed Run if it is still open. In waiting_human the Run is
-   * left open: it occupies its slot on purpose (ADR 0014) and the answer relaunches (UW-22).
+   * left open: it occupies its slot on purpose (ADR 0014) and the answer relaunches.
    */
   private async gone(w: Watch, exited: boolean): Promise<void> {
     this.unwatch(w.runId);

@@ -1,4 +1,4 @@
-// End-to-end implementation ↔ verification loop (UW-23): scheduler, dispatcher against fake herdr,
+// End-to-end implementation ↔ verification loop: scheduler, dispatcher against fake herdr,
 // LunasQ MCP through the official client and subagent hooks over HTTP. The agents are the test:
 // with each Run's run token they call the tools as Claude Code would in the pane.
 import { mkdtempSync, rmSync } from "node:fs";
@@ -219,7 +219,7 @@ describe("implementation ↔ verification loop", { timeout: 60_000 }, () => {
       verificationIteration: 0,
       riskLabel: "low",
     });
-    // The approver's Run stays open for the delivery (UW-26), which starts with this event.
+    // The approver's Run stays open for the delivery, which starts with this event.
     expect(l.runs.get(run.id)).toMatchObject({ endedAt: null });
     expect(l.verdicts()).toEqual([expect.objectContaining({ verdict: "pass", iteration: 0 })]);
     expect(l.order).toEqual([

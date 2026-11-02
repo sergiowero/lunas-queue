@@ -1,4 +1,4 @@
-// Front end build (UW-21): packages/server serves it as statics. In development, `pnpm dev`
+// Front end build: packages/server serves it as statics. In development, `pnpm dev`
 // starts Vite and sends /api to the LunasQ server (LUNASQ_API, port 4310 by default).
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";

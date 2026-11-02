@@ -1,4 +1,4 @@
-// Read-only views consumed by the front end (UW-21, ADR uw-21-front-end): Runs, Event log,
+// Read-only views consumed by the front end (ADR uw-21-front-end): Runs, Event log,
 // usage, evidence and the global queue. They are derived from the tables; none is written through the API.
 import { z } from "zod";
 import { Actor, AgentKind, Phase, RunResult, SessionSource } from "./enums.ts";
@@ -74,7 +74,7 @@ export const TaskUsage = z.strictObject({
 export type TaskUsage = z.infer<typeof TaskUsage>;
 
 /**
- * Evidence file `lunasq/tasks/{id}.md` (written by UW-24): from the worktree while it exists; if
+ * Evidence file `lunasq/tasks/{id}.md` (written by the evidence service): from the worktree while it exists; if
  * it was already cleaned up, from the task branch and, after the merge, from the base branch. `path` is the path on
  * disk or `<ref>:<path>` in git.
  */

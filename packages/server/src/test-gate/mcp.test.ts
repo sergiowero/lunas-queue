@@ -1,4 +1,4 @@
-// UW-11 criterion end to end: the LunasQ MCP with the real gate (FakeHerdr pane, which
+// End-to-end criterion: the LunasQ MCP with the real gate (FakeHerdr pane, which
 // actually executes, over a real git repo). A red suite blocks the transition even if the agent's
 // handoff maps each criterion to tests it claims are green.
 import { execFileSync } from "node:child_process";

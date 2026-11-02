@@ -1,4 +1,4 @@
-// herdr adapter interface (UW-02). The rest of the system depends only on this;
+// herdr adapter interface. The rest of the system depends only on this;
 // the real implementation (CLI + socket) and the in-memory fake pass the same contract suite.
 // herdr 0.9.5 (protocol 22) behavior in docs/decisions/0004-herdr-version-y-cli.md.
 

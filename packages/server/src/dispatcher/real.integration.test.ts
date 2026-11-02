@@ -1,6 +1,6 @@
 // End-to-end dispatch against real herdr (>= 0.9.5). It does not run in `pnpm test`:
 //   pnpm --filter @lunasq/server test:herdr
-// Like UW-02's contract suite: headless server in its own session and a `claude` stub
+// Like the herdr adapter's contract suite: headless server in its own session and a `claude` stub
 // that enters the pane's PATH through `ZDOTDIR` (requires zsh). The stub shows Claude Code's folder
 // trust dialog and stays blocked until it receives keys, which tests that the
 // dispatcher accepts it. It records its args and its run token to check them.

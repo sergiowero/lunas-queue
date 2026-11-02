@@ -1,4 +1,4 @@
-// UW-21 done criterion: a task is created and followed end to end without using the API by
+// Done criterion: a task is created and followed end to end without using the API by
 // hand. The FakeApi acts as scheduler and agents; the human only uses the UI.
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

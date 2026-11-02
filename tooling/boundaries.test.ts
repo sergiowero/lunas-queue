@@ -13,7 +13,7 @@ const allowed: Record<string, string[]> = {
   server: ["domain", "db", "adapters", "schemas"],
   web: ["schemas"],
   cli: ["server"],
-  // End-to-end pilot (UW-29): composes the runtime with adapter fakes; nobody imports it.
+  // End-to-end pilot: composes the runtime with adapter fakes; nobody imports it.
   e2e: ["server", "adapters", "schemas"],
 };
 

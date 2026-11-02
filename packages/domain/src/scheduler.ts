@@ -176,7 +176,7 @@ export type Slot = { projectId: string; phase: SchedulablePhase; agentKind: Agen
 
 /**
  * Live agents per limit level. `schedule` uses it to plan and the dispatcher claim
- * (UW-16) to revalidate with a fresh snapshot, with the same rules.
+ * to revalidate with a fresh snapshot, with the same rules.
  */
 export class Occupancy {
   #global = 0;

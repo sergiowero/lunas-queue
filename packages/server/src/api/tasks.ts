@@ -1,4 +1,4 @@
-// Task routes and their DAG (UW-07, ADR 0010). Validation lives in @lunasq/schemas and the
+// Task routes and their DAG (ADR 0010). Validation lives in @lunasq/schemas and the
 // rules in TaskRepository; here only their errors are translated into HTTP codes.
 import {
   type RunRepository,

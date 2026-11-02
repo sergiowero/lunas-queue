@@ -1,5 +1,5 @@
 // The reviewers in assets/agents are the ones the verdict requires (`REVIEWER_NAMES`): if one is renamed,
-// the approver could not report it nor UW-23 find it in the hooks.
+// the approver could not report it nor verification find it in the hooks.
 import { readdirSync } from "node:fs";
 import { REVIEWER_NAMES } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";

@@ -1,5 +1,5 @@
-// Spec routes and the human gate (UW-12, ADR 0013), mounted under /api/tasks/:id/specs. The
-// version delivered by the refiner comes in through the LunasQ MCP (UW-15), not from here.
+// Spec routes and the human gate (ADR 0013), mounted under /api/tasks/:id/specs. The
+// version delivered by the refiner comes in through the LunasQ MCP, not from here.
 import type { SpecRepository, SpecResult } from "@lunasq/db";
 import {
   SpecDiffQuery,

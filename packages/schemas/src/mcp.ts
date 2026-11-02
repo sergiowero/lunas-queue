@@ -74,7 +74,7 @@ export type ChecklistUpdatedPayload = z.infer<typeof ChecklistUpdatedPayload>;
 export const VERDICT_RECORDED = "verification.verdict_recorded";
 
 // Summary of the verdict for the Event log and the outbox; the full handoff stays in the Run. With
-// pass, delivery (UW-26) starts with this event.
+// pass, delivery starts with this event.
 export const VerdictRecordedPayload = z.strictObject({
   runId: z.uuid(),
   verdict: z.enum(["pass", "reject"]),

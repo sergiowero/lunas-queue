@@ -1,4 +1,4 @@
-// UW-06 done criterion: a notification arrives through both channels without duplicating.
+// Done criterion: a notification arrives through both channels without duplicating.
 import { FakeHerdr } from "@lunasq/adapters";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNotifications } from "./index.ts";

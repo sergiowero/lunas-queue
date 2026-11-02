@@ -51,7 +51,7 @@ export interface OrchestratorOptions {
   paneEnv?: Record<string, string>;
   /** Replaces the `RunWatcher` (tests). */
   observer?: RunObserver;
-  /** Evidence file (UW-24): updated when each Run closes, also those the MCP closes. */
+  /** Evidence file: updated when each Run closes, also those the MCP closes. */
   evidence?: RunEvidenceSink;
   /**
    * Notices to the human: blocked, timeout, exhausted retries and loops. Without this, the notifications

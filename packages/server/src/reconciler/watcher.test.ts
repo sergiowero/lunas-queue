@@ -412,7 +412,7 @@ describe("RunWatcher: Runs that are not failed", () => {
     expect(h.taskRow(taskId)).toMatchObject({ subState: "running" });
   });
 
-  it("a crash with the question open leaves the Run open for the answer (UW-22)", async () => {
+  it("a crash with the question open leaves the Run open for the answer", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     transitionTask(h.db, { taskId, actor: "agent", command: { type: "ask_human" } });

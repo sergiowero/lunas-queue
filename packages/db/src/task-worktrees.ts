@@ -1,4 +1,4 @@
-// Branch and worktree of the tasks (UW-09, ADR 0012). It only touches those two columns: state,
+// Branch and worktree of the tasks (ADR 0012). It only touches those two columns: state,
 // sub-state and iteration change only through task-transitions (ADR 0007).
 import type { TaskWorktreeRecord, TaskWorktreeStore } from "@lunasq/domain";
 import { and, eq, isNotNull, or } from "drizzle-orm";

@@ -1,4 +1,4 @@
-# Spike UW-00/a — MCP SDK v2 on Hono
+# Spike — MCP SDK v2 on Hono
 
 Throwaway code. Result and decision in `docs/decisions/0001-mcp-sdk.md`.
 

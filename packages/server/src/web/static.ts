@@ -1,4 +1,4 @@
-// Front end statics (UW-21): the packages/web build is served from the same process. The
+// Front end statics: the packages/web build is served from the same process. The
 // client routes (TanStack Router) receive index.html; the API and missing assets, their 404.
 import { join } from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
