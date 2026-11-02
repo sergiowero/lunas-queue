@@ -117,6 +117,37 @@ describe("GET y PATCH /api/tasks/:id", () => {
     expect((await send("GET", `/api/tasks/${missing}`)).status).toBe(404);
   });
 
+  it("AC-11: una tarea sin Resultado devuelve resultKind y result nulos", async () => {
+    const { send, create } = setup();
+    const task = await create();
+    expect(await (await send("GET", `/api/tasks/${task.id}`)).json()).toMatchObject({
+      resultKind: null,
+      result: null,
+    });
+    const listed = (await (await send("GET", "/api/tasks")).json()) as TaskBody[];
+    expect(listed[0]).toMatchObject({ resultKind: null, result: null });
+  });
+
+  it("una tarea completada con Resultado devuelve su tipo y su texto, sin PR", async () => {
+    const { send, db, project } = setup();
+    const task = insertTask(db, project.id, {
+      state: "completed",
+      subState: null,
+      resultKind: "already_implemented",
+      result: "# Ya está\n\nVive en `src/x.ts`.",
+    });
+    const body = await (await send("GET", `/api/tasks/${task.id}`)).json();
+    expect(body).toMatchObject({
+      state: "completed",
+      resultKind: "already_implemented",
+      result: "# Ya está\n\nVive en `src/x.ts`.",
+      prUrl: null,
+      prState: null,
+    });
+    const listed = (await (await send("GET", "/api/tasks?state=completed")).json()) as TaskBody[];
+    expect(listed[0]).toMatchObject({ resultKind: "already_implemented" });
+  });
+
   it("actualiza intent, tags y prioridad", async () => {
     const { send, create } = setup();
     const task = await create();
