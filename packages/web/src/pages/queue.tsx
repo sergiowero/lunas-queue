@@ -14,7 +14,7 @@ import type { Json } from "../lib/api.ts";
 import { canPause, canResume, cappedTaskLabel, formatCost, formatTokens } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
-import { useTabFilters, validProjectId } from "../lib/tab-filters.tsx";
+import { useProjectFilter, useTabFilters } from "../lib/tab-filters.tsx";
 
 type Entry = Json<QueueEntry>;
 const column = createColumnHelper<Entry>();
@@ -40,9 +40,9 @@ function ActionsCell({ row }: CellContext<Entry, unknown>) {
 
 export function QueuePage() {
   const t = useT();
-  const [filters, setFilters] = useTabFilters("queue");
+  const [, setFilters] = useTabFilters("queue");
   const projects = useQuery(queries.projects());
-  const projectId = validProjectId(filters.projectId, projects.data);
+  const projectId = useProjectFilter("queue", projects.data);
   const queue = useQuery(queries.queue(projectId || undefined));
   const names = useMemo(
     () => new Map((projects.data ?? []).map((p) => [p.id, p.name])),

@@ -295,6 +295,24 @@ describe("global queue", () => {
       expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
       expect(screen.getByText("De uno")).toBeTruthy();
       expect(fake.requests.at(-1)?.path).toBe("/api/queue");
+
+      // The stored id was cleared: the project does not come back if it reappears in the list.
+      fake.projects.push(empty);
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await waitFor(() =>
+        expect(
+          Array.from((screen.getByLabelText("Proyecto") as HTMLSelectElement).options).map(
+            (o) => o.value,
+          ),
+        ).toContain(empty.id),
+      );
+      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
+      expect(
+        fake.requests
+          .map((r) => r.path)
+          .filter((path) => path.startsWith("/api/queue"))
+          .at(-1),
+      ).toBe("/api/queue");
     });
   });
 });

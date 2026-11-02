@@ -15,7 +15,7 @@ import type { Json } from "../lib/api.ts";
 import { cappedTaskLabel } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
-import { useTabFilters, validProjectId } from "../lib/tab-filters.tsx";
+import { useProjectFilter, useTabFilters } from "../lib/tab-filters.tsx";
 
 type Row = Json<Task>;
 const column = createColumnHelper<Row>();
@@ -32,7 +32,7 @@ export function CompletedPage() {
   const { prFilter } = filters;
   const [restPage, setRestPage] = useState(0);
   const projects = useQuery(queries.projects());
-  const projectId = validProjectId(filters.projectId, projects.data);
+  const projectId = useProjectFilter("completed", projects.data);
   const tasks = useQuery(queries.tasks(projectId || undefined));
   const names = useMemo(
     () => new Map((projects.data ?? []).map((project) => [project.id, project.name])),

@@ -1,6 +1,14 @@
 // Filter store: each tab's filters live above the router, so they survive the page unmounting when
 // the user navigates to another route and back. In memory only: reloading resets them to All.
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 export type TabFilters = {
   queue: { projectId: string };
@@ -50,4 +58,22 @@ export function useTabFilters<T extends TabName>(
 export function validProjectId(stored: string, projects: { id: string }[] | undefined): string {
   if (stored === "" || !projects) return stored;
   return projects.some((p) => p.id === stored) ? stored : "";
+}
+
+/**
+ * The tab's project filter, validated against the project list. When the list has loaded and no
+ * longer has the stored project, the stored value is cleared too, so the project does not come
+ * back if it reappears later in the session.
+ */
+export function useProjectFilter<T extends "queue" | "inProgress" | "completed">(
+  tab: T,
+  projects: { id: string }[] | undefined,
+): string {
+  const [filters, setFilters] = useTabFilters(tab);
+  const stored = filters.projectId;
+  const projectId = validProjectId(stored, projects);
+  useEffect(() => {
+    if (projectId !== stored) setFilters({ projectId: "" } as Partial<TabFilters[T]>);
+  }, [projectId, stored, setFilters]);
+  return projectId;
 }

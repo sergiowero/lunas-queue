@@ -16,7 +16,7 @@ import { canPause, cappedTaskLabel, formatAgent } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { isInProgress } from "../lib/in-progress.ts";
 import { queries } from "../lib/queries.ts";
-import { useTabFilters, validProjectId } from "../lib/tab-filters.tsx";
+import { useProjectFilter, useTabFilters } from "../lib/tab-filters.tsx";
 
 type Row = Json<Task>;
 type Run = Json<RunView>;
@@ -59,9 +59,9 @@ function ActionsCell({ row }: CellContext<Row, unknown>) {
 
 export function InProgressPage() {
   const t = useT();
-  const [filters, setFilters] = useTabFilters("inProgress");
+  const [, setFilters] = useTabFilters("inProgress");
   const projects = useQuery(queries.projects());
-  const projectId = validProjectId(filters.projectId, projects.data);
+  const projectId = useProjectFilter("inProgress", projects.data);
   const tasks = useQuery(queries.tasks(projectId || undefined));
   const names = useMemo(
     () => new Map((projects.data ?? []).map((p) => [p.id, p.name])),
