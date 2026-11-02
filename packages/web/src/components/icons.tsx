@@ -32,6 +32,15 @@ export function SettingsIcon() {
   );
 }
 
+/** Signo más (contorno, 18px como los iconos del header). */
+export function PlusIcon() {
+  return (
+    <Icon name="plus" width={18} height={18} fill="none">
+      <path d="M12 5v14M5 12h14" />
+    </Icon>
+  );
+}
+
 /** Dos barras verticales. */
 export function PauseIcon() {
   return (
