@@ -1,44 +1,45 @@
 # AGENTS.md — LunasQ
 
-LunasQ (repositorio `lunas-queue`) es una cola de tareas multi‑proyecto que despacha agentes de codificación (Claude Code en v1) a través de herdr: refinan, implementan, verifican y entregan cada tarea como PR, con gates humanos en la spec y en el merge.
+LunasQ (repository `lunas-queue`) is a multi‑project task queue that dispatches coding agents (Claude Code in v1) through herdr: they refine, implement, verify and deliver each task as a PR, with human gates on the spec and on the merge.
 
-Este archivo dice cómo trabajar en el repo. El detalle vive en `docs/`; léelo antes de cambiar algo que toque lo que describe.
+This file says how to work in the repo. The detail lives in `docs/`; read it before changing anything it describes.
 
-## Documentos de referencia
+## Reference documents
 
-| Archivo | Qué contiene | Cuándo leerlo |
+| File | What it contains | When to read it |
 | --- | --- | --- |
-| `docs/design.md` | Diseño completo: modelo de dominio, máquina de estados, dispatcher, MCP, verificación, hooks, auditoría | Antes de cambiar algo que toque lo que describe |
-| `docs/tech-stack.md` | Stack, paquetes del monorepo y sus fronteras, integraciones externas, tooling | Antes de agregar dependencias o crear archivos en un paquete |
-| `docs/decisions/` | ADRs cortos con decisiones tomadas durante la implementación | Antes de contradecir algo de los docs anteriores |
-| `docs/archive/` | Backlog histórico de unidades de trabajo (ya no se usa) | Solo como referencia histórica |
+| `docs/design.md` | Full design: domain model, state machine, dispatcher, MCP, verification, hooks, audit | Before changing anything it describes |
+| `docs/tech-stack.md` | Stack, monorepo packages and their boundaries, external integrations, tooling | Before adding dependencies or creating files in a package |
+| `docs/decisions/` | Short ADRs with decisions made during implementation | Before contradicting something in the documents above |
+| `docs/archive/` | Historical backlog of units of work (no longer used) | Only as historical reference |
 
-El repo es la fuente de verdad. Si una decisión cambia mientras implementas, actualiza el `.md` correspondiente en el mismo PR que el código. Un ADR nuevo va en `docs/decisions/<tema>.md`.
+The repo is the source of truth. If a decision changes while you implement, update the corresponding `.md` in the same PR as the code. A new ADR goes in `docs/decisions/<topic>.md`.
 
-## Reglas de arquitectura
+## Architecture rules
 
-- **Monolito modular en pnpm workspaces.** Paquetes: `schemas`, `domain`, `db`, `adapters`, `server`, `web`, `cli`, más `assets/skills` y `assets/agents`.
-- **Fronteras de dependencia** (detalle en `docs/tech-stack.md`):
-  - `domain` solo depende de `schemas` y no conoce base de datos, HTTP, herdr ni `gh`.
-  - `adapters` aísla todo lo externo (herdr, `gh`, git, ejecución de procesos) e incluye un fake por cada adapter.
-  - `server` compone todo; `web` solo comparte tipos de `schemas`.
-  - Nunca importes de un paquete "hacia arriba".
-- **Esquemas en un solo lugar.** Entidades, handoffs y eventos se definen con Zod v4 en `packages/schemas`; el JSON Schema se genera desde ahí.
-- **La base de datos es la verdad.** herdr es estado efímero; toda lógica que dependa de él debe poder reconciliarse.
-- **Idempotencia.** Despachos, worktrees, hooks y escrituras deben poder repetirse sin duplicar efectos.
-- **Sin dependencias nuevas sin motivo.** Si agregas una que no está en `docs/tech-stack.md`, justifícala en el PR o en un ADR.
+- **Modular monolith in pnpm workspaces.** Packages: `schemas`, `domain`, `db`, `adapters`, `server`, `web`, `cli`, plus `assets/skills` and `assets/agents`.
+- **Dependency boundaries** (detail in `docs/tech-stack.md`):
+  - `domain` only depends on `schemas` and knows nothing about the database, HTTP, herdr or `gh`.
+  - `adapters` isolates everything external (herdr, `gh`, git, process execution) and includes a fake for each adapter.
+  - `server` composes everything; `web` only shares types from `schemas`.
+  - Never import from a package «upwards».
+- **Schemas in one place.** Entities, handoffs and events are defined with Zod v4 in `packages/schemas`; the JSON Schema is generated from there.
+- **The database is the truth.** herdr is ephemeral state; any logic that depends on it must be reconcilable.
+- **Idempotency.** Dispatches, worktrees, hooks and writes must be repeatable without duplicating effects.
+- **No new dependencies without a reason.** If you add one that is not in `docs/tech-stack.md`, justify it in the PR or in an ADR.
+- **Language.** The repo is written in English: code, comments, tests, docs, ADRs, skills, and the messages of the API, the MCP and the CLI. Only the UI is bilingual (Spanish by default, with an ES/EN button in the header); its texts live in the front end's dictionaries (`packages/web/src/lib/dictionary/`) and a new UI text goes into both. See `docs/decisions/i18n-es-en.md`.
 
-## Stack y comandos
+## Stack and commands
 
-TypeScript estricto en Node.js 26 LTS, pnpm, SQLite (better-sqlite3 + Drizzle), Hono, SDK oficial de MCP, React + Vite, Vitest, Playwright y Biome.
+Strict TypeScript on Node.js 26 LTS, pnpm, SQLite (better-sqlite3 + Drizzle), Hono, the official MCP SDK, React + Vite, Vitest, Playwright and Biome.
 
-| Acción | Comando |
+| Action | Command |
 | --- | --- |
-| Instalar | `pnpm install` |
+| Install | `pnpm install` |
 | Tests | `pnpm test` |
-| Tests de un paquete | `pnpm --filter <paquete> test` |
-| Lint y formato | `pnpm lint` / `pnpm format` |
-| Tipos | `pnpm typecheck` |
+| Tests of one package | `pnpm --filter <package> test` |
+| Lint and format | `pnpm lint` / `pnpm format` |
+| Types | `pnpm typecheck` |
 | End-to-end | `pnpm e2e` |
 
-Antes de abrir un PR, `pnpm typecheck`, `pnpm lint` y `pnpm test` deben pasar. Las pruebas contra herdr y `gh` reales corren aparte; ejecútalas cuando cambies un adapter.
+Before opening a PR, `pnpm typecheck`, `pnpm lint` and `pnpm test` must pass. Tests against real herdr and `gh` run separately; run them when you change an adapter.

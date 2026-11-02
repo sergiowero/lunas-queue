@@ -1,726 +1,726 @@
-# LunasQ — Diseño
+# LunasQ — Design
 
 Oct 28, 2026 · @Sergio Sanchez
 
-## Objetivo y principios
+## Goal and principles
 
-LunasQ (repositorio `lunas-queue`) es una cola de tareas multi‑proyecto donde un humano define el intent y agentes de codificación la refinan, implementan, verifican y entregan como PR; herdr es la capa de ejecución y observación, no la fuente de verdad.
+LunasQ (repository `lunas-queue`) is a multi‑project task queue where a human defines the intent and coding agents refine, implement, verify and deliver it as a PR; herdr is the execution and observation layer, not the source of truth.
 
-**Modelo de factory:** LunasQ es una AI software factory *lights‑on*: agentes especializados refinan, implementan y verifican con memoria opcional del proyecto (engram), y el humano conserva dos gates, aprobar la spec y mergear cada PR.
+**Factory model:** LunasQ is a *lights‑on* AI software factory: specialized agents refine, implement and verify with optional project memory (engram), and the human keeps two gates, approving the spec and merging each PR.
 
-**Alcance:** crear tareas con intent, prioridad y dependencias; despacho automático a agentes en herdr; gates humanos en refinamiento; loop implementación ↔ verificación; commit, push y PR.
+**Scope:** create tasks with intent, priority and dependencies; automatic dispatch to agents in herdr; human gates in refinement; implementation ↔ verification loop; commit, push and PR.
 
-**Agentes soportados:** Claude Code y GitHub Copilot CLI se seleccionan por fase en cada proyecto. Cada CLI tiene un adapter propio; el dispatcher usa el registry para construir argumentos, configuración MCP y orden de fallback. Si un CLI falla antes de quedar listo, se intenta el siguiente una vez; si ninguno queda listo, la tarea pasa a `needs_human` con el diagnóstico de cada proveedor. Tokens de uso/costo no disponibles se muestran como tales, no como cero. La integración de revisores por subagentes sigue siendo específica de Claude Code; no declarar paridad de verificación para Copilot hasta que sus revisores y evidencia estén conectados a los mismos gates.
+**Supported agents:** Claude Code and GitHub Copilot CLI are selected per phase in each project. Each CLI has its own adapter; the dispatcher uses the registry to build arguments, MCP configuration and fallback order. If a CLI fails before becoming ready, the next one is tried once; if none becomes ready, the task moves to `needs_human` with each provider's diagnosis. Usage/cost tokens that are not available are shown as such, not as zero. The subagent reviewer integration remains specific to Claude Code; do not claim verification parity for Copilot until its reviewers and evidence are connected to the same gates.
 
-**Fuera de alcance (v1):** merge automático, commits directo a main, despliegue a producción hecho por LunasQ (se puede configurar con hooks del proyecto), carriles por tamaño de tarea, pruebas de aceptación ocultas al builder (posible versión futura) e intake automático desde GitHub issues (planeado para v2).
+**Out of scope (v1):** automatic merge, direct commits to main, production deployment done by LunasQ (it can be configured with project hooks), lanes by task size, acceptance tests hidden from the builder (possible future version) and automatic intake from GitHub issues (planned for v2).
 
-Principios:
+Principles:
 
-1. **Control plane vs execution plane.** La base de datos del sistema es la verdad. herdr guarda estado efímero (sus eventos no son durables), así que todo se reconcilia contra la BD.
-2. **Reconciliación, no disparo único.** El dispatcher es un loop que compara estado deseado (BD) contra estado real (herdr) y corrige, al estilo de un controller de Kubernetes.
-3. **Salidas estructuradas por MCP.** El agente reporta requerimientos, checklist y veredictos mediante tools MCP, no se infieren leyendo la terminal. La terminal solo se usa para liveness (working / blocked / idle).
-4. **Aislamiento por tarea.** Cada tarea trabaja siempre en su propio git worktree y branch, en todas las fases, para que varias tareas del mismo repo corran en paralelo sin pisarse.
-5. **Independencia del verificador.** Quien verifica no es la misma sesión que implementó.
-6. **Idempotencia.** Cada transición y cada acción contra herdr o git puede repetirse sin efectos duplicados.
+1. **Control plane vs execution plane.** The system's database is the truth. herdr keeps ephemeral state (its events are not durable), so everything is reconciled against the DB.
+2. **Reconciliation, not fire‑once.** The dispatcher is a loop that compares desired state (DB) against actual state (herdr) and corrects, in the style of a Kubernetes controller.
+3. **Structured outputs through MCP.** The agent reports requirements, checklist and verdicts through MCP tools; they are not inferred by reading the terminal. The terminal is only used for liveness (working / blocked / idle).
+4. **Per‑task isolation.** Each task always works in its own git worktree and branch, in all phases, so that several tasks of the same repo run in parallel without stepping on each other.
+5. **Verifier independence.** Whoever verifies is not the same session that implemented.
+6. **Idempotency.** Every transition and every action against herdr or git can be repeated without duplicated effects.
 
-## Modelo de dominio
+## Domain model
 
-Siete entidades bastan (más UsageRecord, ver Consumo); la clave es separar la **Task** (qué) del **Run** (cada intento de un agente en una fase), para tener historial de reintentos y loops.
+Seven entities are enough (plus UsageRecord, see Consumption); the key is separating the **Task** (what) from the **Run** (each attempt of an agent in a phase), to keep a history of retries and loops.
 
-| Entidad | Propósito | Campos clave |
+| Entity | Purpose | Key fields |
 | --- | --- | --- |
-| Project | Un repo y su configuración; mapea 1:1 a un workspace de herdr | repo, rama base, perfil de agente por fase (kind, modelo, esfuerzo, args), límite de concurrencia, comando de tests, hooks por fase (en lunasq/hooks/ del repo), ruta local, bootstrap del worktree |
-| Task | Unidad de trabajo en la cola | número (#N, secuencial global e inmutable; ADR 0015), intent, título (lo genera el refinador en el primer refinamiento y no vuelve a cambiar; la UI usa el intent mientras no exista), tags, prioridad (entero sin signo), estado, sub‑estado, iteración de verificación, branch, ruta del worktree, URL y estado del PR (abierto / mergeado / cerrado), resultado (tipo y texto Markdown; solo en una tarea completada sin código y sin PR), etiqueta de riesgo (read‑only), caused\_by (tarea que originó este bugfix, opcional), usage (read‑only) |
-| TaskDependency | Arista del DAG | task\_id, depends\_on\_id |
-| Spec | Salida versionada del refinamiento | versión, modelo de dominio (bounded context, glosario, agregados, invariantes, eventos), requerimientos, acceptance criteria, task list, estado de aprobación |
-| Run | Un intento de un agente en una fase | fase, tipo de agente, workspace/pane/nombre en herdr, identidad de sesión del agente (session id nativo o nombre de sesión), run token, inicio, fin, resultado, failure\_reason (texto), handoff (JSON), usage (read‑only) |
-| Event | Log append‑only de transiciones y acciones | task\_id, tipo, actor (humano / agente / sistema), payload, timestamp |
-| Question | Pregunta asíncrona del agente al humano | task\_id, run\_id, pregunta, contexto, opciones (2 a 6, opcionales), estado (abierta / respondida / cancelada), respuesta, quién y cuándo respondió |
+| Project | A repo and its configuration; maps 1:1 to a herdr workspace | repo, base branch, per‑phase agent profile (kind, model, effort, args), concurrency limit, test command, per‑phase hooks (in the repo's lunasq/hooks/), local path, worktree bootstrap |
+| Task | Unit of work in the queue | number (#N, global sequential and immutable; ADR 0015), intent, title (generated by the refiner in the first refinement and never changes again; the UI uses the intent while it does not exist), tags, priority (unsigned integer), state, sub‑state, verification iteration, branch, worktree path, PR URL and state (open / merged / closed), result (type and Markdown text; only on a task completed without code and without a PR), risk label (read‑only), caused\_by (task that originated this bugfix, optional), usage (read‑only) |
+| TaskDependency | DAG edge | task\_id, depends\_on\_id |
+| Spec | Versioned output of refinement | version, domain model (bounded context, glossary, aggregates, invariants, events), requirements, acceptance criteria, task list, approval state |
+| Run | An agent's attempt in a phase | phase, agent kind, herdr workspace/pane/name, agent session identity (native session id or session name), run token, start, end, result, failure\_reason (text), handoff (JSON), usage (read‑only) |
+| Event | Append‑only log of transitions and actions | task\_id, type, actor (human / agent / system), payload, timestamp |
+| Question | Asynchronous question from the agent to the human | task\_id, run\_id, question, context, options (2 to 6, optional), state (open / answered / canceled), answer, who answered and when |
 
-Decisiones de modelado:
+Modeling decisions:
 
-- **Spec versionada.** Cada ronda de refinamiento crea una versión nueva; la aprobación humana se liga a una versión concreta. Implementación y verificación leen siempre la versión aprobada. Versiones, autor, diff y reglas del gate en [ADR 0013](decisions/0013-specs-y-aprobacion.md).
-- **Acceptance criteria como items direccionables.** Cada criterio tiene id, para que el verificador emita un veredicto por criterio (pass / fail / evidencia) y no un booleano global.
-- **Event log como auditoría.** Permite reconstruir por qué una tarea regresó a in progress y alimenta la UI de historial.
-- **Número de tarea (#N).** Además de su UUID, cada tarea recibe al crearse un entero secuencial y global (no por proyecto), inmutable y que no se reutiliza aunque la tarea se cancele. Sirve para identificarla ante personas: título del pane y label del workspace en herdr, notificaciones, UI y menciones `#N` en el intent, que el detalle enlaza a la tarea mencionada. El UUID sigue siendo la identidad en rutas, llaves foráneas, branch y nombre del agente ([ADR 0015](decisions/0015-numero-de-tarea.md)).
-- **Tareas sin código y Resultado.** Una investigación, un pedido que ya está implementado o uno sin resolución no produce un diff. El agente la cierra con `submit_result` en refinamiento o implementación: la tarea pasa directo a Completed con un **Resultado** (`result_kind`: `research`, `already_implemented` o `not_resolvable`, y `result`, un texto Markdown de hasta 20 000 caracteres), sin spec aprobada, verificación, entrega ni PR. Una tarea tiene Resultado o PR, nunca los dos. El detalle lo muestra en una sección «Resultado» y Completed lo muestra en lugar del PR. Completed se divide en dos listas: las tareas con PR abierto, siempre visibles, y el resto (merged, closed, sin PR y con Resultado) en una sección colapsada por defecto y paginada de 20 en 20 ([ADR 0007](decisions/0007-maquina-de-estados.md)).
-- **Run token y timeouts.** Cada Run tiene un token único que se inyecta al pane; solo el Run activo puede mover la tarea. Las tareas atoradas se detectan con señales de herdr y un timeout por fase, sin heartbeat del agente.
+- **Versioned spec.** Each refinement round creates a new version; the human approval is tied to a specific version. Implementation and verification always read the approved version. Versions, author, diff and gate rules in [ADR 0013](decisions/0013-specs-y-aprobacion.md).
+- **Acceptance criteria as addressable items.** Each criterion has an id, so that the verifier issues a verdict per criterion (pass / fail / evidence) and not a global boolean.
+- **Event log as audit.** It allows reconstructing why a task went back to in progress and feeds the history UI.
+- **Task number (#N).** In addition to its UUID, each task receives on creation a sequential, global (not per project) integer, immutable and never reused even if the task is canceled. It serves to identify it to people: pane title and workspace label in herdr, notifications, UI and `#N` mentions in the intent, which the detail links to the mentioned task. The UUID remains the identity in routes, foreign keys, branch and agent name ([ADR 0015](decisions/0015-numero-de-tarea.md)).
+- **Tasks without code and Result.** An investigation, a request that is already implemented or one without resolution produces no diff. The agent closes it with `submit_result` in refinement or implementation: the task goes straight to Completed with a **Result** (`result_kind`: `research`, `already_implemented` or `not_resolvable`, and `result`, a Markdown text of up to 20,000 characters), without an approved spec, verification, delivery or PR. A task has a Result or a PR, never both. The detail shows it in a «Resultado» section and Completed shows it instead of the PR. Completed is split into two lists: the tasks with an open PR, always visible, and the rest (merged, closed, without PR and with Result) in a section collapsed by default and paginated 20 at a time ([ADR 0007](decisions/0007-maquina-de-estados.md)).
+- **Run token and timeouts.** Each Run has a unique token injected into the pane; only the active Run can move the task. Stuck tasks are detected with herdr signals and a per‑phase timeout, without an agent heartbeat.
 
-## Máquina de estados
+## State machine
 
-Se conservan tus cinco estados con New renombrado a Draft; Draft incluye la tarea recién creada y el refinamiento en curso, Refined es el único gate humano y el loop de calidad vive entre In progress y Verification.
+Your five states are kept with New renamed to Draft; Draft includes the newly created task and the refinement in progress, Refined is the only human gate and the quality loop lives between In progress and Verification.
 
-![Máquina de estados: Draft, Refined, In progress, Verification y Completed, con los loops de cambios pedidos y rework](images/maquina-de-estados.png)
+![State machine: Draft, Refined, In progress, Verification and Completed, with the requested‑changes and rework loops](images/maquina-de-estados.png)
 
 <details>
-<summary>Fuente Mermaid</summary>
+<summary>Mermaid source</summary>
 
 ```mermaid
 stateDiagram-v2
     direction LR
     [*] --> Draft
-    Draft --> Refined: spec lista
-    Refined --> Draft: cambios pedidos
-    Refined --> InProgress: aprobada (gate humano)
-    InProgress --> Verification: terminada
-    Verification --> InProgress: rework, iteración + 1
+    Draft --> Refined: spec ready
+    Refined --> Draft: changes requested
+    Refined --> InProgress: approved (human gate)
+    InProgress --> Verification: finished
+    Verification --> InProgress: rework, iteration + 1
     Verification --> Completed: pass
-    Draft --> Completed: resultado, sin código
-    InProgress --> Completed: resultado, sin código
-    Completed --> InProgress: PR en conflicto o CI fallido
+    Draft --> Completed: result, no code
+    InProgress --> Completed: result, no code
+    Completed --> InProgress: PR in conflict or CI failed
     Completed --> [*]
-    Draft --> Paused: pausa (humano)
-    Refined --> Paused: pausa (humano)
-    InProgress --> Paused: pausa (humano)
-    Verification --> Paused: pausa (humano)
-    Paused --> Draft: reanudar
-    Paused --> Refined: reanudar
-    Paused --> InProgress: reanudar
-    Paused --> Verification: reanudar
+    Draft --> Paused: pause (human)
+    Refined --> Paused: pause (human)
+    InProgress --> Paused: pause (human)
+    Verification --> Paused: pause (human)
+    Paused --> Draft: resume
+    Paused --> Refined: resume
+    Paused --> InProgress: resume
+    Paused --> Verification: resume
     InProgress: In progress
     note right of Completed
-        Desde cualquier estado: Needs human
-        (bloqueo, reintentos o iteraciones agotadas)
-        o Cancelled
+        From any state: Needs human
+        (block, retries or iterations exhausted)
+        or Cancelled
     end note
 ```
 
 </details>
-Cada estado con agente tiene un sub‑estado: `queued` (esperando slot o dependencias), `running` (agente vivo en herdr) o `waiting_human` (pregunta abierta). Así la columna del tablero no cambia mientras la tarea espera.
+Each state with an agent has a sub‑state: `queued` (waiting for a slot or dependencies), `running` (agent alive in herdr) or `waiting_human` (open question). This way the board column does not change while the task waits.
 
-| Transición | Disparador | Guard | Actor |
+| Transition | Trigger | Guard | Actor |
 | --- | --- | --- | --- |
-| Draft → Refined | submit\_spec | Spec con requerimientos, criterios y task list completos | Agente refinador |
-| Refined → Draft | Cambios pedidos | Comentarios del humano adjuntos a la versión | Humano |
-| Refined → In progress | Aprobación | Versión de spec aprobada (las dependencias ya se validaron antes de refinar) | Humano, luego scheduler |
-| In progress → Verification | submit\_for\_verification | Gate de tests en verde ejecutado por LunasQ; cada criterio con al menos un test; commits en el branch de la tarea | Agente implementador |
-| Verification → In progress | submit\_verdict = rework | Iteración menor al máximo | Agente verificador |
-| Verification → Completed | submit\_verdict = pass, luego entrega | Veredicto pass del verificador, gate de tests en verde, tests coherentes y todos los criterios en pass; push y PR exitosos | Sistema (entrega), con el veredicto del verificador |
-| Draft o In progress → Completed | submit\_result | Run del refinador o del implementador vivo (`running`). Desde In progress, el branch de la tarea sin commits sobre la rama base. Guarda el Resultado; sin verificación, entrega ni PR | Agente refinador o implementador |
-| Cualquiera no terminal → Needs human | Bloqueo con timeout, reintentos o iteraciones agotadas | — | Sistema |
-| Verification → In progress | Conflictos al integrar la rama base en la entrega | Sin subir la iteración | Sistema |
-| Completed → In progress | El PR abierto queda en conflicto con la rama base (otro PR se mergeó antes), o falla uno de sus checks de CI | PR de la tarea abierto; sin subir la iteración | Sistema (poller de PRs) |
-| Cualquiera no terminal → Cancelled | Cancelación | Agente vivo se detiene y se limpia | Humano |
-| Draft, Refined, In progress o Verification → Paused | Pausa | Solo el humano; no desde Needs human, Paused ni terminales; en Verification se rechaza con la entrega en curso (Run del verificador abierto con su pass guardado). El agente vivo se detiene y su Run se cierra como `cancelled`; el worktree y el branch se conservan | Humano |
-| Paused → estado previo | Reanudar | Vuelve al estado previo a la pausa (el `from` del evento que entró a Paused), con sub‑estado `queued` si lleva agente y la iteración intacta; la fase se redespacha desde cero sobre el mismo worktree | Humano |
-| Needs human → estado previo | Reanudar | Vuelve al estado previo al último escalamiento, con sub‑estado `queued` si lleva agente; opcionalmente reinicia la iteración | Humano |
+| Draft → Refined | submit\_spec | Spec with complete requirements, criteria and task list | Refiner agent |
+| Refined → Draft | Changes requested | Human comments attached to the version | Human |
+| Refined → In progress | Approval | Approved spec version (dependencies were already validated before refining) | Human, then scheduler |
+| In progress → Verification | submit\_for\_verification | Green test gate run by LunasQ; each criterion with at least one test; commits on the task branch | Implementer agent |
+| Verification → In progress | submit\_verdict = rework | Iteration below the maximum | Verifier agent |
+| Verification → Completed | submit\_verdict = pass, then delivery | Verifier's pass verdict, green test gate, coherent tests and all criteria at pass; successful push and PR | System (delivery), with the verifier's verdict |
+| Draft or In progress → Completed | submit\_result | Refiner's or implementer's Run alive (`running`). From In progress, the task branch without commits on top of the base branch. Stores the Result; no verification, delivery or PR | Refiner or implementer agent |
+| Any non‑terminal → Needs human | Block with timeout, retries or iterations exhausted | — | System |
+| Verification → In progress | Conflicts when integrating the base branch in delivery | Without raising the iteration | System |
+| Completed → In progress | The open PR ends up in conflict with the base branch (another PR was merged first), or one of its CI checks fails | The task's PR open; without raising the iteration | System (PR poller) |
+| Any non‑terminal → Cancelled | Cancellation | Live agent is stopped and cleaned up | Human |
+| Draft, Refined, In progress or Verification → Paused | Pause | Human only; not from Needs human, Paused or terminals; in Verification it is rejected while delivery is in progress (verifier's Run open with its pass saved). The live agent is stopped and its Run is closed as `cancelled`; the worktree and the branch are kept | Human |
+| Paused → previous state | Resume | Returns to the state before the pause (the `from` of the event that entered Paused), with sub‑state `queued` if it carries an agent and the iteration intact; the phase is redispatched from scratch on the same worktree | Human |
+| Needs human → previous state | Resume | Returns to the state before the last escalation, with sub‑state `queued` if it carries an agent; optionally resets the iteration | Human |
 
-Paused es el estado de una tarea que el humano sacó del flujo: no tiene sub‑estado ni agente, el scheduler nunca la despacha y no aparece en la bandeja (no espera nada del humano). Solo sale con Reanudar o Cancelar; `escalate` y el resto de comandos se rechazan. Al pausar, la pregunta abierta de una tarea en `waiting_human` se cancela como en cualquier otra salida de ese sub‑estado, y el reconciliador cierra el Run abierto como `cancelled` con `task_left_phase` y libera su pane ([ADR 0007](decisions/0007-maquina-de-estados.md)).
+Paused is the state of a task the human took out of the flow: it has no sub‑state or agent, the scheduler never dispatches it and it does not appear in the inbox (it waits for nothing from the human). It only leaves with Resume or Cancel; `escalate` and the other commands are rejected. When pausing, the open question of a task in `waiting_human` is canceled as in any other exit from that sub‑state, and the reconciler closes the open Run as `cancelled` with `task_left_phase` and releases its pane ([ADR 0007](decisions/0007-maquina-de-estados.md)).
 
-Completed y Cancelled son terminales, salvo que el PR abierto de una tarea completada quede en conflicto con la base o falle CI: entonces vuelve a In progress ([ADR pr-en-conflicto](decisions/pr-en-conflicto.md)). El catálogo de comandos, los guards, los sub-estados y el Event log están en [ADR 0007](decisions/0007-maquina-de-estados.md).
+Completed and Cancelled are terminal, unless the open PR of a completed task ends up in conflict with the base or fails CI: then it goes back to In progress ([ADR pr-en-conflicto](decisions/pr-en-conflicto.md)). The command catalog, the guards, the sub-states and the Event log are in [ADR 0007](decisions/0007-maquina-de-estados.md).
 
-## Arquitectura
+## Architecture
 
-Cuatro piezas propias (front end, backend, scheduler, dispatcher) y un MCP propio; herdr y GitHub (vía el CLI gh) son dependencias externas detrás de adapters; engram es opcional y solo lo usan los agentes.
+Four own pieces (front end, backend, scheduler, dispatcher) and an own MCP; herdr and GitHub (through the gh CLI) are external dependencies behind adapters; engram is optional and only the agents use it.
 
-![Arquitectura: control plane, datos, herdr como execution plane, usage collector, GitHub y engram opcional](images/arquitectura.png)
+![Architecture: control plane, data, herdr as execution plane, usage collector, GitHub and optional engram](images/arquitectura.png)
 
 <details>
-<summary>Fuente Mermaid</summary>
+<summary>Mermaid source</summary>
 
 ```mermaid
 flowchart TB
-    FE["Front end<br/>tablero, aprobaciones"]
+    FE["Front end<br/>board, approvals"]
     subgraph CP["Control plane"]
-        API["Backend API<br/>tareas, specs, aprobaciones, eventos"]
-        SCH["Scheduler<br/>ready set, score, límites de WIP"]
-        DIS["Dispatcher<br/>claim, despacho, reconciliación"]
-        MCP["LunasQ MCP<br/>salidas estructuradas de los agentes"]
+        API["Backend API<br/>tasks, specs, approvals, events"]
+        SCH["Scheduler<br/>ready set, score, WIP limits"]
+        DIS["Dispatcher<br/>claim, dispatch, reconciliation"]
+        MCP["LunasQ MCP<br/>structured agent outputs"]
     end
-    subgraph DATA["Datos"]
-        DB[("Base de datos SQL<br/>tasks, deps, specs, runs, event log")]
-        OUT["Eventos / outbox<br/>cambios de estado hacia el scheduler"]
+    subgraph DATA["Data"]
+        DB[("SQL database<br/>tasks, deps, specs, runs, event log")]
+        OUT["Events / outbox<br/>state changes toward the scheduler"]
     end
     subgraph HERDR["herdr · execution plane"]
-        subgraph WS["Workspace por proyecto"]
-            A1["Claude Code<br/>worktree tarea A"]
-            A2["Claude Code<br/>worktree tarea B"]
+        subgraph WS["Workspace per project"]
+            A1["Claude Code<br/>task A worktree"]
+            A2["Claude Code<br/>task B worktree"]
         end
     end
-    UC["Usage collector<br/>tokens y costo por Run"]
-    GH["GitHub (gh CLI)<br/>PR, reviews, estado de CI"]
-    EN["engram (opcional)<br/>memoria opcional"]
+    UC["Usage collector<br/>tokens and cost per Run"]
+    GH["GitHub (gh CLI)<br/>PR, reviews, CI state"]
+    EN["engram (optional)<br/>optional memory"]
 
     FE --> API
-    API <-->|lee / escribe| DB
-    OUT -->|eventos| SCH
-    DIS <-->|comandos y estado| HERDR
+    API <-->|reads / writes| DB
+    OUT -->|events| SCH
+    DIS <-->|commands and state| HERDR
     A1 & A2 -->|MCP tools| MCP
-    HERDR -->|push y PR| GH
-    HERDR -->|OTel y transcripts| UC
+    HERDR -->|push and PR| GH
+    HERDR -->|OTel and transcripts| UC
     UC -->|UsageRecords| DB
     HERDR <-->|engram MCP| EN
 ```
 
 </details>
-| Componente | Responsabilidad | Notas |
+| Component | Responsibility | Notes |
 | --- | --- | --- |
-| Front end | Crear tareas, aprobar specs, ver cola, historial y consumo | No habla con herdr; todo pasa por el backend |
-| Backend API | CRUD de tareas, validación de DAG, transiciones de estado, auth | Único escritor de estado de negocio |
-| Base de datos SQL | Tasks, dependencias, specs, runs, usage, event log | Claims atómicos para el scheduler |
-| Eventos / outbox | Publicar cambios de estado de forma confiable | Outbox evita perder eventos entre BD y cola |
-| Scheduler | Calcular ready set y score; respetar WIP limits | Puede ser parte del dispatcher en v1 |
-| Dispatcher | Despachar fases a herdr, observar señales, reconciliar | Adapter de herdr aislado del resto |
-| LunasQ MCP | Contrato de entrada y salida de los agentes | Valida que el Run que llama sea el activo |
-| Usage collector | Recibir telemetría OTLP y transcripts; escribir UsageRecords por Run | Normaliza por tipo de agente; aplica tabla de precios |
-| herdr | Workspaces, worktrees, panes, agentes, estado, notificaciones | Estado efímero, nunca fuente de verdad |
-| GitHub (CLI `gh`) | PR, reviews, CI | Solo el CLI gh, detrás de un adapter: crear PR, leer CI y reviews, detectar merges por polling |
-| engram | Memoria persistente del proyecto (Brain) | Dependencia débil: los agentes lo usan vía su MCP si está instalado; LunasQ no lo integra |
+| Front end | Create tasks, approve specs, see queue, history and consumption | Does not talk to herdr; everything goes through the backend |
+| Backend API | Task CRUD, DAG validation, state transitions, auth | Sole writer of business state |
+| SQL database | Tasks, dependencies, specs, runs, usage, event log | Atomic claims for the scheduler |
+| Events / outbox | Publish state changes reliably | The outbox avoids losing events between DB and queue |
+| Scheduler | Compute ready set and score; respect WIP limits | Can be part of the dispatcher in v1 |
+| Dispatcher | Dispatch phases to herdr, observe signals, reconcile | herdr adapter isolated from the rest |
+| LunasQ MCP | Input and output contract of the agents | Validates that the calling Run is the active one |
+| Usage collector | Receive OTLP telemetry and transcripts; write UsageRecords per Run | Normalizes per agent kind; applies price table |
+| herdr | Workspaces, worktrees, panes, agents, state, notifications | Ephemeral state, never the source of truth |
+| GitHub (`gh` CLI) | PR, reviews, CI | Only the gh CLI, behind an adapter: create PR, read CI and reviews, detect merges by polling |
+| engram | Persistent project memory (Brain) | Weak dependency: agents use it through its MCP if installed; LunasQ does not integrate it |
 
-## Scheduler: prioridad, dependencias y concurrencia
+## Scheduler: priority, dependencies and concurrency
 
-El scheduler no ordena una lista: calcula un **ready set** (tareas cuyas dependencias ya están satisfechas) y de ahí elige por score, respetando límites de concurrencia.
+The scheduler does not sort a list: it computes a **ready set** (tasks whose dependencies are already satisfied) and from there picks by score, respecting concurrency limits.
 
-**Dependencias como DAG**
+**Dependencies as a DAG**
 
-- Se valida ausencia de ciclos al crear o editar una arista; se rechaza la operación si cierra un ciclo. Las aristas se agregan mientras la tarea dependiente está en Draft y no pueden apuntar a una tarea cancelada ([ADR 0010](decisions/0010-api-tareas-dag.md)).
-- Una tarea está *ready* cuando todas sus dependencias tienen su PR mergeado a la rama base o están Completed con Resultado (no tienen PR). Aplica desde el refinamiento: con dependencias pendientes la tarea se queda en Draft sin agente. Si el PR de una dependencia se cierra sin merge, o la dependencia se cancela sin PR mergeado, sus dependientes pasan a Needs human.
-- Dependencias cross‑project permitidas, pero visibles en la UI como riesgo.
+- Absence of cycles is validated when creating or editing an edge; the operation is rejected if it closes a cycle. Edges are added while the dependent task is in Draft and cannot point to a canceled task ([ADR 0010](decisions/0010-api-tareas-dag.md)).
+- A task is *ready* when all its dependencies have their PR merged to the base branch or are Completed with a Result (they have no PR). It applies from refinement: with pending dependencies the task stays in Draft without an agent. If a dependency's PR is closed without merge, or the dependency is canceled without a merged PR, its dependents move to Needs human.
+- Cross‑project dependencies are allowed, but visible in the UI as a risk.
 
-**Score de prioridad**
+**Priority score**
 
-score = prioridad base + aging + boost por desbloqueo
+score = base priority + aging + unblock boost
 
-- **Prioridad base:** entero sin signo definido por el humano; mayor número = mayor prioridad. Empates se rompen por antigüedad. La UI sugiere valores espaciados (p. ej. de 100 en 100) para poder insertar tareas entre otras sin renumerar.
-- **Aging:** sube con el tiempo en ready, evita starvation de tareas de baja prioridad; se configura en las mismas unidades que la prioridad (puntos por hora en ready).
-- **Boost por desbloqueo:** una tarea que bloquea a muchas otras sube; se calcula con el número de descendientes en el DAG (camino crítico).
-- **Herencia de prioridad:** si una tarea de prioridad 900 depende de una de 100, la de 100 hereda 900 como prioridad efectiva mientras la bloquee. La prioridad efectiva se calcula; la prioridad base que capturó el humano no cambia.
+- **Base priority:** unsigned integer defined by the human; higher number = higher priority. Ties are broken by age. The UI suggests spaced values (e.g. in steps of 100) so tasks can be inserted between others without renumbering.
+- **Aging:** rises with time in ready, avoids starvation of low‑priority tasks; configured in the same units as priority (points per hour in ready).
+- **Unblock boost:** a task that blocks many others rises; computed with the number of descendants in the DAG (critical path).
+- **Priority inheritance:** if a task of priority 900 depends on one of 100, the one of 100 inherits 900 as effective priority while it blocks it. The effective priority is computed; the base priority the human captured does not change.
 
-**Concurrencia (WIP limits)**
+**Concurrency (WIP limits)**
 
-| Nivel | Qué limita | Por qué |
+| Level | What it limits | Why |
 | --- | --- | --- |
-| Global | Agentes vivos totales | CPU, memoria, rate limits de proveedores |
-| Por proyecto | Agentes vivos por repo, en todas las fases | Conflictos de merge, carga de CI |
-| Por tipo de agente | Instancias por tipo de agente (en v1 solo Claude Code) | Cuotas y costo por proveedor |
-| Por fase | Refinamiento vs implementación | Refinar es barato y desbloquea al humano; conviene más slots |
+| Global | Total live agents | CPU, memory, provider rate limits |
+| Per project | Live agents per repo, in all phases | Merge conflicts, CI load |
+| Per agent kind | Instances per agent kind (in v1 only Claude Code) | Quotas and cost per provider |
+| Per phase | Refinement vs implementation | Refining is cheap and unblocks the human; more slots are worthwhile |
 
-Todos los límites son configurables; el global tiene default de 5 y los demás son opcionales. Sin preemption: una tarea de mayor prioridad espera el siguiente slot libre. Los gates humanos no consumen slots: una tarea en refined esperando aprobación no tiene agente vivo. Una tarea con una pregunta abierta (`waiting_human`) sí ocupa su slot. Defaults del score, cálculo del aging, escalamiento de dependientes y contrato con el dispatcher: [ADR 0014](decisions/0014-scheduler.md).
+All limits are configurable; the global one defaults to 5 and the others are optional. No preemption: a higher‑priority task waits for the next free slot. Human gates do not consume slots: a task in refined waiting for approval has no live agent. A task with an open question (`waiting_human`) does occupy its slot. Score defaults, aging computation, dependents escalation and contract with the dispatcher: [ADR 0014](decisions/0014-scheduler.md).
 
-**Proveedores habilitados (Settings)**
+**Enabled providers (Settings)**
 
-El humano habilita o deshabilita cada proveedor de agente (Claude Code, Copilot CLI) desde la página Settings, p. ej. cuando se agota su límite de uso. Es una configuración global (por defecto todos habilitados) que el scheduler lee en cada pasada. El **proveedor efectivo** de una tarea es el primario del perfil de la fase si está habilitado; si no, el primero habilitado del orden de fallback (el primario y luego los demás en orden de registro). Con todos deshabilitados el scheduler no despacha y las tareas siguen en `queued`; la UI muestra un aviso de despacho en pausa. El claim del dispatcher revalida contra la configuración vigente (`providers_disabled`), el lanzamiento solo prueba proveedores habilitados y los agentes vivos nunca se interrumpen. Guardar la configuración registra `settings.updated` en el outbox, que despierta al scheduler. Detalle: [ADR settings-proveedores](decisions/settings-proveedores.md).
+The human enables or disables each agent provider (Claude Code, Copilot CLI) from the Settings page, e.g. when its usage limit runs out. It is a global setting (all enabled by default) that the scheduler reads on every pass. A task's **effective provider** is the phase profile's primary if enabled; otherwise the first enabled one in the fallback order (the primary and then the others in registration order). With all disabled the scheduler does not dispatch and tasks stay in `queued`; the UI shows a paused‑dispatch notice. The dispatcher's claim revalidates against the current setting (`providers_disabled`), the launch only tries enabled providers and live agents are never interrupted. Saving the setting records `settings.updated` in the outbox, which wakes the scheduler. Detail: [ADR settings-proveedores](decisions/settings-proveedores.md).
 
-## Dispatcher e integración con herdr (propuesta inicial)
+## Dispatcher and herdr integration (initial proposal)
 
-El dispatcher es un worker de larga vida con dos entradas (eventos de la BD y eventos de herdr) y un loop de reconciliación periódico; cada "despacho" es una secuencia idempotente sobre primitivas que herdr ya expone en su CLI y socket API ([CLI reference](https://herdr.dev/docs/cli-reference/), [Socket API](https://herdr.dev/docs/socket-api/)).
+The dispatcher is a long‑lived worker with two inputs (DB events and herdr events) and a periodic reconciliation loop; each "dispatch" is an idempotent sequence over primitives herdr already exposes in its CLI and socket API ([CLI reference](https://herdr.dev/docs/cli-reference/), [Socket API](https://herdr.dev/docs/socket-api/)).
 
-**Primitivas de herdr que usa el diseño**
+**herdr primitives the design uses**
 
-| Necesidad del sistema | Primitiva de herdr |
+| System need | herdr primitive |
 | --- | --- |
-| Un workspace por proyecto | `workspace create` con cwd y label |
-| Aislamiento por tarea | `worktree create`: crea checkout + branch y lo abre como workspace agrupado bajo el del proyecto |
-| Levantar un agente | `agent start` con nombre único y `--kind` (claude en v1) sobre un pane de shell libre |
-| Enviar la instrucción de fase | `agent prompt` (opcionalmente con wait) |
-| Saber si trabaja, terminó o pide permiso | `events.subscribe` a `pane.agent_status_changed` (suscripción por pane; ver ADR 0004), o `agent wait` |
-| Mostrar tarea y fase en el sidebar | `pane report-metadata` con tokens (task id, fase, iteración) |
-| Avisar al humano | `notification show` |
-| Reconstruir estado tras caídas | `session.snapshot` |
-| Limpiar | `pane close`, `worktree remove` |
+| One workspace per project | `workspace create` with cwd and label |
+| Per‑task isolation | `worktree create`: creates checkout + branch and opens it as a workspace grouped under the project's |
+| Start an agent | `agent start` with a unique name and `--kind` (claude in v1) on a free shell pane |
+| Send the phase instruction | `agent prompt` (optionally with wait) |
+| Know whether it is working, finished or asking for permission | `events.subscribe` to `pane.agent_status_changed` (per‑pane subscription; see ADR 0004), or `agent wait` |
+| Show task and phase in the sidebar | `pane report-metadata` with tokens (task id, phase, iteration) |
+| Notify the human | `notification show` |
+| Rebuild state after crashes | `session.snapshot` |
+| Clean up | `pane close`, `worktree remove` |
 
-**Secuencia de despacho (una fase)**
+**Dispatch sequence (one phase)**
 
-1. **Claim.** El scheduler elige la tarea de mayor score del ready set y la reclama de forma atómica en la BD, creando un Run con un token único. Si el claim falla, la tarea ya fue tomada.
-2. **Asegurar workspace del proyecto.** Si no existe en herdr, crearlo; guardar su id en Project.
-3. **Asegurar checkout de la tarea.** Siempre, en todas las fases. La primera vez `worktree create` crea branch y checkout desde la rama base (no es idempotente: antes se consulta `worktree list` y se usa `open` si ya existe; ADR 0004); en fases siguientes y loops de rework `worktree open` reabre el mismo. El label del workspace es `<proyecto> #N`.
-4. **Levantar agente.** Crear pane/tab (con `pane split --env`, que fija las variables del Run en el pane), `agent start` con nombre determinístico (`t<12 hex del task id>-<fase>-<n>`, que cabe en el patrón de 32 caracteres de herdr; [ADR uw-16-dispatcher](decisions/uw-16-dispatcher.md)) y el perfil de esa fase: kind como --kind; modelo y argumentos extra después de --. El nombre determinístico hace la operación idempotente. El título del pane (`pane report-metadata`) es `LunasQ <fase> #N`; nombre y branch siguen con el UUID.
-5. **Prompt de fase.** Enviar un prompt corto que invoque la skill de la fase y le indique el task id; el agente obtiene el contexto completo vía MCP, no por el prompt.
-6. **Observar.** El Run pasa a running; el dispatcher escucha los cambios de estado del pane en herdr y arranca el timer de la fase.
-7. **Cerrar fase.** La señal primaria es la tool MCP de fin de fase con salida estructurada. Se aplica la transición en la BD, se guarda la identidad de sesión en el Run, se cierra el pane y se libera el slot.
+1. **Claim.** The scheduler picks the highest‑score task of the ready set and claims it atomically in the DB, creating a Run with a unique token. If the claim fails, the task was already taken.
+2. **Ensure the project workspace.** If it does not exist in herdr, create it; save its id in Project.
+3. **Ensure the task checkout.** Always, in all phases. The first time `worktree create` creates branch and checkout from the base branch (it is not idempotent: `worktree list` is queried first and `open` is used if it already exists; ADR 0004); in later phases and rework loops `worktree open` reopens the same one. The workspace label is `<project> #N`.
+4. **Start the agent.** Create pane/tab (with `pane split --env`, which sets the Run's variables in the pane), `agent start` with a deterministic name (`t<12 hex of the task id>-<phase>-<n>`, which fits herdr's 32‑character pattern; [ADR uw-16-dispatcher](decisions/uw-16-dispatcher.md)) and that phase's profile: kind as --kind; model and extra arguments after --. The deterministic name makes the operation idempotent. The pane title (`pane report-metadata`) is `LunasQ <phase> #N`; name and branch keep using the UUID.
+5. **Phase prompt.** Send a short prompt that invokes the phase's skill and tells it the task id; the agent gets the full context via MCP, not through the prompt.
+6. **Observe.** The Run moves to running; the dispatcher listens to the pane's state changes in herdr and starts the phase timer.
+7. **Close the phase.** The primary signal is the end‑of‑phase MCP tool with structured output. The transition is applied in the DB, the session identity is saved in the Run, the pane is closed and the slot is released.
 
-**Ciclo de vida del worktree**
+**Worktree lifecycle**
 
-Una tarea = un worktree = un branch, desde el primer despacho hasta el merge; todas sus fases y reintentos trabajan sobre el mismo checkout.
+One task = one worktree = one branch, from the first dispatch until the merge; all its phases and retries work on the same checkout.
 
-| Momento | Acción | Notas |
+| Moment | Action | Notes |
 | --- | --- | --- |
-| Primer despacho (refinamiento) | Crear worktree y branch desde la rama base | Branch `lunasq/<task id>`, desde `origin/<rama base>` tras un `git fetch`; idempotente consultando `worktree list` y usando `open` si ya existe (ADR 0004, ADR 0012) |
-| Worktree creado | Correr el bootstrap del proyecto | Instalar dependencias, copiar config local; corre como proceso hijo y el worktree consta como listo en la BD solo si termina bien, así se reintenta (ADR 0012) |
-| Fases siguientes y rework | Reabrir el mismo worktree | El agente nuevo hereda el estado del código, no el contexto de la sesión |
-| Tarea dependiente | Crear su worktree desde la rama base, que ya incluye el merge de sus dependencias | Sin stacked branches |
-| Entrega | Rebase sobre la rama base dentro del worktree, push, PR | Conflictos regresan la tarea a in progress |
-| Después del merge o cancelación | `worktree remove` | No borra el branch; requiere forzar si hay cambios sin commit |
+| First dispatch (refinement) | Create worktree and branch from the base branch | Branch `lunasq/<task id>`, from `origin/<base branch>` after a `git fetch`; idempotent by querying `worktree list` and using `open` if it already exists (ADR 0004, ADR 0012) |
+| Worktree created | Run the project's bootstrap | Install dependencies, copy local config; runs as a child process and the worktree is recorded as ready in the DB only if it ends well, so it is retried (ADR 0012) |
+| Later phases and rework | Reopen the same worktree | The new agent inherits the code state, not the session's context |
+| Dependent task | Create its worktree from the base branch, which already includes the merge of its dependencies | No stacked branches |
+| Delivery | Rebase onto the base branch inside the worktree, push, PR | Conflicts send the task back to in progress |
+| After merge or cancellation | `worktree remove` | Does not delete the branch; requires forcing if there are uncommitted changes |
 
-Restricciones: dos tareas nunca comparten branch ni worktree, y el reconciliador detecta worktrees huérfanos (tarea inexistente, cancelada o con el PR mergeado; ADR 0012) para limpiarlos. Costo a vigilar: disco y tiempo de bootstrap por tarea, que pesa más con muchas tareas en paralelo.
+Constraints: two tasks never share a branch or worktree, and the reconciler detects orphan worktrees (nonexistent task, canceled or with its PR merged; ADR 0012) to clean them up. Cost to watch: disk and bootstrap time per task, which weighs more with many tasks in parallel.
 
-**Señales y cómo se interpretan**
+**Signals and how they are interpreted**
 
-| Señal | Interpretación | Acción |
+| Signal | Interpretation | Action |
 | --- | --- | --- |
-| MCP: fase completada | Salida válida | Transición de estado, cierre del agente |
-| herdr: `blocked` | Prompt de permiso en la TUI del agente | Item en la bandeja; si sigue así 1 minuto, notificación por herdr y UI; se responde en herdr |
-| herdr: `idle`/`done` sin señal MCP | Se detuvo sin reportar | Tras 15 s de gracia se lee la pantalla del agente: si muestra el aviso de límite de uso de Claude (`Usage limit reached · limit resets …`, el menú de `/rate-limit-options` u otros del [ADR 0015](decisions/0015-limite-de-uso-agente.md)), Needs human con razón `usage_limit` y notificación; si no, nudge (re‑prompt) 2 veces, luego marcar Run fallido |
-| Pane cerrado o proceso salió | Crash | Run fallido; hasta 3 reintentos con backoff (30 s·2^(n‑1), tope 10 min), luego Needs human con notificación |
-| Timeout de fase vencido | Agente atorado o fase más larga de lo esperado | Marcar Needs human y notificar; el agente no se detiene |
+| MCP: phase completed | Valid output | State transition, agent closed |
+| herdr: `blocked` | Permission prompt in the agent's TUI | Inbox item; if it stays that way for 1 minute, notification through herdr and UI; it is answered in herdr |
+| herdr: `idle`/`done` without MCP signal | It stopped without reporting | After a 15 s grace period the agent's screen is read: if it shows Claude's usage‑limit notice (`Usage limit reached · limit resets …`, the `/rate-limit-options` menu or others from [ADR 0015](decisions/0015-limite-de-uso-agente.md)), Needs human with reason `usage_limit` and notification; if not, nudge (re‑prompt) 2 times, then mark the Run failed |
+| Pane closed or process exited | Crash | Run failed; up to 3 retries with backoff (30 s·2^(n‑1), cap 10 min), then Needs human with notification |
+| Phase timeout expired | Stuck agent or phase longer than expected | Mark Needs human and notify; the agent is not stopped |
 
-**Timeout de fase.** Configurable por proyecto y por fase, default 30 minutos. Corre mientras el Run está en running y se pausa en `blocked` o `waiting_human`, porque ese tiempo depende del humano. Al vencer, la tarea pasa a Needs human con notificación; el agente sigue vivo para que decidas si esperar, intervenir o cancelar. Las tools de salida exigen `running`, así que reanudar cierra el Run viejo y redespacha la fase sobre el mismo worktree. El reloj vive en memoria: tras un reinicio arranca con el presupuesto completo ([ADR uw-17-reconciliacion](decisions/uw-17-reconciliacion.md)).
+**Phase timeout.** Configurable per project and per phase, default 30 minutes. It runs while the Run is in running and pauses in `blocked` or `waiting_human`, because that time depends on the human. When it expires, the task moves to Needs human with notification; the agent stays alive so you decide whether to wait, step in or cancel. The exit tools require `running`, so resuming closes the old Run and redispatches the phase on the same worktree. The clock lives in memory: after a restart it starts with the full budget ([ADR uw-17-reconciliacion](decisions/uw-17-reconciliacion.md)).
 
-**Límite de uso del agente.** Cuando Claude Code se queda sin uso, lo anuncia en su TUI (`Usage limit reached · limit resets 3:45pm` con espera automática, `usage limit reached · wrapping up`, el menú de `/rate-limit-options`) y herdr no lo detecta: su manifiesto de detección no conoce ese UI. El watcher lo reconoce leyendo la pantalla del agente (`herdr agent read`) en la vía de agente detenido y en la vía `blocked`: nota en el Event log con el texto que dibujó Claude, notificación con esa información y Needs human con razón `usage_limit`, con el Run y el agente intactos — son los mismos pasos del timeout de fase, con reinserción hasta que el humano la reanuda tras el reset del límite ([ADR 0015](decisions/0015-limite-de-uso-agente.md)).
+**Agent usage limit.** When Claude Code runs out of usage, it announces it in its TUI (`Usage limit reached · limit resets 3:45pm` with automatic wait, `usage limit reached · wrapping up`, the `/rate-limit-options` menu) and herdr does not detect it: its detection manifest does not know that UI. The watcher recognizes it by reading the agent's screen (`herdr agent read`) on the stopped‑agent path and on the `blocked` path: a note in the Event log with the text Claude drew, a notification with that information and Needs human with reason `usage_limit`, with the Run and the agent intact — the same steps as the phase timeout, with reinsertion until the human resumes it after the limit resets ([ADR 0015](decisions/0015-limite-de-uso-agente.md)).
 
-**Sin heartbeat ni lease en v1.** La liveness sale de herdr sin costo de tokens: estado del agente, pane cerrado o proceso terminado. Supuesto: una sola instancia de dispatcher. Si después se escala a varias, se agrega un lease del lado del servidor que renueva el dispatcher, nunca el agente.
+**No heartbeat or lease in v1.** Liveness comes from herdr at no token cost: agent state, closed pane or finished process. Assumption: a single dispatcher instance. If it later scales to several, a server‑side lease is added that the dispatcher renews, never the agent.
 
-**Identidad de sesión por Run.** El pane se cierra al terminar la fase, así que cada Run guarda cómo encontrar su sesión después: para revisarla, reanudarla o correlacionar su consumo. Se guarda lo mejor disponible, en este orden:
+**Session identity per Run.** The pane is closed when the phase ends, so each Run saves how to find its session afterwards: to review it, resume it or correlate its consumption. The best available is saved, in this order:
 
-1. **Session id nativo del agente,** fijado por el dispatcher en los args de arranque si el CLI lo permite.
-2. **Session id reportado por herdr** en `agent_session`, cuando la integración oficial del agente lo publica.
-3. **Nombre de sesión** como respaldo: el nombre determinístico del agente en herdr (`t<12 hex>-<fase>-<n>`) más la ruta del transcript si se conoce.
+1. **The agent's native session id,** set by the dispatcher in the start args if the CLI allows it.
+2. **Session id reported by herdr** in `agent_session`, when the agent's official integration publishes it.
+3. **Session name** as a fallback: the agent's deterministic name in herdr (`t<12 hex>-<phase>-<n>`) plus the transcript path if known.
 
-El Run registra también qué fuente se usó, para saber si la sesión se puede reanudar o solo identificar.
+The Run also records which source was used, to know whether the session can be resumed or only identified.
 
-**Loop de reconciliación**
+**Reconciliation loop**
 
-Cada N segundos (default 60), al arrancar y al reconectar con herdr: tomar `session.snapshot`, compararlo con los Runs activos en la BD y corregir. Runs sin pane → reintentar. Runs abiertos de una tarea que salió de su fase (cancelada, pausada, reanudada) → cerrar como cancelled. Runs vivos sin observar (tras un reinicio) → volver a observar. Panes con prefijo del sistema sin Run → cerrar (huérfanos). Worktrees de tareas canceladas o mergeadas, y los huérfanos de cada proyecto → remover ([ADR uw-17-reconciliacion](decisions/uw-17-reconciliacion.md)). Esto cubre el caso documentado de `events_lost` (en protocol 22 herdr cierra el stream sin mensaje explícito: todo cierre cuenta como pérdida; ADR 0004), donde herdr corta la suscripción si el consumidor se atrasa.
+Every N seconds (default 60), at startup and on reconnecting with herdr: take `session.snapshot`, compare it with the active Runs in the DB and correct. Runs without a pane → retry. Open Runs of a task that left its phase (canceled, paused, resumed) → close as cancelled. Live Runs not observed (after a restart) → observe again. Panes with the system's prefix without a Run → close (orphans). Worktrees of canceled or merged tasks, and the orphans of each project → remove ([ADR uw-17-reconciliacion](decisions/uw-17-reconciliacion.md)). This covers the documented case of `events_lost` (in protocol 22 herdr closes the stream without an explicit message: every close counts as a loss; ADR 0004), where herdr cuts the subscription if the consumer falls behind.
 
-**Dónde vive el dispatcher: servicio externo (decidido)**
+**Where the dispatcher lives: external service (decided)**
 
-El dispatcher es un servicio propio que controla herdr por su CLI o socket API, detrás de un adapter. Así queda desacoplado del ciclo de vida y la versión del plugin API de herdr (pre‑1.0), se puede probar sin herdr usando un fake del adapter, y puede atender varias máquinas con `--machine` si algún día hace falta. Un plugin de herdr queda solo como opción futura para mostrar el tablero dentro de la TUI, sin lógica de despacho.
+The dispatcher is its own service that controls herdr through its CLI or socket API, behind an adapter. This way it stays decoupled from the lifecycle and version of herdr's plugin API (pre‑1.0), it can be tested without herdr using an adapter fake, and it can serve several machines with `--machine` if that is ever needed. A herdr plugin remains only a future option to show the board inside the TUI, with no dispatch logic.
 
-## Hooks por fase
+## Per-phase hooks
 
-Cada proyecto puede configurar comandos que LunasQ ejecuta al inicio y al final de cada fase, para automatizar pasos propios como bump de versión, deploys a ambientes de prueba, notificaciones o generación de changelog. Los ejecuta LunasQ, no el agente, así que corren siempre y en el mismo punto del flujo.
+Each project can configure commands that LunasQ runs at the start and at the end of each phase, to automate its own steps such as version bump, deploys to test environments, notifications or changelog generation. LunasQ runs them, not the agent, so they always run and at the same point of the flow.
 
-**Puntos de enganche**
+**Hook points**
 
-| Hook | Cuándo corre | Ejemplos |
+| Hook | When it runs | Examples |
 | --- | --- | --- |
-| `before_refinement` / `after_refinement` | Antes de despachar al refinador / después de `submit_spec`, antes del gate humano | Preparar datos de prueba; notificar que hay una spec por aprobar |
-| `before_implementation` / `after_implementation` | Antes de despachar al implementador / al recibir `submit_for_verification`, antes del gate de tests ([ADR uw-23-verificacion](decisions/uw-23-verificacion.md)) | Levantar servicios locales; análisis estático adicional |
-| `before_verification` / `after_verification` | Al recibir `submit_for_verification`, tras `after_implementation` y antes del gate, así el verificador se despacha cuando terminó / al recibir `submit_verdict`, antes de registrar el veredicto | Deploy a un ambiente efímero para los revisores de UI y UX; reporte de cobertura |
-| `before_delivery` / `after_delivery` | Antes del rebase, push y PR / después de crear el PR | Bump de versión y changelog antes del push; avisar en un canal que hay PR |
-| `after_merge` | Cuando LunasQ detecta el PR mergeado | Deploy a staging o producción, publicar release |
-| `on_failure` | Cuando un Run termina sin éxito | Recolectar logs, avisar por otro canal |
+| `before_refinement` / `after_refinement` | Before dispatching the refiner / after `submit_spec`, before the human gate | Prepare test data; notify that there is a spec to approve |
+| `before_implementation` / `after_implementation` | Before dispatching the implementer / on receiving `submit_for_verification`, before the test gate ([ADR uw-23-verificacion](decisions/uw-23-verificacion.md)) | Start local services; additional static analysis |
+| `before_verification` / `after_verification` | On receiving `submit_for_verification`, after `after_implementation` and before the gate, so the verifier is dispatched once it finished / on receiving `submit_verdict`, before recording the verdict | Deploy to an ephemeral environment for the UI and UX reviewers; coverage report |
+| `before_delivery` / `after_delivery` | Before the rebase, push and PR / after creating the PR | Version bump and changelog before the push; announce in a channel that there is a PR |
+| `after_merge` | When LunasQ detects the PR merged | Deploy to staging or production, publish release |
+| `on_failure` | When a Run ends unsuccessfully | Collect logs, notify through another channel |
 
-**Dónde se definen**
+**Where they are defined**
 
-Los hooks viven en el repo del proyecto, en `./lunasq/hooks/`, versionados con el código y revisados por PR como cualquier otro cambio. El front end solo los muestra; no se editan desde ahí.
+Hooks live in the project's repo, in `./lunasq/hooks/`, versioned with the code and reviewed by PR like any other change. The front end only shows them; they are not edited from there.
 
-- **Un directorio por punto de enganche:** `lunasq/hooks/before_delivery/`, `lunasq/hooks/after_merge/`, etc. Cada script ejecutable dentro es un hook.
-- **Orden:** los scripts de un mismo punto corren en orden alfabético del nombre de archivo, así un prefijo numérico (`10-bump-version`, `20-changelog`) define la secuencia.
-- **Ajustes por script:** timeout y política de fallo se declaran en `lunasq/hooks/config`, un JSON agrupado por punto y script (`{"before_delivery": {"10-bump-version": {"timeoutSeconds": 300, "policy": "warn"}}}`); si un script no aparece ahí, usa los valores por defecto (política `block`, 10 minutos). Detalle en [ADR uw-10-hooks](decisions/uw-10-hooks.md).
-- **Vista en el front end:** por proyecto, los hooks de cada punto con su contenido, tal como están en la rama base, y sus últimas ejecuciones por tarea con salida, duración y código de salida.
+- **One directory per hook point:** `lunasq/hooks/before_delivery/`, `lunasq/hooks/after_merge/`, etc. Each executable script inside is a hook.
+- **Order:** the scripts of one point run in alphabetical order of the file name, so a numeric prefix (`10-bump-version`, `20-changelog`) defines the sequence.
+- **Per‑script settings:** timeout and failure policy are declared in `lunasq/hooks/config`, a JSON grouped by point and script (`{"before_delivery": {"10-bump-version": {"timeoutSeconds": 300, "policy": "warn"}}}`); if a script does not appear there, it uses the defaults (policy `block`, 10 minutes). Detail in [ADR uw-10-hooks](decisions/uw-10-hooks.md).
+- **View in the front end:** per project, the hooks of each point with their content, as they are in the base branch, and their latest executions per task with output, duration and exit code.
 
-La carpeta `lunasq/` del repo queda con dos partes: `hooks/` (configuración, versionada) y `tasks/` (archivos de evidencia por tarea).
+The repo's `lunasq/` folder ends up with two parts: `hooks/` (configuration, versioned) and `tasks/` (per‑task evidence files).
 
-**Definición de cada hook**
+**Definition of each hook**
 
-| Campo | Significado |
+| Field | Meaning |
 | --- | --- |
-| Comando | Script ejecutable en lunasq/hooks/\<punto>/; corre en el worktree de la tarea (`after_merge` corre en el checkout de la rama base) |
-| Timeout | Tiempo máximo; al vencer cuenta como fallo. Se declara en lunasq/hooks/config |
-| Política de fallo | `block`: la transición se detiene y la tarea pasa a Needs human; `warn`: se registra y el flujo sigue. Se declara en lunasq/hooks/config; por defecto block |
-| Orden | Orden alfabético del nombre de archivo dentro del directorio del punto |
+| Command | Executable script in lunasq/hooks/\<point>/; runs in the task's worktree (`after_merge` runs in the base branch checkout) |
+| Timeout | Maximum time; on expiry it counts as a failure. Declared in lunasq/hooks/config |
+| Failure policy | `block`: the transition stops and the task moves to Needs human; `warn`: it is recorded and the flow continues. Declared in lunasq/hooks/config; block by default |
+| Order | Alphabetical order of the file name inside the point's directory |
 
-**Contrato de ejecución**
+**Execution contract**
 
-- LunasQ pasa variables de entorno con el contexto: id de tarea y de Run, fase, ruta del worktree, branch, rama base, URL del PR cuando existe y resultado de la fase.
-- Corren en un pane de herdr dentro del workspace de la tarea, así se ven igual que los agentes; no consumen slots de agente.
-- Si un hook modifica archivos (p. ej. el bump de versión en `before_delivery`), LunasQ los incluye en un commit con los trailers de la tarea antes del push.
-- La salida, duración y código de salida de cada hook se guardan en el Event log y en el archivo de evidencia `lunasq/tasks/{id}.md`.
-- Los hooks deben ser idempotentes, porque una fase puede repetirse por rework o reintentos.
+- LunasQ passes environment variables with the context: task and Run id, phase, worktree path, branch, base branch, PR URL when it exists and the phase's result.
+- They run in a herdr pane inside the task's workspace, so they look the same as agents; they do not consume agent slots.
+- If a hook modifies files (e.g. the version bump in `before_delivery`), LunasQ includes them in a commit with the task's trailers before the push.
+- The output, duration and exit code of each hook are saved in the Event log and in the evidence file `lunasq/tasks/{id}.md`.
+- Hooks must be idempotent, because a phase can repeat through rework or retries.
 
-**Seguridad:** LunasQ lee lunasq/hooks/ de la rama base, nunca del branch de la tarea, y un cambio a un hook solo entra en vigor cuando su PR se mergea. Así un agente no puede cambiar un hook dentro de su worktree y hacer que LunasQ ejecute un comando arbitrario.
+**Security:** LunasQ reads lunasq/hooks/ from the base branch, never from the task's branch, and a change to a hook only takes effect when its PR is merged. This way an agent cannot change a hook inside its worktree and make LunasQ run an arbitrary command.
 
-## MCPs y skills
+## MCPs and skills
 
-El contrato entre el sistema y cualquier agente es un **MCP propio (LunasQ MCP)** más una **skill por fase**; así Claude Code hoy, y Codex u otro agente compatible con MCP en v2, siguen el mismo protocolo sin código específico por proveedor.
+The contract between the system and any agent is an **own MCP (LunasQ MCP)** plus a **skill per phase**; this way Claude Code today, and Codex or another MCP‑compatible agent in v2, follow the same protocol without provider‑specific code.
 
-**LunasQ MCP (propio, expuesto por el backend)**
+**LunasQ MCP (own, exposed by the backend)**
 
-| Tool | Fase | Qué hace |
+| Tool | Phase | What it does |
 | --- | --- | --- |
-| get\_task\_context | Todas | Intent, spec aprobada, historial de verificación, convenciones del proyecto; obligatoria antes de cualquier tool de salida |
-| submit\_spec | Refinamiento | Envía modelo de dominio (DDD), requerimientos, acceptance criteria y task list como nueva versión de Spec |
-| ask\_human | Todas | Registra una Question y regresa de inmediato; el agente termina su turno y la respuesta llega después como prompt nuevo |
-| update\_checklist | Implementación | Marca items de la task list; alimenta el progreso en la UI |
-| submit\_for\_verification | Implementación | Declara fin de implementación con resumen, commits y mapa criterio → tests; dispara el gate de tests |
-| submit\_result | Refinamiento e implementación | Tarea sin código (investigación, ya implementada o sin resolución): entrega el Resultado y completa la tarea sin verificación ni PR. En implementación se rechaza si el branch tiene commits sobre la rama base |
-| submit\_verdict | Verificación | Pass o reject, veredicto por criterio, reporte de cada revisor, must‑fix consolidados, hallazgos refutados con su motivo y etiqueta de riesgo; cada revisor omitido requiere justificación |
-| report\_failure | Todas | El agente declara que no puede continuar y por qué |
+| get\_task\_context | All | Intent, approved spec, verification history, project conventions; mandatory before any exit tool |
+| submit\_spec | Refinement | Sends domain model (DDD), requirements, acceptance criteria and task list as a new Spec version |
+| ask\_human | All | Records a Question and returns immediately; the agent ends its turn and the answer arrives later as a new prompt |
+| update\_checklist | Implementation | Checks off task list items; feeds progress in the UI |
+| submit\_for\_verification | Implementation | Declares the end of implementation with summary, commits and criterion → tests map; triggers the test gate |
+| submit\_result | Refinement and implementation | Task without code (investigation, already implemented or unresolvable): delivers the Result and completes the task without verification or PR. In implementation it is rejected if the branch has commits on top of the base branch |
+| submit\_verdict | Verification | Pass or reject, verdict per criterion, each reviewer's report, consolidated must‑fix, refuted findings with their reason and risk label; each skipped reviewer requires justification |
+| report\_failure | All | The agent declares it cannot continue and why |
 
-Las tools validan el run token que el dispatcher inyecta al pane; una sesión vieja no puede mover la tarea. La tool de salida cierra el Run en la misma transacción que la transición, salvo un veredicto pass, que deja el Run abierto para la entrega. Guardas, errores, checklist y gate de tests en [ADR uw-15-mcp-tools](decisions/uw-15-mcp-tools.md).
+The tools validate the run token the dispatcher injects into the pane; an old session cannot move the task. The exit tool closes the Run in the same transaction as the transition, except for a pass verdict, which leaves the Run open for delivery. Guards, errors, checklist and test gate in [ADR uw-15-mcp-tools](decisions/uw-15-mcp-tools.md).
 
-**Skills (una por fase, versionadas con el sistema)**
+**Skills (one per phase, versioned with the system)**
 
-| Skill | Responsabilidad | Salida obligatoria |
+| Skill | Responsibility | Mandatory output |
 | --- | --- | --- |
-| refine-task | Leer el repo, aclarar el intent, modelar con DDD y escribir criterios verificables en lenguaje del dominio | submit\_spec (o submit\_result si la tarea no requiere código) |
-| implement-task | TDD contra la spec aprobada: test que falla, implementación mínima, refactor; commits pequeños | submit\_for\_verification (o submit\_result si resulta que no hay nada que cambiar) |
-| verify-task | Elegir según la tarea y el diff qué subagentes revisores lanzar, consolidar, refutar hallazgos, verificar cada criterio y la coherencia de los tests, sin editar código | submit\_verdict |
-| herdr (oficial) | Que el agente sepa operar herdr si necesita panes auxiliares | — |
+| refine-task | Read the repo, clarify the intent, model with DDD and write verifiable criteria in domain language | submit\_spec (or submit\_result if the task requires no code) |
+| implement-task | TDD against the approved spec: failing test, minimal implementation, refactor; small commits | submit\_for\_verification (or submit\_result if it turns out there is nothing to change) |
+| verify-task | Choose, based on the task and the diff, which reviewer subagents to launch, consolidate, refute findings, verify each criterion and the coherence of the tests, without editing code | submit\_verdict |
+| herdr (official) | So the agent knows how to operate herdr if it needs auxiliary panes | — |
 
-Regla de diseño: las skills describen el *cómo*; el MCP es el único canal de *salida*. Si un agente termina sin llamar la tool de salida, el dispatcher lo trata como fase incompleta.
+Design rule: the skills describe the *how*; the MCP is the only *output* channel. If an agent ends without calling the exit tool, the dispatcher treats it as an incomplete phase.
 
-La entrega no tiene skill: rebase, push y PR los hace LunasQ dentro del Run del verificador, sin agente ([ADR uw-18-skills-fase](decisions/uw-18-skills-fase.md)). Cada skill trae un handoff de ejemplo válido y la tabla de códigos de error de sus tools.
+Delivery has no skill: rebase, push and PR are done by LunasQ inside the verifier's Run, without an agent ([ADR uw-18-skills-fase](decisions/uw-18-skills-fase.md)). Each skill carries a valid example handoff and the table of its tools' error codes.
 
-**Handoff entre fases**
+**Handoff between phases**
 
-Cada fase arranca con un agente nuevo, pero no con contexto vacío: la tool de salida de cada fase incluye un handoff estructurado en JSON que se valida y se guarda en el Run y que el siguiente agente recibe en `get_task_context`.
+Each phase starts with a new agent, but not with empty context: each phase's exit tool includes a structured JSON handoff that is validated and saved in the Run and that the next agent receives in `get_task_context`.
 
-| Fase que termina | Handoff que deja | Lo recibe |
+| Phase that ends | Handoff it leaves | Received by |
 | --- | --- | --- |
-| Refinamiento | Spec aprobada con modelo de dominio + notas: archivos y módulos relevantes, decisiones tomadas y descartadas, supuestos | Implementación |
-| Implementación | Resumen de cambios, mapa criterio → tests, archivos tocados, decisiones de diseño, cómo correr las pruebas, pendientes conocidos | Verificación |
-| Verificación con rework | Veredicto por criterio y hallazgos accionables con archivo y motivo | Implementación, siguiente iteración |
-| Cualquier fase que se reintenta | Questions con sus respuestas, último checklist y resumen del Run fallido | La misma fase |
+| Refinement | Approved spec with domain model + notes: relevant files and modules, decisions made and discarded, assumptions | Implementation |
+| Implementation | Summary of changes, criterion → tests map, files touched, design decisions, how to run the tests, known pending items | Verification |
+| Verification with rework | Verdict per criterion and actionable findings with file and reason | Implementation, next iteration |
+| Any phase that is retried | Questions with their answers, last checklist and summary of the failed Run | The same phase |
 
-Reglas:
+Rules:
 
-- El handoff es JSON con esquema fijo por fase y tamaño acotado; el detalle vive en el repo (diff y commits), no en el handoff.
-- El verificador recibe la spec, el diff y el resumen del implementador como afirmaciones a comprobar, no su razonamiento; así conserva su independencia.
-- Si una fase termina sin handoff (crash o timeout), el siguiente Run recibe el último checklist y el diff actual del worktree.
+- The handoff is JSON with a fixed schema per phase and bounded size; the detail lives in the repo (diff and commits), not in the handoff.
+- The verifier receives the spec, the diff and the implementer's summary as claims to check, not their reasoning; this way it keeps its independence.
+- If a phase ends without a handoff (crash or timeout), the next Run receives the last checklist and the worktree's current diff.
 
-**Formato del handoff (JSON)**
+**Handoff format (JSON)**
 
-El handoff nunca es free text: es un objeto JSON que el LunasQ MCP valida contra un JSON Schema versionado por fase. Si no cumple el esquema, la tool de salida rechaza la llamada con los errores de validación y el agente corrige y reintenta; la fase no se cierra con un handoff inválido.
+The handoff is never free text: it is a JSON object that the LunasQ MCP validates against a JSON Schema versioned per phase. If it does not comply with the schema, the exit tool rejects the call with the validation errors and the agent fixes it and retries; the phase is not closed with an invalid handoff.
 
-Todos los handoffs comparten un sobre común y agregan un cuerpo según la fase:
+All handoffs share a common envelope and add a body according to the phase:
 
-| Parte | Campos | Fases |
+| Part | Fields | Phases |
 | --- | --- | --- |
-| Sobre común | versión del esquema, task id, run id, fase, resultado, resumen corto, archivos relevantes, decisiones, riesgos o pendientes conocidos | Todas |
-| Cuerpo de refinamiento | modelo de dominio (bounded context, glosario, agregados, invariantes, eventos), criterios con id, task list, supuestos | Refinamiento |
-| Cuerpo de implementación | mapa criterio → tests, commits, cambios por módulo, cómo correr las pruebas, desviaciones de la spec | Implementación |
-| Cuerpo de verificación | veredicto pass o reject, veredicto por criterio, reporte por revisor, revisores omitidos con justificación, must‑fix, hallazgos refutados con motivo, etiqueta de riesgo | Verificación |
+| Common envelope | schema version, task id, run id, phase, result, short summary, relevant files, decisions, known risks or pending items | All |
+| Refinement body | domain model (bounded context, glossary, aggregates, invariants, events), criteria with id, task list, assumptions | Refinement |
+| Implementation body | criterion → tests map, commits, changes per module, how to run the tests, deviations from the spec | Implementation |
+| Verification body | pass or reject verdict, verdict per criterion, report per reviewer, skipped reviewers with justification, must‑fix, refuted findings with reason, risk label | Verification |
 
-`submit_result` usa su propio handoff (`result.json`): versión, task id, run id, fase, resumen, título, tipo de resultado y texto. No pasa por verificación, así que no forma parte del handoff por fase ni se lee como tal en `get_task_context`.
+`submit_result` uses its own handoff (`result.json`): version, task id, run id, phase, summary, title, result kind and text. It does not go through verification, so it is not part of the per‑phase handoff nor is it read as such in `get_task_context`.
 
-Como el formato es fijo, LunasQ puede usar los campos sin interpretar texto: armar el siguiente `get_task_context`, poblar la UI y renderizar el handoff en el archivo de evidencia `lunasq/tasks/{id}.md` como bloque JSON. Un cambio de esquema sube su versión, y LunasQ conserva la capacidad de leer handoffs de versiones anteriores. Esquemas, ejemplos válidos e inválidos y reglas entre campos: `packages/schemas` ([ADR 0006](decisions/0006-handoff-v1.md)).
+Since the format is fixed, LunasQ can use the fields without interpreting text: build the next `get_task_context`, populate the UI and render the handoff in the evidence file `lunasq/tasks/{id}.md` as a JSON block. A schema change raises its version, and LunasQ keeps the ability to read handoffs of earlier versions. Schemas, valid and invalid examples and rules between fields: `packages/schemas` ([ADR 0006](decisions/0006-handoff-v1.md)).
 
-## Prácticas de ingeniería por fase
+## Engineering practices per phase
 
-Cada fase sigue una práctica obligatoria y las tres se encadenan: DDD produce criterios en lenguaje del dominio, TDD convierte cada criterio en tests antes del código, y la verificación comprueba la trazabilidad, corre la suite y revisa que los tests sean coherentes.
+Each phase follows a mandatory practice and the three chain together: DDD produces criteria in domain language, TDD turns each criterion into tests before the code, and verification checks traceability, runs the suite and reviews that the tests are coherent.
 
-| Fase | Práctica | Artefacto obligatorio | Cómo se comprueba |
+| Phase | Practice | Mandatory artifact | How it is checked |
 | --- | --- | --- | --- |
-| Refinamiento | DDD | Modelo de dominio en la spec: bounded context afectado, glosario del lenguaje ubicuo, agregados y entidades, invariantes, eventos de dominio; criterios escritos en lenguaje del dominio (Given / When / Then) | `submit_spec` exige esas secciones; el humano lo revisa en el gate de la spec |
-| Implementación | TDD | Por cada criterio: test que falla → implementación mínima → refactor; mapa criterio → tests en el handoff | Cada criterio tiene al menos un test; el historial del branch muestra los tests junto o antes que el código que cubren |
-| Verificación | Tests en verde y coherentes | Resultado de la suite y revisión de coherencia en el veredicto | Gate de tests ejecutado por LunasQ + checklist de coherencia del approver y del code reviewer |
+| Refinement | DDD | Domain model in the spec: affected bounded context, ubiquitous language glossary, aggregates and entities, invariants, domain events; criteria written in domain language (Given / When / Then) | `submit_spec` requires those sections; the human reviews it at the spec gate |
+| Implementation | TDD | For each criterion: failing test → minimal implementation → refactor; criterion → tests map in the handoff | Each criterion has at least one test; the branch history shows the tests together with or before the code they cover |
+| Verification | Green and coherent tests | Suite result and coherence review in the verdict | Test gate run by LunasQ + coherence checklist of the approver and the code reviewer |
 
-**Checklist de coherencia de tests**
+**Test coherence checklist**
 
-- Cada acceptance criterion tiene al menos un test que lo ejercita, nombrado en lenguaje del dominio.
-- Los tests prueban comportamiento observable, no detalles internos; los mocks solo se usan en las fronteras del sistema.
-- No hay tests saltados, aserciones vacías ni aserciones triviales que pasarían con cualquier implementación.
-- Cubren las invariantes y los casos borde del modelo de dominio.
-- Ningún test existente se debilitó: un test borrado o con aserciones relajadas en el diff requiere justificación.
-- **Prueba de reversión:** el approver revierte temporalmente el código de producción conservando los tests y confirma que fallan; si siguen en verde, no prueban el cambio.
+- Each acceptance criterion has at least one test that exercises it, named in domain language.
+- The tests check observable behavior, not internal details; mocks are only used at the system's boundaries.
+- There are no skipped tests, empty assertions or trivial assertions that would pass with any implementation.
+- They cover the domain model's invariants and edge cases.
+- No existing test was weakened: a deleted test or one with relaxed assertions in the diff requires justification.
+- **Reversal test:** the approver temporarily reverts the production code keeping the tests and confirms they fail; if they stay green, they do not prove the change.
 
-**Gate de tests:** el Project define su comando de tests. LunasQ lo ejecuta en el worktree al recibir `submit_for_verification` y otra vez antes de aceptar un pass, sin confiar en lo que reporte el agente. Una suite en rojo bloquea la transición. Pane, entorno mínimo y registro en [ADR uw-11-gate-tests](decisions/uw-11-gate-tests.md).
+**Test gate:** the Project defines its test command. LunasQ runs it in the worktree on receiving `submit_for_verification` and again before accepting a pass, without trusting what the agent reports. A red suite blocks the transition. Pane, minimal environment and record in [ADR uw-11-gate-tests](decisions/uw-11-gate-tests.md).
 
-## Brain: engram como dependencia débil
+## Brain: engram as a weak dependency
 
-[engram](https://github.com/Gentleman-Programming/engram) es opcional: si su MCP está instalado en el agente, el agente lo usa por su cuenta; LunasQ no lo consulta, no escribe en él y funciona igual sin él. Del lado de LunasQ solo hay un esfuerzo best effort: las skills de cada fase incluyen instrucciones para aprovechar engram cuando está disponible.
+[engram](https://github.com/Gentleman-Programming/engram) is optional: if its MCP is installed in the agent, the agent uses it on its own; LunasQ does not query it, does not write to it and works the same without it. On LunasQ's side there is only a best‑effort effort: each phase's skills include instructions to take advantage of engram when it is available.
 
-**Instrucciones en las skills (si engram está disponible)**
+**Instructions in the skills (if engram is available)**
 
-| Momento | Qué pide la skill |
+| Moment | What the skill asks for |
 | --- | --- |
-| Al iniciar la fase | Recuperar contexto del proyecto y del módulo con `mem_context` y `mem_search` |
-| Al buscar | Usar consultas de 1 o 2 términos: engram combina las palabras con AND implícito, así que una consulta larga casi nunca devuelve resultados |
-| En refinamiento | Guardar decisiones con `topic_key` estable y mantener el glosario del dominio en un `topic_key` fijo |
-| En rework y verificación | Guardar como `learning` los hallazgos que expliquen un error recurrente |
-| Al cerrar la fase | Guardar un resumen de sesión con lo aprendido |
-| Siempre | Ignorar memorias marcadas como superseded y revisar las marcadas como needs\_review antes de usarlas |
+| At the start of the phase | Retrieve project and module context with `mem_context` and `mem_search` |
+| When searching | Use queries of 1 or 2 terms: engram combines the words with an implicit AND, so a long query almost never returns results |
+| In refinement | Save decisions with a stable `topic_key` and keep the domain glossary under a fixed `topic_key` |
+| In rework and verification | Save as `learning` the findings that explain a recurring error |
+| At the close of the phase | Save a session summary with what was learned |
+| Always | Ignore memories marked as superseded and review those marked as needs\_review before using them |
 
-**Qué implica**
+**What it implies**
 
-- El uso de memoria depende del agente: no es determinístico ni se puede auditar desde LunasQ más allá del transcript.
-- Ninguna fase se bloquea ni se degrada por la ausencia de engram.
-- La memoria vive en el engram local de la máquina; la integración determinística queda en el roadmap.
+- Memory use depends on the agent: it is not deterministic nor can it be audited from LunasQ beyond the transcript.
+- No phase is blocked or degraded by the absence of engram.
+- The memory lives in the machine's local engram; deterministic integration stays on the roadmap.
 
-## Verificación con subagentes
+## Verification with subagents
 
-La fase de verificación es **una sola sesión de Claude Code** (un slot) que lanza en paralelo los subagentes revisores que aplican a la tarea (de 4 posibles) y actúa como approver: consolida sus hallazgos y emite pass o reject. Para el scheduler y para herdr sigue siendo un solo agente vivo ([subagentes de Claude Code](https://code.claude.com/docs/en/sub-agents)).
+The verification phase is **a single Claude Code session** (one slot) that launches in parallel the reviewer subagents that apply to the task (of 4 possible) and acts as approver: it consolidates their findings and issues pass or reject. For the scheduler and for herdr it remains a single live agent ([Claude Code subagents](https://code.claude.com/docs/en/sub-agents)).
 
-**Flujo de la fase**
+**Phase flow**
 
-1. El dispatcher levanta una sesión de Claude Code en el worktree con la skill `verify-task`.
-2. La sesión llama `get_task_context`: spec aprobada, criterios, diff del branch, handoff del implementador.
-3. Decide qué revisores aplican según la spec y el diff y los lanza en paralelo, por nombre explícito. Cada revisor se decide por separado: código si cambia código o tests, seguridad solo si el diff toca una frontera de confianza (entradas externas, procesos, autenticación, secretos, rutas, dependencias), UX si cambia un flujo o sus estados, UI si cambia algo visible. Los que no lanza van omitidos con una justificación que cita el diff.
-4. Cada revisor recibe spec y diff, y devuelve hallazgos en formato fijo y compacto: severidad, archivo, evidencia y criterio afectado.
-5. La sesión principal (approver) deduplica, intenta refutar cada hallazgo serio leyendo código o corriendo tests, verifica cada acceptance criterion y revisa la coherencia de los tests con el checklist, incluida la prueba de reversión.
-6. Llama `submit_verdict` con pass o reject, veredicto por criterio, reporte por revisor, must‑fix consolidados, hallazgos refutados con su motivo y etiqueta de riesgo.
-7. En reject, el handoff a implementación lleva solo los must‑fix con su evidencia.
+1. The dispatcher starts a Claude Code session in the worktree with the `verify-task` skill.
+2. The session calls `get_task_context`: approved spec, criteria, branch diff, implementer's handoff.
+3. It decides which reviewers apply according to the spec and the diff and launches them in parallel, by explicit name. Each reviewer is decided separately: code if code or tests change, security only if the diff touches a trust boundary (external inputs, processes, authentication, secrets, paths, dependencies), UX if a flow or its states change, UI if something visible changes. Those it does not launch are skipped with a justification that cites the diff.
+4. Each reviewer receives spec and diff, and returns findings in a fixed, compact format: severity, file, evidence and affected criterion.
+5. The main session (approver) deduplicates, tries to refute each serious finding by reading code or running tests, verifies each acceptance criterion and reviews the coherence of the tests with the checklist, including the reversal test.
+6. It calls `submit_verdict` with pass or reject, verdict per criterion, report per reviewer, consolidated must‑fix, refuted findings with their reason and risk label.
+7. On reject, the handoff to implementation carries only the must‑fix with their evidence.
 
-**Revisores**
+**Reviewers**
 
-| Subagente | Foco | Herramientas |
+| Subagent | Focus | Tools |
 | --- | --- | --- |
-| `lunasq-security-reviewer` | Vulnerabilidades, secretos, validación de entradas, permisos | Solo lectura: Read, Grep, Glob, Bash |
-| `lunasq-ux-reviewer` | Flujos de usuario, estados vacíos y de error, accesibilidad | Solo lectura; opcionalmente un MCP de navegador |
-| `lunasq-ui-reviewer` | Consistencia visual, componentes, responsive | Solo lectura; opcionalmente un MCP de navegador |
-| `lunasq-code-reviewer` | Calidad, diseño, cumplimiento de la spec y coherencia de los tests (checklist) | Solo lectura: Read, Grep, Glob, Bash |
+| `lunasq-security-reviewer` | Vulnerabilities, secrets, input validation, permissions | Read‑only: Read, Grep, Glob, Bash |
+| `lunasq-ux-reviewer` | User flows, empty and error states, accessibility | Read‑only; optionally a browser MCP |
+| `lunasq-ui-reviewer` | Visual consistency, components, responsive | Read‑only; optionally a browser MCP |
+| `lunasq-code-reviewer` | Quality, design, spec compliance and test coherence (checklist) | Read‑only: Read, Grep, Glob, Bash |
 
-**Guardas determinísticas**
+**Deterministic guards**
 
-| Guarda | Mecanismo | Qué garantiza |
+| Guard | Mechanism | What it guarantees |
 | --- | --- | --- |
-| Revisores de solo lectura | `tools` en el frontmatter de cada subagente, sin Edit ni Write; Bash queda para leer el diff y el prompt prohíbe escribir | Un revisor no tiene herramientas de edición; con Bash, no escribir depende de su prompt ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) |
-| Evidencia de ejecución | Hooks `SubagentStart` y `SubagentStop` (tipo `http`, con el run token en el header) que reportan a LunasQ cada subagente; el dispatcher los pasa en un settings estable con `--settings` ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) | LunasQ sabe qué revisores corrieron en ese Run |
-| Veredicto completo | `submit_verdict` exige, por cada uno de los 4 revisores, su reporte o la justificación de por qué no se lanzó, y se rechaza si un revisor reportado no aparece terminado en los hooks del Run o si uno omitido sí terminó ([ADR uw-23-verificacion](decisions/uw-23-verificacion.md)) | Cada revisor corre o queda omitido con justificación auditada |
-| Gate de tests | LunasQ ejecuta el comando de tests del proyecto en el worktree antes de aceptar un pass | No hay pass con la suite en rojo, aunque el agente diga lo contrario |
+| Read‑only reviewers | `tools` in each subagent's frontmatter, without Edit or Write; Bash is left for reading the diff and the prompt forbids writing | A reviewer has no editing tools; with Bash, not writing depends on its prompt ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) |
+| Execution evidence | `SubagentStart` and `SubagentStop` hooks (type `http`, with the run token in the header) that report each subagent to LunasQ; the dispatcher passes them in a stable settings file with `--settings` ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) | LunasQ knows which reviewers ran in that Run |
+| Complete verdict | `submit_verdict` requires, for each of the 4 reviewers, its report or the justification for why it was not launched, and is rejected if a reported reviewer does not appear finished in the Run's hooks or if a skipped one did finish ([ADR uw-23-verificacion](decisions/uw-23-verificacion.md)) | Each reviewer runs or is skipped with an audited justification |
+| Test gate | LunasQ runs the project's test command in the worktree before accepting a pass | No pass with a red suite, even if the agent says otherwise |
 
-**Detalles de implementación**
+**Implementation details**
 
-- **Definiciones:** LunasQ las instala como subagentes de usuario en `~/.claude/agents/lunasq/`. Un proyecto puede sobrescribir un revisor con uno del mismo nombre en su `.claude/agents/`, porque el nivel de proyecto tiene prioridad.
-- **Modelos:** los revisores usan Opus, fijado en el `model` de su frontmatter; el approver usa Sonnet, el modelo por defecto del perfil de la fase (`DEFAULT_VERIFY_MODEL`), que el perfil puede cambiar.
-- **Esperar resultados:** el dispatcher pasa `CLAUDE_CODE_FORK_SUBAGENT=0` al pane para que el approver espere los reportes de forma predecible.
-- **Revisores de UI/UX con navegador:** si necesitan ver la app, su definición declara el MCP de navegador en `mcpServers`, así solo esos subagentes cargan esas tools.
-- **Consumo por revisor:** el tracking de uso desglosa por subagente con el atributo `agent.name` (requiere `OTEL_LOG_TOOL_DETAILS=1` para nombres custom).
+- **Definitions:** LunasQ installs them as user subagents in `~/.claude/agents/lunasq/`. A project can override a reviewer with one of the same name in its `.claude/agents/`, because the project level has priority.
+- **Models:** the reviewers use Opus, set in their frontmatter's `model`; the approver uses Sonnet, the phase profile's default model (`DEFAULT_VERIFY_MODEL`), which the profile can change.
+- **Waiting for results:** the dispatcher passes `CLAUDE_CODE_FORK_SUBAGENT=0` to the pane so the approver waits for the reports predictably.
+- **UI/UX reviewers with a browser:** if they need to see the app, their definition declares the browser MCP in `mcpServers`, so only those subagents load those tools.
+- **Per‑reviewer consumption:** usage tracking breaks down by subagent with the `agent.name` attribute (requires `OTEL_LOG_TOOL_DETAILS=1` for custom names).
 
-**Implicaciones**
+**Implications**
 
-- En v1 todas las fases usan Claude Code. La verificación además depende de sus subagentes, así que el perfil de esa fase valida `kind = claude` aun cuando en v2 se sumen otros agentes, salvo que tengan un equivalente.
-- Un slot de verificación son 5 flujos de modelo en paralelo: no afecta los slots, pero sí los rate limits del proveedor.
-- Los reportes entran al contexto del approver, por eso el formato de salida de los revisores es compacto.
+- In v1 all phases use Claude Code. Verification also depends on its subagents, so that phase's profile validates `kind = claude` even when other agents are added in v2, unless they have an equivalent.
+- One verification slot is 5 parallel model streams: it does not affect slots, but it does affect the provider's rate limits.
+- The reports enter the approver's context, which is why the reviewers' output format is compact.
 
-## Consumo de tokens y costo (read‑only)
+## Token consumption and cost (read‑only)
 
-En v1 aplica a Claude Code; Codex, previsto para v2, también lo permite. Ambos reportan tokens por request vía OpenTelemetry y en sus transcripts locales, así que cada tarea puede mostrar tokens y costo como propiedad de solo lectura, agregada desde sus Runs.
+In v1 this applies to Claude Code; Codex, planned for v2, also allows it. Both report tokens per request via OpenTelemetry and in their local transcripts, so each task can show tokens and cost as a read‑only property, aggregated from its Runs.
 
-**Qué expone cada agente**
+**What each agent exposes**
 
-| Agente | Fuente | Tokens | Costo | Cómo se liga a la tarea |
+| Agent | Source | Tokens | Cost | How it is tied to the task |
 | --- | --- | --- | --- | --- |
-| [Claude Code](https://code.claude.com/docs/en/monitoring-usage) | OTel: métricas `claude_code.token.usage` y `claude_code.cost.usage`; evento `api_request` por llamada | input, output, cache read, cache write, por modelo | USD estimado por request | Atributos custom vía `OTEL_RESOURCE_ATTRIBUTES` (task, run, fase) + `session.id` |
-| Claude Code | Transcript JSONL por sesión; JSON de la statusline | `message.usage` por mensaje | `cost.total_cost_usd` por sesión (statusline) | Session id |
-| Codex (v2) | OTel (bloque `[otel]` de su config): token usage por turno ([referencia](https://codex.danielvaughan.com/2026/06/07/agent-observability-gap-codex-cli-opentelemetry-session-tracing-cost-attribution/)) | input, cached, output, reasoning | No; se calcula con tabla de precios | Session id; atributos custom por verificar |
-| Codex (v2) | Rollout JSONL en su directorio de sesiones ([referencia](https://codex.danielvaughan.com/2026/06/10/codex-cli-token-consumption-diagnosis-reduction-quota-drain-practitioner-toolkit/)) | Eventos `token_count` acumulados | No | Session id |
-| Otros agentes | Varía por agente | Parcial o nada | — | Se marca *no disponible* |
+| [Claude Code](https://code.claude.com/docs/en/monitoring-usage) | OTel: `claude_code.token.usage` and `claude_code.cost.usage` metrics; `api_request` event per call | input, output, cache read, cache write, per model | Estimated USD per request | Custom attributes via `OTEL_RESOURCE_ATTRIBUTES` (task, run, phase) + `session.id` |
+| Claude Code | Per‑session JSONL transcript; statusline JSON | `message.usage` per message | `cost.total_cost_usd` per session (statusline) | Session id |
+| Codex (v2) | OTel (`[otel]` block of its config): token usage per turn ([reference](https://codex.danielvaughan.com/2026/06/07/agent-observability-gap-codex-cli-opentelemetry-session-tracing-cost-attribution/)) | input, cached, output, reasoning | No; computed with a price table | Session id; custom attributes to be verified |
+| Codex (v2) | Rollout JSONL in its sessions directory ([reference](https://codex.danielvaughan.com/2026/06/10/codex-cli-token-consumption-diagnosis-reduction-quota-drain-practitioner-toolkit/)) | Accumulated `token_count` events | No | Session id |
+| Other agents | Varies by agent | Partial or none | — | Marked *not available* |
 
-**Atribución por tarea**
+**Attribution per task**
 
-1. Al crear el pane, el dispatcher pasa variables de entorno con `--env` de herdr: telemetría activa, endpoint del collector propio y `OTEL_RESOURCE_ATTRIBUTES` con task id, run id y fase. Claude Code copia esos atributos a cada métrica y evento.
-2. Para agentes sin atributos custom, se correlaciona por session id: herdr expone `agent_session` con el id nativo cuando la integración oficial lo reporta, y el Run lo guarda.
-3. Al cerrar el Run, un job concilia contra el transcript de esa sesión como respaldo.
+1. When creating the pane, the dispatcher passes environment variables with herdr's `--env`: telemetry on, the own collector's endpoint and `OTEL_RESOURCE_ATTRIBUTES` with task id, run id and phase. Claude Code copies those attributes to every metric and event.
+2. For agents without custom attributes, it is correlated by session id: herdr exposes `agent_session` with the native id when the official integration reports it, and the Run stores it.
+3. When the Run closes, a job reconciles against that session's transcript as a backup.
 
-**Modelo de datos**
+**Data model**
 
-- **UsageRecord** (nuevo, por Run): modelo, tokens por tipo, costo USD, fuente (otel / transcript / calculado), versión de precios usada.
-- **Task.usage** (read‑only, derivado): total de tokens y costo, desglose por fase (refinamiento, implementación, verificación, rework), por agente, modelo y revisor de verificación. Nunca se edita; se recalcula desde los UsageRecords.
-- **Tabla de precios versionada** por modelo, para agentes que solo reportan tokens.
+- **UsageRecord** (new, per Run): model, tokens by type, USD cost, source (otel / transcript / computed), price version used.
+- **Task.usage** (read‑only, derived): total tokens and cost, broken down by phase (refinement, implementation, verification, rework), by agent, model and verification reviewer. It is never edited; it is recomputed from the UsageRecords.
+- **Versioned price table** per model, for agents that only report tokens.
 
-**Componente nuevo:** Usage collector. Recibe OTLP, normaliza por agente y escribe UsageRecords en la BD. En Claude Code la fuente es el evento `api_request` (una llamada, un UsageRecord, deduplicado por `request_id`) y el revisor se resuelve con el `agent_id` de los hooks de subagentes; las métricas son delta y se descartan ([ADR uw-20-usage-collector](decisions/uw-20-usage-collector.md)). El flag `telemetry` lo apaga.
+**New component:** Usage collector. It receives OTLP, normalizes per agent and writes UsageRecords to the DB. In Claude Code the source is the `api_request` event (one call, one UsageRecord, deduplicated by `request_id`) and the reviewer is resolved with the `agent_id` from the subagent hooks; the metrics are delta and are discarded ([ADR uw-20-usage-collector](decisions/uw-20-usage-collector.md)). The `telemetry` flag turns it off.
 
-**Limitaciones**
+**Limitations**
 
-- El costo de Claude Code se calcula del lado del cliente con precios públicos: es un estimado y [puede no coincidir con la factura](https://github.com/rockdarko/claude-code-metrics-prometheus). Con plan de suscripción conviene mostrarlo como *costo equivalente a API*, no como cobro real.
-- Hay un [issue reportado](https://github.com/anthropics/claude-code/issues/28197) donde el transcript de Claude Code guarda `input_tokens` como placeholder en registros de streaming; por eso OTel es la fuente primaria y el transcript solo respaldo, deduplicando por message id.
-- El formato de los transcripts es interno y cambia entre versiones.
-- Las métricas de Claude Code se exportan cada 60 s por defecto: el valor en vivo trae lag; al cerrar el Run se consolida.
+- Claude Code's cost is computed on the client side with public prices: it is an estimate and [may not match the invoice](https://github.com/rockdarko/claude-code-metrics-prometheus). With a subscription plan it is better to show it as *API‑equivalent cost*, not as an actual charge.
+- There is a [reported issue](https://github.com/anthropics/claude-code/issues/28197) where Claude Code's transcript stores `input_tokens` as a placeholder in streaming records; that is why OTel is the primary source and the transcript only a backup, deduplicating by message id.
+- The transcripts' format is internal and changes between versions.
+- Claude Code's metrics are exported every 60 s by default: the live value lags; it is consolidated when the Run closes.
 
-En la UI se muestra en el detalle de la tarea y como columna en la cola.
+In the UI it is shown in the task detail and as a column in the queue.
 
-## Human‑in‑the‑loop, verificación y entrega
+## Human‑in‑the‑loop, verification and delivery
 
-Hay un solo gate humano obligatorio (aprobar la spec) y cuatro puntos de escalamiento (pregunta del agente, permiso bloqueado, timeout de fase, loop de verificación agotado); todo lo demás es automático.
+There is a single mandatory human gate (approving the spec) and four escalation points (agent question, blocked permission, phase timeout, exhausted verification loop); everything else is automatic.
 
-**Aprobación de la spec (refined)**
+**Spec approval (refined)**
 
-- La UI muestra la versión de la spec con diff contra la anterior en el detalle de la tarea. La bandeja solo lista las tareas en refined con un enlace a ese detalle ([ADR 0015](decisions/0015-bandeja-lista-de-specs.md)).
-- El humano puede: **aprobar**, **pedir cambios** con comentarios (nueva ronda de refinamiento con esos comentarios como input) o **editar la spec directamente** y aprobar.
-- Al aprobar, la tarea entra al ready set de implementación; no se despacha nada mientras espera.
+- The UI shows the spec version with a diff against the previous one in the task detail. The Inbox only lists the tasks in refined with a link to that detail ([ADR 0015](decisions/0015-bandeja-lista-de-specs.md)).
+- The human can: **approve**, **request changes** with comments (a new refinement round with those comments as input) or **edit the spec directly** and approve.
+- On approval, the task enters the implementation ready set; nothing is dispatched while it waits.
 
-**Preguntas del agente y bloqueos**
+**Agent questions and blocks**
 
-Todo lo que espera al humano aparece en la bandeja del front end; herdr solo notifica. Hay dos casos y se responden en lugares distintos.
+Everything that waits for the human appears in the front end's Inbox; herdr only notifies. There are two cases and they are answered in different places.
 
-| Caso | Origen | Dónde se ve | Dónde se responde |
+| Case | Origin | Where it is seen | Where it is answered |
 | --- | --- | --- | --- |
-| Pregunta de negocio o diseño | El agente llama `ask_human` | Bandeja del front end, con el contexto de la tarea | Front end |
-| Permiso de herramienta | Prompt en la TUI del agente; herdr lo detecta como `blocked` | Bandeja, como "agente bloqueado", con acceso al pane (`agent focus`) | herdr, en el pane del agente |
+| Business or design question | The agent calls `ask_human` | Front end Inbox, with the task's context | Front end |
+| Tool permission | Prompt in the agent's TUI; herdr detects it as `blocked` | Inbox, as "blocked agent", with access to the pane (`agent focus`) | herdr, in the agent's pane |
 
-Flujo de `ask_human`:
+`ask_human` flow:
 
-0. El agente puede mandar la pregunta de forma estructurada: `options` con 2 a 6 alternativas `{ label, description? }` (labels únicos sin distinguir mayúsculas ni espacios extremos; inmutables tras crearse). Sin `options` la pregunta es abierta.
-1. El backend guarda la Question ligada a la tarea y al Run; la tarea pasa a `waiting_human` y el timeout de fase se pausa.
-2. La Question aparece de inmediato en la bandeja; si sigue abierta después de 1 minuto, se notifica por herdr y por la UI.
-3. El humano responde en la bandeja: una pregunta con opciones se muestra como un grupo de radios (label y descripción) más «Otra respuesta», que habilita un campo de texto; sin opciones, el campo de texto. La respuesta es el label elegido o el free text recortado, nunca ambos.
-4. Si el agente sigue vivo, el dispatcher le envía la respuesta al mismo pane con `agent prompt`. Si ya se cerró, se crea un Run nuevo y la Question con su respuesta llega en `get_task_context`. Detalle, API y casos límite: [ADR uw-22-preguntas](decisions/uw-22-preguntas.md).
+0. The agent can send the question in a structured way: `options` with 2 to 6 alternatives `{ label, description? }` (labels unique ignoring case and surrounding whitespace; immutable once created). Without `options` the question is open.
+1. The backend stores the Question tied to the task and the Run; the task moves to `waiting_human` and the phase timeout is paused.
+2. The Question appears in the Inbox immediately; if it is still open after 1 minute, it is notified through herdr and the UI.
+3. The human answers in the Inbox: a question with options is shown as a group of radios (label and description) plus «Otra respuesta», which enables a text field; without options, the text field. The answer is the chosen label or the trimmed free text, never both.
+4. If the agent is still alive, the dispatcher sends it the answer to the same pane with `agent prompt`. If it has already closed, a new Run is created and the Question with its answer arrives in `get_task_context`. Detail, API and edge cases: [ADR uw-22-preguntas](decisions/uw-22-preguntas.md).
 
-La tool no espera la respuesta dentro de la llamada MCP: los clientes MCP tienen timeouts y una llamada colgada por horas es frágil. Registra la pregunta, le indica al agente que termine su turno y la respuesta entra después como prompt nuevo. Escribir directo en el pane de herdr también funciona, pero esa respuesta no queda en el historial de la tarea.
+The tool does not wait for the answer inside the MCP call: MCP clients have timeouts and a call hanging for hours is fragile. It records the question, tells the agent to end its turn and the answer comes in later as a new prompt. Writing directly into the herdr pane also works, but that answer is not kept in the task's history.
 
-**Loop implementación ↔ verificación**
+**Implementation ↔ verification loop**
 
-- El verificador corre en un agente nuevo, con la spec aprobada y el diff, sin el contexto del implementador.
-- Rework devuelve la tarea a in progress con los hallazgos como input estructurado; el contador de iteración sube.
-- Al llegar a 3 iteraciones (configurable por proyecto con `limits.maxVerificationIterations`), la tarea pasa a *needs human* en lugar de seguir el loop.
-- La revisión la hacen los subagentes especializados que aplican al diff y la sesión principal decide como approver (ver Verificación con subagentes).
+- The verifier runs in a new agent, with the approved spec and the diff, without the implementer's context.
+- Rework returns the task to in progress with the findings as structured input; the iteration counter goes up.
+- On reaching 3 iterations (configurable per project with `limits.maxVerificationIterations`), the task moves to *needs human* instead of continuing the loop.
+- The review is done by the specialized subagents that apply to the diff and the main session decides as approver (see Verification with subagents).
 
-**Entrega (completed)**
+**Delivery (completed)**
 
-La hace LunasQ, sin agente, dentro del Run del verificador, cuando éste registra un pass ([ADR uw-26-entrega](decisions/uw-26-entrega.md)):
+LunasQ does it, without an agent, inside the verifier's Run, when the verifier records a pass ([ADR uw-26-entrega](decisions/uw-26-entrega.md)):
 
-1. Hook `before_delivery`.
-2. Rebase sobre `origin/<rama base>`; si hay conflictos, la tarea regresa a in progress (sin subir la iteración) y el implementador recibe los archivos en conflicto.
-3. Trailers `LunasQ-Task` y `LunasQ-Run` en cada commit del branch.
-4. Correr la suite de tests una última vez; en rojo, la tarea regresa a in progress igual que con un conflicto.
-5. Cerrar el Run del verificador, commit del archivo de evidencia y push del branch de la tarea.
-6. Crear PR con el CLI gh, titulado con el título de la tarea (o la primera línea del intent si no tiene), con el intent, los criterios y su evidencia en la descripción, más la etiqueta de riesgo (bajo / medio / alto) que asignó el approver para priorizar tu revisión. Registrar el PR y correr `after_delivery`; si el hook commiteó cambios, se publican con un segundo push.
-7. `verdict_pass`: la tarea queda en Completed. Conservar o remover el worktree según política; los dependientes se liberan cuando el PR se mergea.
+1. `before_delivery` hook.
+2. Rebase onto `origin/<base branch>`; if there are conflicts, the task goes back to in progress (without raising the iteration) and the implementer receives the conflicting files.
+3. `LunasQ-Task` and `LunasQ-Run` trailers on every commit of the branch.
+4. Run the test suite one last time; if red, the task goes back to in progress just like with a conflict.
+5. Close the verifier's Run, commit the evidence file and push the task's branch.
+6. Create the PR with the gh CLI, titled with the task's title (or the first line of the intent if it has none), with the intent, the criteria and their evidence in the description, plus the risk label (low / medium / high) the approver assigned to prioritize your review. Record the PR and run `after_delivery`; if the hook committed changes, they are published with a second push.
+7. `verdict_pass`: the task ends up in Completed. Keep or remove the worktree according to policy; dependents are released when the PR is merged.
 
-Mientras el PR espera el merge humano, la base sigue avanzando con otros PRs. El poller de PRs lee también si GitHub lo marca en conflicto con la base; si es así, la tarea vuelve de Completed a In progress con `deliveryConflict.reason: pr_conflict`, el implementador integra la base, y verificación y entrega se repiten sobre el mismo PR ([ADR pr-en-conflicto](decisions/pr-en-conflicto.md)).
+While the PR waits for the human merge, the base keeps moving with other PRs. The PR poller also reads whether GitHub marks it as in conflict with the base; if so, the task goes back from Completed to In progress with `deliveryConflict.reason: pr_conflict`, the implementer integrates the base, and verification and delivery repeat on the same PR ([ADR pr-en-conflicto](decisions/pr-en-conflicto.md)).
 
-Cualquier otro fallo (push, `gh`, un hook bloqueado) escala a Needs human. Una entrega que un reinicio dejó a medias se retoma sola al arrancar.
+Any other failure (push, `gh`, a blocked hook) escalates to Needs human. A delivery that a restart left half‑done resumes by itself on startup.
 
-**Front end: vistas mínimas**
+**Front end: minimal views**
 
-- Tablero por proyecto (columnas por estado, incluida Paused) y vista global de la cola ordenada por score. Pausar y reanudar están en el detalle de la tarea (botón con icono y texto), en cada fila de «En curso» (solo pausa) y en la columna «Acciones» de la Cola, con botones de solo icono: pausa para las tareas pausables, reanudar para las pausadas y las de Needs human.
-- Pestaña «En curso» con las tareas In progress y las que tienen un agente corriendo (sub-estado running) de todos los proyectos, con Iteración, Agente y Pane del Run más reciente de cada tarea; la etiqueta In progress va en azul en todas las vistas. El pane id de esta tabla y del panel de Runs es un botón que enfoca el agente en herdr. Detalle: [ADR uw-21-front-end](decisions/uw-21-front-end.md) y [ADR runs-foco-pane](decisions/runs-foco-pane.md).
-- Bandeja de aprobaciones y preguntas pendientes (todo lo que espera al humano); las specs por aprobar son una lista de enlaces al detalle de la tarea, donde se aprueban; los bloqueos por permiso incluyen un acceso que enfoca el pane en herdr. Detalle: [ADR uw-27-bandeja](decisions/uw-27-bandeja.md) y [ADR 0015](decisions/0015-bandeja-lista-de-specs.md).
-- Detalle de tarea: spec y versiones, Runs (con el pane id como botón que enfoca el agente en herdr), event log, enlace al pane en herdr.
-- Vista de hooks por proyecto: contenido de `lunasq/hooks/` en la rama base y últimas ejecuciones.
+- Board per project (columns by state, including Paused) and a global queue view ordered by score. Pause and resume are in the task detail (button with icon and text), on each row of «En curso» (pause only) and in the «Acciones» column of the Queue, with icon‑only buttons: pause for pausable tasks, resume for paused ones and those in Needs human.
+- «En curso» tab with the In progress tasks and those with a running agent (running sub‑state) from all projects, with Iteration, Agent and Pane of each task's most recent Run; the In progress label is blue in all views. The pane id in this table and in the Runs panel is a button that focuses the agent in herdr. Detail: [ADR uw-21-front-end](decisions/uw-21-front-end.md) and [ADR runs-foco-pane](decisions/runs-foco-pane.md).
+- Inbox of approvals and pending questions (everything that waits for the human); specs to approve are a list of links to the task detail, where they are approved; permission blocks include an access that focuses the pane in herdr. Detail: [ADR uw-27-bandeja](decisions/uw-27-bandeja.md) and [ADR 0015](decisions/0015-bandeja-lista-de-specs.md).
+- Task detail: spec and versions, Runs (with the pane id as a button that focuses the agent in herdr), event log, link to the pane in herdr.
+- Hooks view per project: content of `lunasq/hooks/` in the base branch and latest executions.
 
-## Auditoría y trazabilidad
+## Audit and traceability
 
-Todo lo que LunasQ hace queda trazable en dos direcciones: de una tarea a cada intento de cada fase, y de una línea de código en producción a la tarea y el Run que la produjeron.
+Everything LunasQ does is traceable in two directions: from a task to each attempt of each phase, and from a line of code in production to the task and the Run that produced it.
 
-**Dónde falló una tarea**
+**Where a task failed**
 
-Cada intento es un Run ligado a una fase, y cada transición queda en el Event log con actor y timestamp. El detalle de la tarea muestra los Runs en orden, y el último Run sin éxito indica la fase que falló.
+Each attempt is a Run tied to a phase, and each transition is recorded in the Event log with actor and timestamp. The task detail shows the Runs in order, and the last unsuccessful Run indicates the phase that failed.
 
-| Qué se ve | Dónde está |
+| What is seen | Where it is |
 | --- | --- |
-| Fase, agente, modelo, inicio y fin de cada intento | Run |
-| Motivo del fallo, en texto | `failure_reason` del Run |
-| Quién movió la tarea y por qué | Event log |
-| Qué contexto recibió el agente | `get_task_context` y transcript del Run |
-| Qué entregó el agente | Handoff, versión de spec, veredicto |
-| La conversación completa | Archivo de evidencia de la tarea |
+| Phase, agent, model, start and end of each attempt | Run |
+| Failure reason, in text | The Run's `failure_reason` |
+| Who moved the task and why | Event log |
+| What context the agent received | `get_task_context` and the Run's transcript |
+| What the agent delivered | Handoff, spec version, verdict |
+| The complete conversation | The task's evidence file |
 
-`failure_reason` es free text que escribe LunasQ al cerrar un Run sin éxito: por ejemplo, el gate de tests en rojo con el resumen de la salida, el timeout de fase, el crash del proceso o la tool MCP rechazada y por qué.
+`failure_reason` is free text that LunasQ writes when closing an unsuccessful Run: for example, the red test gate with a summary of the output, the phase timeout, the process crash or the rejected MCP tool and why.
 
-**Trazabilidad del código**
+**Code traceability**
 
-Cada commit de una tarea lleva trailers de git: `LunasQ-Task: <id>` y `LunasQ-Run: <id>`. El PR los incluye en su descripción. Con `git blame` sobre la línea que falla se llega a la tarea y al Run exactos.
+Each commit of a task carries git trailers: `LunasQ-Task: <id>` and `LunasQ-Run: <id>`. The PR includes them in its description. With `git blame` on the failing line you get to the exact task and Run.
 
-**Archivo de evidencia: `lunasq/tasks/{id}.md`**
+**Evidence file: `lunasq/tasks/{id}.md`**
 
-Cada tarea tiene un archivo de evidencia dentro del propio repo del proyecto, en el worktree de la tarea. LunasQ le agrega una sección al cerrar cada Run, así viaja en el branch y en el PR, y queda en el historial de git después del merge.
+Each task has an evidence file inside the project's own repo, in the task's worktree. LunasQ adds a section to it when closing each Run, so it travels in the branch and in the PR, and stays in git history after the merge.
 
-Cada sección de Run contiene:
+Each Run section contains:
 
-- fase, agente, modelo, inicio, fin, resultado y `failure_reason`;
-- handoff entregado;
-- en verificación, el veredicto completo: por criterio, reporte de cada revisor, revisores omitidos con su justificación, must‑fix y hallazgos refutados;
-- salida del gate de tests;
-- transcript de la sesión del agente y, en verificación, de los subagentes, convertido a markdown.
+- phase, agent, model, start, end, result and `failure_reason`;
+- the handoff delivered;
+- in verification, the complete verdict: per criterion, each reviewer's report, skipped reviewers with their justification, must‑fix and refuted findings;
+- the test gate's output;
+- the agent session's transcript and, in verification, the subagents' transcripts, converted to markdown.
 
-Esto evita perder evidencia cuando herdr cierra el pane o cuando Claude Code borra sus transcripts al vencer su periodo de retención ([30 días por defecto](https://code.claude.com/docs/en/sub-agents)). Antes de escribir, LunasQ redacta secretos detectados en toda la sección ([ADR uw-24-archivo-evidencia](decisions/uw-24-archivo-evidencia.md)).
+This avoids losing evidence when herdr closes the pane or when Claude Code deletes its transcripts at the end of their retention period ([30 days by default](https://code.claude.com/docs/en/sub-agents)). Before writing, LunasQ redacts detected secrets across the whole section ([ADR uw-24-archivo-evidencia](decisions/uw-24-archivo-evidencia.md)).
 
-Durante el loop de implementación y verificación el archivo queda sin commitear; los chequeos de worktree limpio ignoran sus cambios y la comparación de `HEAD` del pass tolera los commits que solo lo tocan, porque el gate del pass corre sobre el `HEAD` actual. Si el pass igual se refusa por `dirty_worktree` o `head_changed` (un archivo ajeno sin commitear, un commit que no es evidencia, o ningún gate en verde), LunasQ no deja al verificador sin salida: el pass se convierte en reject con un must-fix `source: "approver"` y la tarea vuelve a implementación, que corrige el estado de git ([ADR verdict-git-rework](decisions/verdict-git-rework.md)). Antes de integrar la base, la entrega commitea la evidencia pendiente (así el rebase no falla si el proyecto la trackea) y la vuelve a commitear tras cerrar el Run del verificador, antes del push.
+While the implementation and verification loop runs, the file stays uncommitted; the clean‑worktree checks ignore its changes and the pass's `HEAD` comparison tolerates commits that only touch it, because the pass's gate runs on the current `HEAD`. If the pass is still refused with `dirty_worktree` or `head_changed` (an unrelated uncommitted file, a commit that is not evidence, or no green gate), LunasQ does not leave the verifier without an exit: the pass becomes a reject with an `source: "approver"` must‑fix and the task goes back to implementation, which fixes the git state ([ADR verdict-git-rework](decisions/verdict-git-rework.md)). Before integrating the base, delivery commits the pending evidence (so the rebase does not fail if the project tracks it) and commits it again after closing the verifier's Run, before the push.
 
-**Hallazgos refutados**
+**Refuted findings**
 
-El veredicto guarda cada hallazgo que el approver descartó, con el motivo, además de los must‑fix. Si un bug en producción estaba en un hallazgo descartado, la auditoría lo muestra.
+The verdict stores every finding the approver discarded, with the reason, in addition to the must‑fix. If a production bug was in a discarded finding, the audit shows it.
 
-**Auditoría de un feature entregado que falla**
+**Audit of a delivered feature that fails**
 
-Se recorre la tarea hacia atrás, fase por fase, para ubicar la causa raíz:
+The task is walked backwards, phase by phase, to locate the root cause:
 
-| Pregunta | Evidencia | Si la respuesta es no, la causa raíz es |
+| Question | Evidence | If the answer is no, the root cause is |
 | --- | --- | --- |
-| ¿La spec aprobada cubría el caso? | Versión de spec aprobada y criterios | Spec: faltó un criterio en refinamiento o en el gate humano |
-| ¿Había un test para ese criterio? | Mapa criterio → tests del handoff | Test: TDD incompleto |
-| ¿El test probaba el cambio? | Checklist de coherencia y prueba de reversión | Verificación: test débil aceptado |
-| ¿Algún revisor lo detectó? | Reportes de revisores y hallazgos refutados | Approver: descartó un hallazgo válido |
-| ¿Se omitió un revisor que aplicaba? | Revisores omitidos y su justificación | Selección de revisores |
-| ¿El agente tenía el contexto correcto? | Transcript del Run (uso de engram, si lo hubo) | Memoria: contexto faltante o desactualizado |
+| Did the approved spec cover the case? | Approved spec version and criteria | Spec: a criterion was missing in refinement or at the human gate |
+| Was there a test for that criterion? | Handoff's criterion → tests map | Test: incomplete TDD |
+| Did the test prove the change? | Coherence checklist and reversal test | Verification: a weak test was accepted |
+| Did any reviewer detect it? | Reviewer reports and refuted findings | Approver: discarded a valid finding |
+| Was an applicable reviewer skipped? | Skipped reviewers and their justification | Reviewer selection |
+| Did the agent have the right context? | The Run's transcript (engram use, if any) | Memory: missing or outdated context |
 
-**Cierre del ciclo**
+**Closing the cycle**
 
-- La corrección se crea como una tarea nueva con `caused_by` apuntando a la tarea original, así se ve qué entregas generaron trabajo posterior.
-- La causa raíz queda en el archivo de evidencia; si engram está instalado, la skill de la fase pide al agente guardarla como `learning`.
+- The fix is created as a new task with `caused_by` pointing to the original task, so you can see which deliveries generated later work.
+- The root cause stays in the evidence file; if engram is installed, the phase's skill asks the agent to save it as a `learning`.
 
-## Riesgos
+## Risks
 
-El mayor riesgo es depender de la detección heurística de estado de herdr; el diseño lo mitiga usando el MCP como señal primaria y herdr solo como liveness.
+The biggest risk is depending on herdr's heuristic state detection; the design mitigates it by using the MCP as the primary signal and herdr only as liveness.
 
-| Riesgo | Impacto | Mitigación |
+| Risk | Impact | Mitigation |
 | --- | --- | --- |
-| Detección de estado de herdr basada en heurísticas de terminal | Fin de fase mal detectado | MCP como señal primaria; instalar la integración oficial de cada agente en herdr |
-| herdr pre‑1.0 con releases frecuentes | Cambios en CLI/API | Adapter de herdr aislado; fijar versión; usar `api schema` para validar contrato |
-| Eventos no durables (`events_lost`) | Estado desincronizado | Loop de reconciliación con snapshot |
-| Agente en `blocked` por permisos | Cola detenida | Modo Auto en todas las fases; lo que aún pida permiso se notifica al minuto |
-| Conflictos entre tareas paralelas del mismo repo | Rework en entrega | WIP por proyecto; rebase en entrega; lock por área de código como extensión futura si el problema persiste |
-| Loops infinitos de rework | Costo | Máximo de iteraciones + escalamiento humano |
-| Prompt injection desde el repo o issues | Acciones no deseadas | Modo Auto con su clasificador de acciones; aislamiento por worktree; el verificador no edita por instrucción de su skill; push solo en entrega |
-| engram ausente o memoria desactualizada | Agentes sin contexto o con contexto viejo | engram es opcional y LunasQ funciona sin él; las skills piden ignorar memorias superseded y revisar las needs\_review |
-| Solo Claude Code en v1 | Dependencia de un solo proveedor y su cuota | Aceptado en v1; contratos agnósticos para sumar Codex y otros en v2 |
-| 5 flujos de modelo por cada verificación | Rate limits del proveedor | El approver lanza solo los revisores que aplican; límite por tipo de agente |
-| Archivo de evidencia en el repo | Archivos grandes en el PR; datos sensibles en transcripts | Redacción de secretos antes de escribir; transcripts convertidos a markdown compacto |
-| Hooks con comandos arbitrarios | Un hook modificado por un agente ejecutaría código no revisado; un deploy fallido deja el flujo a medias | Hooks leídos de lunasq/hooks/ en la rama base, nunca del branch de la tarea; cambios solo vía PR; política block/warn y timeout por hook |
+| herdr state detection based on terminal heuristics | Phase end wrongly detected | MCP as the primary signal; install each agent's official integration in herdr |
+| herdr pre‑1.0 with frequent releases | CLI/API changes | Isolated herdr adapter; pin the version; use `api schema` to validate the contract |
+| Non‑durable events (`events_lost`) | Out‑of‑sync state | Reconciliation loop with snapshot |
+| Agent in `blocked` due to permissions | Stopped queue | Auto mode in all phases; whatever still asks for permission is notified after a minute |
+| Conflicts between parallel tasks of the same repo | Rework at delivery | WIP per project; rebase at delivery; code‑area lock as a future extension if the problem persists |
+| Infinite rework loops | Cost | Maximum iterations + human escalation |
+| Prompt injection from the repo or issues | Unwanted actions | Auto mode with its action classifier; isolation per worktree; the verifier does not edit, by its skill's instruction; push only at delivery |
+| engram absent or outdated memory | Agents without context or with old context | engram is optional and LunasQ works without it; the skills ask to ignore superseded memories and review the needs\_review ones |
+| Only Claude Code in v1 | Dependence on a single provider and its quota | Accepted in v1; agnostic contracts to add Codex and others in v2 |
+| 5 model streams per verification | Provider rate limits | The approver launches only the reviewers that apply; limit per agent type |
+| Evidence file in the repo | Large files in the PR; sensitive data in transcripts | Secret redaction before writing; transcripts converted to compact markdown |
+| Hooks with arbitrary commands | A hook modified by an agent would run unreviewed code; a failed deploy leaves the flow half‑done | Hooks read from lunasq/hooks/ in the base branch, never from the task's branch; changes only via PR; block/warn policy and timeout per hook |
 
-## Decisiones tomadas
+## Decisions made
 
-Resumen de lo ya decidido; cada punto está reflejado en su sección.
+Summary of what has already been decided; each point is reflected in its section.
 
-| Tema | Decisión |
+| Topic | Decision |
 | --- | --- |
-| Nombre | LunasQ en la documentación; repositorio `lunas-queue` |
-| Estado inicial | Draft (antes New) |
-| Dónde vive el dispatcher | Servicio externo que controla herdr por CLI o socket, detrás de un adapter |
-| Topología | herdr en una sola máquina; dispatcher por socket local en v1 |
-| Agentes | Uno por fase, con handoff estructurado entre fases |
-| Perfil de agente | Por proyecto y fase: kind, modelo y args; sin override por tarea en v1 |
-| Aislamiento | Worktree siempre, por tarea; script de bootstrap por proyecto; sin caché de dependencias en v1 |
-| Concurrencia | Límites configurables; global con default de 5 y ajustable desde Settings (1 a 50); por proyecto y por tipo de agente opcionales |
-| Preemption | No; una tarea solo toma slots libres |
-| Prioridad | Entero sin signo; mayor número = mayor prioridad |
-| Identificación de tareas | UUID como identidad; número #N secuencial global para personas (herdr, notificaciones, UI, menciones) |
-| Dependencias | Solo bloqueantes; satisfechas con el PR mergeado a la rama base; sin stacked branches |
-| Refinamiento | Espera a que las dependencias estén satisfechas |
-| Detección de merge | Polling con el CLI `gh` en v1 |
-| Liveness | Sin heartbeat ni lease; señales de herdr + timeout de fase (default 30 min) |
-| Permisos | Modo Auto (sin confirmaciones) en todas las fases, definido en los args del perfil de agente |
-| Escalamiento | Si un agente sigue blocked o una Question sigue abierta después de 1 minuto, se notifica por herdr y por la UI |
-| Reintentos | 3 reintentos con backoff ante crash; máximo 3 iteraciones de verificación; después Needs human |
-| Cierre | El pane se cierra al terminar la fase; el worktree se conserva hasta el merge; cada Run guarda la identidad de la sesión del agente |
-| Intervención manual | Permitida en cualquier pane; el dispatcher solo reacciona a señales MCP y de estado de herdr, así que lo escrito a mano no queda en el historial de la tarea |
-| Modelo de factory | Lights‑on: gate humano en la spec y en el merge; sin commits directo a main; el despliegue solo vía hooks del proyecto |
-| Brain | engram como dependencia débil: los agentes lo usan vía su MCP si está instalado; LunasQ solo agrega instrucciones best effort en las skills |
-| Verificación | Una sesión de Claude Code que lanza los subagentes revisores que aplican (seguridad, UX, UI, código) y actúa como approver; un solo slot |
-| Agentes soportados | Solo Claude Code en v1; Codex y otros en v2 o posteriores |
-| Router de riesgo | Solo etiqueta (bajo / medio / alto) en el PR; todo sigue con merge humano |
-| Roadmap | Intake desde GitHub issues en v2; pruebas ocultas al builder después; carriles por tamaño no por ahora |
-| Definiciones de revisores | Instaladas por LunasQ en \~/.claude/agents/lunasq/, con override opcional por proyecto |
-| Selección de revisores | El approver decide en cada tarea qué revisores lanzar y justifica los que omite |
-| Modelos de verificación | Revisores en Opus; approver en Sonnet |
-| Refinamiento | DDD: la spec incluye modelo de dominio y criterios en lenguaje del dominio |
-| Implementación | TDD: test que falla, implementación mínima, refactor; mapa criterio → tests en el handoff |
-| Tests en verificación | Gate de tests ejecutado por LunasQ + checklist de coherencia con prueba de reversión; sin ambos no hay pass |
-| Motivo de fallo | failure\_reason en cada Run, como free text |
-| Trazabilidad del código | Trailers LunasQ-Task y LunasQ-Run en cada commit y en el PR |
-| Archivo de evidencia | lunasq/tasks/{id}.md dentro del repo del proyecto, una sección por Run |
-| Hallazgos refutados | Se guardan en el veredicto con su motivo |
-| Bugfix de una entrega | Tarea nueva con caused\_by; la lección queda en el archivo de evidencia y, si hay engram, el agente la guarda ahí |
-| Hooks por fase | Por proyecto, before y after de cada fase más after\_merge y on\_failure; los ejecuta LunasQ con política block o warn; definidos en lunasq/hooks/ del repo y visibles en el front end |
-| Formato del handoff | JSON validado contra un JSON Schema versionado por fase; un handoff inválido se rechaza y la fase no se cierra |
+| Name | LunasQ in the documentation; repository `lunas-queue` |
+| Initial state | Draft (formerly New) |
+| Where the dispatcher lives | External service that controls herdr via CLI or socket, behind an adapter |
+| Topology | herdr on a single machine; dispatcher via local socket in v1 |
+| Agents | One per phase, with a structured handoff between phases |
+| Agent profile | Per project and phase: kind, model and args; no per‑task override in v1 |
+| Isolation | Worktree always, per task; bootstrap script per project; no dependency cache in v1 |
+| Concurrency | Configurable limits; global with a default of 5 and adjustable from Settings (1 to 50); per project and per agent type optional |
+| Preemption | No; a task only takes free slots |
+| Priority | Unsigned integer; higher number = higher priority |
+| Task identification | UUID as identity; global sequential number #N for people (herdr, notifications, UI, mentions) |
+| Dependencies | Blocking only; satisfied with the PR merged into the base branch; no stacked branches |
+| Refinement | Waits for the dependencies to be satisfied |
+| Merge detection | Polling with the `gh` CLI in v1 |
+| Liveness | No heartbeat or lease; herdr signals + phase timeout (default 30 min) |
+| Permissions | Auto mode (no confirmations) in all phases, defined in the agent profile's args |
+| Escalation | If an agent stays blocked or a Question stays open after 1 minute, it is notified through herdr and the UI |
+| Retries | 3 retries with backoff on crash; maximum 3 verification iterations; then Needs human |
+| Closing | The pane is closed when the phase ends; the worktree is kept until the merge; each Run stores the agent's session identity |
+| Manual intervention | Allowed in any pane; the dispatcher only reacts to MCP signals and herdr state, so what is typed by hand does not end up in the task's history |
+| Factory model | Lights‑on: human gate on the spec and on the merge; no direct commits to main; deployment only via the project's hooks |
+| Brain | engram as a weak dependency: agents use it via its MCP if installed; LunasQ only adds best‑effort instructions in the skills |
+| Verification | A Claude Code session that launches the reviewer subagents that apply (security, UX, UI, code) and acts as approver; a single slot |
+| Supported agents | Only Claude Code in v1; Codex and others in v2 or later |
+| Risk router | Label only (low / medium / high) on the PR; everything still has a human merge |
+| Roadmap | Intake from GitHub issues in v2; tests hidden from the builder later; size lanes not for now |
+| Reviewer definitions | Installed by LunasQ in \~/.claude/agents/lunasq/, with an optional per‑project override |
+| Reviewer selection | The approver decides for each task which reviewers to launch and justifies those it skips |
+| Verification models | Reviewers on Opus; approver on Sonnet |
+| Refinement | DDD: the spec includes a domain model and criteria in domain language |
+| Implementation | TDD: failing test, minimal implementation, refactor; criterion → tests map in the handoff |
+| Tests in verification | Test gate run by LunasQ + coherence checklist with reversal test; without both there is no pass |
+| Failure reason | failure\_reason in each Run, as free text |
+| Code traceability | LunasQ-Task and LunasQ-Run trailers on every commit and in the PR |
+| Evidence file | lunasq/tasks/{id}.md inside the project's repo, one section per Run |
+| Refuted findings | Stored in the verdict with their reason |
+| Bugfix of a delivery | New task with caused\_by; the lesson stays in the evidence file and, if engram is present, the agent saves it there |
+| Per‑phase hooks | Per project, before and after each phase plus after\_merge and on\_failure; run by LunasQ with a block or warn policy; defined in the repo's lunasq/hooks/ and visible in the front end |
+| Handoff format | JSON validated against a JSON Schema versioned per phase; an invalid handoff is rejected and the phase is not closed |
 
-## Roadmap: v2 y posteriores
+## Roadmap: v2 and later
 
-Features que quedaron fuera de v1, ya sea por decisión explícita o porque v1 tomó la opción más simple; ninguno cambia la arquitectura base.
+Features left out of v1, either by explicit decision or because v1 took the simplest option; none changes the base architecture.
 
-| Feature | Qué aporta | En v1 | Versión sugerida |
+| Feature | What it brings | In v1 | Suggested version |
 | --- | --- | --- | --- |
-| Soporte de Codex y otros agentes | Elegir agente por fase según costo o fortaleza | Solo Claude Code | v2 |
-| Verificación con agentes distintos a Claude Code | Fan-out de revisores sin depender de subagentes de Claude | Subagentes de Claude Code | v2, junto con el soporte de otros agentes |
-| Intake automático desde GitHub issues | Issues con cierta etiqueta crean tareas en Draft | Tareas creadas a mano | v2 |
-| Override de agente por tarea | Cambiar kind o modelo en una tarea puntual | Solo perfil por proyecto y fase | v2 |
-| Webhook de GitHub para merges | Liberar dependientes al instante, sin polling | Polling con `gh` | v2 |
-| Varias máquinas con herdr (`--machine`) | Repartir agentes entre equipos | Una máquina, socket local | v2 |
-| Memoria compartida con engram (Git Sync o Cloud) | Que la memoria viaje con el repo o se comparta entre máquinas | Solo local | v2 |
-| Caché de dependencias entre worktrees | Bootstrap más rápido y menos disco | Bootstrap completo por worktree | v2 |
-| Plugin de herdr con tablero en la TUI | Ver la cola sin salir de herdr | Solo front end propio | v2 |
-| Notificaciones por otros canales (chat, correo) | Enterarte de bloqueos sin estar frente a herdr o la UI | herdr + UI | v2 |
-| Métricas de la factory | Lead time, tasa de rework, porcentaje de pass a la primera, consumo por fase | Solo usage por tarea | v2 |
-| Multiusuario con roles | Que otras personas creen tareas, aprueben specs o mergeen | Un solo usuario | v2 o posterior |
-| Auto-merge por categoría de riesgo | Convertir la etiqueta de riesgo en acción para cambios de bajo riesgo con oráculo fuerte | Solo etiqueta; merge humano | Posterior |
-| Pruebas de aceptación ocultas al builder | Evitar que el builder optimice para los tests que ve | Tests visibles | Posterior |
-| Carriles por tamaño de tarea | Fast-track sin gate de spec para cambios triviales | Flujo completo para todo | Posterior |
-| Preemption por prioridad | Que una tarea urgente tome el slot de una menos prioritaria | Solo slots libres | Posterior |
-| Stacked branches | Empezar una tarea dependiente sin esperar el merge | Dependencia satisfecha con PR mergeado | Posterior |
-| Lock por área de código | Evitar que dos tareas paralelas toquen el mismo módulo | WIP por proyecto + rebase en entrega | Posterior |
-| Varias instancias de dispatcher | Alta disponibilidad del dispatcher | Una instancia; lease del lado del servidor si se escala | Posterior |
-| Integración determinística con engram | LunasQ arma un memory pack por fase y escribe decisiones y lecciones desde el handoff, sin depender del agente | engram opcional, usado por el agente vía MCP | v2 |
+| Support for Codex and other agents | Choose the agent per phase according to cost or strength | Only Claude Code | v2 |
+| Verification with agents other than Claude Code | Reviewer fan‑out without depending on Claude subagents | Claude Code subagents | v2, together with support for other agents |
+| Automatic intake from GitHub issues | Issues with a certain label create tasks in Draft | Tasks created by hand | v2 |
+| Per‑task agent override | Change kind or model on a specific task | Only per‑project and phase profile | v2 |
+| GitHub webhook for merges | Release dependents instantly, without polling | Polling with `gh` | v2 |
+| Several machines with herdr (`--machine`) | Spread agents across machines | One machine, local socket | v2 |
+| Shared memory with engram (Git Sync or Cloud) | Have the memory travel with the repo or be shared across machines | Local only | v2 |
+| Dependency cache between worktrees | Faster bootstrap and less disk | Full bootstrap per worktree | v2 |
+| herdr plugin with a board in the TUI | See the queue without leaving herdr | Own front end only | v2 |
+| Notifications through other channels (chat, email) | Learn about blocks without being in front of herdr or the UI | herdr + UI | v2 |
+| Factory metrics | Lead time, rework rate, first‑time pass percentage, consumption per phase | Only usage per task | v2 |
+| Multi‑user with roles | Let other people create tasks, approve specs or merge | A single user | v2 or later |
+| Auto‑merge by risk category | Turn the risk label into an action for low‑risk changes with a strong oracle | Label only; human merge | Later |
+| Acceptance tests hidden from the builder | Prevent the builder from optimizing for the tests it sees | Visible tests | Later |
+| Lanes by task size | Fast‑track without a spec gate for trivial changes | Full flow for everything | Later |
+| Preemption by priority | Let an urgent task take the slot of a lower‑priority one | Free slots only | Later |
+| Stacked branches | Start a dependent task without waiting for the merge | Dependency satisfied with merged PR | Later |
+| Code‑area lock | Prevent two parallel tasks from touching the same module | WIP per project + rebase at delivery | Later |
+| Several dispatcher instances | Dispatcher high availability | One instance; server‑side lease if scaled | Later |
+| Deterministic integration with engram | LunasQ builds a memory pack per phase and writes decisions and lessons from the handoff, without depending on the agent | Optional engram, used by the agent via MCP | v2 |

@@ -1,29 +1,29 @@
-# Piloto de LunasQ
+# LunasQ pilot
 
-El piloto tiene dos partes. La suite e2e (`pnpm e2e`, [ADR uw-29-e2e](decisions/uw-29-e2e.md)) automatiza el guion con un agente guionado y corre en CI. Esta guía es la otra parte: el mismo guion en un proyecto real, con herdr y Claude Code de verdad. Gasta tokens y necesita tu máquina, así que se corre a mano, una vez por versión.
+The pilot has two parts. The e2e suite (`pnpm e2e`, [ADR uw-29-e2e](decisions/uw-29-e2e.md)) automates the script with a scripted agent and runs in CI. This guide is the other part: the same script on a real project, with real herdr and Claude Code. It spends tokens and needs your machine, so it is run by hand, once per version.
 
-## Antes de empezar
+## Before starting
 
-1. `lunasq install` y `lunasq doctor` en verde (sin fallas).
-2. Un repo de prueba en GitHub, clonado en local, con `gh auth status` válido y un comando de tests que pase.
-3. En ese repo, en la rama base, `lunasq/hooks/before_verification/10-smoke.sh` (ejecutable, `echo ok`) y `lunasq/hooks/after_implementation/10-lint.sh` (falla con `exit 1`) con `{"after_implementation": {"10-lint.sh": {"policy": "warn"}}}` en `lunasq/hooks/config`. Solo corren los puntos que `docs/decisions/uw-29-e2e.md` lista como conectados.
-4. `lunasq start` y abrir la URL que imprime.
+1. `lunasq install` and `lunasq doctor` green (no failures).
+2. A test repo on GitHub, cloned locally, with a valid `gh auth status` and a test command that passes.
+3. In that repo, on the base branch, `lunasq/hooks/before_verification/10-smoke.sh` (executable, `echo ok`) and `lunasq/hooks/after_implementation/10-lint.sh` (fails with `exit 1`) with `{"after_implementation": {"10-lint.sh": {"policy": "warn"}}}` in `lunasq/hooks/config`. Only the points that `docs/decisions/uw-29-e2e.md` lists as connected run.
+4. `lunasq start` and open the URL it prints.
 
-## Guion
+## Script
 
-1. Crea el proyecto (`POST /api/projects`: repo, rama base, ruta local y comando de tests).
-2. Crea tres tareas desde **Nueva tarea**: A, B (depende de A) y C (depende de B). Haz que A sea ambigua para forzar una pregunta.
-3. **Pregunta:** responde en la **Bandeja** cuando el refinador pregunte; luego abre A desde «Specs por aprobar» de la Bandeja y aprueba su spec en el detalle de la tarea. Comprueba que el agente retoma con tu respuesta.
-4. **Dependencias:** B y C no arrancan hasta que el PR de la anterior se mergea. Mergea el PR de A en GitHub y comprueba que B avanza en el siguiente poll.
-5. **Rework:** en B, abre B desde la Bandeja y rechaza algo en la spec (**Pedir cambios**) o deja que el verificador rechace; comprueba que vuelve a implementación con los must-fix y que la iteración sube.
-6. **Hook:** en **Hooks** del proyecto, comprueba la ejecución de `10-smoke.sh` y que `10-lint.sh` falló sin detener la fase.
-7. Mergea B y C. Cada tarea debe terminar en un PR mergeable (rebasado sobre la base, con evidencia y etiqueta de riesgo).
+1. Create the project (`POST /api/projects`: repo, base branch, local path and test command).
+2. Create three tasks from **Nueva tarea**: A, B (depends on A) and C (depends on B). Make A ambiguous to force a question.
+3. **Question:** answer in the **Bandeja** when the refiner asks; then open A from «Specs por aprobar» in the Inbox and approve its spec in the task detail. Check that the agent resumes with your answer.
+4. **Dependencies:** B and C do not start until the previous one's PR is merged. Merge A's PR on GitHub and check that B advances on the next poll.
+5. **Rework:** on B, open B from the Inbox and reject something in the spec (**Pedir cambios**) or let the verifier reject; check that it goes back to implementation with the must-fixes and that the iteration goes up.
+6. **Hook:** in the project's **Hooks**, check the execution of `10-smoke.sh` and that `10-lint.sh` failed without stopping the phase.
+7. Merge B and C. Each task must end in a mergeable PR (rebased onto the base, with evidence and risk label).
 
-## Qué registrar
+## What to record
 
-Cada desvío del guion es un hallazgo. Conviértelo en una tarea de LunasQ (intent con el síntoma, el paso del guion y lo que esperabas) y enlázala con **originada por** a la tarea donde apareció.
+Each deviation from the script is a finding. Turn it into a LunasQ task (intent with the symptom, the script step and what you expected) and link it with **originated by** to the task where it appeared.
 
-## Hallazgos de la suite e2e (listos para encolar)
+## e2e suite findings (ready to queue)
 
-- **Conectar los hooks que faltan:** `before_refinement`, `after_refinement`, `before_implementation` y `on_failure` están en el esquema y en `docs/design.md` §Hooks por fase, pero ningún módulo los ejecuta. Conectarlos a su fase (dispatcher y MCP, como `before_verification`) y probar cada punto.
-- **Despertar al scheduler al crear una tarea:** hoy la tarea nueva espera el siguiente tick (30 s). `POST /api/tasks` debería despertarlo, como ya lo hace responder una pregunta.
+- **Connect the missing hooks:** `before_refinement`, `after_refinement`, `before_implementation` and `on_failure` are in the schema and in `docs/design.md` §Per-phase hooks, but no module runs them. Connect them to their phase (dispatcher and MCP, like `before_verification`) and test each point.
+- **Wake the scheduler when a task is created:** today a new task waits for the next tick (30 s). `POST /api/tasks` should wake it, as answering a question already does.
