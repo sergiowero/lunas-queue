@@ -4,6 +4,7 @@ import type {
   AgentProviderPatch,
   AgentProviderSettings,
   BlockedAgent,
+  ConcurrencySettings,
   EventView,
   HookExecutionView,
   Project,
@@ -133,6 +134,12 @@ export const api = {
   providerSettings: () => request<AgentProviderSettings>("/api/settings/providers"),
   updateProviderSettings: (input: AgentProviderPatch) =>
     request<AgentProviderSettings>("/api/settings/providers", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  concurrencySettings: () => request<ConcurrencySettings>("/api/settings/concurrency"),
+  updateConcurrencySettings: (input: ConcurrencySettings) =>
+    request<ConcurrencySettings>("/api/settings/concurrency", {
       method: "PUT",
       body: JSON.stringify(input),
     }),
