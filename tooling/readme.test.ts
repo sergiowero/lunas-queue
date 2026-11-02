@@ -2,13 +2,13 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// README.md de la raíz: puerta de entrada del repo. Estas pruebas evitan que se pudra:
-// secciones obligatorias, tabla de contenidos, enlaces relativos y comandos pnpm citados.
+// Root README.md: the repo's front door. These tests keep it from rotting:
+// required sections, table of contents, relative links and cited pnpm commands.
 const root = join(import.meta.dirname, "..");
 const readmePath = join(root, "README.md");
 
 function readme(): string {
-  expect(existsSync(readmePath), "falta README.md en la raíz del repo").toBe(true);
+  expect(existsSync(readmePath), "README.md is missing at the repo root").toBe(true);
   return readFileSync(readmePath, "utf8");
 }
 
@@ -17,7 +17,7 @@ interface Fence {
   body: string;
 }
 
-/** Separa el markdown en texto fuera de bloques de código y bloques de código. */
+/** Splits the markdown into text outside code blocks and code blocks. */
 function split(md: string): { prose: string; fences: Fence[] } {
   const fences: Fence[] = [];
   const prose = md.replace(/^```(.*)\n([\s\S]*?)^```[ \t]*$/gm, (_, info: string, body: string) => {
@@ -33,7 +33,7 @@ function headings(md: string, level: number): string[] {
   return [...prose.matchAll(re)].map((m) => m[1] as string);
 }
 
-/** Ancla que genera GitHub para un encabezado. */
+/** Anchor GitHub generates for a heading. */
 function slug(heading: string): string {
   return heading
     .replace(/`/g, "")
@@ -74,7 +74,7 @@ function workspaces(): Map<string, PackageJson> {
   return found;
 }
 
-// Subcomandos propios de pnpm que no son scripts.
+// pnpm's own subcommands that are not scripts.
 const pnpmBuiltins = new Set(["install", "i", "add", "exec", "dlx", "run"]);
 
 interface Cited {
@@ -112,57 +112,57 @@ function citedPnpm(md: string): Cited[] {
 }
 
 describe("README.md", () => {
-  it("existe en la raíz y su primer encabezado de nivel 1 menciona LunasQ", () => {
+  it("exists at the root and its first level 1 heading mentions LunasQ", () => {
     const h1 = headings(readme(), 1);
     expect(h1[0]).toContain("LunasQ");
   });
 
-  describe("secciones obligatorias", () => {
+  describe("required sections", () => {
     const required: [string, RegExp][] = [
-      ["qué es / para qué sirve", /qué es|para qué sirve/i],
-      ["características", /caracter[ií]sticas/i],
-      ["arquitectura", /arquitectura/i],
-      ["requisitos", /requisitos/i],
-      ["inicio rápido", /inicio r[aá]pido/i],
-      ["uso", /^uso\b/i],
-      ["configuración", /configuraci[oó]n/i],
-      ["estructura del repositorio", /estructura del repositorio/i],
-      ["desarrollo", /^desarrollo\b/i],
-      ["documentación", /documentaci[oó]n/i],
-      ["contribución", /contribuci[oó]n|contribuir/i],
+      ["what it is / what it is for", /what is|what it is for/i],
+      ["features", /features/i],
+      ["architecture", /architecture/i],
+      ["requirements", /requirements/i],
+      ["quick start", /quick start/i],
+      ["usage", /^usage\b/i],
+      ["configuration", /configuration/i],
+      ["repository structure", /repository structure/i],
+      ["development", /^development\b/i],
+      ["documentation", /documentation/i],
+      ["contributing", /contribut/i],
     ];
 
-    it.each(required)("incluye la sección %s", (_name, pattern) => {
+    it.each(required)("includes the %s section", (_name, pattern) => {
       const h2 = headings(readme(), 2);
       expect(
         h2.some((h) => pattern.test(h)),
-        `encabezados de nivel 2: ${h2.join(" | ")}`,
+        `level 2 headings: ${h2.join(" | ")}`,
       ).toBe(true);
     });
   });
 
-  it("cada ancla de la tabla de contenidos corresponde a un encabezado", () => {
+  it("every anchor in the table of contents matches a heading", () => {
     const md = readme();
     const anchors = new Set(
       [...split(md).prose.matchAll(/^#{1,6} +(.+?) *#*$/gm)].map((m) => slug(m[1] as string)),
     );
     const toc = links(md).filter((l) => l.startsWith("#"));
-    expect(toc.length, "la tabla de contenidos no tiene enlaces a anclas").toBeGreaterThan(5);
+    expect(toc.length, "the table of contents has no anchor links").toBeGreaterThan(5);
     const broken = toc.filter((l) => !anchors.has(l.slice(1)));
-    expect(broken, `anclas sin encabezado: ${broken.join(", ")}`).toEqual([]);
+    expect(broken, `anchors without a heading: ${broken.join(", ")}`).toEqual([]);
   });
 
-  it("todo enlace o imagen relativo apunta a una ruta que existe", () => {
+  it("every relative link or image points to a path that exists", () => {
     const relative = links(readme()).filter((l) => !isExternal(l) && !l.startsWith("#"));
     expect(relative.length).toBeGreaterThan(0);
     const broken = relative.filter((l) => {
       const path = decodeURIComponent(l.split("#")[0] as string);
       return !existsSync(resolve(root, path));
     });
-    expect(broken, `enlaces rotos: ${broken.join(", ")}`).toEqual([]);
+    expect(broken, `broken links: ${broken.join(", ")}`).toEqual([]);
   });
 
-  it("todo comando pnpm citado existe como script", () => {
+  it("every cited pnpm command exists as a script", () => {
     const packages = workspaces();
     const rootScripts = readPackage(root).scripts ?? {};
     const cited = citedPnpm(readme());
@@ -171,20 +171,20 @@ describe("README.md", () => {
     const missing = cited.flatMap(({ line, filter, script }) => {
       if (script === undefined) return [];
       if (filter === undefined) {
-        return script in rootScripts ? [] : [`${line} (no hay script «${script}» en la raíz)`];
+        return script in rootScripts ? [] : [`${line} (no script «${script}» at the root)`];
       }
       const pkg = packages.get(filter);
-      if (!pkg) return [`${line} (no existe el paquete «${filter}»)`];
-      // `pnpm --filter x exec ...` se descartó arriba (script undefined); aquí sólo scripts.
+      if (!pkg) return [`${line} (package «${filter}» does not exist)`];
+      // `pnpm --filter x exec ...` was discarded above (script undefined); only scripts here.
       return script in (pkg.scripts ?? {})
         ? []
-        : [`${line} (no hay script «${script}» en ${filter})`];
+        : [`${line} (no script «${script}» in ${filter})`];
     });
-    expect(missing, `comandos inexistentes:\n${missing.join("\n")}`).toEqual([]);
+    expect(missing, `nonexistent commands:\n${missing.join("\n")}`).toEqual([]);
   });
 
-  describe("coherencia con el repo", () => {
-    it("requisitos e inicio rápido mencionan versiones, comandos y puerto", () => {
+  describe("coherence with the repo", () => {
+    it("requirements and quick start mention versions, commands and port", () => {
       const md = readme();
       const nodeMajor = readFileSync(join(root, ".node-version"), "utf8").trim().split(".")[0];
       const pnpmMajor = (
@@ -203,7 +203,7 @@ describe("README.md", () => {
       expect(md).toContain("7360");
     });
 
-    it("la estructura del repositorio nombra cada paquete y asset", () => {
+    it("the repository structure names each package and asset", () => {
       const md = readme();
       const dirs = [
         ...readdirSync(join(root, "packages")).map((n) => `packages/${n}`),
@@ -212,10 +212,10 @@ describe("README.md", () => {
           .map((n) => `assets/${n}`),
       ];
       const missing = dirs.filter((d) => !md.includes(d));
-      expect(missing, `directorios sin mencionar: ${missing.join(", ")}`).toEqual([]);
+      expect(missing, `directories not mentioned: ${missing.join(", ")}`).toEqual([]);
     });
 
-    it("solo declara badges respaldados y no inventa licencia", () => {
+    it("only declares backed badges and does not invent a license", () => {
       const md = readme();
       const badges = [...md.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)]
         .map((m) => m[1] as string)
@@ -225,7 +225,7 @@ describe("README.md", () => {
       expect(existsSync(join(root, ".github", "workflows", "ci.yml"))).toBe(true);
       const hasLicenseFile = readdirSync(root).some((n) => /^licen[cs]e/i.test(n));
       if (!hasLicenseFile) {
-        expect(md).not.toMatch(/license-|licencia (MIT|Apache|GPL|BSD)|\bMIT License\b/i);
+        expect(md).not.toMatch(/license-|license (MIT|Apache|GPL|BSD)|\bMIT License\b/i);
       }
       expect(md).not.toMatch(/codecov|coveralls|npm\/v\//i);
     });
