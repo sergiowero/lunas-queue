@@ -522,9 +522,14 @@ export class PhaseDispatcher implements Dispatcher {
       await this.pauseRun(initial.id, "todos los proveedores están deshabilitados en Settings");
       return null;
     }
-    if (saturated) {
-      // Un proveedor habilitado quedó sin slot: es saturación transitoria, no un fallo de los CLI.
-      // La tarea espera en queued y el scheduler la replanifica cuando se libere un slot.
+    const hadRealFailure = this.runs
+      .providerAttempts(initial.id)
+      .some((a) => a.status === "failed");
+    if (saturated && !hadRealFailure) {
+      // Ningún proveedor falló al arrancar y uno habilitado quedó sin slot: es saturación
+      // transitoria, no un fallo de los CLI. La tarea espera en queued y el scheduler la
+      // replanifica cuando se libere un slot. Si algún proveedor sí falló, el fallo se cuenta
+      // abajo: pausar lo ocultaría y el scheduler reintentaría el proveedor roto sin backoff.
       await this.pauseRun(initial.id, `sin slot de concurrencia: ${diagnostics.join("; ")}`);
       return null;
     }

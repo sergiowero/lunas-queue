@@ -663,7 +663,7 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
     ]);
   });
 
-  it("no pasa a un fallback cuyo límite de concurrencia ya está lleno: el claim reservó otro slot", async () => {
+  it("no pasa a un fallback cuyo límite de concurrencia ya está lleno y cuenta el fallo del primario", async () => {
     const { db, project, herdr, dispatcher, runs, taskRow } = setup({
       config: { agentKindConcurrency: { copilot: 1 } },
     });
@@ -689,11 +689,12 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
     const [run] = runs.forTask(task.id);
     expect(kinds).toEqual(["claude"]);
     expect(run?.agentKind).toBe("claude");
-    // Saturación transitoria, no fallo de los CLI: el Run se cancela sin contar reintentos y la
-    // tarea espera en queued hasta que se libere un slot.
-    expect(run).toMatchObject({ result: "cancelled" });
+    // El fallo real de claude se cuenta: pausar lo ocultaría y el scheduler volvería a despachar
+    // al proveedor roto sin backoff. El diagnóstico conserva ambos motivos.
+    expect(run).toMatchObject({ result: "failure" });
+    expect(run?.failureReason).toContain("claude: claude executable not found");
     expect(run?.failureReason).toContain("copilot: sin slot de concurrencia");
-    expect(taskRow(task.id)).toMatchObject({ subState: "queued" });
+    expect(taskRow(task.id)).not.toMatchObject({ subState: "queued" });
     expect(runs.forTask(live.id)[0]?.agentKind).toBe("copilot");
   });
 
