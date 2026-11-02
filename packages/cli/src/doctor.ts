@@ -1,5 +1,5 @@
-// `lunasq doctor`: cada requisito de una máquina lista para LunasQ (ADR uw-28-instalador). Una
-// falla impide trabajar; un aviso no (p. ej. engram, que es opcional). Verde = ninguna falla.
+// `lunasq doctor`: each requirement of a machine ready for LunasQ (ADR uw-28-instalador). A
+// failure prevents working; a warning does not (e.g. engram, which is optional). Green = no failures.
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
@@ -17,11 +17,11 @@ export interface CheckResult {
   id: string;
   status: CheckStatus;
   summary: string;
-  /** Qué hacer para resolverlo. */
+  /** What to do to resolve it. */
   fix?: string;
 }
 
-/** Versiones mínimas verificadas en los spikes (ADR 0002, ADR 0003, ADR 0004, ADR uw-19-revisores). */
+/** Minimum versions verified in the spikes (ADR 0002, ADR 0003, ADR 0004, ADR uw-19-revisores). */
 export const MINIMUM = {
   node: "26.0.0",
   herdr: "0.9.5",
@@ -53,7 +53,7 @@ export function checkNode(ctx: MachineContext): CheckResult {
   if (compareVersions(version, MINIMUM.node) < 0) {
     return fail(
       "node",
-      `Node.js ${version}; LunasQ necesita ${MINIMUM.node} o más`,
+      `Node.js ${version}; LunasQ needs ${MINIMUM.node} or newer`,
       "instala Node.js 26 LTS",
     );
   }
@@ -63,12 +63,12 @@ export function checkNode(ctx: MachineContext): CheckResult {
 export function checkSqlite(ctx: MachineContext): CheckResult {
   try {
     ctx.checkSqlite();
-    return ok("sqlite", "better-sqlite3 carga y las migraciones aplican");
+    return ok("sqlite", "better-sqlite3 loads and the migrations apply");
   } catch (err) {
     return fail(
       "sqlite",
       `better-sqlite3 no carga: ${message(err)}`,
-      "reinstala lunasq en una plataforma con prebuild de better-sqlite3 (ADR 0003)",
+      "reinstall lunasq on a platform with a better-sqlite3 prebuild (ADR 0003)",
     );
   }
 }
@@ -81,7 +81,7 @@ interface HerdrStatus {
 export async function checkHerdr(ctx: MachineContext): Promise<CheckResult[]> {
   const res = await run(ctx, "herdr status --json");
   if (res.exitCode === NOT_FOUND_EXIT_CODE) {
-    return [fail("herdr", "herdr no está instalado", "instala herdr 0.9.5 o más")];
+    return [fail("herdr", "herdr is not installed", "install herdr 0.9.5 or newer")];
   }
   let status: HerdrStatus;
   try {
@@ -90,7 +90,7 @@ export async function checkHerdr(ctx: MachineContext): Promise<CheckResult[]> {
     return [
       fail(
         "herdr",
-        `\`herdr status --json\` no devolvió JSON: ${res.stderr.trim() || res.stdout.trim()}`,
+        `\`herdr status --json\` did not return JSON: ${res.stderr.trim() || res.stdout.trim()}`,
       ),
     ];
   }
@@ -100,7 +100,7 @@ export async function checkHerdr(ctx: MachineContext): Promise<CheckResult[]> {
     return [
       fail(
         "herdr",
-        `herdr ${version || "desconocido"}; LunasQ necesita ${MINIMUM.herdr} o más`,
+        `herdr ${version || "unknown"}; LunasQ needs ${MINIMUM.herdr} or newer`,
         "actualiza herdr",
       ),
     ];
@@ -110,32 +110,28 @@ export async function checkHerdr(ctx: MachineContext): Promise<CheckResult[]> {
       ? ok("herdr", `herdr ${version} (protocol ${protocol})`)
       : warn(
           "herdr",
-          `herdr ${version} habla protocol ${protocol}; LunasQ se verificó con ${MINIMUM.herdrProtocol}`,
+          `herdr ${version} speaks protocol ${protocol}; LunasQ was verified with ${MINIMUM.herdrProtocol}`,
         ),
   ];
   if (!status.server?.running) {
     results.push(
-      warn(
-        "herdr-server",
-        "el servidor de herdr no está corriendo",
-        "abre herdr antes de `lunasq start`",
-      ),
+      warn("herdr-server", "the herdr server is not running", "open herdr before `lunasq start`"),
     );
   } else if (status.server.compatible === false) {
     results.push(
       fail(
         "herdr-server",
-        `el servidor de herdr (${status.server.version}) no es compatible con el cliente`,
+        `the herdr server (${status.server.version}) is not compatible with the client`,
         "reinicia herdr",
       ),
     );
   } else {
-    results.push(ok("herdr-server", "servidor de herdr corriendo"));
+    results.push(ok("herdr-server", "herdr server running"));
   }
   return results;
 }
 
-/** Estado de la integración oficial de herdr para Claude Code (`herdr integration status`). */
+/** State of the official herdr integration for Claude Code (`herdr integration status`). */
 export async function claudeIntegrationState(ctx: MachineContext): Promise<string | undefined> {
   const res = await run(ctx, "herdr integration status");
   if (res.exitCode !== 0) return undefined;
@@ -146,46 +142,46 @@ export async function checkHerdrIntegration(ctx: MachineContext): Promise<CheckR
   if ((await checkClaude(ctx)).status !== "ok" && (await checkCopilot(ctx)).status === "ok") {
     return warn(
       "herdr-integration",
-      "integración de herdr para Claude Code omitida: GitHub Copilot CLI está disponible",
+      "herdr integration for Claude Code skipped: GitHub Copilot CLI is available",
     );
   }
   const state = await claudeIntegrationState(ctx);
   if (state?.startsWith("current"))
-    return ok("herdr-integration", `integración de herdr para Claude Code: ${state}`);
+    return ok("herdr-integration", `herdr integration for Claude Code: ${state}`);
   return fail(
     "herdr-integration",
-    `integración de herdr para Claude Code: ${state ?? "desconocida"}`,
+    `herdr integration for Claude Code: ${state ?? "unknown"}`,
     INSTALL_FIX,
   );
 }
 
-/** ADR 0009: con `ui.toast.delivery = "off"` (el default de herdr) las notificaciones no se ven. */
+/** ADR 0009: with `ui.toast.delivery = "off"` (herdr's default) the notifications are not visible. */
 export async function checkHerdrToast(ctx: MachineContext): Promise<CheckResult> {
   const text = await readFile(ctx.paths.herdrConfig, "utf8").catch(() => "");
   const delivery = tomlString(text, "ui.toast.delivery") ?? "off";
   if (delivery === "off") {
     return warn(
       "herdr-toast",
-      'los avisos de herdr están apagados (`[ui.toast] delivery = "off"`); solo llegarán a la UI',
-      `define \`delivery\` en la sección \`[ui.toast]\` de ${ctx.paths.herdrConfig}`,
+      'herdr notifications are off (`[ui.toast] delivery = "off"`); they will only reach the UI',
+      `set \`delivery\` in the \`[ui.toast]\` section of ${ctx.paths.herdrConfig}`,
     );
   }
-  return ok("herdr-toast", `avisos de herdr: ${delivery}`);
+  return ok("herdr-toast", `herdr notifications: ${delivery}`);
 }
 
 export async function checkClaude(ctx: MachineContext): Promise<CheckResult> {
   const res = await run(ctx, "claude --version");
   if (res.exitCode === NOT_FOUND_EXIT_CODE) {
-    return fail("claude", "Claude Code no está instalado", "instala Claude Code");
+    return fail("claude", "Claude Code is not installed", "install Claude Code");
   }
   const version = parseVersion(res.stdout);
   if (res.exitCode !== 0 || !version) {
-    return fail("claude", `\`claude --version\` falló: ${res.stderr.trim() || res.stdout.trim()}`);
+    return fail("claude", `\`claude --version\` failed: ${res.stderr.trim() || res.stdout.trim()}`);
   }
   if (compareVersions(version, MINIMUM.claude) < 0) {
     return fail(
       "claude",
-      `Claude Code ${version}; LunasQ necesita ${MINIMUM.claude} o más`,
+      `Claude Code ${version}; LunasQ needs ${MINIMUM.claude} or newer`,
       "actualiza Claude Code",
     );
   }
@@ -195,19 +191,19 @@ export async function checkClaude(ctx: MachineContext): Promise<CheckResult> {
 export async function checkCopilot(ctx: MachineContext): Promise<CheckResult> {
   const res = await run(ctx, "copilot --version");
   if (res.exitCode === NOT_FOUND_EXIT_CODE) {
-    return fail("copilot", "GitHub Copilot CLI no está instalado", "instala GitHub Copilot CLI");
+    return fail("copilot", "GitHub Copilot CLI is not installed", "install GitHub Copilot CLI");
   }
   const version = parseVersion(res.stdout);
   if (res.exitCode !== 0 || !version) {
     return fail(
       "copilot",
-      `\`copilot --version\` falló: ${res.stderr.trim() || res.stdout.trim()}`,
+      `\`copilot --version\` failed: ${res.stderr.trim() || res.stdout.trim()}`,
     );
   }
   if (compareVersions(version, MINIMUM.copilot) < 0) {
     return fail(
       "copilot",
-      `GitHub Copilot CLI ${version}; LunasQ necesita ${MINIMUM.copilot} o más`,
+      `GitHub Copilot CLI ${version}; LunasQ needs ${MINIMUM.copilot} or newer`,
       "actualiza GitHub Copilot CLI",
     );
   }
@@ -217,13 +213,13 @@ export async function checkCopilot(ctx: MachineContext): Promise<CheckResult> {
 export async function checkGh(ctx: MachineContext): Promise<CheckResult> {
   const res = await run(ctx, "gh auth status");
   if (res.exitCode === NOT_FOUND_EXIT_CODE)
-    return fail("gh", "gh no está instalado", "instala GitHub CLI");
+    return fail("gh", "gh is not installed", "install GitHub CLI");
   if (res.exitCode !== 0)
-    return fail("gh", "gh no tiene una sesión autenticada", "corre `gh auth login`");
+    return fail("gh", "gh has no authenticated session", "run `gh auth login`");
   return ok("gh", "gh autenticado");
 }
 
-/** Herramientas que LunasQ no instala: sin ellas `install` no sigue. */
+/** Tools LunasQ does not install: without them `install` does not continue. */
 export async function checkPrerequisites(ctx: MachineContext): Promise<CheckResult[]> {
   const [herdr, claude, copilot, gh] = await Promise.all([
     checkHerdr(ctx),
@@ -236,9 +232,9 @@ export async function checkPrerequisites(ctx: MachineContext): Promise<CheckResu
   return [...herdr, claude, copilot, gh];
 }
 
-/** Fix para un destino ajeno: LunasQ no lo sobrescribe (ADR uw-28-instalador). */
+/** Fix for a foreign destination: LunasQ does not overwrite it (ADR uw-28-instalador). */
 export const foreignFix = (dest: string) =>
-  `${dest} no lo instaló LunasQ: muévelo o bórralo y corre \`lunasq install\``;
+  `${dest} was not installed by LunasQ: move or delete it and run \`lunasq install\``;
 
 export async function checkAssets(ctx: MachineContext): Promise<CheckResult[]> {
   const targets = await assetTargets(ctx.assetsRoot, ctx.paths);
@@ -258,18 +254,22 @@ export async function checkAssets(ctx: MachineContext): Promise<CheckResult[]> {
             ? "subagentes revisores de Copilot CLI"
             : `skill ${t.name}${t.kind === "copilot-skill" ? " de Copilot" : ""}`;
       if (await isForeign(t, manifest)) {
-        return fail(id, `${label}: ${t.dest} ya existe y no es de LunasQ`, foreignFix(t.dest));
+        return fail(
+          id,
+          `${label}: ${t.dest} already exists and does not belong to LunasQ`,
+          foreignFix(t.dest),
+        );
       }
       const changes = await drift(t.src, t.dest);
       if (changes.length === 0) return ok(id, `${label} en ${t.dest}`);
-      const state = existsSync(t.dest) ? `desactualizado (${changes.join(", ")})` : "sin instalar";
+      const state = existsSync(t.dest) ? `outdated (${changes.join(", ")})` : "not installed";
       return fail(id, `${label}: ${state}`, INSTALL_FIX);
     }),
   );
   const leftovers = retired(targets, manifest)
     .filter((dest) => existsSync(dest))
     .map((dest) =>
-      fail(`retired:${dest}`, `asset retirado sigue instalado en ${dest}`, INSTALL_FIX),
+      fail(`retired:${dest}`, `retired asset is still installed in ${dest}`, INSTALL_FIX),
     );
   return [...current, ...leftovers];
 }
@@ -284,45 +284,43 @@ async function sameJson(path: string, expected: unknown): Promise<boolean> {
   }
 }
 
-/** Configuración, archivo MCP estable (el registro del LunasQ MCP) y settings de hooks. */
+/** Configuration, stable MCP file (the LunasQ MCP registration) and hook settings. */
 export async function checkLunasqFiles(ctx: MachineContext): Promise<CheckResult[]> {
   let config: LunasqConfig | undefined;
   try {
     config = await readConfig(ctx.paths.config);
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
-    return [
-      fail("config", `configuración inválida: ${err.message}`, `corrige ${ctx.paths.config}`),
-    ];
+    return [fail("config", `invalid configuration: ${err.message}`, `fix ${ctx.paths.config}`)];
   }
-  if (!config) return [fail("config", "LunasQ no está instalado", INSTALL_FIX)];
+  if (!config) return [fail("config", "LunasQ is not installed", INSTALL_FIX)];
   const urls = runtimeUrls(baseUrl(config));
   const mcp = (await sameJson(ctx.paths.mcpConfig, mcpConfig(urls.mcp)))
-    ? ok("mcp", `LunasQ MCP registrado en ${ctx.paths.mcpConfig} (${urls.mcp})`)
+    ? ok("mcp", `LunasQ MCP registered in ${ctx.paths.mcpConfig} (${urls.mcp})`)
     : fail(
         "mcp",
-        "el archivo MCP de LunasQ falta o no corresponde a la configuración",
+        "the LunasQ MCP file is missing or does not match the configuration",
         INSTALL_FIX,
       );
   const hooks = (await sameJson(ctx.paths.hookSettings, hookSettings(urls.hooks)))
-    ? ok("hooks", `hooks de subagentes en ${ctx.paths.hookSettings}`)
-    : fail("hooks", "el settings de hooks falta o no corresponde a la configuración", INSTALL_FIX);
-  const telemetry = config.telemetry
-    ? ok("telemetry", `telemetría de Claude Code hacia ${baseUrl(config)}`)
-    : warn(
-        "telemetry",
-        "telemetría apagada: no habrá usage por tarea",
-        `pon \`telemetry: true\` en ${ctx.paths.config}`,
-      );
-  const copilotMcp = (await hasCopilotMcpConfig(ctx.paths.copilotMcpConfig, urls.mcp))
-    ? ok("copilot-mcp", `LunasQ MCP registrado en ${ctx.paths.copilotMcpConfig}`)
+    ? ok("hooks", `subagent hooks in ${ctx.paths.hookSettings}`)
     : fail(
-        "copilot-mcp",
-        "LunasQ MCP no está registrado en la configuración de Copilot",
+        "hooks",
+        "the hooks settings are missing or do not match the configuration",
         INSTALL_FIX,
       );
+  const telemetry = config.telemetry
+    ? ok("telemetry", `Claude Code telemetry to ${baseUrl(config)}`)
+    : warn(
+        "telemetry",
+        "telemetry is off: there will be no per-task usage",
+        `set \`telemetry: true\` in ${ctx.paths.config}`,
+      );
+  const copilotMcp = (await hasCopilotMcpConfig(ctx.paths.copilotMcpConfig, urls.mcp))
+    ? ok("copilot-mcp", `LunasQ MCP registered in ${ctx.paths.copilotMcpConfig}`)
+    : fail("copilot-mcp", "LunasQ MCP is not registered in the Copilot configuration", INSTALL_FIX);
   return [
-    ok("config", `configuración en ${ctx.paths.config} (puerto ${config.port})`),
+    ok("config", `configuration in ${ctx.paths.config} (port ${config.port})`),
     mcp,
     copilotMcp,
     hooks,
@@ -335,7 +333,7 @@ export async function checkEngram(ctx: MachineContext): Promise<CheckResult> {
   if (res.exitCode === 0) return ok("engram", "engram instalado");
   return warn(
     "engram",
-    "engram no está instalado: los agentes trabajan sin memoria persistente (opcional)",
+    "engram is not installed: agents work without persistent memory (optional)",
   );
 }
 

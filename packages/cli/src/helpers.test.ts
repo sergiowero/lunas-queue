@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe("resolvePaths", () => {
-  it("usa ~/.lunasq y ~/.claude por defecto", () => {
+  it("uses ~/.lunasq and ~/.claude by default", () => {
     const p = resolvePaths({}, "/h");
     expect(p).toMatchObject({
       config: "/h/.lunasq/config.json",
@@ -26,7 +26,7 @@ describe("resolvePaths", () => {
     });
   });
 
-  it("respeta LUNASQ_HOME, CLAUDE_CONFIG_DIR y HERDR_CONFIG_PATH", () => {
+  it("respects LUNASQ_HOME, CLAUDE_CONFIG_DIR and HERDR_CONFIG_PATH", () => {
     const p = resolvePaths(
       { LUNASQ_HOME: "/l", CLAUDE_CONFIG_DIR: "/c", HERDR_CONFIG_PATH: "/x/herdr.toml" },
       "/h",
@@ -38,7 +38,7 @@ describe("resolvePaths", () => {
 });
 
 describe("config", () => {
-  it("completa defaults y rechaza valores inválidos", () => {
+  it("fills in defaults and rejects invalid values", () => {
     expect(parseConfig({})).toEqual({ port: DEFAULT_PORT, telemetry: true });
     expect(() => parseConfig({ port: 0 })).toThrow(ConfigError);
     expect(() => parseConfig({ port: "80" })).toThrow(ConfigError);
@@ -46,7 +46,7 @@ describe("config", () => {
     expect(() => parseConfig([])).toThrow(ConfigError);
   });
 
-  it("lee lo que escribe; un archivo ausente es undefined y uno roto es ConfigError", async () => {
+  it("reads what it writes; a missing file is undefined and a broken one is ConfigError", async () => {
     const dir = mkdtempSync(join(tmpdir(), "lunasq-config-"));
     dirs.push(dir);
     const path = join(dir, "sub", "config.json");
@@ -59,7 +59,7 @@ describe("config", () => {
 });
 
 describe("tomlString", () => {
-  it("lee una clave de una tabla, con puntos o comentarios", () => {
+  it("reads a key from a table, with dots or comments", () => {
     expect(tomlString('[ui.toast]\ndelivery = "system" # nota\n', "ui.toast.delivery")).toBe(
       "system",
     );
@@ -71,7 +71,7 @@ describe("tomlString", () => {
 });
 
 describe("versions", () => {
-  it("extrae y compara x.y.z", () => {
+  it("extracts and compares x.y.z", () => {
     expect(parseVersion("2.1.314 (Claude Code)")).toBe("2.1.314");
     expect(parseVersion("sin versión")).toBeUndefined();
     expect(compareVersions("0.9.5", "0.9.5")).toBe(0);

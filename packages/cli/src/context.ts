@@ -1,4 +1,4 @@
-// Lo que `install` y `doctor` necesitan de la máquina; los tests pasan un home temporal y un fake.
+// What `install` and `doctor` need from the machine; tests pass a temporary home and a fake.
 import { homedir } from "node:os";
 import {
   type ProcessResult,
@@ -11,17 +11,17 @@ import { type Paths, resolvePaths } from "./paths.ts";
 
 export interface MachineContext {
   paths: Paths;
-  /** Carpeta con `skills/` y `agents/` (los assets del repo o del paquete publicado). */
+  /** Folder with `skills/` and `agents/` (the assets of the repo or the published package). */
   assetsRoot: string;
-  /** Build del front end, si existe (ADR uw-29-e2e). */
+  /** Front end build, if it exists (ADR uw-29-e2e). */
   webRoot?: string | undefined;
   runner: ProcessRunner;
   nodeVersion: string;
-  /** Lanza si better-sqlite3 no carga o las migraciones no aplican. */
+  /** Throws if better-sqlite3 does not load or the migrations do not apply. */
   checkSqlite: () => void;
 }
 
-/** Tope por comando: una herramienta colgada no debe colgar `doctor`. */
+/** Cap per command: a hung tool must not hang `doctor`. */
 export const COMMAND_TIMEOUT_MS = 30_000;
 
 export function machineContext(): MachineContext {
@@ -39,5 +39,5 @@ export function run(ctx: MachineContext, command: string): Promise<ProcessResult
   return ctx.runner.run({ command, cwd: homedir(), timeoutMs: COMMAND_TIMEOUT_MS });
 }
 
-/** `sh -c` sale con 127 si el comando no existe. */
+/** `sh -c` exits with 127 if the command does not exist. */
 export const NOT_FOUND_EXIT_CODE = 127;

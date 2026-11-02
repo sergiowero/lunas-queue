@@ -18,7 +18,7 @@ function cleanMachine(responses = healthyResponses()) {
     "herdr integration status": integrationStatus("not installed"),
   });
   cleanups.push(m.cleanup);
-  // La integración queda instalada cuando herdr la instala.
+  // The integration is installed when herdr installs it.
   m.responses["herdr integration install claude"] = { stdout: "installed" };
   const original = m.runner.run.bind(m.runner);
   m.runner.run = async (input) => {
@@ -32,7 +32,7 @@ function cleanMachine(responses = healthyResponses()) {
 }
 
 describe("install", () => {
-  it("deja una máquina limpia lista en un solo comando y doctor en verde", async () => {
+  it("leaves a clean machine ready in a single command and doctor green", async () => {
     const { ctx, commands } = cleanMachine();
     const result = await install(ctx);
 
@@ -81,7 +81,7 @@ describe("install", () => {
     expect(existsSync(ctx.paths.db)).toBe(true);
   });
 
-  it("crea el directorio de Claude Code antes de instalar la integración de herdr", async () => {
+  it("creates the Claude Code directory before installing the herdr integration", async () => {
     const { ctx, runner } = cleanMachine();
     let existed: boolean | undefined;
     const run = runner.run.bind(runner);
@@ -94,7 +94,7 @@ describe("install", () => {
     expect(existed).toBe(true);
   });
 
-  it("repetirlo no cambia nada", async () => {
+  it("repeating it changes nothing", async () => {
     const { ctx, commands } = cleanMachine();
     await install(ctx);
     const before = commands().length;
@@ -105,7 +105,7 @@ describe("install", () => {
     expect(commands().slice(before)).not.toContain("herdr integration install claude");
   });
 
-  it("registra MCP en Copilot preservando otras opciones y servidores", async () => {
+  it("registers MCP in Copilot preserving other options and servers", async () => {
     const { ctx } = cleanMachine();
     mkdirSync(ctx.paths.copilotHome, { recursive: true });
     writeFileSync(
@@ -127,7 +127,7 @@ describe("install", () => {
     });
   });
 
-  it("restaura un asset editado y borra los que ya no existen", async () => {
+  it("restores an edited asset and deletes the ones that no longer exist", async () => {
     const { ctx } = cleanMachine();
     await install(ctx);
     writeFileSync(join(ctx.paths.agents, "lunasq-code-reviewer.md"), "editado");
@@ -141,7 +141,7 @@ describe("install", () => {
     expect(existsSync(join(ctx.paths.agents, "lunasq-viejo-reviewer.md"))).toBe(false);
   });
 
-  it("--port cambia el puerto y reescribe los archivos de Claude Code; sin él se conserva", async () => {
+  it("--port changes the port and rewrites the Claude Code files; without it the current one is kept", async () => {
     const { ctx } = cleanMachine();
     await install(ctx, { port: 8123 });
     await install(ctx);
@@ -149,7 +149,7 @@ describe("install", () => {
     expect(readFileSync(ctx.paths.mcpConfig, "utf8")).toContain("http://127.0.0.1:8123/mcp");
   });
 
-  it("no toca una skill ajena con el mismo nombre y doctor la reporta", async () => {
+  it("does not touch a foreign skill with the same name and doctor reports it", async () => {
     const { ctx } = cleanMachine();
     const mine = join(ctx.paths.skills, "implement-task");
     mkdirSync(mine, { recursive: true });
@@ -163,13 +163,13 @@ describe("install", () => {
     expect(result.ok).toBe(false);
     expect(result.checks.find((c) => c.id === "skill:implement-task")).toMatchObject({
       status: "fail",
-      fix: expect.stringContaining("no lo instaló LunasQ"),
+      fix: expect.stringContaining("was not installed by LunasQ"),
     });
-    // Las demás sí quedan instaladas.
+    // The rest are installed.
     expect(result.checks.find((c) => c.id === "skill:refine-task")?.status).toBe("ok");
   });
 
-  it("adopta un destino idéntico a los assets", async () => {
+  it("adopts a destination identical to the assets", async () => {
     const { ctx } = cleanMachine();
     await install(ctx);
     rmSync(ctx.paths.manifest);
@@ -180,7 +180,7 @@ describe("install", () => {
     );
   });
 
-  it("borra la carpeta de un asset que LunasQ instaló y ya no publica", async () => {
+  it("deletes the folder of an asset that LunasQ installed and no longer publishes", async () => {
     const { ctx } = cleanMachine();
     await install(ctx);
     const old = join(ctx.paths.skills, "deliver-task");
@@ -197,7 +197,7 @@ describe("install", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("una configuración inválida se reporta con su ruta antes de escribir nada", async () => {
+  it("an invalid configuration is reported with its path before writing anything", async () => {
     const { ctx } = cleanMachine();
     mkdirSync(ctx.paths.home, { recursive: true });
     writeFileSync(ctx.paths.config, "{");
@@ -207,9 +207,9 @@ describe("install", () => {
 
   it.each([
     ["herdr", "herdr status --json"],
-    ["ambos proveedores", "claude --version"],
+    ["both providers", "claude --version"],
     ["gh", "gh auth status"],
-  ])("sin %s no instala nada", async (_, command) => {
+  ])("does not install anything without %s", async (_, command) => {
     const { ctx, commands } = cleanMachine({
       ...healthyResponses(),
       [command]: { exitCode: 127 },
@@ -224,7 +224,7 @@ describe("install", () => {
     expect(existsSync(ctx.paths.claudeHome)).toBe(false);
   });
 
-  it("si herdr no puede instalar la integración, lo dice", async () => {
+  it("if herdr cannot install the integration, it says so", async () => {
     const m = fakeMachine({
       ...healthyResponses(),
       "herdr integration status": integrationStatus("not installed"),

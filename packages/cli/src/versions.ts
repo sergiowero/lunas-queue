@@ -1,9 +1,9 @@
-/** Primer `x.y.z` del texto (p. ej. `2.1.314 (Claude Code)` o `v26.1.0`). */
+/** First `x.y.z` of the text (e.g. `2.1.314 (Claude Code)` or `v26.1.0`). */
 export function parseVersion(text: string): string | undefined {
   return /(\d+)\.(\d+)\.(\d+)/.exec(text)?.[0];
 }
 
-/** Compara `x.y.z` numéricamente: negativo si `a < b`. */
+/** Compares `x.y.z` numerically: negative if `a < b`. */
 export function compareVersions(a: string, b: string): number {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);

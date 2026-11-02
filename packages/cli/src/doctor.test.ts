@@ -26,7 +26,7 @@ async function installed(responses = healthyResponses()) {
 }
 
 describe("doctor", () => {
-  it("una máquina recién instalada queda en verde", async () => {
+  it("a freshly installed machine is green", async () => {
     const { ctx } = await installed();
     const results = await runDoctor(ctx);
     expect(results.filter((r) => r.status === "fail")).toEqual([]);
@@ -58,7 +58,7 @@ describe("doctor", () => {
     ]);
   });
 
-  it("una máquina limpia falla en lo que instala `lunasq install`", async () => {
+  it("a clean machine fails on what `lunasq install` installs", async () => {
     const { ctx } = machine({
       ...healthyResponses(),
       "herdr integration status": integrationStatus("not installed"),
@@ -82,13 +82,13 @@ describe("doctor", () => {
     ).toBe(true);
   });
 
-  it("Node.js anterior a 26 falla", async () => {
+  it("Node.js older than 26 fails", async () => {
     const { ctx } = await installed();
     ctx.nodeVersion = "25.8.2";
     expect(byId(await runDoctor(ctx), "node")?.status).toBe("fail");
   });
 
-  it("better-sqlite3 que no carga falla", async () => {
+  it("better-sqlite3 that does not load fails", async () => {
     const { ctx } = await installed();
     ctx.checkSqlite = () => {
       throw new Error("invalid ELF header");
@@ -100,16 +100,16 @@ describe("doctor", () => {
   });
 
   it.each([
-    ["no instalado", { exitCode: 127 }, "fail", /no está instalado/],
+    ["not installed", { exitCode: 127 }, "fail", /is not installed/],
     [
-      "viejo",
+      "old",
       { stdout: JSON.stringify({ client: { version: "0.9.4", protocol: 22 } }) },
       "fail",
       /0\.9\.5/,
     ],
-    ["salida rota", { stdout: "nope", exitCode: 1 }, "fail", /no devolvió JSON/],
+    ["broken output", { stdout: "nope", exitCode: 1 }, "fail", /did not return JSON/],
     [
-      "otro protocol",
+      "another protocol",
       { stdout: JSON.stringify({ ...HERDR_STATUS, client: { version: "0.10.0", protocol: 23 } }) },
       "warn",
       /protocol 23/,
@@ -122,7 +122,7 @@ describe("doctor", () => {
     });
   });
 
-  it("avisa si el servidor de herdr no corre y falla si no es compatible", async () => {
+  it("warns if the herdr server is not running and fails if it is not compatible", async () => {
     const stopped = machine({
       ...healthyResponses(),
       "herdr status --json": {
@@ -142,7 +142,7 @@ describe("doctor", () => {
     expect(byId(await runDoctor(stale.ctx), "herdr-server")?.status).toBe("fail");
   });
 
-  it("una integración de herdr desactualizada falla", async () => {
+  it("an outdated herdr integration fails", async () => {
     const { ctx, responses } = await installed();
     responses["herdr integration status"] = integrationStatus("outdated (v10, current v11)");
     expect(byId(await runDoctor(ctx), "herdr-integration")).toMatchObject({
@@ -151,7 +151,7 @@ describe("doctor", () => {
     });
   });
 
-  it("avisa con los toasts de herdr apagados (default) y no con otro delivery", async () => {
+  it("warns with herdr toasts off (default) and not with another delivery", async () => {
     const { ctx } = await installed();
     expect(byId(await runDoctor(ctx), "herdr-toast")?.status).toBe("warn");
     mkdirSync(dirname(ctx.paths.herdrConfig), { recursive: true });
@@ -160,8 +160,8 @@ describe("doctor", () => {
   });
 
   it.each([
-    ["no instalado", { exitCode: 127 }, /no está instalado/],
-    ["viejo", { stdout: "2.1.200 (Claude Code)" }, /2\.1\.312/],
+    ["not installed", { exitCode: 127 }, /is not installed/],
+    ["old", { stdout: "2.1.200 (Claude Code)" }, /2\.1\.312/],
   ])("Claude Code %s falla", async (_, response, summary) => {
     const { ctx } = machine({
       ...healthyResponses(),
@@ -174,24 +174,24 @@ describe("doctor", () => {
     });
   });
 
-  it("gh sin sesión falla con la instrucción para autenticarse", async () => {
+  it("gh without a session fails with the instruction to authenticate", async () => {
     const { ctx } = machine({ ...healthyResponses(), "gh auth status": { exitCode: 1 } });
     expect(byId(await runDoctor(ctx), "gh")).toMatchObject({
       status: "fail",
-      fix: "corre `gh auth login`",
+      fix: "run `gh auth login`",
     });
   });
 
-  it("una skill modificada a mano falla como desactualizada", async () => {
+  it("a skill edited by hand fails as outdated", async () => {
     const { ctx } = await installed();
     writeFileSync(`${ctx.paths.skills}/verify-task/SKILL.md`, "editada");
     expect(byId(await runDoctor(ctx), "skill:verify-task")).toMatchObject({
       status: "fail",
-      summary: expect.stringContaining("desactualizado (SKILL.md)"),
+      summary: expect.stringContaining("outdated (SKILL.md)"),
     });
   });
 
-  it("el archivo MCP debe apuntar al puerto configurado", async () => {
+  it("the MCP file must point to the configured port", async () => {
     const { ctx } = await installed();
     await writeConfig(ctx.paths.config, { port: 9999, telemetry: true });
     const results = await runDoctor(ctx);
@@ -199,13 +199,13 @@ describe("doctor", () => {
     expect(byId(results, "hooks")?.status).toBe("fail");
   });
 
-  it("una configuración inválida falla", async () => {
+  it("an invalid configuration fails", async () => {
     const { ctx } = await installed();
     writeFileSync(ctx.paths.config, '{"port": -1}');
     expect(byId(await runDoctor(ctx), "config")?.status).toBe("fail");
   });
 
-  it("sin engram solo avisa", async () => {
+  it("without engram it only warns", async () => {
     const { ctx } = await installed({
       ...healthyResponses(),
       "command -v engram": { exitCode: 1 },

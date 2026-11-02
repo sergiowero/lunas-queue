@@ -1,5 +1,5 @@
-// Configuración de la instalación (`~/.lunasq/config.json`): el puerto del proceso y si se pasa
-// la telemetría a los panes. La URL del LunasQ MCP y de los hooks sale del puerto.
+// Installation configuration (`~/.lunasq/config.json`): the process port and whether telemetry is passed
+// to the panes. The URL of the LunasQ MCP and of the hooks comes from the port.
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { DEFAULT_HOSTNAME } from "@lunasq/server";
@@ -24,17 +24,17 @@ export function isPort(value: unknown): value is number {
 
 export function parseConfig(value: unknown): LunasqConfig {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new ConfigError("la configuración debe ser un objeto JSON");
+    throw new ConfigError("the configuration must be a JSON object");
   }
   const { port = DEFAULT_PORT, telemetry = true } = value as Record<string, unknown>;
-  if (!isPort(port)) throw new ConfigError(`port inválido: ${JSON.stringify(port)}`);
+  if (!isPort(port)) throw new ConfigError(`invalid port: ${JSON.stringify(port)}`);
   if (typeof telemetry !== "boolean") {
-    throw new ConfigError(`telemetry inválido: ${JSON.stringify(telemetry)}`);
+    throw new ConfigError(`invalid telemetry: ${JSON.stringify(telemetry)}`);
   }
   return { port, telemetry };
 }
 
-/** `undefined` si el archivo no existe; ConfigError si no es válido. */
+/** `undefined` if the file does not exist; ConfigError if it is not valid. */
 export async function readConfig(path: string): Promise<LunasqConfig | undefined> {
   let text: string;
   try {
@@ -47,7 +47,7 @@ export async function readConfig(path: string): Promise<LunasqConfig | undefined
   try {
     json = JSON.parse(text);
   } catch {
-    throw new ConfigError(`${path} no es JSON válido`);
+    throw new ConfigError(`${path} is not valid JSON`);
   }
   return parseConfig(json);
 }

@@ -17,7 +17,7 @@ function tmp() {
 }
 
 describe("assetTargets", () => {
-  it("instala skills y revisores para Claude y Copilot", async () => {
+  it("installs skills and reviewers for Claude and Copilot", async () => {
     const targets = await assetTargets(repoAssetsRoot(), resolvePaths({}, "/h"));
     expect(targets.map((t) => [t.kind, t.name, t.dest])).toEqual([
       ["skill", "implement-task", "/h/.claude/skills/implement-task"],
@@ -31,13 +31,13 @@ describe("assetTargets", () => {
     ]);
   });
 
-  it("en el repo encuentra los assets de la raíz", () => {
+  it("in the repo it finds the root assets", () => {
     expect(findAssetsRoot()).toBe(repoAssetsRoot());
   });
 });
 
 describe("mirror", () => {
-  it("copia, actualiza y borra lo que sobra; repetirlo no cambia nada", async () => {
+  it("copies, updates and deletes the leftovers; repeating it changes nothing", async () => {
     const src = tmp();
     const dest = join(tmp(), "out");
     mkdirSync(join(src, "nested"));
