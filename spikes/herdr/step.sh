@@ -1,4 +1,4 @@
-# Uso: source step.sh; step <nombre> <args de herdr...>  — corre herdr en la sesión aislada y guarda salida.
+# Usage: source step.sh; step <name> <herdr args...>  — runs herdr in the isolated session and saves the output.
 H_SESSION=${H_SESSION:-lunasq-spike}
 step() {
   n=$1; shift

@@ -1,4 +1,4 @@
-// Servidor MCP v2 montado en Hono (Streamable HTTP, stateless). Lo reusa spikes/run-token.
+// MCP v2 server mounted on Hono (Streamable HTTP, stateless). spikes/run-token reuses it.
 import { serve } from "@hono/node-server";
 import { createMcpHonoApp, localhostHostValidation } from "@modelcontextprotocol/hono";
 import { McpServer, WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
@@ -25,12 +25,12 @@ export function startServer(port: number) {
     const server = new McpServer({ name: "lunasq-spike", version: "0.0.0" });
     server.registerTool(
       "echo",
-      { description: "Devuelve el texto recibido", inputSchema: z.object({ text: z.string() }) },
+      { description: "Returns the received text", inputSchema: z.object({ text: z.string() }) },
       async ({ text }) => ({ content: [{ type: "text", text }] }),
     );
     server.registerTool(
       "whoami",
-      { description: "Devuelve el run token con el que llegó la llamada" },
+      { description: "Returns the run token the call arrived with" },
       async () => ({ content: [{ type: "text", text: `run token: ${token ?? "<ninguno>"}` }] }),
     );
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });

@@ -1,4 +1,4 @@
-// Spike UW-00/b: levanta el servidor de spikes/mcp-sdk y registra cada request con su run token.
+// Spike UW-00/b: starts the spikes/mcp-sdk server and records each request with its run token.
 import { appendFileSync } from "node:fs";
 import { startServer } from "../mcp-sdk/server.ts";
 
