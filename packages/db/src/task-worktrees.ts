@@ -12,6 +12,7 @@ const columns = {
   projectId: tasks.projectId,
   state: tasks.state,
   prState: tasks.prState,
+  resultKind: tasks.resultKind,
   branch: tasks.branch,
   worktreePath: tasks.worktreePath,
 };
@@ -43,8 +44,8 @@ export class TaskWorktreeRepository implements TaskWorktreeStore {
   }
 
   /**
-   * Tareas que ya no usan su worktree y lo conservan: canceladas, o completadas con el PR mergeado
-   * (docs/design.md §Ciclo de vida del worktree). La reconciliación las remueve.
+   * Tareas que ya no usan su worktree y lo conservan: canceladas, o completadas con el PR mergeado o con
+   * un Resultado (docs/design.md §Ciclo de vida del worktree). La reconciliación las remueve.
    */
   releasable(): TaskWorktreeRecord[] {
     return this.db
@@ -53,10 +54,14 @@ export class TaskWorktreeRepository implements TaskWorktreeStore {
       .where(
         and(
           isNotNull(tasks.worktreePath),
-          // La misma regla que worktreeReleased (domain): cancelada, o completada y mergeada.
+          // La misma regla que worktreeReleased (domain): cancelada, o completada y mergeada o con
+          // Resultado.
           or(
             eq(tasks.state, "cancelled"),
-            and(eq(tasks.state, "completed"), eq(tasks.prState, "merged")),
+            and(
+              eq(tasks.state, "completed"),
+              or(eq(tasks.prState, "merged"), isNotNull(tasks.resultKind)),
+            ),
           ),
         ),
       )

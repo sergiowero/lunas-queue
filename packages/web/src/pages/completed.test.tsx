@@ -59,6 +59,44 @@ describe("pestaña Completed", () => {
     expect(screen.getByText("De dos")).toBeTruthy();
   });
 
+  it("AC-10: filtrando por Sin PR, la tarea con Resultado muestra su tipo en lugar de un PR", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "uno" });
+    fake.addTask(project.id, {
+      intent: "Investigar la cola",
+      state: "completed",
+      subState: null,
+      resultKind: "research",
+      result: "# Hallazgos",
+    });
+    fake.addTask(project.id, {
+      intent: "Ya estaba hecha",
+      state: "completed",
+      subState: null,
+      resultKind: "already_implemented",
+      result: "Vive en src/x.ts",
+    });
+    fake.addTask(project.id, {
+      intent: "Con PR mergeado",
+      state: "completed",
+      subState: null,
+      prUrl: "https://github.com/o/r/pull/9",
+      prState: "merged",
+    });
+    const { user } = renderApp("/completed", fake);
+
+    await screen.findByText("Con PR mergeado");
+    await user.selectOptions(screen.getByLabelText("Estado del PR"), "Sin PR");
+
+    await waitFor(() => expect(screen.queryByText("Con PR mergeado")).toBeNull());
+    const research = within(screen.getByRole("row", { name: /Investigar la cola/ }));
+    expect(research.getByText("Investigación")).toBeTruthy();
+    expect(research.queryByRole("link", { name: /PR/ })).toBeNull();
+    expect(
+      within(screen.getByRole("row", { name: /Ya estaba hecha/ })).getByText("Ya implementada"),
+    ).toBeTruthy();
+  });
+
   describe("filtro Estado del PR", () => {
     const completed = { state: "completed", subState: null } as const;
 

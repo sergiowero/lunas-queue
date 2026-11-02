@@ -190,6 +190,8 @@ export class FakeApi {
       prUrl: null,
       prState: null,
       riskLabel: null,
+      resultKind: null,
+      result: null,
       causedBy: null,
       createdAt: at,
       updatedAt: at,

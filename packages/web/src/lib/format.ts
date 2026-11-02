@@ -1,4 +1,11 @@
-import type { Phase, RunResult, SubState, TaskState, UsageTotals } from "@lunasq/schemas";
+import type {
+  Phase,
+  ResultKind,
+  RunResult,
+  SubState,
+  TaskState,
+  UsageTotals,
+} from "@lunasq/schemas";
 
 /** Nombre de una tarea en la UI: su título y, mientras el refinamiento no lo genera, el intent. */
 export function taskLabel(task: { title: string | null; intent: string }): string {
@@ -50,6 +57,13 @@ export const RESULT_LABEL: Record<RunResult, string> = {
   success: "éxito",
   failure: "fallo",
   cancelled: "cancelado",
+};
+
+/** Tipo de Resultado de una tarea completada sin código (submit_result). */
+export const RESULT_KIND_LABEL: Record<ResultKind, string> = {
+  research: "Investigación",
+  already_implemented: "Ya implementada",
+  not_resolvable: "Sin resolución",
 };
 
 export function isTerminal(state: TaskState): boolean {

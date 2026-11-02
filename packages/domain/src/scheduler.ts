@@ -6,6 +6,7 @@ import type {
   AgentProviderSettings,
   Project,
   PrState,
+  ResultKind,
   SchedulablePhase,
   SchedulerConfig,
   StatePosition,
@@ -26,6 +27,8 @@ export type SchedulerTask = {
   /** Prioridad base capturada por el humano; la efectiva se calcula. */
   priority: number;
   prState: PrState | null;
+  /** Resultado de una tarea completada sin código (submit_result); null o ausente si no tiene. */
+  resultKind?: ResultKind | null;
   createdAt: Date;
   /** Desde cuándo la tarea espera en su posición actual: la base del aging. */
   readySince: Date;
@@ -105,8 +108,10 @@ function holdsSlot(task: SchedulerTask): boolean {
   );
 }
 
+/** Una dependencia se satisface con su PR mergeado o completada con Resultado (ADR 0007). */
 function satisfies(dep: SchedulerTask | undefined): boolean {
-  return dep?.prState === "merged";
+  if (!dep) return false;
+  return dep.prState === "merged" || (dep.state === "completed" && Boolean(dep.resultKind));
 }
 
 /** Una dependencia que ya no se entregará: su dependiente quedaría esperando para siempre. */

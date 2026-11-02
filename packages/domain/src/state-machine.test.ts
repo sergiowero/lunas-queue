@@ -22,6 +22,7 @@ const passing: { [K in CommandInput["type"]]: Extract<CommandInput, { type: K }>
     everyCriterionHasTest: true,
     hasCommits: true,
   },
+  submit_result: { type: "submit_result", resultKind: "research" },
   verdict_rework: { type: "verdict_rework" },
   verdict_pass: {
     type: "verdict_pass",
@@ -73,6 +74,8 @@ add("draft/running", "submit_spec", "refined/-");
 add("refined/-", "request_changes", "draft/queued");
 add("refined/-", "approve", "in_progress/queued");
 add("in_progress/running", "submit_for_verification", "verification/queued");
+add("draft/running", "submit_result", "completed/-");
+add("in_progress/running", "submit_result", "completed/-");
 add("verification/running", "verdict_rework", "in_progress/queued");
 add("verification/running", "verdict_pass", "completed/-");
 add("verification/running", "delivery_conflict", "in_progress/queued");
@@ -128,10 +131,10 @@ describe("transition: tabla completa de estados × comandos", () => {
     }
   }
 
-  it("la tabla cubre las 14 combinaciones y los 15 comandos", () => {
+  it("la tabla cubre las 14 combinaciones y los 16 comandos", () => {
     expect(SNAPSHOTS).toHaveLength(14);
-    expect(COMMANDS).toHaveLength(15);
-    expect(Object.keys(VALID)).toHaveLength(54);
+    expect(COMMANDS).toHaveLength(16);
+    expect(Object.keys(VALID)).toHaveLength(56);
   });
 });
 
@@ -181,6 +184,7 @@ describe("transition: actores", () => {
     ask_human: snap("draft", "running"),
     answer: snap("draft", "waiting_human"),
     run_failed: snap("draft", "running"),
+    submit_result: snap("draft", "running"),
   };
 
   it("cada comando tiene los actores del diseño", () => {
@@ -189,6 +193,7 @@ describe("transition: actores", () => {
       request_changes: ["human"],
       approve: ["human"],
       submit_for_verification: ["agent"],
+      submit_result: ["agent"],
       verdict_rework: ["agent"],
       verdict_pass: ["system"],
       delivery_conflict: ["system"],
@@ -497,6 +502,70 @@ describe("transition: pausa", () => {
       for (const actor of ["human", "agent", "system"] as const) {
         expect(transition(snap("paused", null), passing[command], actor).ok).toBe(false);
       }
+    }
+  });
+});
+
+describe("transition: submit_result", () => {
+  it.each([
+    ["draft", "research"],
+    ["in_progress", "already_implemented"],
+    ["in_progress", "not_resolvable"],
+  ] as const)(
+    "%s/running con el tipo %s completa la tarea y lo deja en el evento",
+    (state, kind) => {
+      const result = transition(
+        snap(state, "running", 2),
+        { type: "submit_result", resultKind: kind },
+        "agent",
+      );
+      if (!result.ok) throw new Error(result.error.message);
+      expect(result.next).toEqual({ state: "completed", subState: null, verificationIteration: 2 });
+      expect(result.event.payload).toEqual({
+        command: "submit_result",
+        from: { state, subState: "running" },
+        to: { state: "completed", subState: null },
+        verificationIteration: 2,
+        note: kind,
+      });
+    },
+  );
+
+  it.each([["queued"], ["waiting_human"]] as const)(
+    "se rechaza desde un sub-estado %s",
+    (subState) => {
+      const result = transition(
+        snap("in_progress", subState),
+        { type: "submit_result", resultKind: "research" },
+        "agent",
+      );
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid_transition" } });
+    },
+  );
+
+  it("se rechaza desde verification, refined y completed", () => {
+    for (const [state, sub] of [
+      ["verification", "running"],
+      ["refined", null],
+      ["completed", null],
+    ] as const) {
+      const result = transition(
+        snap(state, sub),
+        { type: "submit_result", resultKind: "research" },
+        "agent",
+      );
+      expect(result).toMatchObject({ ok: false, error: { code: "invalid_transition" } });
+    }
+  });
+
+  it("se rechaza con un actor que no es agente", () => {
+    for (const actor of ["human", "system"] as const) {
+      const result = transition(
+        snap("draft", "running"),
+        { type: "submit_result", resultKind: "research" },
+        actor,
+      );
+      expect(result).toMatchObject({ ok: false, error: { code: "actor_not_allowed" } });
     }
   });
 });

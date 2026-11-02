@@ -18,6 +18,7 @@ describe("TaskWorktreeRepository", () => {
       projectId: project.id,
       state: "completed",
       prState: "open",
+      resultKind: null,
       branch: null,
       worktreePath: null,
     });
@@ -42,7 +43,7 @@ describe("TaskWorktreeRepository", () => {
     );
   });
 
-  it("releasable lista las tareas canceladas o mergeadas que conservan su worktree", () => {
+  it("releasable lista las tareas canceladas, mergeadas o con Resultado que conservan su worktree", () => {
     const { db, project, repo } = setup();
     const withWt = (overrides: Parameters<typeof insertTask>[2]) => {
       const task = insertTask(db, project.id, overrides);
@@ -51,6 +52,7 @@ describe("TaskWorktreeRepository", () => {
     };
     const cancelled = withWt({ state: "cancelled" });
     const merged = withWt({ state: "completed", prState: "merged" });
+    const withResult = withWt({ state: "completed", subState: null, resultKind: "research" });
     withWt({ state: "completed", prState: "open" });
     withWt({ state: "verification", subState: "running", prState: "merged" });
     withWt({ state: "in_progress", subState: "queued" });
@@ -61,6 +63,6 @@ describe("TaskWorktreeRepository", () => {
         .releasable()
         .map((t) => t.id)
         .sort(),
-    ).toEqual([cancelled.id, merged.id].sort());
+    ).toEqual([cancelled.id, merged.id, withResult.id].sort());
   });
 });

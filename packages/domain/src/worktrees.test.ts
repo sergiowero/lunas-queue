@@ -42,6 +42,13 @@ describe("worktreeReleased", () => {
     expect(worktreeReleased({ state: "completed", prState: "open" })).toBe(false);
     expect(worktreeReleased({ state: "completed", prState: "closed" })).toBe(false);
     expect(worktreeReleased({ state: "completed", prState: null })).toBe(false);
+    // completed con Resultado no tiene PR ni vuelve a in progress: nada que conservar.
+    expect(worktreeReleased({ state: "completed", prState: null, resultKind: "research" })).toBe(
+      true,
+    );
+    expect(worktreeReleased({ state: "in_progress", prState: null, resultKind: "research" })).toBe(
+      false,
+    );
     for (const state of [
       "draft",
       "refined",

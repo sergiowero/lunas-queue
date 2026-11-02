@@ -11,7 +11,7 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { taskLabel } from "../lib/format.ts";
+import { RESULT_KIND_LABEL, taskLabel } from "../lib/format.ts";
 import { queries } from "../lib/queries.ts";
 
 type Row = Json<Task>;
@@ -63,26 +63,30 @@ export function CompletedPage() {
         header: "Proyecto",
       }),
       column.accessor("priority", { header: "Prioridad" }),
-      column.accessor((task) => task.prState ?? "—", {
-        id: "pr",
-        header: "PR",
-        cell: (cell) => {
-          const task = cell.row.original;
-          return task.prUrl ? (
-            <a
-              href={task.prUrl}
-              target="_blank"
-              rel="noreferrer"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              {`PR ${cell.getValue()}`}
-              <ExternalLinkIcon />
-            </a>
-          ) : (
-            cell.getValue()
-          );
+      // Sin PR: una tarea completada con Resultado muestra su tipo en lugar del PR.
+      column.accessor(
+        (task) => (task.resultKind ? RESULT_KIND_LABEL[task.resultKind] : (task.prState ?? "—")),
+        {
+          id: "pr",
+          header: "PR",
+          cell: (cell) => {
+            const task = cell.row.original;
+            return task.prUrl ? (
+              <a
+                href={task.prUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                {`PR ${cell.getValue()}`}
+                <ExternalLinkIcon />
+              </a>
+            ) : (
+              cell.getValue()
+            );
+          },
         },
-      }),
+      ),
     ],
     [names],
   );

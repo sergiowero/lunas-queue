@@ -90,6 +90,14 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
       guarded("submit_for_verification", (run) => service.submitForVerification(run, handoff)),
   );
   server.registerTool(
+    "submit_result",
+    {
+      description: `Refinamiento o implementación de una tarea sin código (investigación, pedido ya implementado o sin resolución): entrega el Resultado en Markdown con su tipo (research, already_implemented, not_resolvable) y completa la tarea sin verificación ni PR. En implementación se rechaza si el branch tiene commits sobre la rama base. ${HANDOFF_HINT}`,
+      inputSchema: HandoffInput,
+    },
+    ({ handoff }) => guarded("submit_result", (run) => service.submitResult(run, handoff)),
+  );
+  server.registerTool(
     "run_reviewer",
     {
       description:

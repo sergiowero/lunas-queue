@@ -49,6 +49,24 @@ export function handoffFor(
   return { ...handoff, taskId: run.taskId, runId: run.id };
 }
 
+/** Handoff válido de submit_result con los ids del Run que lo envía. */
+export function resultFor(
+  run: { id: string; taskId: string },
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    schemaVersion: 1,
+    taskId: run.taskId,
+    runId: run.id,
+    phase: "refinement",
+    summary: "SQLite basta para un solo proceso.",
+    title: "Elegir la base de datos",
+    resultKind: "research",
+    result: "# Hallazgos\n\nSQLite basta para un solo proceso.",
+    ...overrides,
+  };
+}
+
 export class FakeTestGate implements TestGate {
   readonly calls: TestGateInput[] = [];
   result: TestGateResult = { passed: true, output: "todo en verde" };
@@ -93,6 +111,15 @@ export class FakeCommitVerifier implements CommitVerifier {
 
   async uncommitted(_worktreePath: string): Promise<string[]> {
     return this.dirty;
+  }
+
+  /** Respuesta de `branchHasCommits`: true simula un branch con commits sobre la base. */
+  ahead = false;
+  readonly aheadCalls: { worktreePath: string; baseBranch: string }[] = [];
+
+  async branchHasCommits(input: { worktreePath: string; baseBranch: string }): Promise<boolean> {
+    this.aheadCalls.push(input);
+    return this.ahead;
   }
 
   headSha: string | null = "a".repeat(40);

@@ -21,6 +21,7 @@ describe("evento task.transitioned", () => {
       "request_changes",
       "approve",
       "submit_for_verification",
+      "submit_result",
       "verdict_rework",
       "verdict_pass",
       "delivery_conflict",

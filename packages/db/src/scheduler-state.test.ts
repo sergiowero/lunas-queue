@@ -19,6 +19,7 @@ schedulerStateReaderContract("SchedulerStateRepository", (seeds, edges) => {
       subState: seed.subState ?? null,
       priority: seed.priority ?? 100,
       prState: seed.prState ?? null,
+      resultKind: seed.resultKind ?? null,
     });
     ids.set(seed.name, row.id);
   }
@@ -89,6 +90,22 @@ describe("SchedulerStateRepository: readySince", () => {
     const task = insertTask(db, project.id, { createdAt });
     db.insert(taskDependencies).values({ taskId: task.id, dependsOnId: dep.id }).run();
     expect(readySince(task.id)).toBe(mergedAt.getTime());
+  });
+
+  it("cuenta desde que una dependencia se completó con Resultado", () => {
+    const { db, project, readySince } = setup();
+    const createdAt = new Date("2026-10-01T00:00:00Z");
+    const completedAt = new Date("2026-10-22T00:00:00Z");
+    const dep = insertTask(db, project.id, {
+      state: "completed",
+      subState: null,
+      resultKind: "research",
+      result: "hallazgos",
+    });
+    db.update(tasks).set({ updatedAt: completedAt }).where(eq(tasks.id, dep.id)).run();
+    const task = insertTask(db, project.id, { createdAt });
+    db.insert(taskDependencies).values({ taskId: task.id, dependsOnId: dep.id }).run();
+    expect(readySince(task.id)).toBe(completedAt.getTime());
   });
 
   it("ignora los cambios de una dependencia que todavía no se mergea", () => {

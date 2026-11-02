@@ -30,7 +30,7 @@ Siete entidades bastan (más UsageRecord, ver Consumo); la clave es separar la *
 | Entidad | Propósito | Campos clave |
 | --- | --- | --- |
 | Project | Un repo y su configuración; mapea 1:1 a un workspace de herdr | repo, rama base, perfil de agente por fase (kind, modelo, esfuerzo, args), límite de concurrencia, comando de tests, hooks por fase (en lunasq/hooks/ del repo), ruta local, bootstrap del worktree |
-| Task | Unidad de trabajo en la cola | número (#N, secuencial global e inmutable; ADR 0015), intent, título (lo genera el refinador en el primer refinamiento y no vuelve a cambiar; la UI usa el intent mientras no exista), tags, prioridad (entero sin signo), estado, sub‑estado, iteración de verificación, branch, ruta del worktree, URL y estado del PR (abierto / mergeado / cerrado), etiqueta de riesgo (read‑only), caused\_by (tarea que originó este bugfix, opcional), usage (read‑only) |
+| Task | Unidad de trabajo en la cola | número (#N, secuencial global e inmutable; ADR 0015), intent, título (lo genera el refinador en el primer refinamiento y no vuelve a cambiar; la UI usa el intent mientras no exista), tags, prioridad (entero sin signo), estado, sub‑estado, iteración de verificación, branch, ruta del worktree, URL y estado del PR (abierto / mergeado / cerrado), resultado (tipo y texto Markdown; solo en una tarea completada sin código y sin PR), etiqueta de riesgo (read‑only), caused\_by (tarea que originó este bugfix, opcional), usage (read‑only) |
 | TaskDependency | Arista del DAG | task\_id, depends\_on\_id |
 | Spec | Salida versionada del refinamiento | versión, modelo de dominio (bounded context, glosario, agregados, invariantes, eventos), requerimientos, acceptance criteria, task list, estado de aprobación |
 | Run | Un intento de un agente en una fase | fase, tipo de agente, workspace/pane/nombre en herdr, identidad de sesión del agente (session id nativo o nombre de sesión), run token, inicio, fin, resultado, failure\_reason (texto), handoff (JSON), usage (read‑only) |
@@ -43,6 +43,7 @@ Decisiones de modelado:
 - **Acceptance criteria como items direccionables.** Cada criterio tiene id, para que el verificador emita un veredicto por criterio (pass / fail / evidencia) y no un booleano global.
 - **Event log como auditoría.** Permite reconstruir por qué una tarea regresó a in progress y alimenta la UI de historial.
 - **Número de tarea (#N).** Además de su UUID, cada tarea recibe al crearse un entero secuencial y global (no por proyecto), inmutable y que no se reutiliza aunque la tarea se cancele. Sirve para identificarla ante personas: título del pane y label del workspace en herdr, notificaciones, UI y menciones `#N` en el intent, que el detalle enlaza a la tarea mencionada. El UUID sigue siendo la identidad en rutas, llaves foráneas, branch y nombre del agente ([ADR 0015](decisions/0015-numero-de-tarea.md)).
+- **Tareas sin código y Resultado.** Una investigación, un pedido que ya está implementado o uno sin resolución no produce un diff. El agente la cierra con `submit_result` en refinamiento o implementación: la tarea pasa directo a Completed con un **Resultado** (`result_kind`: `research`, `already_implemented` o `not_resolvable`, y `result`, un texto Markdown de hasta 20 000 caracteres), sin spec aprobada, verificación, entrega ni PR. Una tarea tiene Resultado o PR, nunca los dos. El detalle lo muestra en una sección «Resultado» y Completed lo muestra en lugar del PR ([ADR 0007](decisions/0007-maquina-de-estados.md)).
 - **Run token y timeouts.** Cada Run tiene un token único que se inyecta al pane; solo el Run activo puede mover la tarea. Las tareas atoradas se detectan con señales de herdr y un timeout por fase, sin heartbeat del agente.
 
 ## Máquina de estados
@@ -64,6 +65,8 @@ stateDiagram-v2
     InProgress --> Verification: terminada
     Verification --> InProgress: rework, iteración + 1
     Verification --> Completed: pass
+    Draft --> Completed: resultado, sin código
+    InProgress --> Completed: resultado, sin código
     Completed --> InProgress: PR en conflicto o CI fallido
     Completed --> [*]
     Draft --> Paused: pausa (humano)
@@ -93,6 +96,7 @@ Cada estado con agente tiene un sub‑estado: `queued` (esperando slot o depende
 | In progress → Verification | submit\_for\_verification | Gate de tests en verde ejecutado por LunasQ; cada criterio con al menos un test; commits en el branch de la tarea | Agente implementador |
 | Verification → In progress | submit\_verdict = rework | Iteración menor al máximo | Agente verificador |
 | Verification → Completed | submit\_verdict = pass, luego entrega | Veredicto pass del verificador, gate de tests en verde, tests coherentes y todos los criterios en pass; push y PR exitosos | Sistema (entrega), con el veredicto del verificador |
+| Draft o In progress → Completed | submit\_result | Run del refinador o del implementador vivo (`running`). Desde In progress, el branch de la tarea sin commits sobre la rama base. Guarda el Resultado; sin verificación, entrega ni PR | Agente refinador o implementador |
 | Cualquiera no terminal → Needs human | Bloqueo con timeout, reintentos o iteraciones agotadas | — | Sistema |
 | Verification → In progress | Conflictos al integrar la rama base en la entrega | Sin subir la iteración | Sistema |
 | Completed → In progress | El PR abierto queda en conflicto con la rama base (otro PR se mergeó antes), o falla uno de sus checks de CI | PR de la tarea abierto; sin subir la iteración | Sistema (poller de PRs) |
@@ -170,7 +174,7 @@ El scheduler no ordena una lista: calcula un **ready set** (tareas cuyas depende
 **Dependencias como DAG**
 
 - Se valida ausencia de ciclos al crear o editar una arista; se rechaza la operación si cierra un ciclo. Las aristas se agregan mientras la tarea dependiente está en Draft y no pueden apuntar a una tarea cancelada ([ADR 0010](decisions/0010-api-tareas-dag.md)).
-- Una tarea está *ready* cuando todas sus dependencias tienen su PR mergeado a la rama base. Aplica desde el refinamiento: con dependencias pendientes la tarea se queda en Draft sin agente. Si el PR de una dependencia se cierra sin merge, o la dependencia se cancela sin PR mergeado, sus dependientes pasan a Needs human.
+- Una tarea está *ready* cuando todas sus dependencias tienen su PR mergeado a la rama base o están Completed con Resultado (no tienen PR). Aplica desde el refinamiento: con dependencias pendientes la tarea se queda en Draft sin agente. Si el PR de una dependencia se cierra sin merge, o la dependencia se cancela sin PR mergeado, sus dependientes pasan a Needs human.
 - Dependencias cross‑project permitidas, pero visibles en la UI como riesgo.
 
 **Score de prioridad**
@@ -330,6 +334,7 @@ El contrato entre el sistema y cualquier agente es un **MCP propio (LunasQ MCP)*
 | ask\_human | Todas | Registra una Question y regresa de inmediato; el agente termina su turno y la respuesta llega después como prompt nuevo |
 | update\_checklist | Implementación | Marca items de la task list; alimenta el progreso en la UI |
 | submit\_for\_verification | Implementación | Declara fin de implementación con resumen, commits y mapa criterio → tests; dispara el gate de tests |
+| submit\_result | Refinamiento e implementación | Tarea sin código (investigación, ya implementada o sin resolución): entrega el Resultado y completa la tarea sin verificación ni PR. En implementación se rechaza si el branch tiene commits sobre la rama base |
 | submit\_verdict | Verificación | Pass o reject, veredicto por criterio, reporte de cada revisor, must‑fix consolidados, hallazgos refutados con su motivo y etiqueta de riesgo; cada revisor omitido requiere justificación |
 | report\_failure | Todas | El agente declara que no puede continuar y por qué |
 
@@ -339,8 +344,8 @@ Las tools validan el run token que el dispatcher inyecta al pane; una sesión vi
 
 | Skill | Responsabilidad | Salida obligatoria |
 | --- | --- | --- |
-| refine-task | Leer el repo, aclarar el intent, modelar con DDD y escribir criterios verificables en lenguaje del dominio | submit\_spec |
-| implement-task | TDD contra la spec aprobada: test que falla, implementación mínima, refactor; commits pequeños | submit\_for\_verification |
+| refine-task | Leer el repo, aclarar el intent, modelar con DDD y escribir criterios verificables en lenguaje del dominio | submit\_spec (o submit\_result si la tarea no requiere código) |
+| implement-task | TDD contra la spec aprobada: test que falla, implementación mínima, refactor; commits pequeños | submit\_for\_verification (o submit\_result si resulta que no hay nada que cambiar) |
 | verify-task | Elegir según la tarea y el diff qué subagentes revisores lanzar, consolidar, refutar hallazgos, verificar cada criterio y la coherencia de los tests, sin editar código | submit\_verdict |
 | herdr (oficial) | Que el agente sepa operar herdr si necesita panes auxiliares | — |
 
@@ -377,6 +382,8 @@ Todos los handoffs comparten un sobre común y agregan un cuerpo según la fase:
 | Cuerpo de refinamiento | modelo de dominio (bounded context, glosario, agregados, invariantes, eventos), criterios con id, task list, supuestos | Refinamiento |
 | Cuerpo de implementación | mapa criterio → tests, commits, cambios por módulo, cómo correr las pruebas, desviaciones de la spec | Implementación |
 | Cuerpo de verificación | veredicto pass o reject, veredicto por criterio, reporte por revisor, revisores omitidos con justificación, must‑fix, hallazgos refutados con motivo, etiqueta de riesgo | Verificación |
+
+`submit_result` usa su propio handoff (`result.json`): versión, task id, run id, fase, resumen, título, tipo de resultado y texto. No pasa por verificación, así que no forma parte del handoff por fase ni se lee como tal en `get_task_context`.
 
 Como el formato es fijo, LunasQ puede usar los campos sin interpretar texto: armar el siguiente `get_task_context`, poblar la UI y renderizar el handoff en el archivo de evidencia `lunasq/tasks/{id}.md` como bloque JSON. Un cambio de esquema sube su versión, y LunasQ conserva la capacidad de leer handoffs de versiones anteriores. Esquemas, ejemplos válidos e inválidos y reglas entre campos: `packages/schemas` ([ADR 0006](decisions/0006-handoff-v1.md)).
 

@@ -133,7 +133,7 @@ export class Reconciler {
   }
 
   /**
-   * Outbox: una cancelación, una pausa, una reanudación o un merge piden pasada ya, sin esperar
+   * Outbox: una cancelación, una pausa, una reanudación, un Resultado o un merge piden pasada ya, sin esperar
    * al tick (detener el agente de una tarea cancelada o pausada, ADR 0010; remover su worktree, ADR 0012).
    */
   onMessage(message: OutboxMessage): void {
@@ -141,7 +141,14 @@ export class Reconciler {
       const payload = TaskTransitionedPayload.safeParse(message.payload);
       if (!payload.success) return;
       const { command } = payload.data;
-      if (command === "cancel" || command === "pause" || command === "resume") this.wake();
+      if (
+        command === "cancel" ||
+        command === "pause" ||
+        command === "resume" ||
+        command === "submit_result"
+      ) {
+        this.wake();
+      }
     } else if (message.topic === TASK_PR_STATE_CHANGED) {
       const payload = TaskPrStateChangedPayload.safeParse(message.payload);
       if (payload.success && payload.data.to === "merged") this.wake();

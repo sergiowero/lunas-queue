@@ -11,6 +11,7 @@ import {
   applyTaskTitle,
   applyTransition,
   closeRun,
+  completeTaskWithResult,
   consecutiveFailures,
   createQuestion,
   type LunasqDatabase,
@@ -40,6 +41,7 @@ import {
   type MustFixFinding,
   type Phase,
   parseHandoff,
+  parseResultHandoff,
   REVIEWER_NAMES,
   type ReportFailureInput,
   type RunReviewerInput,
@@ -60,6 +62,7 @@ export const TOOL_NAMES = [
   "ask_human",
   "update_checklist",
   "submit_for_verification",
+  "submit_result",
   "run_reviewer",
   "submit_verdict",
   "report_failure",
@@ -99,6 +102,7 @@ export const TOOL_PHASES: Readonly<Record<ToolName, readonly Phase[]>> = {
   submit_spec: ["refine"],
   update_checklist: ["implement"],
   submit_for_verification: ["implement"],
+  submit_result: ["refine", "implement"],
   run_reviewer: ["verify"],
   submit_verdict: ["verify"],
 };
@@ -115,6 +119,8 @@ export type McpErrorCode =
   // Criterios o tareas del handoff que no coinciden con la spec aprobada.
   | "spec_mismatch"
   | "commits_missing"
+  // submit_result en implementación con un branch que ya tiene commits sobre la base.
+  | "branch_has_commits"
   | "dirty_worktree"
   // Ya corre un gate de tests para este Run.
   | "gate_in_progress"
@@ -430,6 +436,72 @@ export class LunasqMcpService {
         expected: { state: "in_progress", subState: "running" },
       });
       return { ok: true, data: { state: "verification" } };
+    });
+  }
+
+  /**
+   * Tarea sin código (ADR 0007): el Resultado reemplaza a la spec o al diff. Completa la tarea sin
+   * verificación, entrega ni PR. En implementación solo si el branch no tiene commits sobre la
+   * base: con código, la salida es submit_for_verification.
+   */
+  async submitResult(run: RunRow, input: unknown): Promise<Outcome<{ state: "completed" }>> {
+    const parsed = parseResultHandoff(input);
+    if (!parsed.success) {
+      return fail("invalid_handoff", "el handoff no cumple el esquema", { issues: parsed.errors });
+    }
+    const handoff = parsed.data;
+    const issues: HandoffError[] = [];
+    if (handoff.phase !== HANDOFF_PHASE[run.phase]) {
+      issues.push({
+        path: "phase",
+        message: `se esperaba ${HANDOFF_PHASE[run.phase]} y llegó ${handoff.phase}`,
+      });
+    }
+    if (handoff.taskId !== run.taskId) {
+      issues.push({ path: "taskId", message: `el Run es de la tarea ${run.taskId}` });
+    }
+    if (handoff.runId !== run.id) {
+      issues.push({ path: "runId", message: `el Run activo es ${run.id}` });
+    }
+    if (issues.length > 0) {
+      return fail("handoff_mismatch", "el handoff no corresponde a este Run", { issues });
+    }
+
+    const { task, project } = this.#taskAndProject(run);
+    const origin = run.phase === "refine" ? "draft" : "in_progress";
+    const moved = notRunning(task, origin);
+    if (moved) return moved;
+    if (run.phase === "implement") {
+      if (!task.worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
+      if (
+        await this.#commits.branchHasCommits({
+          worktreePath: task.worktreePath,
+          baseBranch: project.baseBranch,
+        })
+      ) {
+        return fail(
+          "branch_has_commits",
+          `el branch de la tarea tiene commits sobre ${project.baseBranch}: entrega con submit_for_verification`,
+        );
+      }
+    }
+
+    return this.#write((tx) => {
+      this.#close(tx, run, { result: "success", handoff });
+      const result = completeTaskWithResult(tx, {
+        taskId: run.taskId,
+        resultKind: handoff.resultKind,
+        result: handoff.result,
+        title: handoff.title,
+        // El commit check corrió fuera de la transacción: la tarea no debe haberse movido.
+        expected: { state: origin, subState: "running" },
+      });
+      if (!result.ok) {
+        throw new Rejected(
+          fail("transition_rejected", `${result.error.code}: ${result.error.message}`),
+        );
+      }
+      return { ok: true, data: { state: "completed" } };
     });
   }
 

@@ -23,6 +23,7 @@ const columns = {
   subState: tasks.subState,
   priority: tasks.priority,
   prState: tasks.prState,
+  resultKind: tasks.resultKind,
   createdAt: tasks.createdAt,
   updatedAt: tasks.updatedAt,
 };
@@ -91,9 +92,12 @@ export class SchedulerStateRepository implements SchedulerStateReader {
       );
 
       const rows = [...live, ...terminal];
-      // Solo las dependencias ya mergeadas: lo que cambie en las demás no hace lista a la tarea.
+      // Solo las dependencias ya satisfechas (PR mergeado o completada con Resultado): lo que
+      // cambie en las demás no hace lista a la tarea.
       const mergedAt = new Map(
-        rows.filter((t) => t.prState === "merged").map((t) => [t.id, t.updatedAt.getTime()]),
+        rows
+          .filter((t) => t.prState === "merged" || (t.state === "completed" && t.resultKind))
+          .map((t) => [t.id, t.updatedAt.getTime()]),
       );
       const depsOf = new Map<string, string[]>();
       for (const e of edges) depsOf.set(e.taskId, [...(depsOf.get(e.taskId) ?? []), e.dependsOnId]);
@@ -113,6 +117,7 @@ export class SchedulerStateRepository implements SchedulerStateReader {
           subState: row.subState,
           priority: row.priority,
           prState: row.prState,
+          resultKind: row.resultKind,
           createdAt: row.createdAt,
           readySince: new Date(since),
           ...(retry && { retry }),

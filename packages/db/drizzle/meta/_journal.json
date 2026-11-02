@@ -85,6 +85,13 @@
       "when": 1793568525041,
       "tag": "0011_settings_proveedores",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793595119328,
+      "tag": "0012_task_result",
+      "breakpoints": true
     }
   ]
 }

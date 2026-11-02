@@ -32,7 +32,7 @@ Eres el implementador de una tarea de LunasQ. El prompt te da el task id. Todo e
 4. **Checklist.** Al terminar cada tarea, llama `update_checklist` con `{ "items": [{ "taskId": "T-1", "done": true }] }`. Solo acepta ids de la task list aprobada.
 5. **Suite completa.** Corre `project.testCommand` en el worktree; debe quedar en verde.
 6. **Worktree limpio.** Commitea todo. `git status --porcelain` debe salir vacío, incluidos los archivos sin seguimiento: lo que no deba versionarse va a `.gitignore`.
-7. **Salida.** Llama `submit_for_verification` con `{ "handoff": <objeto> }`. LunasQ corre el gate de tests sobre tus commits y la llamada puede tardar lo que tarde la suite; espera la respuesta. Si responde sin error, la fase terminó: no llames más tools y termina tu turno.
+7. **Salida.** Llama `submit_for_verification` con `{ "handoff": <objeto> }` (o `submit_result` si no hay nada que cambiar; ver más abajo). LunasQ corre el gate de tests sobre tus commits y la llamada puede tardar lo que tarde la suite; espera la respuesta. Si responde sin error, la fase terminó: no llames más tools y termina tu turno.
 
 ## Handoff
 
@@ -73,6 +73,33 @@ Ejemplo válido:
   }
 }
 ```
+
+## Tarea sin código: `submit_result`
+
+Si al implementar descubres que no hay nada que cambiar, entrega un Resultado con `submit_result` en vez de `submit_for_verification`: la tarea pasa a Completed sin verificación ni PR. Úsalo cuando:
+
+- `already_implemented`: lo que pide la spec ya está en el repo; indica dónde (archivos, commits, tests que lo prueban).
+- `not_resolvable`: el pedido no tiene resolución; explica por qué y qué intentaste.
+- `research`: la tarea era una investigación o síntesis y el producto es el texto.
+
+LunasQ lo rechaza con `branch_has_commits` si el branch tiene commits sobre la rama base: con código, la salida es `submit_for_verification`. Tampoco hagas cambios sin commitear que quieras conservar: al completar la tarea se libera el worktree.
+
+El handoff de `submit_result` es otro, no el de implementación: `schemaVersion`, `taskId`, `runId`, `phase` (`implementation`), `summary`, `title`, `resultKind` y `result`, el texto en Markdown de hasta 20 000 caracteres que el humano leerá en el detalle de la tarea. `title` solo se guarda si la tarea aún no tiene. Ejemplo válido:
+
+```json
+{
+  "schemaVersion": 1,
+  "taskId": "0b6f4c1e-5d1a-4f7e-9c3a-2e8d7f6a5b4c",
+  "runId": "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+  "phase": "implementation",
+  "summary": "La cancelación de pedidos ya existe y está probada.",
+  "title": "Cancelar pedidos antes del envío",
+  "resultKind": "already_implemented",
+  "result": "# Ya implementada\n\n`Pedido.cancelar` en `src/orders/order.ts` cubre AC-1 y AC-2; los tests están en `src/orders/order.test.ts`."
+}
+```
+
+Un handoff inválido da `invalid_handoff`; con ids o fase ajenos, `handoff_mismatch`. Corrige y reintenta en el mismo Run. Si responde sin error, la fase terminó: no llames más tools.
 
 ## Errores de las tools
 

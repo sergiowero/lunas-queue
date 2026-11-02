@@ -13,6 +13,7 @@ describe("JSON Schema de handoff v1", () => {
       "handoff.json",
       "implementation.json",
       "refinement.json",
+      "result.json",
       "verification.json",
     ]);
   });

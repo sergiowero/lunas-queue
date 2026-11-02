@@ -28,6 +28,26 @@ const UNIQUE = /UNIQUE constraint failed/;
 const FK = /FOREIGN KEY constraint failed/;
 const NOT_NULL = /NOT NULL constraint failed/;
 
+/**
+ * Inserta una tarea y un Run con SQL directo en una base migrada solo hasta cierta migración:
+ * Drizzle inserta todas las columnas del esquema actual y las migraciones posteriores aún no
+ * existen.
+ */
+function rawTaskWithRun(db: ReturnType<typeof freshDatabase>["db"], projectId: string) {
+  db.$client
+    .prepare(
+      "insert into tasks (id, project_id, intent, priority, state, sub_state) values ('t1', ?, 'x', 1, 'in_progress', 'running')",
+    )
+    .run(projectId);
+  db.$client
+    .prepare(
+      "insert into runs (id, task_id, phase, agent_kind, run_token) values ('r1', 't1', 'implement', 'claude', 'tok')",
+    )
+    .run();
+  const number = db.$client.prepare("select number from tasks where id = 't1'").pluck().get();
+  return { id: "t1", number: number as number };
+}
+
 describe("projects", () => {
   it("genera id, timestamps y defaults de configuración", () => {
     const db = migratedDatabase();
@@ -111,10 +131,12 @@ describe("tasks", () => {
       const { db } = freshDatabase();
       migrate(db, { migrationsFolder: previous });
       const p = insertProject(db);
-      const t = insertTask(db, p.id, { state: "in_progress", subState: "running" });
-      insertRun(db, t.id);
+      const t = rawTaskWithRun(db, p.id);
       const numberBefore = t.number;
-      expect(() => insertTask(db, p.id, { state: "paused", subState: null })).toThrow(CHECK);
+      const insertPaused = db.$client.prepare(
+        "insert into tasks (id, project_id, intent, priority, state, sub_state) values (?, ?, 'x', 1, 'paused', null)",
+      );
+      expect(() => insertPaused.run("pausada-0", p.id)).toThrow(CHECK);
 
       migrateDatabase(db);
 
@@ -142,6 +164,55 @@ describe("tasks", () => {
     } finally {
       rmSync(previous, { recursive: true, force: true });
     }
+  });
+
+  it("la migración del Resultado recrea tasks conservando filas, Runs, número y triggers", () => {
+    // Base con las migraciones previas a 0012_task_result: tasks no tiene result_kind ni result.
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-drizzle-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8"));
+      journal.entries = journal.entries.filter((e: { tag: string }) => e.tag < "0012");
+      writeFileSync(journalFile, JSON.stringify(journal));
+      const { db } = freshDatabase();
+      migrate(db, { migrationsFolder: previous });
+      const p = insertProject(db);
+      const t = rawTaskWithRun(db, p.id);
+
+      migrateDatabase(db);
+
+      const migrated = db.select().from(tasks).where(eq(tasks.id, t.id)).get();
+      expect(migrated).toMatchObject({
+        state: "in_progress",
+        number: t.number,
+        resultKind: null,
+        result: null,
+      });
+      expect(db.$client.prepare("select count(*) from runs").pluck().get()).toBe(1);
+      // Los triggers de tasks se recrean: el número se asigna y no cambia.
+      expect(insertTask(db, p.id).number).toBe((t.number ?? 0) + 1);
+      expect(() => db.update(tasks).set({ number: 99 }).where(eq(tasks.id, t.id)).run()).toThrow(
+        /el número de una tarea no cambia/,
+      );
+      expect(db.$client.pragma("foreign_keys", { simple: true })).toBe(1);
+      expect(db.$client.pragma("foreign_key_check")).toEqual([]);
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
+  });
+
+  it("result_kind solo acepta valores del enum y result guarda el texto", () => {
+    const db = migratedDatabase();
+    const p = insertProject(db);
+    const task = insertTask(db, p.id, {
+      state: "completed",
+      subState: null,
+      resultKind: "not_resolvable",
+      result: "# Sin resolución",
+    });
+    expect(task).toMatchObject({ resultKind: "not_resolvable", result: "# Sin resolución" });
+    expect(() => insertTask(db, p.id, { resultKind: "otro" as never })).toThrow(CHECK);
   });
 
   it("número: entero positivo y único, asignado si el insert no lo trae", () => {

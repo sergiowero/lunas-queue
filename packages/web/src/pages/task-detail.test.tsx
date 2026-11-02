@@ -336,6 +336,61 @@ describe("detalle de tarea", () => {
     expect(within(panel.getByRole("table")).getAllByRole("row")).toHaveLength(11);
   });
 
+  describe("Resultado de una tarea sin código", () => {
+    const withResult = () => {
+      const { fake, task } = seeded();
+      Object.assign(task, {
+        state: "completed",
+        subState: null,
+        resultKind: "research",
+        result: "# Hallazgos\n\nSQLite basta para **un** proceso.",
+      });
+      return { fake, task };
+    };
+
+    it("AC-9: muestra la sección Resultado con el tipo y el texto renderizado como Markdown", async () => {
+      const { fake, task } = withResult();
+      renderApp(`/tasks/${task.id}`, fake);
+
+      const block = await section("Resultado");
+      expect(block.getByText("Investigación")).toBeTruthy();
+      expect(block.getByRole("heading", { name: "Hallazgos" })).toBeTruthy();
+      expect(block.getByText("un").tagName).toBe("STRONG");
+    });
+
+    it("AC-9: el campo PR indica que no tiene PR", async () => {
+      const { fake, task } = withResult();
+      renderApp(`/tasks/${task.id}`, fake);
+
+      await screen.findByRole("region", { name: "Resultado" });
+      const field = screen.getByText("PR", { selector: "dt" }).parentElement;
+      expect(field?.textContent).toContain("Sin PR");
+    });
+
+    it.each([
+      ["already_implemented", "Ya implementada"],
+      ["not_resolvable", "Sin resolución"],
+    ] as const)("el tipo %s se muestra como «%s»", async (kind, label) => {
+      const { fake, task } = withResult();
+      task.resultKind = kind;
+      renderApp(`/tasks/${task.id}`, fake);
+
+      expect(await (await section("Resultado")).findByText(label)).toBeTruthy();
+    });
+
+    it("AC-11: una tarea sin Resultado no muestra la sección Resultado", async () => {
+      const { fake, task } = seeded();
+      Object.assign(task, { state: "completed", subState: null, prState: "merged" });
+      renderApp(`/tasks/${task.id}`, fake);
+
+      await screen.findByRole("heading", { name: "Login con email" });
+      expect(screen.queryByRole("region", { name: "Resultado" })).toBeNull();
+      expect(screen.getByText("PR", { selector: "dt" }).parentElement?.textContent).not.toContain(
+        "Sin PR",
+      );
+    });
+  });
+
   it("el panel Evidencia nace colapsado y no muestra la evidencia", async () => {
     const { fake, task } = seeded();
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");

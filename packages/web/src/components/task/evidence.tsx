@@ -4,13 +4,10 @@
 import type { EvidenceSource } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
-import Markdown from "react-markdown";
 import { queries } from "../../lib/queries.ts";
+import { MarkdownText } from "../markdown-text.tsx";
 import { Muted, Section } from "../section.tsx";
 import { Loading, QueryError } from "../status.tsx";
-
-const prose =
-  "flex flex-col gap-2 text-sm [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-2 [&_code]:text-xs [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5";
 
 const SOURCE_LABEL: Record<EvidenceSource, string> = {
   worktree: "worktree",
@@ -59,9 +56,7 @@ function EvidenceBody({ evidence }: { evidence: ReturnType<typeof useEvidence> }
             {`Desde ${SOURCE_LABEL[evidence.data.source]}: `}
             <code>{evidence.data.path}</code>
           </p>
-          <div className={prose}>
-            <Markdown>{evidence.data.markdown}</Markdown>
-          </div>
+          <MarkdownText>{evidence.data.markdown}</MarkdownText>
         </div>
       ) : null}
     </>

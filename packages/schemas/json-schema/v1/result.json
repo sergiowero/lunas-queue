@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lunasq:handoff:v1:result",
+  "description": "Handoff v1 de LunasQ, generado desde @lunasq/schemas. Las reglas entre campos (ids únicos, veredicto coherente, tamaño máximo de 32768 bytes) las aplica el validador Zod.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["refinement", "implementation"]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 72
+    },
+    "resultKind": {
+      "type": "string",
+      "enum": ["research", "already_implemented", "not_resolvable"]
+    },
+    "result": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "runId",
+    "phase",
+    "summary",
+    "title",
+    "resultKind",
+    "result"
+  ],
+  "additionalProperties": false
+}

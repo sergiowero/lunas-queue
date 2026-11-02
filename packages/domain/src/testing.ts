@@ -4,6 +4,7 @@ import {
   Project,
   ProjectCreate,
   type PrState,
+  type ResultKind,
   type SubState,
   type TaskState,
 } from "@lunasq/schemas";
@@ -116,6 +117,7 @@ export type SchedulerSeed = {
   subState?: SubState | null;
   priority?: number;
   prState?: PrState | null;
+  resultKind?: ResultKind | null;
 };
 
 /**
@@ -185,6 +187,18 @@ export function schedulerStateReaderContract(
           { taskId: idOf("viva"), dependsOnId: idOf("cancelada") },
         ]),
       );
+    });
+
+    it("expone el Resultado de una dependencia completada sin PR", () => {
+      const { reader, idOf } = setup(
+        [
+          { name: "investigada", state: "completed", resultKind: "research" },
+          { name: "viva", state: "draft", subState: "queued" },
+        ],
+        [{ taskId: "viva", dependsOnId: "investigada" }],
+      );
+      const dep = reader.snapshot().tasks.find((t) => t.id === idOf("investigada"));
+      expect(dep).toMatchObject({ state: "completed", prState: null, resultKind: "research" });
     });
 
     it("modificar el snapshot no cambia el siguiente", () => {
