@@ -35,7 +35,7 @@ Siete entidades bastan (más UsageRecord, ver Consumo); la clave es separar la *
 | Spec | Salida versionada del refinamiento | versión, modelo de dominio (bounded context, glosario, agregados, invariantes, eventos), requerimientos, acceptance criteria, task list, estado de aprobación |
 | Run | Un intento de un agente en una fase | fase, tipo de agente, workspace/pane/nombre en herdr, identidad de sesión del agente (session id nativo o nombre de sesión), run token, inicio, fin, resultado, failure\_reason (texto), handoff (JSON), usage (read‑only) |
 | Event | Log append‑only de transiciones y acciones | task\_id, tipo, actor (humano / agente / sistema), payload, timestamp |
-| Question | Pregunta asíncrona del agente al humano | task\_id, run\_id, pregunta, contexto, estado (abierta / respondida / cancelada), respuesta, quién y cuándo respondió |
+| Question | Pregunta asíncrona del agente al humano | task\_id, run\_id, pregunta, contexto, opciones (2 a 6, opcionales), estado (abierta / respondida / cancelada), respuesta, quién y cuándo respondió |
 
 Decisiones de modelado:
 
@@ -533,9 +533,10 @@ Todo lo que espera al humano aparece en la bandeja del front end; herdr solo not
 
 Flujo de `ask_human`:
 
+0. El agente puede mandar la pregunta de forma estructurada: `options` con 2 a 6 alternativas `{ label, description? }` (labels únicos sin distinguir mayúsculas ni espacios extremos; inmutables tras crearse). Sin `options` la pregunta es abierta.
 1. El backend guarda la Question ligada a la tarea y al Run; la tarea pasa a `waiting_human` y el timeout de fase se pausa.
 2. La Question aparece de inmediato en la bandeja; si sigue abierta después de 1 minuto, se notifica por herdr y por la UI.
-3. El humano responde en la bandeja.
+3. El humano responde en la bandeja: una pregunta con opciones se muestra como un grupo de radios (label y descripción) más «Otra respuesta», que habilita un campo de texto; sin opciones, el campo de texto. La respuesta es el label elegido o el texto libre recortado, nunca ambos.
 4. Si el agente sigue vivo, el dispatcher le envía la respuesta al mismo pane con `agent prompt`. Si ya se cerró, se crea un Run nuevo y la Question con su respuesta llega en `get_task_context`. Detalle, API y casos límite: [ADR uw-22-preguntas](decisions/uw-22-preguntas.md).
 
 La tool no espera la respuesta dentro de la llamada MCP: los clientes MCP tienen timeouts y una llamada colgada por horas es frágil. Registra la pregunta, le indica al agente que termine su turno y la respuesta entra después como prompt nuevo. Escribir directo en el pane de herdr también funciona, pero esa respuesta no queda en el historial de la tarea.
