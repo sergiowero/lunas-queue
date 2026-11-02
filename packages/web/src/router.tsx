@@ -17,6 +17,7 @@ import { InboxPage } from "./pages/inbox.tsx";
 import { NewTaskPage } from "./pages/new-task.tsx";
 import { ProjectsPage } from "./pages/projects.tsx";
 import { QueuePage } from "./pages/queue.tsx";
+import { SettingsPage } from "./pages/settings.tsx";
 import { TaskDetailPage } from "./pages/task-detail.tsx";
 
 type RouterContext = { queryClient: QueryClient };
@@ -61,6 +62,12 @@ const projectsRoute = createRoute({
   component: ProjectsPage,
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: SettingsPage,
+});
+
 const boardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/projects/$projectId",
@@ -96,6 +103,7 @@ const routeTree = rootRoute.addChildren([
   completedRoute,
   inboxRoute,
   projectsRoute,
+  settingsRoute,
   boardRoute,
   hooksRoute,
   newTaskRoute,

@@ -71,6 +71,24 @@ describe("actualización en vivo por SSE", () => {
     );
   });
 
+  it("un change de configuración refresca Settings y el aviso aunque no haya tareas", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const fake = new FakeApi();
+    renderApp("/settings", fake);
+    const claude = await screen.findByRole("switch", { name: "Claude" });
+    expect(claude.getAttribute("aria-checked")).toBe("true");
+
+    // Otra pestaña apaga ambos proveedores: aquí solo llega el change global.
+    fake.providers = { claude: false, copilot: false };
+    FakeEventSource.instances[0]?.emit("change", JSON.stringify({ taskIds: [], settings: true }));
+    await waitFor(() =>
+      expect(screen.getByRole("switch", { name: "Claude" }).getAttribute("aria-checked")).toBe(
+        "false",
+      ),
+    );
+    expect(await screen.findByRole("status")).toBeTruthy();
+  });
+
   it("ignora mensajes ilegibles y cierra la conexión al desmontar", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const { unmount } = renderApp("/queue");

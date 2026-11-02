@@ -1,4 +1,9 @@
-import type { Project, SchedulablePhase, SchedulerConfigInput } from "@lunasq/schemas";
+import type {
+  AgentProviderSettings,
+  Project,
+  SchedulablePhase,
+  SchedulerConfigInput,
+} from "@lunasq/schemas";
 import { SchedulerConfig } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import type { DependencyEdge } from "./dependency-graph.ts";
@@ -53,9 +58,16 @@ function plan(
   edges: DependencyEdge[] = [],
   input: SchedulerConfigInput = {},
   projects: Project[] = [alfa, beta],
+  providers?: AgentProviderSettings,
 ) {
   const snapshot: SchedulerSnapshot = { tasks, edges };
-  return schedule(snapshot, new InMemoryProjectConfigReader(projects), config(input), NOW);
+  return schedule(
+    snapshot,
+    new InMemoryProjectConfigReader(projects),
+    config(input),
+    NOW,
+    providers,
+  );
 }
 
 const dispatched = (result: ReturnType<typeof plan>) => result.dispatch.map((d) => d.taskId);
@@ -393,6 +405,112 @@ describe("Occupancy", () => {
     const slot = occupancy.slotFor({ projectId: beta.id }, "refine");
     expect(slot.agentKind).toBeUndefined();
     expect(occupancy.fits(slot, config())).toBe(false);
+  });
+});
+
+describe("proveedores habilitados", () => {
+  const copilotPrimary = sampleProject("copiloto", {
+    agentProfiles: { refine: { kind: "copilot", args: [] } },
+  });
+  const projects = [alfa, copilotPrimary];
+
+  it("con claude y copilot deshabilitados no despacha nada y las tareas siguen en queued", () => {
+    const tareas = [task("a"), task("b", { projectId: copilotPrimary.id })];
+    const result = plan(tareas, [], {}, projects, { claude: false, copilot: false });
+    // La pausa no escala ni descarta nada: el plan entero es vacío y las tareas esperan.
+    expect(result).toEqual({ dispatch: [], escalate: [] });
+    // Contraste: habilitado uno, las mismas tareas sí se despachan.
+    const reanudado = plan(tareas, [], {}, projects, { claude: true, copilot: false });
+    expect(reanudado.dispatch.map((d) => d.taskId).sort()).toEqual(["a", "b"]);
+  });
+
+  it("con claude deshabilitado, una tarea con primario claude va a copilot y ocupa su slot", () => {
+    const result = plan([task("a")], [], {}, projects, { claude: false, copilot: true });
+    expect(result.dispatch.map((d) => d.agentKind)).toEqual(["copilot"]);
+    // El slot de copilot se llena: el límite por tipo de agente se aplica al proveedor efectivo.
+    const limited = plan(
+      [task("a"), task("b")],
+      [],
+      { agentKindConcurrency: { copilot: 1 } },
+      projects,
+      { claude: false, copilot: true },
+    );
+    expect(dispatched(limited)).toEqual(["a"]);
+  });
+
+  it("con copilot deshabilitado, una tarea con primario copilot va a claude", () => {
+    const result = plan([task("a", { projectId: copilotPrimary.id })], [], {}, projects, {
+      claude: true,
+      copilot: false,
+    });
+    expect(result.dispatch.map((d) => d.agentKind)).toEqual(["claude"]);
+  });
+
+  it("con ambos habilitados cada tarea usa el primario de su perfil y ocupa el slot de ese tipo", () => {
+    const both = { claude: true, copilot: true };
+    const kinds = (tasks: SchedulerTask[], input: SchedulerConfigInput = {}) =>
+      plan(tasks, [], input, projects, both).dispatch.map((d) => [d.taskId, d.agentKind]);
+    expect(kinds([task("a"), task("b", { projectId: copilotPrimary.id })])).toEqual([
+      ["a", "claude"],
+      ["b", "copilot"],
+    ]);
+    // Cada tipo cuenta contra su propio límite: la de copilot no gasta el slot de claude.
+    const limited = kinds([task("a"), task("b"), task("c", { projectId: copilotPrimary.id })], {
+      agentKindConcurrency: { claude: 1, copilot: 1 },
+    });
+    expect(limited).toEqual([
+      ["a", "claude"],
+      ["c", "copilot"],
+    ]);
+    // Sin configuración explícita, todos habilitados.
+    expect(plan([task("g")], [], {}, projects).dispatch[0]?.agentKind).toBe("claude");
+    // El primario manda porque está habilitado: la misma tarea cambia al deshabilitarlo.
+    const solo = (providers: AgentProviderSettings) =>
+      plan([task("h")], [], {}, projects, providers).dispatch.map((d) => d.agentKind);
+    expect(solo(both)).toEqual(["claude"]);
+    expect(solo({ claude: false, copilot: true })).toEqual(["copilot"]);
+  });
+
+  it("la misma tarea cambia de proveedor solo cuando su primario se deshabilita", () => {
+    const providerOf = (id: string, projectId: string, providers: AgentProviderSettings) =>
+      plan([task(id, { projectId })], [], {}, projects, providers).dispatch.map((d) => d.agentKind);
+    expect(providerOf("c", alfa.id, { claude: true, copilot: false })).toEqual(["claude"]);
+    expect(providerOf("d", alfa.id, { claude: false, copilot: true })).toEqual(["copilot"]);
+    expect(providerOf("e", copilotPrimary.id, { claude: true, copilot: false })).toEqual([
+      "claude",
+    ]);
+    expect(providerOf("f", alfa.id, { claude: false, copilot: false })).toEqual([]);
+  });
+
+  it("un agente vivo ocupa el slot del proveedor con el que corre, no el de su perfil", () => {
+    const both = { claude: true, copilot: true };
+    // El perfil dice claude, pero el Run cayó a copilot en el fallback.
+    const viva = task("viva", { subState: "running", agentKind: "copilot" });
+    const claudeLibre = plan(
+      [viva, task("a")],
+      [],
+      { agentKindConcurrency: { claude: 1 } },
+      projects,
+      both,
+    );
+    expect(dispatched(claudeLibre)).toEqual(["a"]);
+    const copilotLleno = plan(
+      [viva, task("b", { projectId: copilotPrimary.id }), task("c")],
+      [],
+      { agentKindConcurrency: { copilot: 1 } },
+      projects,
+      both,
+    );
+    expect(dispatched(copilotLleno)).toEqual(["c"]);
+  });
+
+  it("un agente vivo sin proveedor registrado cuenta contra el primario de su perfil", () => {
+    const viva = task("viva", { subState: "running" });
+    const result = plan([viva, task("a")], [], { agentKindConcurrency: { claude: 1 } }, projects, {
+      claude: true,
+      copilot: true,
+    });
+    expect(result.dispatch).toEqual([]);
   });
 });
 

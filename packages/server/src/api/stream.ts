@@ -18,12 +18,13 @@ export function changeStreamRoutes(views: TaskViewRepository, intervalMs: number
     streamSSE(c, async (stream) => {
       let after = cursor(c.req.header("Last-Event-ID"), views);
       while (!stream.aborted && !stream.closed) {
-        const { lastId, taskIds } = views.changesSince(after);
-        if (taskIds.length > 0) {
+        const { lastId, taskIds, settingsChanged } = views.changesSince(after);
+        if (taskIds.length > 0 || settingsChanged) {
           await stream.writeSSE({
             event: "change",
             id: String(lastId),
-            data: JSON.stringify({ taskIds }),
+            // `settings` solo viaja cuando cambió la configuración global (settings.updated).
+            data: JSON.stringify(settingsChanged ? { taskIds, settings: true } : { taskIds }),
           });
         }
         after = lastId;

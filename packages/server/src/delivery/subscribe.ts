@@ -20,11 +20,12 @@ export function subscribeDelivery(opts: SubscribeDeliveryOptions): () => void {
   const onError = opts.onError ?? defaultError;
   return opts.publisher.subscribe(VERDICT_RECORDED, (message) => {
     const parsed = VerdictRecordedPayload.safeParse(message.payload);
-    if (!parsed.success || parsed.data.verdict !== "pass") return;
+    const { taskId } = message;
+    if (!parsed.success || parsed.data.verdict !== "pass" || taskId === null) return;
     opts.delivery
-      .deliver(message.taskId)
+      .deliver(taskId)
       .catch((error: unknown) =>
-        onError(error instanceof Error ? error : new Error(String(error)), message.taskId),
+        onError(error instanceof Error ? error : new Error(String(error)), taskId),
       );
   });
 }

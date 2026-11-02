@@ -5,6 +5,7 @@
 import { randomBytes } from "node:crypto";
 import {
   agentName,
+  effectiveAgentKind,
   Occupancy,
   type ProjectConfigReader,
   pendingPhase,
@@ -20,7 +21,7 @@ import {
   QUESTION_CREATED,
   QuestionCreatedPayload,
   type RunResult,
-  type SchedulablePhase,
+  SchedulablePhase,
   type SchedulerConfig,
   type StatePosition,
   TASK_TRANSITIONED,
@@ -32,6 +33,7 @@ import type { LunasqDatabase } from "./client.ts";
 import { appendEvent } from "./event-log.ts";
 import { SchedulerStateRepository } from "./scheduler-state.ts";
 import { events, questions, runs, tasks } from "./schema.ts";
+import { readProviderSettings } from "./settings.ts";
 import { applyTransition, type TaskRow } from "./task-transitions.ts";
 
 export type RunRow = typeof runs.$inferSelect;
@@ -62,6 +64,7 @@ export type ClaimErrorCode =
   | "phase_mismatch"
   | "stale_state"
   | "no_slot"
+  | "providers_disabled"
   | "run_active"
   | "invalid_transition"
   | "actor_not_allowed"
@@ -86,8 +89,8 @@ const newRunToken = () => randomBytes(32).toString("hex");
 
 /**
  * Reclama la tarea para una fase: en una sola transacción IMMEDIATE revalida los límites con un
- * snapshot fresco (el plan del scheduler se calculó antes), aplica `dispatch` con `expected` y
- * crea el Run con su token. Si algo no cuadra no escribe nada. Repetirlo con la misma decisión
+ * snapshot fresco (el plan del scheduler se calculó antes) y contra los proveedores habilitados
+ * vigentes, aplica `dispatch` con `expected` y crea el Run con su token y el proveedor efectivo. Si algo no cuadra no escribe nada. Repetirlo con la misma decisión
  * da `stale_state`: la tarea ya está en running.
  */
 export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
@@ -127,8 +130,22 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
             `la tarea ${task.id} tiene abierto el Run ${active.id}`,
           );
         }
+        // Los proveedores habilitados se leen aquí, no al planear: el humano pudo cambiarlos.
+        const providers = readProviderSettings(tx);
+        const profile = phaseProfile(project, decision.phase);
+        const agentKind = effectiveAgentKind(profile.kind, providers);
+        if (agentKind === null) {
+          throw new ClaimRejected(
+            "providers_disabled",
+            `no hay proveedor de agente habilitado para ${task.id}`,
+          );
+        }
         // La misma conexión: el snapshot ve lo que esta transacción ve (savepoint anidado).
-        const occupancy = Occupancy.of(new SchedulerStateRepository(tx).snapshot(), input.projects);
+        const occupancy = Occupancy.of(
+          new SchedulerStateRepository(tx).snapshot(),
+          input.projects,
+          providers,
+        );
         if (!occupancy.fits(occupancy.slotFor(task, decision.phase), input.config)) {
           throw new ClaimRejected("no_slot", `sin slot para ${task.id} en ${decision.phase}`);
         }
@@ -146,14 +163,14 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
           .from(runs)
           .where(and(eq(runs.taskId, task.id), eq(runs.phase, decision.phase)))
           .all();
-        const profile = phaseProfile(project, decision.phase);
         const [run] = tx
           .insert(runs)
           .values({
             taskId: task.id,
             phase: decision.phase,
-            agentKind: profile.kind,
-            model: profile.model ?? null,
+            agentKind,
+            // El modelo del perfil es del proveedor primario; un fallback usa el suyo por default.
+            model: agentKind === profile.kind ? (profile.model ?? null) : null,
             iteration: task.verificationIteration,
             herdrName: agentName(task.id, decision.phase, previous + 1),
             agentSession: input.sessionId,
@@ -328,9 +345,40 @@ export class RunRepository {
       .run();
   }
 
-  setAgentKind(runId: string, kind: AgentKind, model: string | null): RunRow | null {
-    this.db.update(runs).set({ agentKind: kind, model }).where(eq(runs.id, runId)).run();
-    return this.get(runId);
+  /**
+   * Cambia el proveedor del Run. El claim reservó el slot del proveedor efectivo de entonces; pasar
+   * a otro (un fallback tras fallar el arranque, o porque el humano cambió Settings) lo revalida en
+   * la misma transacción contra los agentes vivos de los demás Runs, con los mismos límites del
+   * claim. Devuelve `no_slot` sin escribir nada si el proveedor nuevo no cabe; null si no hay Run.
+   */
+  switchAgentKind(
+    runId: string,
+    kind: AgentKind,
+    model: string | null,
+    limits: { projects: ProjectConfigReader; config: SchedulerConfig },
+  ): RunRow | "no_slot" | null {
+    return this.db.transaction(
+      (tx) => {
+        const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
+        if (!run) return null;
+        if (run.agentKind !== kind) {
+          const task = tx.select().from(tasks).where(eq(tasks.id, run.taskId)).get();
+          const snapshot = new SchedulerStateRepository(tx).snapshot();
+          // Sin el propio Run: se vuelve a colocar, no se suma a su slot actual.
+          const others = { ...snapshot, tasks: snapshot.tasks.filter((t) => t.id !== run.taskId) };
+          const occupancy = Occupancy.of(others, limits.projects, readProviderSettings(tx));
+          const slot = {
+            projectId: task?.projectId ?? "",
+            phase: SchedulablePhase.parse(run.phase),
+            agentKind: kind,
+          };
+          if (!occupancy.fits(slot, limits.config)) return "no_slot" as const;
+        }
+        tx.update(runs).set({ agentKind: kind, model }).where(eq(runs.id, runId)).run();
+        return tx.select().from(runs).where(eq(runs.id, runId)).get() ?? null;
+      },
+      { behavior: "immediate" },
+    );
   }
 
   providerAttempts(runId: string): {
@@ -446,6 +494,36 @@ export class RunRepository {
               },
         );
         if (!moved.ok) throw new Error(`run_failed de ${task.id}: ${moved.error.message}`);
+        return { closed: true, transitioned: true, task: moved.task };
+      },
+      { behavior: "immediate" },
+    );
+  }
+
+  /**
+   * Despacho en pausa: el humano apagó todos los proveedores después del claim y antes de que
+   * arrancara el agente. Cierra el Run como cancelled (no cuenta como fallo ni agota reintentos) y
+   * devuelve la tarea a queued para que espere a que se habilite un proveedor.
+   */
+  pause(runId: string, reason: string): FailRunResult {
+    return this.db.transaction(
+      (tx) => {
+        const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
+        if (!run) throw new Error(`no existe el Run ${runId}`);
+        if (!closeRun(tx, runId, { result: "cancelled", failureReason: reason })) {
+          return { closed: false, transitioned: false };
+        }
+        const task = tx.select().from(tasks).where(eq(tasks.id, run.taskId)).get();
+        if (task?.subState !== "running" || pendingPhase(task.state) !== run.phase) {
+          return { closed: true, transitioned: false };
+        }
+        const moved = applyTransition(tx, {
+          taskId: task.id,
+          actor: "system",
+          command: { type: "run_failed", attempt: 1 },
+          expected: { state: task.state, subState: "running" },
+        });
+        if (!moved.ok) throw new Error(`pausa de ${task.id}: ${moved.error.message}`);
         return { closed: true, transitioned: true, task: moved.task };
       },
       { behavior: "immediate" },

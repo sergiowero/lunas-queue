@@ -8,7 +8,7 @@ import {
   type SchedulerTask,
 } from "@lunasq/domain";
 import { TASK_TRANSITIONED, type TaskState } from "@lunasq/schemas";
-import { and, desc, eq, inArray, isNotNull, max, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, max, notInArray, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { consecutiveFailures } from "./runs.ts";
 import { events, runs, taskDependencies, tasks } from "./schema.ts";
@@ -78,6 +78,18 @@ export class SchedulerStateRepository implements SchedulerStateReader {
         ).map((row) => [row.taskId, row.at]),
       );
 
+      // El proveedor real de cada agente vivo: el del Run abierto (un fallback puede no ser el primario).
+      const openRunKind = new Map(
+        (liveIds.length === 0
+          ? []
+          : tx
+              .select({ taskId: runs.taskId, agentKind: runs.agentKind })
+              .from(runs)
+              .where(and(inArray(runs.taskId, liveIds), isNull(runs.endedAt)))
+              .all()
+        ).map((row) => [row.taskId, row.agentKind]),
+      );
+
       const rows = [...live, ...terminal];
       // Solo las dependencias ya mergeadas: lo que cambie en las demás no hace lista a la tarea.
       const mergedAt = new Map(
@@ -88,6 +100,7 @@ export class SchedulerStateRepository implements SchedulerStateReader {
 
       const toTask = (row: (typeof rows)[number]): SchedulerTask => {
         const retry = row.subState === "queued" ? retryState(tx, row.id, row.state) : undefined;
+        const agentKind = openRunKind.get(row.id);
         const since = Math.max(
           row.createdAt.getTime(),
           lastTransition.get(row.id)?.getTime() ?? 0,
@@ -103,6 +116,7 @@ export class SchedulerStateRepository implements SchedulerStateReader {
           createdAt: row.createdAt,
           readySince: new Date(since),
           ...(retry && { retry }),
+          ...(agentKind && { agentKind }),
         };
       };
       return { tasks: rows.map(toTask), edges };

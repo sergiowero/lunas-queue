@@ -6,6 +6,7 @@
 
 import type {
   Actor,
+  AgentProviderSettings as AgentProviderSettingsValue,
   BlockedAgent,
   EventView,
   EvidenceSource,
@@ -24,6 +25,8 @@ import type {
   UsageTotals,
 } from "@lunasq/schemas";
 import {
+  AgentProviderPatch,
+  AgentProviderSettings,
   type HookExecutionView,
   ProjectCreate,
   ProjectUpdate,
@@ -114,6 +117,16 @@ export class FakeApi {
   readonly focused: string[] = [];
   /** Si se fija, `POST /api/blocked/:runId/focus` y `POST /api/runs/:runId/focus` responden este error de herdr. */
   focusError: { status: number; error: string; message: string } | null = null;
+  /** Proveedores habilitados guardados; por defecto todos, como el servidor sin configuración. */
+  providers: AgentProviderSettingsValue = { claude: true, copilot: true };
+  /** Si se fija, PUT /api/settings/providers responde este error. */
+  providersError: { status: number; error: string; message: string } | null = null;
+  /** Si es true, GET /api/settings/providers responde 500. */
+  providersReadFails = false;
+  /** Se ejecuta tras guardar un PUT y antes de responderlo: simula un cambio de otra pestaña. */
+  afterProvidersPut: (() => void) | null = null;
+  /** Si se fija, el PUT de proveedores espera a esta promesa antes de responder. */
+  holdProvidersPut: Promise<void> | null = null;
   /** Si el agente que preguntó sigue vivo: la respuesta va al pane; si no, a un Run nuevo. */
   agentAlive = false;
   /** Si se fija, GET /api/queue responde esto tal cual. */
@@ -298,6 +311,7 @@ export class FakeApi {
     const body = typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : undefined;
     this.requests.push({ method, path: url.pathname + url.search, body });
     if (this.runsGate && /^\/api\/tasks\/[^/]+\/runs$/.test(url.pathname)) await this.runsGate;
+    if (method === "PUT" && url.pathname === "/api/settings/providers") await this.holdProvidersPut;
     const [status, payload] = this.route(method, url, body);
     return new Response(status === 204 ? null : JSON.stringify(payload), {
       status,
@@ -320,6 +334,27 @@ export class FakeApi {
     return [204, null];
   }
 
+  private providerSettings(method: string, body: unknown): [number, unknown] {
+    if (method === "GET") {
+      if (this.providersReadFails) return [500, { error: "internal", message: "sin conexión" }];
+      return [200, this.providers];
+    }
+    if (method !== "PUT") return [404, { error: "not_found" }];
+    if (this.providersError) {
+      const { status, ...error } = this.providersError;
+      return [status, error];
+    }
+    const input = validate(AgentProviderPatch, body);
+    if (!input.ok) return input.response;
+    this.providers = AgentProviderSettings.parse({
+      ...this.providers,
+      ...Object.fromEntries(Object.entries(input.data).filter(([, v]) => v !== undefined)),
+    });
+    const saved = { ...this.providers };
+    this.afterProvidersPut?.();
+    return [200, saved];
+  }
+
   private route(method: string, url: URL, body: unknown): [number, unknown] {
     const parts = url.pathname.split("/").filter(Boolean).slice(1);
     const [resource, id, sub, version, action] = parts;
@@ -331,6 +366,7 @@ export class FakeApi {
     if (resource === "projects" && method === "GET") {
       return sub === "hooks" ? this.projectHooks(id, version, url) : [200, this.projects];
     }
+    if (resource === "settings" && id === "providers") return this.providerSettings(method, body);
     if (resource === "questions") return this.question(method, url, id, sub, body);
     if (resource === "blocked") {
       if (method === "GET") return [200, this.blocked];

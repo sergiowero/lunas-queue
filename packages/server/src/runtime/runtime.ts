@@ -114,7 +114,7 @@ export function prepareDatabase(path: string): LunasqDatabase {
 function listen(
   port: number,
   hostname: string,
-  fetch: (req: Request) => Response | Promise<Response>,
+  fetch: (req: Request, env: unknown) => Response | Promise<Response>,
 ) {
   return new Promise<{ server: ServerType; port: number }>((resolve, reject) => {
     const server = serve({ fetch, port, hostname }, (info: AddressInfo) =>
@@ -250,11 +250,11 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
   const db = prepareDatabase(opts.dbPath);
 
   // Se escucha antes de componer: la URL (con el puerto real) va en los archivos de Claude Code.
-  let handler: ((req: Request) => Response | Promise<Response>) | undefined;
+  let handler: ((req: Request, env: unknown) => Response | Promise<Response>) | undefined;
   let listening: Awaited<ReturnType<typeof listen>>;
   try {
-    listening = await listen(opts.port, hostname, (req) =>
-      handler ? handler(req) : new Response("arrancando", { status: 503 }),
+    listening = await listen(opts.port, hostname, (req, env) =>
+      handler ? handler(req, env) : new Response("arrancando", { status: 503 }),
     );
   } catch (err) {
     db.$client.close();
@@ -282,7 +282,8 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
     unsubscribeAfterMerge,
     unsubscribeDelivery,
   } = parts;
-  handler = (req) => app.fetch(req);
+  // env trae la conexión (incoming): sin reenviarlo, la guarda de loopback no ve al par.
+  handler = (req, env) => app.fetch(req, env);
 
   let stopping: Promise<void> | undefined;
   const stop = () => {

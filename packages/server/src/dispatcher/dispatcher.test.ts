@@ -8,6 +8,7 @@ import {
   ProjectRepository,
   ProjectWorkspaceRepository,
   RunRepository,
+  SettingsRepository,
   TaskWorktreeRepository,
 } from "@lunasq/db";
 import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
@@ -464,6 +465,175 @@ describe("PhaseDispatcher: confianza de carpeta", () => {
   });
 });
 
+describe("PhaseDispatcher: proveedores habilitados", () => {
+  it("con claude deshabilitado solo intenta copilot y no registra intento para claude", async () => {
+    const { db, project, herdr, dispatcher, runs } = setup();
+    const task = insertTask(db, project.id);
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+    const kinds: string[] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      return start(input);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(kinds).toEqual(["copilot"]);
+    expect(run?.agentKind).toBe("copilot");
+    expect(runs.providerAttempts(run?.id ?? "")).toEqual([
+      { provider: "copilot", status: "started" },
+    ]);
+  });
+
+  it("si el único habilitado falla al arrancar, no cae a un proveedor deshabilitado", async () => {
+    const { db, project, herdr, dispatcher, runs, taskRow } = setup();
+    const task = insertTask(db, project.id);
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+    const kinds: string[] = [];
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      throw new Error(`${input.kind} service unavailable`);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    expect(kinds).toEqual(["copilot"]);
+    expect(runs.forTask(task.id)[0]?.failureReason).toContain(
+      "copilot: copilot service unavailable",
+    );
+    expect(taskRow(task.id)).toMatchObject({ state: "needs_human" });
+  });
+
+  it("si claude se deshabilita mientras se prepara el lanzamiento, no lo arranca y cae a copilot", async () => {
+    const { db, project, herdr, dispatcher, runs } = setup();
+    const task = insertTask(db, project.id);
+    const kinds: string[] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      return start(input);
+    });
+    const closed: string[] = [];
+    const close = herdr.closePane.bind(herdr);
+    vi.spyOn(herdr, "closePane").mockImplementation(async (paneId) => {
+      closed.push(paneId);
+      return close(paneId);
+    });
+    // El humano apaga claude después del claim, mientras el dispatcher prepara el pane.
+    const split = herdr.splitPane.bind(herdr);
+    let disabled = false;
+    vi.spyOn(herdr, "splitPane").mockImplementation(async (input) => {
+      if (!disabled) {
+        disabled = true;
+        new SettingsRepository(db).saveProviders({ claude: false });
+      }
+      return split(input);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(kinds).toEqual(["copilot"]);
+    expect(run?.agentKind).toBe("copilot");
+    expect(runs.providerAttempts(run?.id ?? "")).toEqual([
+      { provider: "copilot", status: "started" },
+    ]);
+    // El pane preparado para claude no queda huérfano: se cierra y solo el de copilot sigue abierto.
+    expect(closed).toHaveLength(1);
+    const { panes } = await herdr.snapshot();
+    expect(panes.some((p) => p.paneId === closed[0])).toBe(false);
+    expect(panes.some((p) => p.paneId === run?.herdrPane)).toBe(true);
+  });
+
+  it("si todos se deshabilitan mientras se prepara el lanzamiento, no arranca nada y la tarea vuelve a queued", async () => {
+    const { db, project, herdr, dispatcher, runs, taskRow } = setup();
+    const task = insertTask(db, project.id);
+    const startAgent = vi.spyOn(herdr, "startAgent");
+    const split = herdr.splitPane.bind(herdr);
+    let disabled = false;
+    vi.spyOn(herdr, "splitPane").mockImplementation(async (input) => {
+      if (!disabled) {
+        disabled = true;
+        new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+      }
+      return split(input);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    expect(startAgent).not.toHaveBeenCalled();
+    // Es una pausa, no un fallo: la tarea espera en queued y el Run no cuenta como fallido.
+    expect(taskRow(task.id)).toMatchObject({ state: "draft", subState: "queued" });
+    const [run] = runs.forTask(task.id);
+    expect(run).toMatchObject({ result: "cancelled" });
+    expect(run?.failureReason).toContain("deshabilitados");
+    expect(runs.consecutiveFailures(task.id, "refine")).toBe(0);
+    const { panes } = await herdr.snapshot();
+    expect(panes.some((p) => p.paneId === run?.herdrPane)).toBe(false);
+
+    // Al habilitar uno, la tarea se despacha con normalidad.
+    new SettingsRepository(db).saveProviders({ copilot: true });
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+    expect(runs.forTask(task.id).at(-1)).toMatchObject({ agentKind: "copilot", endedAt: null });
+  });
+
+  it("rechaza el claim si todos los proveedores se deshabilitaron tras planear y la tarea sigue en queued", async () => {
+    const { db, project, dispatcher, runs, taskRow } = setup();
+    const task = insertTask(db, project.id);
+    const decision = refine(task);
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+
+    await expect(dispatcher.dispatch(decision)).rejects.toMatchObject({
+      code: "providers_disabled",
+    });
+
+    expect(taskRow(task.id)).toMatchObject({ state: "draft", subState: "queued" });
+    expect(runs.forTask(task.id)).toEqual([]);
+  });
+
+  it("deshabilitar claude no interrumpe a un agente vivo, conserva su slot y la tarea nueva va al habilitado", async () => {
+    // Con un slot por tipo, si el agente vivo dejara de contar al apagar claude, o el claim lo
+    // siguiera contando en el proveedor del perfil, la tarea nueva no cabría o pisaría el slot.
+    const { db, project, herdr, dispatcher, runs, taskRow } = setup({
+      config: { agentKindConcurrency: { claude: 1, copilot: 1 } },
+    });
+    const viva = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(viva));
+    await dispatcher.idle();
+    const [vivaRun] = runs.forTask(viva.id);
+    expect(vivaRun).toMatchObject({ agentKind: "claude", endedAt: null });
+    const closed: string[] = [];
+    const close = herdr.closePane.bind(herdr);
+    vi.spyOn(herdr, "closePane").mockImplementation(async (paneId) => {
+      closed.push(paneId);
+      return close(paneId);
+    });
+
+    new SettingsRepository(db).saveProviders({ claude: false });
+    // La reconciliación corre tras el cambio: no debe tratar al agente de un proveedor apagado
+    // como huérfano ni reiniciarlo.
+    await dispatcher.recover();
+    await dispatcher.idle();
+    const nueva = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(nueva));
+    await dispatcher.idle();
+
+    expect(closed).toEqual([]);
+    expect(runs.get(vivaRun?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
+    expect(taskRow(viva.id)).toMatchObject({ subState: "running" });
+    const snapshot = await herdr.snapshot();
+    expect(snapshot.agents.some((a) => a.paneId === vivaRun?.herdrPane)).toBe(true);
+    expect(runs.forTask(nueva.id)[0]).toMatchObject({ agentKind: "copilot", endedAt: null });
+  });
+});
+
 describe("PhaseDispatcher: fallos al lanzar", () => {
   it("cambia al siguiente proveedor cuando el CLI primario no inicia", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();
@@ -491,6 +661,41 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
       },
       { provider: "copilot", status: "started" },
     ]);
+  });
+
+  it("no pasa a un fallback cuyo límite de concurrencia ya está lleno y cuenta el fallo del primario", async () => {
+    const { db, project, herdr, dispatcher, runs, taskRow } = setup({
+      config: { agentKindConcurrency: { copilot: 1 } },
+    });
+    const settings = new SettingsRepository(db);
+    // Un agente vivo de copilot llena su único slot (claude estaba apagado al despacharlo).
+    settings.saveProviders({ claude: false, copilot: true });
+    const live = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(live));
+    await dispatcher.idle();
+    settings.saveProviders({ claude: true, copilot: true });
+    const kinds: string[] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      if (input.kind === "claude") throw new Error("claude executable not found");
+      return start(input);
+    });
+    const task = insertTask(db, project.id);
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(kinds).toEqual(["claude"]);
+    expect(run?.agentKind).toBe("claude");
+    // El fallo real de claude se cuenta: pausar lo ocultaría y el scheduler volvería a despachar
+    // al proveedor roto sin backoff. El diagnóstico conserva ambos motivos.
+    expect(run).toMatchObject({ result: "failure" });
+    expect(run?.failureReason).toContain("claude: claude executable not found");
+    expect(run?.failureReason).toContain("copilot: sin slot de concurrencia");
+    expect(taskRow(task.id)).not.toMatchObject({ subState: "queued" });
+    expect(runs.forTask(live.id)[0]?.agentKind).toBe("copilot");
   });
 
   it("aplica fallback simétrico cuando Copilot es el proveedor primario", async () => {

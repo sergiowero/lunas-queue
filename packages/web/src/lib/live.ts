@@ -7,7 +7,14 @@ import { useEffect } from "react";
 
 export const CHANGE_STREAM_URL = "/api/stream";
 
-export function invalidateChanges(queryClient: QueryClient, taskIds: string[]): void {
+export function invalidateChanges(
+  queryClient: QueryClient,
+  taskIds: string[],
+  settings = false,
+): void {
+  // La configuración de proveedores es global (settings.updated): la página Settings y el aviso
+  // de despacho en pausa de otras pestañas se refrescan sin esperar el polling.
+  if (settings) void queryClient.invalidateQueries({ queryKey: ["settings"] });
   void queryClient.invalidateQueries({ queryKey: ["queue"] });
   void queryClient.invalidateQueries({ queryKey: ["tasks"] });
   // Las ejecuciones de hooks son eventos de tarea. El contenido de los hooks
@@ -32,8 +39,11 @@ export function useLiveUpdates(): void {
     const source = new EventSource(CHANGE_STREAM_URL);
     const onChange = (event: MessageEvent<string>) => {
       try {
-        const { taskIds } = JSON.parse(event.data) as { taskIds: string[] };
-        invalidateChanges(queryClient, taskIds);
+        const { taskIds, settings } = JSON.parse(event.data) as {
+          taskIds: string[];
+          settings?: boolean;
+        };
+        invalidateChanges(queryClient, taskIds, settings === true);
       } catch {
         // Un mensaje ilegible no rompe la UI: el refresco periódico lo cubre.
       }

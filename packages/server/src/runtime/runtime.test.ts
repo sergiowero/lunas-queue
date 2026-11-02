@@ -1,5 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { request } from "node:http";
+import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
 import { FakeGit, FakeGitHub, FakeHerdr, FakeProcessRunner } from "@lunasq/adapters";
 import { createQuestion, openDatabase, RunRepository } from "@lunasq/db";
@@ -36,6 +37,36 @@ async function start(opts: RuntimeOptions) {
   const runtime = await startRuntime(opts);
   cleanups.push(() => runtime.stop());
   return runtime;
+}
+
+/** IPv4 de una interfaz externa de esta máquina; undefined si no hay red (p. ej. un sandbox). */
+function lanAddress(): string | undefined {
+  for (const list of Object.values(networkInterfaces())) {
+    const found = list?.find((i) => i.family === "IPv4" && !i.internal);
+    if (found) return found.address;
+  }
+  return undefined;
+}
+
+/** PUT crudo con Host de localhost: fetch no deja elegir el origen de la conexión ni el Host. */
+function putProviders(host: string, port: number, body: object) {
+  return new Promise<number>((resolve, reject) => {
+    const req = request(
+      {
+        host,
+        port,
+        path: "/api/settings/providers",
+        method: "PUT",
+        headers: { "content-type": "application/json", host: "localhost" },
+      },
+      (res) => {
+        res.resume();
+        res.on("end", () => resolve(res.statusCode ?? 0));
+      },
+    );
+    req.on("error", reject);
+    req.end(JSON.stringify(body));
+  });
 }
 
 describe("telemetryEnv", () => {
@@ -239,4 +270,17 @@ describe("startRuntime", () => {
     const port = Number(new URL(first.url).port);
     await expect(startRuntime(options({ port }))).rejects.toThrow(/EADDRINUSE/);
   });
+
+  // Pasa por el servidor real: app.request inyecta la conexión a mano y no prueba que el runtime
+  // la reenvíe a la guarda de loopback.
+  it.skipIf(lanAddress() === undefined)(
+    "con el servidor en todas las interfaces, rechaza el PUT de settings que llega por la red aunque falsifique Host: localhost",
+    async () => {
+      const runtime = await start(options({ hostname: "0.0.0.0" }));
+      const port = Number(new URL(runtime.url).port);
+
+      expect(await putProviders(lanAddress() ?? "", port, { claude: false })).toBe(403);
+      expect(await putProviders("127.0.0.1", port, { claude: true })).toBe(200);
+    },
+  );
 });

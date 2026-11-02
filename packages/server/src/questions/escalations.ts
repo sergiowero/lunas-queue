@@ -33,7 +33,7 @@ export class QuestionEscalations {
 
   /** Transición de una tarea (outbox): idempotente, porque el outbox entrega al menos una vez. */
   onTransition(message: OutboxMessage): void {
-    if (message.topic !== TASK_TRANSITIONED) return;
+    if (message.topic !== TASK_TRANSITIONED || message.taskId === null) return;
     const payload = TaskTransitionedPayload.safeParse(message.payload);
     if (!payload.success) return;
     const { from, to } = payload.data;

@@ -1,11 +1,12 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { useInbox } from "../lib/inbox.ts";
 import { useLiveUpdates } from "../lib/live.ts";
+import { DispatchPausedBanner } from "./dispatch-paused-banner.tsx";
 import { ThemeToggle } from "./theme-toggle.tsx";
 import { Badge } from "./ui/badge.tsx";
 
 const nav =
-  "rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text";
+  "shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text";
 const active = { className: "bg-primary/10 text-primary-text hover:bg-primary/10" };
 
 /** Marca de LunasQ: tile con degradado índigo-violeta y tres fases lunares en cola (nueva, cuarto, llena). */
@@ -44,7 +45,7 @@ export function Layout() {
             <BrandMark />
             LunasQ
           </Link>
-          <nav className="flex gap-1">
+          <nav className="-my-2 flex min-w-0 gap-1 overflow-x-auto px-1 py-2">
             <Link to="/queue" className={nav} activeProps={active}>
               Cola
             </Link>
@@ -78,10 +79,14 @@ export function Layout() {
             <Link to="/tasks/new" className={nav} activeProps={active}>
               Nueva tarea
             </Link>
+            <Link to="/settings" className={nav} activeProps={active}>
+              Settings
+            </Link>
           </nav>
-          <ThemeToggle className="ml-auto" />
+          <ThemeToggle className="ml-auto shrink-0" />
         </div>
       </header>
+      <DispatchPausedBanner />
       <main className="mx-auto max-w-7xl px-6 py-6">
         <Outlet />
       </main>

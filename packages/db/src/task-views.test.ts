@@ -259,9 +259,29 @@ describe("TaskViewRepository.changesSince", () => {
     expect(views.changesSince(first.id - 1)).toEqual({
       lastId: last.id,
       taskIds: [task.id, other.id],
+      settingsChanged: false,
     });
-    expect(views.changesSince(first.id)).toEqual({ lastId: last.id, taskIds: [other.id, task.id] });
-    expect(views.changesSince(last.id)).toEqual({ lastId: last.id, taskIds: [] });
+    expect(views.changesSince(first.id)).toEqual({
+      lastId: last.id,
+      taskIds: [other.id, task.id],
+      settingsChanged: false,
+    });
+    expect(views.changesSince(last.id)).toEqual({
+      lastId: last.id,
+      taskIds: [],
+      settingsChanged: false,
+    });
+  });
+
+  it("marca settingsChanged con un settings.updated, que no pertenece a ninguna tarea", () => {
+    const { db, views } = setup();
+    const event = appendEvent(db, { taskId: null, type: "settings.updated", actor: "human" });
+    expect(views.changesSince(event.id - 1)).toEqual({
+      lastId: event.id,
+      taskIds: [],
+      settingsChanged: true,
+    });
+    expect(views.changesSince(event.id).settingsChanged).toBe(false);
   });
 });
 

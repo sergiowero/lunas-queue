@@ -25,8 +25,10 @@ import {
   type FailRunResult,
   type LunasqDatabase,
   ProjectRepository,
+  type ProviderSettingsReader,
   RunRepository,
   type RunRow,
+  SettingsRepository,
   TaskWorktreeRepository,
 } from "@lunasq/db";
 import {
@@ -119,6 +121,8 @@ export interface PhaseDispatcherOptions {
   /** Settings estable con los hooks de subagentes (ADR uw-19-revisores); ver `ensureHookSettings`. */
   hookSettingsPath: string;
   projects?: ProjectConfigReader;
+  /** Proveedores habilitados; por defecto los de la base. Se leen en el claim y al lanzar. */
+  settings?: ProviderSettingsReader;
   /** Los mismos límites que el scheduler: el claim los revalida (ADR 0014). */
   config?: SchedulerConfigInput;
   /** Variables extra del pane de cada agente (telemetría, PATH de pruebas). */
@@ -141,6 +145,7 @@ export class PhaseDispatcher implements Dispatcher {
   private readonly copilotMcpDirs = new Map<string, string>();
   private readonly hookSettingsPath: string;
   private readonly projects: ProjectConfigReader;
+  private readonly settings: ProviderSettingsReader;
   private readonly config: SchedulerConfig;
   private readonly paneEnv: Record<string, string>;
   private readonly observer: RunObserver | undefined;
@@ -167,6 +172,7 @@ export class PhaseDispatcher implements Dispatcher {
     this.mcpUrl = opts.mcpUrl;
     this.hookSettingsPath = opts.hookSettingsPath;
     this.projects = opts.projects ?? new ProjectRepository(opts.db);
+    this.settings = opts.settings ?? new SettingsRepository(opts.db);
     this.config = SchedulerConfig.parse(opts.config ?? {});
     this.paneEnv = {
       ...opts.paneEnv,
@@ -283,6 +289,17 @@ export class PhaseDispatcher implements Dispatcher {
         throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
       const res = this.runs.fail(runId, reason, opts);
       // También con closed false: un lanzamiento que falla tras un cierre deja su pane abierto.
+      await this.releaseAndRecord(runId);
+      return res;
+    });
+  }
+
+  /** Despacho en pausa: cierra el Run sin contarlo como fallo y la tarea vuelve a queued. */
+  pauseRun(runId: string, reason: string): Promise<FailRunResult> {
+    return this.closeLocks.run(runId, async () => {
+      if (!this.runs.get(runId))
+        throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
+      const res = this.runs.pause(runId, reason);
       await this.releaseAndRecord(runId);
       return res;
     });
@@ -413,7 +430,10 @@ export class PhaseDispatcher implements Dispatcher {
     worktree: { workspaceId: string; rootPaneId: string; path: string },
   ): Promise<HerdrAgent | null> {
     const primary = phaseProfile(project, phase);
+    // Solo los proveedores habilitados ahora; el humano pudo cambiarlos después del claim, así que
+    // se vuelve a leer justo antes de arrancar cada uno.
     const order = agentProviders.fallbackOrder(primary.kind);
+    const isEnabled = (kind: AgentKind) => this.settings.providers()[kind];
     const attempts = this.runs.providerAttempts(initial.id);
     const latest = new Map<AgentKind, (typeof attempts)[number]["status"]>();
     for (const attempt of attempts) latest.set(attempt.provider, attempt.status);
@@ -438,18 +458,34 @@ export class PhaseDispatcher implements Dispatcher {
     }
 
     const attempted = new Set(latest.keys());
+    let saturated = false;
     for (const provider of order) {
-      if (attempted.has(provider.kind)) continue;
-      let run = this.runs.setAgentKind(
+      if (attempted.has(provider.kind) || !isEnabled(provider.kind)) continue;
+      const switched = this.runs.switchAgentKind(
         initial.id,
         provider.kind,
         provider.kind === primary.kind ? (primary.model ?? null) : null,
+        { projects: this.projects, config: this.config },
       );
-      if (!run) throw new DispatchError("run_not_found", `no existe el Run ${initial.id}`);
+      if (!switched) throw new DispatchError("run_not_found", `no existe el Run ${initial.id}`);
+      if (switched === "no_slot") {
+        // El claim reservó otro proveedor: pasar a este rebasaría su límite de concurrencia.
+        diagnostics.push(`${provider.kind}: sin slot de concurrencia`);
+        saturated = true;
+        continue;
+      }
+      let run: RunRow = switched;
       run = this.checkOpen(run.id);
       const args = await this.args(project, phase, run);
       const paneId = await this.ensurePane(run, worktree, phase);
       run = this.checkOpen(run.id);
+      // La preparación espera a herdr y al sistema de archivos: el humano pudo apagar el proveedor.
+      if (!isEnabled(provider.kind)) {
+        await this.herdr.closePane(paneId);
+        this.runs.clearPane(run.id);
+        await this.removeCopilotMcpConfig(run.id);
+        continue;
+      }
       this.runs.recordProviderAttempt(run.id, provider.kind, "started");
       try {
         const started = await this.herdr.startAgent({
@@ -480,6 +516,23 @@ export class PhaseDispatcher implements Dispatcher {
       }
     }
 
+    if (order.every((p) => !isEnabled(p.kind))) {
+      // El humano apagó todos durante el lanzamiento: no es un fallo de los CLI, el despacho se
+      // pausa y la tarea espera en queued hasta que habilite uno.
+      await this.pauseRun(initial.id, "todos los proveedores están deshabilitados en Settings");
+      return null;
+    }
+    const hadRealFailure = this.runs
+      .providerAttempts(initial.id)
+      .some((a) => a.status === "failed");
+    if (saturated && !hadRealFailure) {
+      // Ningún proveedor falló al arrancar y uno habilitado quedó sin slot: es saturación
+      // transitoria, no un fallo de los CLI. La tarea espera en queued y el scheduler la
+      // replanifica cuando se libere un slot. Si algún proveedor sí falló, el fallo se cuenta
+      // abajo: pausar lo ocultaría y el scheduler reintentaría el proveedor roto sin backoff.
+      await this.pauseRun(initial.id, `sin slot de concurrencia: ${diagnostics.join("; ")}`);
+      return null;
+    }
     const reason = `ningún proveedor respondió al arrancar: ${diagnostics.join("; ") || "sin diagnóstico"}`;
     await this.failRun(initial.id, reason, { providersUnavailable: true });
     return null;

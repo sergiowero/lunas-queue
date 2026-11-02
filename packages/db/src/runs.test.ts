@@ -23,6 +23,7 @@ import {
   recordVerdict,
 } from "./runs.ts";
 import { events, outbox, tasks } from "./schema.ts";
+import { SettingsRepository } from "./settings.ts";
 import { transitionTask } from "./task-transitions.ts";
 import {
   freshDatabase,
@@ -235,6 +236,47 @@ const decisionFor = (
   phase: ClaimDecision["phase"] = "refine",
   expected: ClaimDecision["expected"] = { state: "draft", subState: "queued" },
 ): ClaimDecision => ({ taskId: task.id, projectId: task.projectId, phase, expected });
+
+describe("claimRun: proveedores habilitados", () => {
+  it("con todos los proveedores deshabilitados rechaza y la tarea sigue en queued sin Run", () => {
+    const { db, project, claim } = setup();
+    const task = insertTask(db, project.id);
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+
+    const res = claim(decisionFor(task));
+
+    expect(res).toMatchObject({ ok: false, error: { code: "providers_disabled" } });
+    expect(
+      db.$client.prepare("select state, sub_state as s from tasks where id = ?").get(task.id),
+    ).toEqual({ state: "draft", s: "queued" });
+    expect(new RunRepository(db).forTask(task.id)).toEqual([]);
+  });
+
+  it("con el primario deshabilitado crea el Run con el proveedor efectivo, sin el modelo del primario", () => {
+    const { db, project, claim } = setup();
+    const task = insertTask(db, project.id, { state: "in_progress" });
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+
+    const res = claim(decisionFor(task, "implement", { state: "in_progress", subState: "queued" }));
+
+    if (!res.ok) throw new Error(res.error.message);
+    expect(res.run).toMatchObject({ agentKind: "copilot", model: null });
+  });
+
+  it("un agente vivo no se toca al deshabilitar su proveedor", () => {
+    const { db, project, claim } = setup();
+    const task = insertTask(db, project.id);
+    const res = claim(decisionFor(task));
+    if (!res.ok) throw new Error(res.error.message);
+
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+
+    expect(new RunRepository(db).get(res.run.id)).toMatchObject({ endedAt: null, result: null });
+    expect(
+      db.$client.prepare("select sub_state from tasks where id = ?").pluck().get(task.id),
+    ).toBe("running");
+  });
+});
 
 describe("claimRun", () => {
   it("mueve la tarea a running y crea el Run con token, iteración, nombre y sesión nativa", () => {
@@ -453,6 +495,26 @@ describe("RunRepository.fail", () => {
       state: "in_progress",
       subState: "queued",
     });
+  });
+
+  it("pause cierra el Run como cancelled, devuelve la tarea a queued y no cuenta como fallo", () => {
+    const { db, runs, task, claimOnce } = claimedInProgress();
+    // Tres fallos previos: la pausa no suma el cuarto que escalaría a needs_human.
+    for (let i = 0; i < 3; i++) runs.fail(claimOnce().id, `fallo ${i}`);
+    const run = claimOnce();
+
+    const res = runs.pause(run.id, "todos los proveedores están deshabilitados en Settings");
+
+    expect(res).toMatchObject({ closed: true, transitioned: true });
+    expect(runs.get(run.id)).toMatchObject({
+      result: "cancelled",
+      failureReason: "todos los proveedores están deshabilitados en Settings",
+    });
+    expect(db.select().from(tasks).where(eq(tasks.id, task.id)).get()).toMatchObject({
+      state: "in_progress",
+      subState: "queued",
+    });
+    expect(runs.pause(run.id, "otra vez")).toEqual({ closed: false, transitioned: false });
   });
 
   it("los fallos consecutivos agotan los reintentos y escalan a needs_human", () => {

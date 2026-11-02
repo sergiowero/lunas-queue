@@ -17,7 +17,7 @@ export function escalationNotification(
   taskNumber: number,
   message: OutboxMessage,
 ): Notification | null {
-  if (message.topic !== TASK_TRANSITIONED) return null;
+  if (message.topic !== TASK_TRANSITIONED || message.taskId === null) return null;
   const payload = TaskTransitionedPayload.safeParse(message.payload);
   if (!payload.success || payload.data.to.state !== "needs_human") return null;
   const short = taskLabel(taskNumber);
