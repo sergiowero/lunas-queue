@@ -11,6 +11,7 @@ Este archivo dice cómo trabajar en el repo. El detalle vive en `docs/`; léelo 
 | `docs/design.md` | Diseño completo: modelo de dominio, máquina de estados, dispatcher, MCP, verificación, hooks, auditoría | Antes de cambiar algo que toque lo que describe |
 | `docs/tech-stack.md` | Stack, paquetes del monorepo y sus fronteras, integraciones externas, tooling | Antes de agregar dependencias o crear archivos en un paquete |
 | `docs/decisions/` | ADRs cortos con decisiones tomadas durante la implementación | Antes de contradecir algo de los docs anteriores |
+| `docs/research/codex-compatibilidad.md` | Informe de compatibilidad de Codex CLI como proveedor (veredictos por punto de integración, brechas y recomendación) | Antes de agregar Codex como `AgentKind` |
 | `docs/archive/` | Backlog histórico de unidades de trabajo (ya no se usa) | Solo como referencia histórica |
 
 El repo es la fuente de verdad. Si una decisión cambia mientras implementas, actualiza el `.md` correspondiente en el mismo PR que el código. Un ADR nuevo va en `docs/decisions/<tema>.md`.
