@@ -98,9 +98,32 @@ describe("página Settings", () => {
 
     // El PUT se guardó: el aviso lo dice y no habla de un cambio fallido (ver el test siguiente).
     const alert = await screen.findByText(/El cambio se guardó/, {}, { timeout: 4000 });
-    expect(alert).toBeTruthy();
-    expect(screen.getByRole("switch", { name: "Claude" })).toBeTruthy();
-    expect(screen.getByRole("switch", { name: "Copilot" })).toBeTruthy();
+    expect(alert.getAttribute("role")).toBe("alert");
+    // Los interruptores conservan el último estado leído: ambos siguen encendidos.
+    expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(true);
+    expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(true);
+  });
+
+  it("una lectura fallida posterior a una relectura exitosa no dice que el cambio no se leyó", async () => {
+    const fake = new FakeApi();
+    const { user, refresh } = renderApp("/settings", fake);
+    await screen.findByRole("switch", { name: "Claude" });
+    fake.providersReadFails = true;
+    await user.click(screen.getByRole("switch", { name: "Copilot" }));
+    await screen.findByText(/El cambio se guardó/, {}, { timeout: 4000 });
+
+    // Una lectura posterior al PUT tiene éxito: los interruptores ya reflejan lo guardado.
+    fake.providersReadFails = false;
+    await refresh();
+    await waitFor(() => expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(false));
+    expect(screen.queryByText(/El cambio se guardó/)).toBeNull();
+
+    // Otra lectura falla después: es un fallo ajeno al cambio, con el texto genérico.
+    fake.providersReadFails = true;
+    await refresh();
+    const alert = await screen.findByText(/No se pudo actualizar la configuración/);
+    expect(alert.textContent).not.toMatch(/El cambio se guardó/);
+    expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(false);
   });
 
   it("si el PUT se guarda pero la relectura falla, avisa que el cambio se guardó y no que falló", async () => {

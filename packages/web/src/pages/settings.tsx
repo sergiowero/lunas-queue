@@ -70,9 +70,13 @@ export function SettingsPage() {
     return settings.error ? <QueryError error={settings.error} /> : <Loading />;
   }
   const current = settings.data;
-  // El PUT del último cambio tuvo éxito y la lectura que lo siguió falló: el servidor ya guardó, pero
-  // los interruptores muestran un estado anterior. Hay que decirlo, no que "no se pudo actualizar".
-  const savedButUnread = update.isSuccess && settings.errorUpdatedAt >= update.submittedAt;
+  // El PUT del último cambio tuvo éxito y ninguna lectura posterior llegó a leerlo: el servidor ya
+  // guardó, pero los interruptores muestran un estado anterior. Si una lectura posterior al PUT
+  // tuvo éxito, los datos ya reflejan el cambio y un fallo más tardío es ajeno a él.
+  const savedButUnread =
+    update.isSuccess &&
+    settings.errorUpdatedAt >= update.submittedAt &&
+    settings.dataUpdatedAt < update.submittedAt;
 
   return (
     <div className="flex flex-col gap-4">
