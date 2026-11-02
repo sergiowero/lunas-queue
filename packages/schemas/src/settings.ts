@@ -33,15 +33,31 @@ export const ConcurrencySettings = z.strictObject({
 });
 export type ConcurrencySettings = z.infer<typeof ConcurrencySettings>;
 
+export const MAX_VERIFICATION_ITERATIONS = 20;
+
+/**
+ * Global cap of verification reworks saved in Settings: integer from 1 to 20. A project's
+ * `limits.maxVerificationIterations` overrides it.
+ */
+export const VerificationSettings = z.strictObject({
+  maxVerificationIterations: z.int().min(1).max(MAX_VERIFICATION_ITERATIONS),
+});
+export type VerificationSettings = z.infer<typeof VerificationSettings>;
+
 export const SETTINGS_UPDATED = "settings.updated";
 
-/** What changed: the providers, the concurrency limit or both (at least one). */
+/** What changed: the providers, the concurrency limit, the iteration cap or several (at least one). */
 export const SettingsUpdatedPayload = z
   .strictObject({
     providers: AgentProviderSettings.optional(),
     globalConcurrency: ConcurrencySettings.shape.globalConcurrency.optional(),
+    maxVerificationIterations: VerificationSettings.shape.maxVerificationIterations.optional(),
   })
-  .refine((p) => p.providers !== undefined || p.globalConcurrency !== undefined, {
-    message: "settings.updated necesita providers o globalConcurrency",
-  });
+  .refine(
+    (p) =>
+      p.providers !== undefined ||
+      p.globalConcurrency !== undefined ||
+      p.maxVerificationIterations !== undefined,
+    { message: "settings.updated needs providers, globalConcurrency or maxVerificationIterations" },
+  );
 export type SettingsUpdatedPayload = z.infer<typeof SettingsUpdatedPayload>;
