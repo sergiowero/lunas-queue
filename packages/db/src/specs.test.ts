@@ -72,6 +72,17 @@ describe("SpecRepository.submit", () => {
     });
   });
 
+  it("persists the approved documentation deliverable through the database", () => {
+    const { repo, refining } = setup();
+    const task = refining();
+    const content = { ...specContentExample(), deliverable: "docs" as const };
+
+    const submitted = ok(repo.submit(task.id, content));
+
+    expect(submitted.spec.content.deliverable).toBe("docs");
+    expect(repo.get(task.id, submitted.spec.version)?.content.deliverable).toBe("docs");
+  });
+
   it("numbers the versions of each task in order", () => {
     const { db, repo, refining } = setup();
     const task = refining();

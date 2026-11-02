@@ -102,6 +102,23 @@ describe("GitCommitVerifier against a real repo", { timeout: 30_000 }, () => {
     expect(await verifier.branchHasCommits({ worktreePath: dir, baseBranch: "main" })).toBe(false);
   });
 
+  it("changedFiles lists committed changes from the merge base and returns an empty list at base", async () => {
+    const { dir, base } = repo();
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    expect(await verifier.changedFiles({ worktreePath: dir, baseBranch: "main" })).toEqual([
+      "work.txt",
+    ]);
+
+    git(dir, "reset", "-q", "--hard", base);
+    expect(await verifier.changedFiles({ worktreePath: dir, baseBranch: "main" })).toEqual([]);
+  });
+
+  it("changedFiles returns null when neither base ref can be resolved", async () => {
+    const { dir } = repo();
+    const verifier = new GitCommitVerifier(new ShellProcessRunner());
+    expect(await verifier.changedFiles({ worktreePath: dir, baseBranch: "--all" })).toBeNull();
+  });
+
   it("branchHasCommits does not count what is already in origin/<base> even if the local base is behind", async () => {
     const { dir, base } = repo();
     git(dir, "reset", "-q", "--hard", base);

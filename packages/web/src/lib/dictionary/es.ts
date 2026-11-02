@@ -176,6 +176,8 @@ export const es = {
       changes_requested: "cambios pedidos",
     },
     boundedContext: "Bounded context:",
+    deliverable: "Entregable:",
+    deliverables: { code: "Cambios de código", docs: "Documentación del repositorio solicitada" },
     requirements: "Requerimientos",
     criteria: "Criterios de aceptación",
     criterion: (id: string, given: string, when: string, outcome: string) =>
@@ -190,6 +192,7 @@ export const es = {
       invariant: "invariante",
       event: "evento",
     },
+    diffDeliverable: "entregable",
     diffBoundedContext: "bounded context",
     firstVersion: "Primera versión",
     changesAgainst: (version: number) => `Cambios contra v${version}`,

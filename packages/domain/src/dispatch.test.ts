@@ -66,6 +66,8 @@ describe("phasePrompt", () => {
     expect(prompt).toContain("refine-task");
     expect(prompt).toContain(TASK);
     expect(prompt).toContain("get_task_context");
+    expect(prompt).toContain("research");
+    expect(prompt).toContain("submit_result");
     expect(phasePrompt("implement", TASK)).toContain("implement-task");
     expect(phasePrompt("verify", TASK)).toContain("verify-task");
   });

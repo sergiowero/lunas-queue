@@ -30,9 +30,13 @@ export const SpecTask = z.strictObject({
   criterionIds: list(CriterionId, 50),
 });
 
+export const SpecDeliverable = z.enum(["code", "docs"]);
+
 // Content of a Spec version (docs/design.md §Domain model). The Spec stores it as
 // is; the refinement handoff sends it together with the assumptions.
 export const specContentShape = {
+  /** Repository change the human is approving; omitted in older handoffs means code. */
+  deliverable: SpecDeliverable.default("code"),
   domainModel: DomainModel,
   requirements: list(Text, 50).min(1),
   criteria: list(AcceptanceCriterion, 50).min(1),

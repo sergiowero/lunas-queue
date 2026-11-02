@@ -68,7 +68,15 @@ const PHASES = [
     skill: "refine-task",
     exit: "submit_spec",
     handoffPhase: "refinement",
-    body: ["title", "domainModel", "requirements", "criteria", "taskList", "assumptions"],
+    body: [
+      "title",
+      "deliverable",
+      "domainModel",
+      "requirements",
+      "criteria",
+      "taskList",
+      "assumptions",
+    ],
   },
   {
     skill: "implement-task",
@@ -190,15 +198,42 @@ describe("@lunasq/assets-skills", () => {
   });
 
   it.each([
-    ["refine-task", ["submit_result", "research", "already_implemented", "not_resolvable"]],
+    [
+      "refine-task",
+      [
+        "submit_result",
+        "research",
+        "already_implemented",
+        "not_resolvable",
+        "deliverable",
+        "AGENTS.md",
+        "Do not create a report file",
+      ],
+    ],
     [
       "implement-task",
-      ["submit_result", "branch_has_commits", "already_implemented", "not_resolvable"],
+      [
+        "submit_result",
+        "branch_has_commits",
+        "already_implemented",
+        "not_resolvable",
+        "deliverable",
+        "docs_only_diff",
+        "research report",
+        "ask the human",
+      ],
     ],
   ])("%s explains when to close a task without code with submit_result", (skill, pieces) => {
     const { body } = parseSkill(skill);
     for (const piece of pieces) expect(body, piece).toContain(piece);
     expect(body).toMatch(/without (verification|PR)/i);
+  });
+
+  it("verify-task rejects documentation-only diffs for code tasks", () => {
+    const { body } = parseSkill("verify-task");
+    expect(body).toContain("deliverable: code");
+    expect(body).toContain("lunasq/tasks/");
+    expect(body).toContain("deliverable: docs");
   });
 
   it("implement-task follows TDD, checks off the checklist and delivers commits on a clean worktree", () => {

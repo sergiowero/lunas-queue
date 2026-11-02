@@ -121,6 +121,10 @@ export type McpErrorCode =
   | "commits_missing"
   // submit_result in implementation with a branch that already has commits on top of the base.
   | "branch_has_commits"
+  // The committed diff contains only docs although the approved spec requires code.
+  | "docs_only_diff"
+  // Git could not determine the committed diff against the project's base branch.
+  | "changed_files_unavailable"
   | "dirty_worktree"
   // A test gate is already running for this Run.
   | "gate_in_progress"
@@ -423,7 +427,7 @@ export class LunasqMcpService {
 
     const worktreePath = task.worktreePath;
     const rejected = await this.#gated(run, () =>
-      this.#checkWorktree(run, handoff, worktreePath, project),
+      this.#checkWorktree(run, handoff, spec, worktreePath, project),
     );
     if (rejected) return rejected;
     return this.#write((tx) => {
@@ -762,6 +766,7 @@ export class LunasqMcpService {
   async #checkWorktree(
     run: RunRow,
     handoff: ImplementationHandoff,
+    spec: Spec,
     worktreePath: string,
     project: { baseBranch: string; testCommand?: string | null },
   ): Promise<Extract<Outcome<never>, { ok: false }> | null> {
@@ -785,6 +790,27 @@ export class LunasqMcpService {
     for (const point of ["after_implementation", "before_verification"] as const) {
       const blocked = await this.#runHooks(run, point);
       if (blocked) return blocked;
+    }
+    const changedFiles = await this.#commits.changedFiles({
+      worktreePath,
+      baseBranch: project.baseBranch,
+    });
+    if (changedFiles === null) {
+      return fail(
+        "changed_files_unavailable",
+        `could not determine the files changed from ${project.baseBranch}`,
+      );
+    }
+    const sourceFiles = changedFiles.filter((file) => !file.startsWith("lunasq/tasks/"));
+    if (
+      spec.content.deliverable !== "docs" &&
+      sourceFiles.length > 0 &&
+      sourceFiles.every((file) => file.endsWith(".md") || file.startsWith("docs/"))
+    ) {
+      return fail(
+        "docs_only_diff",
+        "this branch only changes documentation but the approved spec declares code. For research, remove the report and its task-only commits, then use submit_result; if those commits cannot safely be discarded, ask the human. For explicitly requested repository documentation, ask the human to reopen the spec with deliverable: docs.",
+      );
     }
     return this.#runGate(run, worktreePath, project, "submit_for_verification");
   }

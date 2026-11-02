@@ -2,6 +2,7 @@
 import { parseArgs } from "node:util";
 import { type Runtime, type RuntimeOptions, startRuntime } from "@lunasq/server";
 import pkg from "../package.json" with { type: "json" };
+import { syncAssets } from "./assets.ts";
 import { ConfigError, isPort, readConfig } from "./config.ts";
 import { type MachineContext, machineContext } from "./context.ts";
 import { formatResults, isGreen, runDoctor } from "./doctor.ts";
@@ -123,6 +124,13 @@ async function start(
   if (!config) {
     err("LunasQ is not installed: run `lunasq install`.");
     return 1;
+  }
+  const assets = await syncAssets(ctx.assetsRoot, ctx.paths);
+  for (const dest of assets.foreign) {
+    err(`LunasQ left the foreign asset untouched: ${dest}`);
+  }
+  if (assets.changes.length > 0) {
+    out(`Updated LunasQ assets:\n${assets.changes.map((change) => `  · ${change}`).join("\n")}`);
   }
   const runtime = await (deps.startRuntime ?? startRuntime)({
     dbPath: ctx.paths.db,

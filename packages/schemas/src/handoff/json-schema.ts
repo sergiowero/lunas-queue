@@ -24,7 +24,7 @@ const description =
 export function buildHandoffJsonSchemas(): Record<string, JsonSchema> {
   return Object.fromEntries(
     Object.entries(schemas).map(([file, schema]) => {
-      const { $schema, ...rest } = z.toJSONSchema(schema);
+      const { $schema, ...rest } = z.toJSONSchema(schema, { io: "input" });
       const $id = `urn:lunasq:handoff:v1:${file.replace(".json", "")}`;
       return [file, { $schema: $schema ?? "", $id, description, ...rest }];
     }),

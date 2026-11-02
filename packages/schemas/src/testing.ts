@@ -3,6 +3,7 @@ import type { SpecContent } from "./spec.ts";
 
 export function specContentExample(): SpecContent {
   return {
+    deliverable: "code",
     domainModel: {
       boundedContext: "Pedidos",
       glossary: [{ term: "Pending order", definition: "Confirmed order that has not shipped yet" }],

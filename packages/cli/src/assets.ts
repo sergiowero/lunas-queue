@@ -151,3 +151,47 @@ export function retired(targets: AssetTarget[], manifest: string[]): string[] {
   const current = new Set(targets.map((t) => t.dest));
   return manifest.filter((dest) => !current.has(dest));
 }
+
+export interface SyncAssetsResult {
+  changes: string[];
+  foreign: string[];
+}
+
+/** Mirrors published assets onto destinations LunasQ owns and reports foreign destinations untouched. */
+export async function syncAssets(root: string, paths: Paths): Promise<SyncAssetsResult> {
+  const targets = await assetTargets(root, paths);
+  const manifest = await readManifest(paths.manifest);
+  const installed = new Set(manifest);
+  const changes: string[] = [];
+  const foreign: string[] = [];
+
+  for (const target of targets) {
+    if (await isForeign(target, manifest)) {
+      foreign.push(target.dest);
+      continue;
+    }
+    const changed = await mirror(target.src, target.dest);
+    installed.add(target.dest);
+    if (changed.length > 0) {
+      const label =
+        target.kind === "agents"
+          ? "reviewer subagents"
+          : target.kind === "copilot-agents"
+            ? "reviewer subagents for Copilot CLI"
+            : `skill ${target.name}${target.kind === "copilot-skill" ? " for Copilot" : ""}`;
+      changes.push(`${label} → ${target.dest}`);
+    }
+  }
+
+  for (const dest of retired(targets, manifest)) {
+    await rm(dest, { recursive: true, force: true });
+    installed.delete(dest);
+    changes.push(`retired asset removed: ${dest}`);
+  }
+
+  const sorted = [...installed].sort();
+  if (sorted.join("\n") !== [...manifest].sort().join("\n")) {
+    await writeManifest(paths.manifest, sorted);
+  }
+  return { changes, foreign };
+}

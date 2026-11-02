@@ -2,9 +2,9 @@
 // herdr, Claude Code and gh (it does not install them), installs the herdr integration for Claude Code,
 // copies skills and subagents, writes the configuration and the stable files for Claude Code,
 // creates the database and ends with `doctor`. Repeating it changes nothing that is already up to date.
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { ensureHookSettings, ensureMcpConfig, prepareDatabase, runtimeUrls } from "@lunasq/server";
-import { assetTargets, isForeign, mirror, readManifest, retired, writeManifest } from "./assets.ts";
+import { syncAssets } from "./assets.ts";
 import {
   baseUrl,
   ConfigError,
@@ -67,33 +67,7 @@ export async function install(
     changes.push("herdr integration for Claude Code");
   }
 
-  const targets = await assetTargets(ctx.assetsRoot, ctx.paths);
-  const manifest = await readManifest(ctx.paths.manifest);
-  const installed = new Set(manifest);
-  for (const target of targets) {
-    // A foreign folder with the same name is not touched: doctor reports it.
-    if (await isForeign(target, manifest)) continue;
-    const changed = await mirror(target.src, target.dest);
-    installed.add(target.dest);
-    if (changed.length > 0) {
-      const label =
-        target.kind === "agents"
-          ? "reviewer subagents"
-          : target.kind === "copilot-agents"
-            ? "reviewer subagents for Copilot CLI"
-            : `skill ${target.name}${target.kind === "copilot-skill" ? " for Copilot" : ""}`;
-      changes.push(`${label} → ${target.dest}`);
-    }
-  }
-  for (const dest of retired(targets, manifest)) {
-    await rm(dest, { recursive: true, force: true });
-    installed.delete(dest);
-    changes.push(`retired asset removed: ${dest}`);
-  }
-  const sorted = [...installed].sort();
-  if (sorted.join("\n") !== [...manifest].sort().join("\n")) {
-    await writeManifest(ctx.paths.manifest, sorted);
-  }
+  changes.push(...(await syncAssets(ctx.assetsRoot, ctx.paths)).changes);
 
   const config = {
     telemetry: current?.telemetry ?? true,

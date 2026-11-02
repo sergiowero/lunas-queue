@@ -11,6 +11,17 @@ describe("diffSpecContent", () => {
     expect(diff.domainModel.boundedContext).toBeNull();
   });
 
+  it("reports changes to the deliverable", () => {
+    const before = specContentExample();
+    const after = specContentExample();
+    after.deliverable = "docs";
+
+    const diff = diffSpecContent(before, after);
+
+    expect(diff.deliverable).toEqual({ from: "code", to: "docs" });
+    expect(isEmptyDiff(diff)).toBe(false);
+  });
+
   it("criteria and tasks are compared by id: added, removed and changed", () => {
     const before = specContentExample();
     const after = specContentExample();

@@ -8,6 +8,7 @@ import {
   checkSpecReferences,
   DomainEvent,
   GlossaryEntry,
+  SpecDeliverable,
   SpecTask,
   specContentShape,
 } from "./handoff/refinement.ts";
@@ -67,6 +68,7 @@ export const TextListDiff = z.strictObject({
 export type TextListDiff = z.infer<typeof TextListDiff>;
 
 export const SpecContentDiff = z.strictObject({
+  deliverable: z.strictObject({ from: SpecDeliverable.nullable(), to: SpecDeliverable }).nullable(),
   domainModel: z.strictObject({
     boundedContext: z.strictObject({ from: z.string(), to: z.string() }).nullable(),
     glossary: keyedDiff(GlossaryEntry),

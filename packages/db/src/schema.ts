@@ -15,6 +15,7 @@ import {
   SessionSource,
   SpecApproval,
   type SpecContent,
+  SpecDeliverable,
   SubState,
   TaskState,
   UsageSource,
@@ -171,6 +172,9 @@ export const specs = sqliteTable(
       .notNull()
       .references(() => tasks.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
+    deliverable: text("deliverable", { enum: values(SpecDeliverable) })
+      .notNull()
+      .default("code"),
     // Content validated with SpecContent on write; the criteria are addressable by id.
     domainModel: text("domain_model", { mode: "json" }).$type<SpecContent["domainModel"]>(),
     requirements: text("requirements", { mode: "json" }).$type<SpecContent["requirements"]>(),
@@ -194,6 +198,7 @@ export const specs = sqliteTable(
   (t) => [
     unique("specs_task_version_unique").on(t.taskId, t.version),
     check("specs_version_positive", sql`${t.version} >= 1`),
+    inEnum("specs_deliverable_enum", t.deliverable, values(SpecDeliverable)),
     inEnum("specs_approval_enum", t.approval, values(SpecApproval)),
     inEnum("specs_created_by_enum", t.createdBy, values(Actor)),
     // The approval is tied to a single version per task.
