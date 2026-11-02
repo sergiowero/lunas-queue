@@ -70,6 +70,24 @@ describe("project creation", () => {
     });
   });
 
+  it("an empty iterations field says it uses the global value and sends no cap", async () => {
+    const fake = new FakeApi();
+    const { user, dialog } = await openDialog(fake);
+    const form = within(dialog);
+    const field = form.getByLabelText("Iteraciones de verificación") as HTMLInputElement;
+
+    expect(field.placeholder).toBe("valor global");
+    expect(field.placeholder).not.toBe("3");
+    expect(form.getByText(/valor global de Settings/)).toBeTruthy();
+
+    await user.type(form.getByLabelText("Nombre"), "global");
+    await user.type(form.getByLabelText("Repositorio"), "owner/global");
+    await user.type(form.getByLabelText("Ruta local"), "/repos/global");
+    await user.click(form.getByRole("button", { name: "Crear proyecto" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(fake.requests.find((r) => r.method === "POST")?.body).not.toHaveProperty("limits");
+  });
+
   it("sends the per-phase effort only when chosen, and shows it when editing", async () => {
     const fake = new FakeApi();
     const { user, dialog } = await openDialog(fake);

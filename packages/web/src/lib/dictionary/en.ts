@@ -305,6 +305,8 @@ export const en: Dictionary = {
     concurrency: "Concurrency",
     concurrencyPlaceholder: "global limit only",
     maxIterations: "Verification iterations",
+    maxIterationsPlaceholder: "global value",
+    maxIterationsHelp: "If left empty, the global value from Settings applies (5 by default).",
     agentByPhase: "Agent per phase",
     provider: (phase) => `${phase} provider`,
     model: (phase) => `${phase} model`,
@@ -468,6 +470,19 @@ export const en: Dictionary = {
     limitReadFailed: "The concurrency limit could not be read: ",
     limitSaveFailed: (effective, message) =>
       `The limit could not be saved; ${effective} remains in effect: ${message}`,
+    verificationTitle: "Verification iterations",
+    verificationHelp:
+      "Maximum number of reworks the verifier can request before the task moves to needs human. This is the global value: a project with its own value under Limits overrides it. Changing it does not interrupt agents that are already running; it applies to the next verdict or delivery.",
+    maxIterations: "Maximum iterations",
+    saveIterations: "Save iterations",
+    iterationsInvalid: (max) => `Enter a whole number between 1 and ${max}.`,
+    iterationsUpdateFailed:
+      "The iteration cap could not be refreshed; showing the last value read: ",
+    iterationsSavedUnread: (value) =>
+      `The iteration cap was saved (${value}), but it could not be read again: `,
+    iterationsReadFailed: "The iteration cap could not be read: ",
+    iterationsSaveFailed: (effective, message) =>
+      `The iteration cap could not be saved; ${effective} remains in effect: ${message}`,
   },
   newTask: {
     title: "New task",

@@ -305,6 +305,8 @@ export const es = {
     concurrency: "Concurrencia",
     concurrencyPlaceholder: "solo el límite global",
     maxIterations: "Iteraciones de verificación",
+    maxIterationsPlaceholder: "valor global",
+    maxIterationsHelp: "Si lo dejas vacío, se usa el valor global de Settings (5 por defecto).",
     agentByPhase: "Agente por fase",
     provider: (phase: string) => `Proveedor de ${phase}`,
     model: (phase: string) => `Modelo de ${phase}`,
@@ -471,6 +473,19 @@ export const es = {
     limitReadFailed: "No se pudo leer el límite de concurrencia: ",
     limitSaveFailed: (effective: number, message: string) =>
       `No se pudo guardar el límite; sigue vigente ${effective}: ${message}`,
+    verificationTitle: "Iteraciones de verificación",
+    verificationHelp:
+      "Máximo de reworks que el verificador puede pedir antes de que la tarea pase a necesita humano. Es el valor global: un proyecto con su propio valor en Límites lo sobrescribe. Cambiarlo no interrumpe a los agentes que ya corren; se aplica al siguiente veredicto o entrega.",
+    maxIterations: "Iteraciones máximas",
+    saveIterations: "Guardar iteraciones",
+    iterationsInvalid: (max: number) => `Escribe un número entero entre 1 y ${max}.`,
+    iterationsUpdateFailed:
+      "No se pudo actualizar el máximo de iteraciones; se muestra el último valor leído: ",
+    iterationsSavedUnread: (value: number) =>
+      `El máximo de iteraciones se guardó (${value}), pero no se pudo volver a leer: `,
+    iterationsReadFailed: "No se pudo leer el máximo de iteraciones: ",
+    iterationsSaveFailed: (effective: number, message: string) =>
+      `No se pudo guardar el máximo de iteraciones; sigue vigente ${effective}: ${message}`,
   },
   newTask: {
     title: "Nueva tarea",
