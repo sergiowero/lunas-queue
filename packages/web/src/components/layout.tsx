@@ -2,6 +2,7 @@ import { Link, Outlet } from "@tanstack/react-router";
 import { useInProgressCount } from "../lib/in-progress.ts";
 import { useInbox } from "../lib/inbox.ts";
 import { useLiveUpdates } from "../lib/live.ts";
+import { useOpenPrCount } from "../lib/open-prs.ts";
 import { cn } from "../lib/utils.ts";
 import { DispatchPausedBanner } from "./dispatch-paused-banner.tsx";
 import { PlusIcon, SettingsIcon } from "./icons.tsx";
@@ -42,6 +43,7 @@ export function Layout() {
   useLiveUpdates();
   const { count } = useInbox();
   const inProgressCount = useInProgressCount();
+  const openPrs = useOpenPrCount();
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-border bg-surface/80 backdrop-blur-xl">
@@ -75,8 +77,18 @@ export function Layout() {
                 </Badge>
               )}
             </Link>
-            <Link to="/completed" className={nav} activeProps={active}>
+            <Link
+              to="/completed"
+              className={nav}
+              activeProps={active}
+              aria-label={openPrs > 0 ? `Completed, ${openPrs} PR abiertos` : "Completed"}
+            >
               Completed
+              {openPrs > 0 && (
+                <Badge variant="success" className="ml-1.5">
+                  {openPrs}
+                </Badge>
+              )}
             </Link>
             <Link
               to="/inbox"

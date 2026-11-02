@@ -11,7 +11,7 @@ export const badgeVariants = cva(
         secondary: "bg-surface-secondary text-text-secondary ring-border",
         destructive: "bg-danger/10 text-danger-text ring-danger/20",
         success: "bg-success/10 text-success-text ring-success/20",
-        info:"bg-info/10 text-info-text ring-info/20",
+        info: "bg-info/10 text-info-text ring-info/20",
         outline: "bg-transparent text-text-secondary ring-border-strong",
       },
     },
