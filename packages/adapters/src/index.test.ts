@@ -50,6 +50,7 @@ describe("@lunasq/adapters", () => {
       "--reasoning-effort",
       "xhigh",
       "--disable-client-telemetry",
+      "--autopilot",
       "--allow-all-tools",
       "--session-id",
       "sess-1",
@@ -83,6 +84,66 @@ describe("@lunasq/adapters", () => {
         },
       ),
     ).toThrow(/deja uno/);
+  });
+
+  it("lanza Copilot en autopilot aunque el perfil no traiga model, effort ni args", () => {
+    const args = agentProviders
+      .get("copilot")
+      .args(
+        { kind: "copilot", args: [] },
+        { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" },
+      );
+    expect(args.filter((arg) => arg === "--autopilot")).toEqual(["--autopilot"]);
+  });
+
+  it("reserva --autopilot, --mode y --plan para Copilot", () => {
+    const context = { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" };
+    for (const args of [["--autopilot"], ["--mode", "autopilot"], ["--mode=plan"], ["--plan"]]) {
+      expect(() => agentProviders.get("copilot").args({ kind: "copilot", args }, context)).toThrow(
+        /lo fija LunasQ/,
+      );
+    }
+  });
+
+  it("rechaza el terminador -- en los args de Copilot para que no anule los flags fijos", () => {
+    const context = { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" };
+    expect(() =>
+      agentProviders.get("copilot").args({ kind: "copilot", args: ["--", "x"] }, context),
+    ).toThrow(/no puede traer --/);
+  });
+
+  it("no pasa flags de autopilot a Claude ni reserva los de Copilot", () => {
+    const context = { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" };
+    // Contraste: el mismo perfil vacío lleva --autopilot en Copilot y no en Claude.
+    expect(agentProviders.get("copilot").args({ kind: "copilot", args: [] }, context)).toContain(
+      "--autopilot",
+    );
+    expect(agentProviders.get("claude").args({ kind: "claude", args: [] }, context)).toEqual([
+      "--mcp-config",
+      "/mcp",
+      "--strict-mcp-config",
+      "--settings",
+      "/settings",
+      "--session-id",
+      "id",
+    ]);
+    // --mode y --plan solo están reservados para Copilot: Claude los deja pasar tal cual.
+    expect(
+      agentProviders
+        .get("claude")
+        .args({ kind: "claude", args: ["--mode", "x", "--plan"] }, context),
+    ).toEqual([
+      "--mode",
+      "x",
+      "--plan",
+      "--mcp-config",
+      "/mcp",
+      "--strict-mcp-config",
+      "--settings",
+      "/settings",
+      "--session-id",
+      "id",
+    ]);
   });
 
   it("rechaza providers duplicados en el registry", () => {

@@ -65,6 +65,7 @@ export class CopilotCliReviewerExecutor implements CopilotReviewerExecutor {
           "view",
           "grep",
           "glob",
+          "--autopilot",
           "--allow-all-tools",
           "--silent",
           "<",
