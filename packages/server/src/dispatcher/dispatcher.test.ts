@@ -1,7 +1,12 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FakeHerdr, FakeProcessRunner, TRUST_ACCEPT_KEYS } from "@lunasq/adapters";
+import {
+  CODEX_TRUST_ACCEPT_KEYS,
+  FakeHerdr,
+  FakeProcessRunner,
+  TRUST_ACCEPT_KEYS,
+} from "@lunasq/adapters";
 import {
   claimRun,
   closeRun,
@@ -447,6 +452,38 @@ describe("PhaseDispatcher: folder trust", () => {
     expect(await herdr.readAgent({ name })).toBe(phasePrompt("refine", task.id));
   });
 
+  it("accepts Codex's trust dialog and launches it with run-scoped MCP configuration", async () => {
+    const herdr = new FakeHerdr({ startStatus: "blocked" });
+    const { db, project, dispatcher, runs, errors } = setup({
+      herdr,
+      agentProfiles: { refine: { kind: "codex", model: "gpt-5.4", effort: "high", args: [] } },
+    });
+    const task = insertTask(db, project.id);
+    const starts: Parameters<typeof herdr.startAgent>[0][] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      starts.push(input);
+      return start(input);
+    });
+
+    await dispatcher.dispatch({ ...refine(task), agentKind: "codex" });
+    await dispatcher.idle();
+
+    const run = runs.forTask(task.id)[0];
+    const name = run?.herdrName ?? "";
+    const args = starts[0]?.args ?? [];
+    expect(errors).toEqual([]);
+    expect(run).toMatchObject({ agentKind: "codex", launchedAt: expect.any(Date) });
+    expect(herdr.sentKeys(name)).toEqual([[...CODEX_TRUST_ACCEPT_KEYS]]);
+    expect(args).toContain("--sandbox");
+    expect(args).toContain('mcp_servers.lunasq.url="http://127.0.0.1:8123/mcp"');
+    expect(args).toContain(
+      'mcp_servers.lunasq.env_http_headers={"X-LunasQ-Run-Token"="LUNASQ_RUN_TOKEN"}',
+    );
+    expect(args).toContain('mcp_servers.lunasq.default_tools_approval_mode="approve"');
+    expect(args.join(" ")).not.toContain(run?.runToken);
+  });
+
   it("a blockage that is not the trust dialog fails the Run without sending keys", async () => {
     const herdr = new FakeHerdr({ startStatus: "blocked" });
     const { db, project, dispatcher, runs, errors, taskRow } = setup({ herdr });
@@ -469,7 +506,7 @@ describe("PhaseDispatcher: enabled providers", () => {
   it("with claude disabled it only tries copilot and does not record an attempt for claude", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();
     const task = insertTask(db, project.id);
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: true, codex: false });
     const kinds: string[] = [];
     const start = herdr.startAgent.bind(herdr);
     vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
@@ -491,7 +528,7 @@ describe("PhaseDispatcher: enabled providers", () => {
   it("if the only enabled one fails to start, it does not fall back to a disabled provider", async () => {
     const { db, project, herdr, dispatcher, runs, taskRow } = setup();
     const task = insertTask(db, project.id);
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: true, codex: false });
     const kinds: string[] = [];
     vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
       kinds.push(input.kind);
@@ -559,7 +596,7 @@ describe("PhaseDispatcher: enabled providers", () => {
     vi.spyOn(herdr, "splitPane").mockImplementation(async (input) => {
       if (!disabled) {
         disabled = true;
-        new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+        new SettingsRepository(db).saveProviders({ claude: false, copilot: false, codex: false });
       }
       return split(input);
     });
@@ -578,7 +615,7 @@ describe("PhaseDispatcher: enabled providers", () => {
     expect(panes.some((p) => p.paneId === run?.herdrPane)).toBe(false);
 
     // When one is enabled, the task is dispatched normally.
-    new SettingsRepository(db).saveProviders({ copilot: true });
+    new SettingsRepository(db).saveProviders({ copilot: true, codex: false });
     await dispatcher.dispatch(refine(task));
     await dispatcher.idle();
     expect(runs.forTask(task.id).at(-1)).toMatchObject({ agentKind: "copilot", endedAt: null });
@@ -588,7 +625,7 @@ describe("PhaseDispatcher: enabled providers", () => {
     const { db, project, dispatcher, runs, taskRow } = setup();
     const task = insertTask(db, project.id);
     const decision = refine(task);
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: false, codex: false });
 
     await expect(dispatcher.dispatch(decision)).rejects.toMatchObject({
       code: "providers_disabled",
@@ -669,11 +706,11 @@ describe("PhaseDispatcher: launch failures", () => {
     });
     const settings = new SettingsRepository(db);
     // A live copilot agent fills its only slot (claude was off when it was dispatched).
-    settings.saveProviders({ claude: false, copilot: true });
+    settings.saveProviders({ claude: false, copilot: true, codex: false });
     const live = insertTask(db, project.id);
     await dispatcher.dispatch(refine(live));
     await dispatcher.idle();
-    settings.saveProviders({ claude: true, copilot: true });
+    settings.saveProviders({ claude: true, copilot: true, codex: false });
     const kinds: string[] = [];
     const start = herdr.startAgent.bind(herdr);
     vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
@@ -738,13 +775,13 @@ describe("PhaseDispatcher: launch failures", () => {
     expect(run).toMatchObject({
       result: "failure",
       failureReason: expect.stringContaining(
-        "no provider responded on start: claude: claude service unavailable; copilot: copilot service unavailable",
+        "no provider responded on start: claude: claude service unavailable; copilot: copilot service unavailable; codex: codex service unavailable",
       ),
     });
     expect(taskRow(task.id)).toMatchObject({ state: "needs_human", subState: null });
     expect(
       runs.providerAttempts(run?.id ?? "").filter((attempt) => attempt.status === "failed"),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
   it("a failing bootstrap closes the Run as failure and returns the task to queued", async () => {

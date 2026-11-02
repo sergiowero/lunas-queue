@@ -13,9 +13,9 @@ export {
   type RecordRunResult,
 } from "./service.ts";
 export {
+  AgentReviewerTranscriptSource,
   ClaudeTranscriptSource,
   type ClaudeTranscriptSourceOptions,
-  CopilotReviewerTranscriptSource,
   DEFAULT_TRANSCRIPT_MAX_BYTES,
   NoTranscripts,
   projectDirName,

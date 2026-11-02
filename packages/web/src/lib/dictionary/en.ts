@@ -40,10 +40,10 @@ export const en: Dictionary = {
   dispatch: {
     unknownTitle: "Dispatch status unknown:",
     unknownBody:
-      "The provider settings could not be read; if both are disabled, tasks wait in the queue.",
+      "The provider settings could not be read; if all are disabled, tasks wait in the queue.",
     pausedTitle: "Dispatch paused:",
     pausedBody:
-      "Claude and Copilot are disabled, so tasks wait in the queue. Live agents keep running.",
+      "Claude, Copilot, and Codex are disabled, so tasks wait in the queue. Live agents keep running.",
     goToSettings: "Go to Settings",
   },
   state: {
@@ -107,7 +107,7 @@ export const en: Dictionary = {
   },
   usage: {
     title: "Usage",
-    partial: "Recorded usage (partial: Copilot CLI does not report usage): ",
+    partial: "Recorded usage (partial: Copilot and Codex CLIs do not report usage): ",
     summary: (tokens, cost) => `${tokens} tokens · ${cost}`,
     none: "No usage recorded yet.",
     phase: "Phase",
@@ -443,14 +443,16 @@ export const en: Dictionary = {
     providers: {
       claude: "Claude",
       copilot: "Copilot",
+      codex: "Codex",
     },
     providerDescriptions: {
       claude: "Claude Code",
       copilot: "GitHub Copilot CLI",
+      codex: "OpenAI Codex CLI",
     },
     providersTitle: "Agent providers",
     providersHelp:
-      "Disable a provider when its usage limit runs out: it will not receive new dispatches and the fallback to the other one applies. With both disabled, tasks wait in the queue. Agents that are already running are not interrupted.",
+      "Disable a provider when it is unavailable or its usage limit runs out: it will not receive new dispatches and the fallback to another enabled provider applies. With all providers disabled, tasks wait in the queue. Agents that are already running are not interrupted.",
     providersSavedUnread:
       "The change was saved, but the state could not be read; the switches show the last state read, which may not reflect it: ",
     providersUpdateFailed: "The settings could not be refreshed; showing the last state read: ",

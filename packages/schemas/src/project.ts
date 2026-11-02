@@ -5,7 +5,7 @@ import { AgentKind, Phase } from "./enums.ts";
 
 const nonEmpty = z.string().trim().min(1);
 
-// Effort levels shared by `claude --effort` and `copilot --reasoning-effort`.
+// Effort levels shared by Claude Code, Copilot CLI and Codex CLI.
 export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export const EffortLevel = z.enum(EFFORT_LEVELS);
 export type EffortLevel = z.infer<typeof EffortLevel>;

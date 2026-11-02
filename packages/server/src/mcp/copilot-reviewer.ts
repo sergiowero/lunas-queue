@@ -5,7 +5,7 @@ import type { ProcessRunner } from "@lunasq/adapters";
 import type { RunRow } from "@lunasq/db";
 import type { ReviewerName } from "@lunasq/schemas";
 
-export type CopilotReviewerInput = {
+export type ReviewerInput = {
   run: RunRow;
   worktreePath: string;
   agentId: string;
@@ -13,14 +13,18 @@ export type CopilotReviewerInput = {
   instructions: string;
 };
 
-export type CopilotReviewerResult = {
+export type ReviewerResult = {
   transcriptPath: string;
   output: string;
 };
 
-export interface CopilotReviewerExecutor {
-  run(input: CopilotReviewerInput): Promise<CopilotReviewerResult>;
+export interface ReviewerExecutor {
+  run(input: ReviewerInput): Promise<ReviewerResult>;
 }
+
+export type CopilotReviewerInput = ReviewerInput;
+export type CopilotReviewerResult = ReviewerResult;
+export interface CopilotReviewerExecutor extends ReviewerExecutor {}
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
@@ -37,7 +41,7 @@ export class CopilotCliReviewerExecutor implements CopilotReviewerExecutor {
     this.#evidencePath = options.evidencePath;
   }
 
-  async run(input: CopilotReviewerInput): Promise<CopilotReviewerResult> {
+  async run(input: ReviewerInput): Promise<ReviewerResult> {
     const sessionId = randomUUID();
     const agentId = input.agentId;
     const runDir = join(this.#evidencePath, input.run.id);

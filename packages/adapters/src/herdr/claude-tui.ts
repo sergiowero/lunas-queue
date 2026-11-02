@@ -13,6 +13,9 @@ export const TRUST_ACCEPT_KEYS = ["down", "enter"] as const;
 /** Copilot's interactive workspace-trust dialog selects "1. Yes" by default. */
 export const COPILOT_TRUST_ACCEPT_KEYS = ["enter"] as const;
 
+/** Codex asks whether to trust the contents of a newly opened worktree. */
+export const CODEX_TRUST_ACCEPT_KEYS = ["enter"] as const;
+
 /** Whether the agent's screen shows the folder trust dialog. */
 export function showsTrustDialog(screen: string): boolean {
   return screen.includes(TRUST_DIALOG_MARKER) && screen.includes("No, exit");
@@ -24,6 +27,15 @@ export function showsCopilotTrustDialog(screen: string): boolean {
     screen.includes("Confirm folder trust") &&
     screen.includes("Do you trust the files in this folder?") &&
     screen.includes("1. Yes")
+  );
+}
+
+/** Whether Codex CLI shows its untrusted-directory prompt. */
+export function showsCodexTrustDialog(screen: string): boolean {
+  return (
+    screen.includes("Do you trust the contents of this directory?") &&
+    screen.includes("1. Yes, continue") &&
+    screen.includes("2. No, quit")
   );
 }
 

@@ -1326,7 +1326,7 @@ describe("report_failure", () => {
   });
 });
 
-describe("run_reviewer: verifiable Copilot CLI executions", () => {
+describe("run_reviewer: verifiable CLI executions", () => {
   it("launches the Copilot profile and persists the prompt, answer and execution state", async () => {
     const reviewer = {
       run: vi.fn(async () => ({
@@ -1370,6 +1370,37 @@ describe("run_reviewer: verifiable Copilot CLI executions", () => {
     expect(result.body).toMatchObject({ error: "reviewer_execution_unavailable" });
     expect(reviewer.run).not.toHaveBeenCalled();
     expect(new RunSubagentRepository(h.db).forRun(run.id)).toEqual([]);
+  });
+
+  it("launches Codex reviewers and records their transcript under the Codex agent id", async () => {
+    const reviewer = {
+      run: vi.fn(async () => ({
+        transcriptPath: "/lunasq/codex-reviewers/run/codex-session.jsonl",
+        output: "NO FINDINGS",
+      })),
+    };
+    const h = mcpHarness({ codexReviewers: reviewer });
+    const { task, run, call } = await h.ready("verify", verifying, { agentKind: "codex" });
+    const result = await call("run_reviewer", {
+      reviewer: "lunasq-security-reviewer",
+      instructions: "Review AC-1 and src/auth.ts",
+    });
+
+    expect(result).toEqual({ isError: false, body: { output: "NO FINDINGS" } });
+    expect(reviewer.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreePath: task.worktreePath,
+        reviewer: "lunasq-security-reviewer",
+        instructions: "Review AC-1 and src/auth.ts",
+      }),
+    );
+    expect(new RunSubagentRepository(h.db).forRun(run.id)).toMatchObject([
+      {
+        agentType: "lunasq-security-reviewer",
+        agentId: expect.stringMatching(/^codex-/),
+        transcriptPath: "/lunasq/codex-reviewers/run/codex-session.jsonl",
+      },
+    ]);
   });
 
   it("a Copilot failure stays as an attempt without SubagentStop and cannot count as ran", async () => {

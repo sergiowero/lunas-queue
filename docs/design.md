@@ -10,7 +10,7 @@ LunasQ (repository `lunas-queue`) is a multi‑project task queue where a human 
 
 **Scope:** create tasks with intent, priority and dependencies; automatic dispatch to agents in herdr; human gates in refinement; implementation ↔ verification loop; commit, push and PR.
 
-**Supported agents:** Claude Code and GitHub Copilot CLI are selected per phase in each project. Each CLI has its own adapter; the dispatcher uses the registry to build arguments, MCP configuration and fallback order. If a CLI fails before becoming ready, the next one is tried once; if none becomes ready, the task moves to `needs_human` with each provider's diagnosis. Usage/cost tokens that are not available are shown as such, not as zero. The subagent reviewer integration remains specific to Claude Code; do not claim verification parity for Copilot until its reviewers and evidence are connected to the same gates.
+**Supported agents:** Claude Code, GitHub Copilot CLI and OpenAI Codex CLI are selected per phase in each project. Each CLI has its own adapter; the dispatcher uses the registry to build arguments, MCP configuration and fallback order. If a CLI fails before becoming ready, the next enabled one is tried once; if none becomes ready, the task moves to `needs_human` with each provider's diagnosis. Every provider can run verification: Claude Code launches native subagents, while Copilot and Codex use LunasQ's read-only CLI reviewer executors. Provider availability is controlled from Settings. Usage/cost tokens that are not available are shown as such, not as zero. See [ADR codex-provider](decisions/codex-provider.md).
 
 **Out of scope (v1):** automatic merge, direct commits to main, production deployment done by LunasQ (it can be configured with project hooks), lanes by task size, acceptance tests hidden from the builder (possible future version) and automatic intake from GitHub issues (planned for v2).
 
@@ -193,14 +193,14 @@ score = base priority + aging + unblock boost
 | --- | --- | --- |
 | Global | Total live agents | CPU, memory, provider rate limits |
 | Per project | Live agents per repo, in all phases | Merge conflicts, CI load |
-| Per agent kind | Instances per agent kind (in v1 only Claude Code) | Quotas and cost per provider |
+| Per agent kind | Instances per provider kind | Quotas and cost per provider |
 | Per phase | Refinement vs implementation | Refining is cheap and unblocks the human; more slots are worthwhile |
 
 All limits are configurable; the global one defaults to 5 and the others are optional. No preemption: a higher‑priority task waits for the next free slot. Human gates do not consume slots: a task in refined waiting for approval has no live agent. A task with an open question (`waiting_human`) does occupy its slot. Score defaults, aging computation, dependents escalation and contract with the dispatcher: [ADR 0014](decisions/0014-scheduler.md).
 
 **Enabled providers (Settings)**
 
-The human enables or disables each agent provider (Claude Code, Copilot CLI) from the Settings page, e.g. when its usage limit runs out. It is a global setting (all enabled by default) that the scheduler reads on every pass. A task's **effective provider** is the phase profile's primary if enabled; otherwise the first enabled one in the fallback order (the primary and then the others in registration order). With all disabled the scheduler does not dispatch and tasks stay in `queued`; the UI shows a paused‑dispatch notice. The dispatcher's claim revalidates against the current setting (`providers_disabled`), the launch only tries enabled providers and live agents are never interrupted. Saving the setting records `settings.updated` in the outbox, which wakes the scheduler. Detail: [ADR settings-proveedores](decisions/settings-proveedores.md).
+The human enables or disables each agent provider (Claude Code, Copilot CLI and Codex CLI) from the Settings page, e.g. when a CLI is unavailable or its usage limit runs out. It is a global setting (all enabled by default) that the scheduler reads on every pass. A task's **effective provider** is the phase profile's primary if enabled; otherwise the first enabled one in the fallback order (the primary and then the others in registration order). With all disabled the scheduler does not dispatch and tasks stay in `queued`; the UI shows a paused‑dispatch notice. The dispatcher's claim revalidates against the current setting (`providers_disabled`), the launch only tries enabled providers and live agents are never interrupted. Saving the setting records `settings.updated` in the outbox, which wakes the scheduler. Detail: [ADR settings-proveedores](decisions/settings-proveedores.md).
 
 ## Dispatcher and herdr integration (initial proposal)
 
@@ -212,7 +212,7 @@ The dispatcher is a long‑lived worker with two inputs (DB events and herdr eve
 | --- | --- |
 | One workspace per project | `workspace create` with cwd and label |
 | Per‑task isolation | `worktree create`: creates checkout + branch and opens it as a workspace grouped under the project's |
-| Start an agent | `agent start` with a unique name and `--kind` (claude in v1) on a free shell pane |
+| Start an agent | `agent start` with a unique name and `--kind` (`claude`, `copilot` or `codex`) on a free shell pane |
 | Send the phase instruction | `agent prompt` (optionally with wait) |
 | Know whether it is working, finished or asking for permission | `events.subscribe` to `pane.agent_status_changed` (per‑pane subscription; see ADR 0004), or `agent wait` |
 | Show task and phase in the sidebar | `pane report-metadata` with tokens (task id, phase, iteration) |
@@ -254,6 +254,8 @@ Constraints: two tasks never share a branch or worktree, and the reconciler dete
 | herdr: `idle`/`done` without MCP signal | It stopped without reporting | After a 15 s grace period the agent's screen is read: if it shows Claude's usage‑limit notice (`Usage limit reached · limit resets …`, the `/rate-limit-options` menu or others from [ADR 0015](decisions/0015-limite-de-uso-agente.md)), Needs human with reason `usage_limit` and notification; if not, nudge (re‑prompt) 2 times, then mark the Run failed |
 | Pane closed or process exited | Crash | Run failed; up to 3 retries with backoff (30 s·2^(n‑1), cap 10 min), then Needs human with notification |
 | Phase timeout expired | Stuck agent or phase longer than expected | Mark Needs human and notify; the agent is not stopped |
+
+For new worktrees, the dispatcher accepts the CLI-specific folder-trust prompt only for the selected provider and its expected screen; this is separate from permission prompts that remain for the human.
 
 **Phase timeout.** Configurable per project and per phase, default 30 minutes. It runs while the Run is in running and pauses in `blocked` or `waiting_human`, because that time depends on the human. When it expires, the task moves to Needs human with notification; the agent stays alive so you decide whether to wait, step in or cancel. The exit tools require `running`, so resuming closes the old Run and redispatches the phase on the same worktree. The clock lives in memory: after a restart it starts with the full budget ([ADR uw-17-reconciliacion](decisions/uw-17-reconciliacion.md)).
 
@@ -324,7 +326,7 @@ The repo's `lunasq/` folder ends up with two parts: `hooks/` (configuration, ver
 
 ## MCPs and skills
 
-The contract between the system and any agent is an **own MCP (LunasQ MCP)** plus a **skill per phase**; this way Claude Code today, and Codex or another MCP‑compatible agent in v2, follow the same protocol without provider‑specific code.
+The contract between the system and any agent is an **own MCP (LunasQ MCP)** plus a **skill per phase**; Claude Code, Copilot CLI and Codex follow the same protocol while provider-specific command and MCP configuration stays in adapters.
 
 **LunasQ MCP (own, exposed by the backend)**
 
@@ -432,11 +434,11 @@ Each phase follows a mandatory practice and the three chain together: DDD produc
 
 ## Verification with subagents
 
-The verification phase is **a single Claude Code session** (one slot) that launches in parallel the reviewer subagents that apply to the task (of 4 possible) and acts as approver: it consolidates their findings and issues pass or reject. For the scheduler and for herdr it remains a single live agent ([Claude Code subagents](https://code.claude.com/docs/en/sub-agents)).
+The verification phase is **one selected provider session** (one slot) that launches in parallel the reviewer executions that apply to the task (of 4 possible) and acts as approver: it consolidates their findings and issues pass or reject. Claude Code uses native subagents; Copilot and Codex run the same reviewer instructions through LunasQ's read-only CLI executors. For the scheduler and for herdr it remains one live phase agent.
 
 **Phase flow**
 
-1. The dispatcher starts a Claude Code session in the worktree with the `verify-task` skill.
+1. The dispatcher starts the selected verification provider in the worktree with the `verify-task` skill.
 2. The session calls `get_task_context`: approved spec, criteria, branch diff, implementer's handoff.
 3. It decides which reviewers apply according to the spec and the diff and launches them in parallel, by explicit name. Each reviewer is decided separately: code if code or tests change, security only if the diff touches a trust boundary (external inputs, processes, authentication, secrets, paths, dependencies), UX if a flow or its states change, UI if something visible changes. Those it does not launch are skipped with a justification that cites the diff.
 4. Each reviewer receives spec and diff, and returns findings in a fixed, compact format: severity, file, evidence and affected criterion.
@@ -457,28 +459,28 @@ The verification phase is **a single Claude Code session** (one slot) that launc
 
 | Guard | Mechanism | What it guarantees |
 | --- | --- | --- |
-| Read‑only reviewers | `tools` in each subagent's frontmatter, without Edit or Write; Bash is left for reading the diff and the prompt forbids writing | A reviewer has no editing tools; with Bash, not writing depends on its prompt ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) |
-| Execution evidence | `SubagentStart` and `SubagentStop` hooks (type `http`, with the run token in the header) that report each subagent to LunasQ; the dispatcher passes them in a stable settings file with `--settings` ([ADR uw-19-revisores](decisions/uw-19-revisores.md)) | LunasQ knows which reviewers ran in that Run |
-| Complete verdict | `submit_verdict` requires, for each of the 4 reviewers, its report or the justification for why it was not launched, and is rejected if a reported reviewer does not appear finished in the Run's hooks or if a skipped one did finish ([ADR uw-23-verificacion](decisions/uw-23-verificacion.md)) | Each reviewer runs or is skipped with an audited justification |
+| Read‑only reviewers | Claude subagent tools omit Edit/Write; Copilot gets read-only available tools; Codex runs `codex exec --sandbox read-only --ignore-user-config` with approval policy `never` | Reviewers cannot edit the worktree through their configured tools or sandbox |
+| Execution evidence | Claude's `SubagentStart`/`SubagentStop` hooks or LunasQ's Copilot/Codex reviewer executor records each start, stop and private transcript | LunasQ knows which reviewers ran in that Run |
+| Complete verdict | `submit_verdict` requires, for each of the 4 reviewers, its report or the justification for why it was not launched, and is rejected if a reported reviewer does not appear finished in the Run's hooks or CLI-executor records, or if a skipped one did finish ([ADR uw-23-verificacion](decisions/uw-23-verificacion.md)) | Each reviewer runs or is skipped with an audited justification |
 | Test gate | LunasQ runs the project's test command in the worktree before accepting a pass | No pass with a red suite, even if the agent says otherwise |
 
 **Implementation details**
 
-- **Definitions:** LunasQ installs them as user subagents in `~/.claude/agents/lunasq/`. A project can override a reviewer with one of the same name in its `.claude/agents/`, because the project level has priority.
-- **Models:** the reviewers use Opus, set in their frontmatter's `model`; the approver uses Sonnet, the phase profile's default model (`DEFAULT_VERIFY_MODEL`), which the profile can change.
-- **Waiting for results:** the dispatcher passes `CLAUDE_CODE_FORK_SUBAGENT=0` to the pane so the approver waits for the reports predictably.
-- **UI/UX reviewers with a browser:** if they need to see the app, their definition declares the browser MCP in `mcpServers`, so only those subagents load those tools.
+- **Definitions:** LunasQ installs Claude and Copilot reviewer assets in their supported user locations; the Codex executor receives the selected reviewer's instructions from the verification session.
+- **Models:** Claude reviewers use Opus from their frontmatter; CLI reviewers use the verification profile's configured model. The approver uses the phase profile's default model (`DEFAULT_VERIFY_MODEL`), which the profile can change.
+- **Waiting for results:** Claude receives `CLAUDE_CODE_FORK_SUBAGENT=0`; Copilot and Codex executions are synchronous and return their report before the MCP call completes.
+- **UI/UX reviewers with a browser:** Claude subagents may load the browser MCP declared in their definition; the isolated Copilot/Codex CLI reviewer executors do not inherit other configured MCP servers.
 - **Per‑reviewer consumption:** usage tracking breaks down by subagent with the `agent.name` attribute (requires `OTEL_LOG_TOOL_DETAILS=1` for custom names).
 
 **Implications**
 
-- In v1 all phases use Claude Code. Verification also depends on its subagents, so that phase's profile validates `kind = claude` even when other agents are added in v2, unless they have an equivalent.
+- Any provider can be selected for any phase, including verification; provider-specific reviewer execution keeps the same MCP verdict and evidence gates.
 - One verification slot is 5 parallel model streams: it does not affect slots, but it does affect the provider's rate limits.
 - The reports enter the approver's context, which is why the reviewers' output format is compact.
 
 ## Token consumption and cost (read‑only)
 
-In v1 this applies to Claude Code; Codex, planned for v2, also allows it. Both report tokens per request via OpenTelemetry and in their local transcripts, so each task can show tokens and cost as a read‑only property, aggregated from its Runs.
+Usage collection currently supports Claude Code. Copilot CLI and Codex CLI do not report usage through LunasQ, so the UI marks their consumption as partial instead of presenting zero or an invented estimate.
 
 **What each agent exposes**
 
@@ -486,15 +488,15 @@ In v1 this applies to Claude Code; Codex, planned for v2, also allows it. Both r
 | --- | --- | --- | --- | --- |
 | [Claude Code](https://code.claude.com/docs/en/monitoring-usage) | OTel: `claude_code.token.usage` and `claude_code.cost.usage` metrics; `api_request` event per call | input, output, cache read, cache write, per model | Estimated USD per request | Custom attributes via `OTEL_RESOURCE_ATTRIBUTES` (task, run, phase) + `session.id` |
 | Claude Code | Per‑session JSONL transcript; statusline JSON | `message.usage` per message | `cost.total_cost_usd` per session (statusline) | Session id |
-| Codex (v2) | OTel (`[otel]` block of its config): token usage per turn ([reference](https://codex.danielvaughan.com/2026/06/07/agent-observability-gap-codex-cli-opentelemetry-session-tracing-cost-attribution/)) | input, cached, output, reasoning | No; computed with a price table | Session id; custom attributes to be verified |
-| Codex (v2) | Rollout JSONL in its sessions directory ([reference](https://codex.danielvaughan.com/2026/06/10/codex-cli-token-consumption-diagnosis-reduction-quota-drain-practitioner-toolkit/)) | Accumulated `token_count` events | No | Session id |
+| Codex CLI | No supported usage source in LunasQ | Not available | Not available | Not collected |
+| GitHub Copilot CLI | No supported usage source in LunasQ | Not available | Not available | Not collected |
 | Other agents | Varies by agent | Partial or none | — | Marked *not available* |
 
 **Attribution per task**
 
 1. When creating the pane, the dispatcher passes environment variables with herdr's `--env`: telemetry on, the own collector's endpoint and `OTEL_RESOURCE_ATTRIBUTES` with task id, run id and phase. Claude Code copies those attributes to every metric and event.
-2. For agents without custom attributes, it is correlated by session id: herdr exposes `agent_session` with the native id when the official integration reports it, and the Run stores it.
-3. When the Run closes, a job reconciles against that session's transcript as a backup.
+2. Other providers may expose a session identity through herdr, but LunasQ does not infer usage from it.
+3. When the Run closes, Claude's transcript is reconciled as a backup; Copilot and Codex transcripts are used for review evidence only.
 
 **Data model**
 
@@ -648,7 +650,7 @@ The biggest risk is depending on herdr's heuristic state detection; the design m
 | Infinite rework loops | Cost | Maximum iterations + human escalation |
 | Prompt injection from the repo or issues | Unwanted actions | Auto mode with its action classifier; isolation per worktree; the verifier does not edit, by its skill's instruction; push only at delivery |
 | engram absent or outdated memory | Agents without context or with old context | engram is optional and LunasQ works without it; the skills ask to ignore superseded memories and review the needs\_review ones |
-| Only Claude Code in v1 | Dependence on a single provider and its quota | Accepted in v1; agnostic contracts to add Codex and others in v2 |
+| CLI options and terminal screens can change | A provider may fail to start or its trust prompt may be missed | Keep CLI configuration in provider adapters and test the fake/real terminal contracts; disable unavailable providers in Settings |
 | 5 model streams per verification | Provider rate limits | The approver launches only the reviewers that apply; limit per agent type |
 | Evidence file in the repo | Large files in the PR; sensitive data in transcripts | Secret redaction before writing; transcripts converted to compact markdown |
 | Hooks with arbitrary commands | A hook modified by an agent would run unreviewed code; a failed deploy leaves the flow half‑done | Hooks read from lunasq/hooks/ in the base branch, never from the task's branch; changes only via PR; block/warn policy and timeout per hook |
@@ -681,8 +683,8 @@ Summary of what has already been decided; each point is reflected in its section
 | Manual intervention | Allowed in any pane; the dispatcher only reacts to MCP signals and herdr state, so what is typed by hand does not end up in the task's history |
 | Factory model | Lights‑on: human gate on the spec and on the merge; no direct commits to main; deployment only via the project's hooks |
 | Brain | engram as a weak dependency: agents use it via its MCP if installed; LunasQ only adds best‑effort instructions in the skills |
-| Verification | A Claude Code session that launches the reviewer subagents that apply (security, UX, UI, code) and acts as approver; a single slot |
-| Supported agents | Only Claude Code in v1; Codex and others in v2 or later |
+| Verification | A selected provider session that launches applicable Claude subagents or LunasQ-managed Copilot/Codex reviewers and acts as approver; a single slot |
+| Supported agents | Claude Code, GitHub Copilot CLI and OpenAI Codex CLI; configured per phase |
 | Risk router | Label only (low / medium / high) on the PR; everything still has a human merge |
 | Roadmap | Intake from GitHub issues in v2; tests hidden from the builder later; size lanes not for now |
 | Reviewer definitions | Installed by LunasQ in \~/.claude/agents/lunasq/, with an optional per‑project override |
@@ -705,8 +707,8 @@ Features left out of v1, either by explicit decision or because v1 took the simp
 
 | Feature | What it brings | In v1 | Suggested version |
 | --- | --- | --- | --- |
-| Support for Codex and other agents | Choose the agent per phase according to cost or strength | Only Claude Code | v2 |
-| Verification with agents other than Claude Code | Reviewer fan‑out without depending on Claude subagents | Claude Code subagents | v2, together with support for other agents |
+| Support for additional coding-agent CLIs | Choose further agents per phase according to cost or strength | Claude Code, Copilot and Codex | v2 |
+| Native subagents for non-Claude providers | Provider-native reviewer fan-out rather than LunasQ-managed CLI executions | LunasQ-managed reviewers for Copilot and Codex | Later |
 | Automatic intake from GitHub issues | Issues with a certain label create tasks in Draft | Tasks created by hand | v2 |
 | Per‑task agent override | Change kind or model on a specific task | Only per‑project and phase profile | v2 |
 | GitHub webhook for merges | Release dependents instantly, without polling | Polling with `gh` | v2 |

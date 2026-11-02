@@ -260,7 +260,7 @@ describe("Scheduler", () => {
   it("with claude and copilot disabled it does not dispatch and the tasks stay in queued", async () => {
     const { db, project, dispatcher, scheduler } = setup();
     const task = insertTask(db, project.id);
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+    new SettingsRepository(db).saveProviders({ claude: false, copilot: false, codex: false });
     expect((await scheduler.run()).dispatched).toEqual([]);
     expect(dispatcher.calls).toEqual([]);
     expect(live(db)).toBe(0);
@@ -273,11 +273,11 @@ describe("Scheduler", () => {
     const { db, project, dispatcher, scheduler } = setup();
     const settings = new SettingsRepository(db);
     const task = insertTask(db, project.id);
-    settings.saveProviders({ claude: false, copilot: false });
+    settings.saveProviders({ claude: false, copilot: false, codex: false });
     await scheduler.run();
     expect(dispatcher.calls).toEqual([]);
 
-    settings.saveProviders({ claude: false, copilot: true });
+    settings.saveProviders({ claude: false, copilot: true, codex: false });
     await scheduler.run();
     expect(dispatcher.calls.map((d) => [d.taskId, d.agentKind])).toEqual([[task.id, "copilot"]]);
   });
@@ -294,13 +294,13 @@ describe("Scheduler", () => {
     });
     stoppables.push(scheduler, publisher);
     const settings = new SettingsRepository(db);
-    settings.saveProviders({ claude: false, copilot: false });
+    settings.saveProviders({ claude: false, copilot: false, codex: false });
     const task = insertTask(db, project.id);
     await scheduler.start();
     await publisher.start();
     expect(dispatcher.calls).toEqual([]);
 
-    settings.saveProviders({ claude: true, copilot: false });
+    settings.saveProviders({ claude: true, copilot: false, codex: false });
     publisher.wake();
     await vi.waitFor(() =>
       expect(dispatcher.calls.map((d) => [d.taskId, d.agentKind])).toEqual([[task.id, "claude"]]),

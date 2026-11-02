@@ -20,10 +20,10 @@ describe("SchedulerConfig", () => {
     const config = SchedulerConfig.parse({
       globalConcurrency: 8,
       phaseConcurrency: { refine: 3, implement: 2 },
-      agentKindConcurrency: { claude: 4 },
+      agentKindConcurrency: { claude: 4, codex: 2 },
     });
     expect(config.phaseConcurrency).toEqual({ refine: 3, implement: 2 });
-    expect(config.agentKindConcurrency).toEqual({ claude: 4 });
+    expect(config.agentKindConcurrency).toEqual({ claude: 4, codex: 2 });
   });
 
   it.each([
@@ -32,7 +32,7 @@ describe("SchedulerConfig", () => {
     { phaseConcurrency: { refine: 0 } },
     { phaseConcurrency: { review: 1 } },
     { phaseConcurrency: { deliver: 1 } },
-    { agentKindConcurrency: { codex: 1 } },
+    { agentKindConcurrency: { gemini: 1 } },
     { agingPointsPerHour: -1 },
     { boostPerDescendant: -1 },
     { tickIntervalMs: 999 },

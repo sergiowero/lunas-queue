@@ -120,7 +120,7 @@ export class FakeApi {
   /** If set, `POST /api/blocked/:runId/focus` and `POST /api/runs/:runId/focus` answer this herdr error. */
   focusError: { status: number; error: string; message: string } | null = null;
   /** Saved enabled providers; all by default, like the server without configuration. */
-  providers: AgentProviderSettingsValue = { claude: true, copilot: true };
+  providers: AgentProviderSettingsValue = { claude: true, copilot: true, codex: true };
   /** If set, PUT /api/settings/providers answers this error. */
   providersError: { status: number; error: string; message: string } | null = null;
   /** If true, GET /api/settings/providers answers 500. */

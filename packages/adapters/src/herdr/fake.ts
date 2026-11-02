@@ -2,7 +2,12 @@
 // (ADR 0004): opaque ids `wN`, `wN:tN`, `wN:pN`; worktrees that survive as a branch after
 // `remove`; per-pane events; notifications off by default. It passes the contract suite.
 import { type ChildProcess, spawn } from "node:child_process";
-import { COPILOT_TRUST_ACCEPT_KEYS, TRUST_ACCEPT_KEYS, TRUST_DIALOG_MARKER } from "./claude-tui.ts";
+import {
+  CODEX_TRUST_ACCEPT_KEYS,
+  COPILOT_TRUST_ACCEPT_KEYS,
+  TRUST_ACCEPT_KEYS,
+  TRUST_DIALOG_MARKER,
+} from "./claude-tui.ts";
 import { HerdrError } from "./errors.ts";
 import type {
   AgentSessionInfo,
@@ -31,13 +36,21 @@ const trustDialog = (cursor: number, kind: string) =>
         ` ${cursor === 1 ? "❯" : " "} 2. Yes, and remember this folder for future sessions`,
         "   3. No (Esc)",
       ].join("\n")
-    : [
-        " Quick safety check: Is this a project you created or",
-        " one you trust?",
-        ` ${cursor === 0 ? "❯" : " "} No, exit`,
-        ` ${cursor === 1 ? "❯" : " "} ${TRUST_DIALOG_MARKER}`,
-        " Enter to confirm · Esc to cancel",
-      ].join("\n");
+    : kind === "codex"
+      ? [
+          " You are in /worktree",
+          " Do you trust the contents of this directory?",
+          " Working with untrusted contents comes with higher risk of prompt injection.",
+          ` ${cursor === 0 ? "❯" : " "} 1. Yes, continue`,
+          ` ${cursor === 1 ? "❯" : " "} 2. No, quit`,
+        ].join("\n")
+      : [
+          " Quick safety check: Is this a project you created or",
+          " one you trust?",
+          ` ${cursor === 0 ? "❯" : " "} No, exit`,
+          ` ${cursor === 1 ? "❯" : " "} ${TRUST_DIALOG_MARKER}`,
+          " Enter to confirm · Esc to cancel",
+        ].join("\n");
 
 interface FakeWorkspace extends HerdrWorkspace {
   /** Checkout that opens the workspace; herdr only publishes it for worktrees (ADR 0004, addendum). */
@@ -366,7 +379,9 @@ export class FakeHerdr implements HerdrAdapter {
         const accepted =
           agent.kind === "copilot"
             ? agent.trustCursor === 0 && COPILOT_TRUST_ACCEPT_KEYS.includes(key)
-            : agent.trustCursor === 1 && TRUST_ACCEPT_KEYS.includes(key);
+            : agent.kind === "codex"
+              ? agent.trustCursor === 0 && CODEX_TRUST_ACCEPT_KEYS.includes(key)
+              : agent.trustCursor === 1 && TRUST_ACCEPT_KEYS.includes(key);
         delete agent.trustCursor;
         if (accepted) this.setAgentStatus(agent.name, "idle");
         else return this.exitAgent(agent.name);

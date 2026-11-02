@@ -53,7 +53,7 @@ import {
   type UpdateChecklistInput,
   VERDICT_RECORDED,
 } from "@lunasq/schemas";
-import type { CopilotReviewerExecutor } from "./copilot-reviewer.ts";
+import type { CopilotReviewerExecutor, ReviewerExecutor } from "./copilot-reviewer.ts";
 import type { CommitVerifier, PhaseHooks, TestGate } from "./ports.ts";
 
 export const TOOL_NAMES = [
@@ -180,6 +180,7 @@ export interface McpServiceDeps {
   commitVerifier: CommitVerifier;
   phaseHooks: PhaseHooks;
   copilotReviewers?: CopilotReviewerExecutor;
+  codexReviewers?: ReviewerExecutor;
 }
 
 export class LunasqMcpService {
@@ -193,6 +194,7 @@ export class LunasqMcpService {
   readonly #hooks: PhaseHooks;
   readonly #subagents: RunSubagentRepository;
   readonly #copilotReviewers: CopilotReviewerExecutor | undefined;
+  readonly #codexReviewers: ReviewerExecutor | undefined;
   readonly #reviewersInFlight = new Set<string>();
   // Runs with a test gate in progress: a retry does not launch a second suite in parallel.
   readonly #gating = new Set<string>();
@@ -208,6 +210,7 @@ export class LunasqMcpService {
     this.#hooks = deps.phaseHooks;
     this.#subagents = new RunSubagentRepository(deps.db);
     this.#copilotReviewers = deps.copilotReviewers;
+    this.#codexReviewers = deps.codexReviewers;
   }
 
   /** Common guards: active Run, tool of its phase and context read (except get_task_context). */
@@ -362,10 +365,16 @@ export class LunasqMcpService {
   }
 
   async runReviewer(run: RunRow, input: RunReviewerInput): Promise<Outcome<{ output: string }>> {
-    if (run.agentKind !== "copilot" || !this.#copilotReviewers) {
+    const reviewers =
+      run.agentKind === "copilot"
+        ? this.#copilotReviewers
+        : run.agentKind === "codex"
+          ? this.#codexReviewers
+          : undefined;
+    if (!reviewers) {
       return fail(
         "reviewer_execution_unavailable",
-        "run_reviewer is only available when Copilot CLI is the verification provider",
+        "run_reviewer is only available when the verification provider has a configured reviewer executor",
       );
     }
     const key = `${run.id}:${input.reviewer}`;
@@ -376,10 +385,10 @@ export class LunasqMcpService {
     if (!task?.worktreePath) return fail("no_worktree", "the task has no registered worktree");
 
     this.#reviewersInFlight.add(key);
-    const agentId = `copilot-${randomUUID()}`;
+    const agentId = `${run.agentKind}-${randomUUID()}`;
     this.#subagents.recordStart(run.id, { agentId, agentType: input.reviewer });
     try {
-      const result = await this.#copilotReviewers.run({
+      const result = await reviewers.run({
         run,
         worktreePath: task.worktreePath,
         agentId,

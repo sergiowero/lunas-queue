@@ -38,6 +38,7 @@ describe("doctor", () => {
       "herdr-server",
       "claude",
       "copilot",
+      "codex",
       "gh",
       "herdr-integration",
       "herdr-toast",
@@ -162,15 +163,47 @@ describe("doctor", () => {
   it.each([
     ["not installed", { exitCode: 127 }, /is not installed/],
     ["old", { stdout: "2.1.200 (Claude Code)" }, /2\.1\.312/],
-  ])("Claude Code %s falla", async (_, response, summary) => {
+  ])("Claude Code %s warns while another provider is available", async (_, response, summary) => {
     const { ctx } = machine({
       ...healthyResponses(),
       "claude --version": response,
       "copilot --version": { exitCode: 127 },
     });
     expect(byId(await runDoctor(ctx), "claude")).toMatchObject({
-      status: "fail",
+      status: "warn",
       summary: expect.stringMatching(summary),
+    });
+  });
+
+  it("Codex can be the only available agent provider", async () => {
+    const { ctx } = machine({
+      ...healthyResponses(),
+      "claude --version": { exitCode: 127 },
+      "copilot --version": { exitCode: 127 },
+    });
+    const results = await runDoctor(ctx);
+    expect(byId(results, "claude")?.status).toBe("warn");
+    expect(byId(results, "copilot")?.status).toBe("warn");
+    expect(byId(results, "codex")?.status).toBe("ok");
+    expect(byId(results, "herdr-integration")?.status).toBe("warn");
+  });
+
+  it("warns when Codex is unavailable but another provider is available", async () => {
+    const { ctx } = machine({ ...healthyResponses(), "codex --version": { exitCode: 127 } });
+    expect(byId(await runDoctor(ctx), "codex")).toMatchObject({
+      status: "warn",
+      summary: expect.stringContaining("not installed"),
+    });
+  });
+
+  it("warns when Codex is older than its supported version", async () => {
+    const { ctx } = machine({
+      ...healthyResponses(),
+      "codex --version": { stdout: "codex-cli 0.121.0" },
+    });
+    expect(byId(await runDoctor(ctx), "codex")).toMatchObject({
+      status: "warn",
+      summary: expect.stringContaining("0.122.0 or newer"),
     });
   });
 

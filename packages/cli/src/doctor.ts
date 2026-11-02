@@ -28,6 +28,7 @@ export const MINIMUM = {
   herdrProtocol: 22,
   claude: "2.1.312",
   copilot: "1.0.0",
+  codex: "0.122.0",
 } as const;
 
 const INSTALL_FIX = "corre `lunasq install`";
@@ -139,10 +140,13 @@ export async function claudeIntegrationState(ctx: MachineContext): Promise<strin
 }
 
 export async function checkHerdrIntegration(ctx: MachineContext): Promise<CheckResult> {
-  if ((await checkClaude(ctx)).status !== "ok" && (await checkCopilot(ctx)).status === "ok") {
+  if (
+    (await checkClaude(ctx)).status !== "ok" &&
+    ((await checkCopilot(ctx)).status === "ok" || (await checkCodex(ctx)).status === "ok")
+  ) {
     return warn(
       "herdr-integration",
-      "herdr integration for Claude Code skipped: GitHub Copilot CLI is available",
+      "herdr integration for Claude Code skipped: a non-Claude provider is available",
     );
   }
   const state = await claudeIntegrationState(ctx);
@@ -210,6 +214,25 @@ export async function checkCopilot(ctx: MachineContext): Promise<CheckResult> {
   return ok("copilot", `GitHub Copilot CLI ${version}`);
 }
 
+export async function checkCodex(ctx: MachineContext): Promise<CheckResult> {
+  const res = await run(ctx, "codex --version");
+  if (res.exitCode === NOT_FOUND_EXIT_CODE) {
+    return fail("codex", "OpenAI Codex CLI is not installed", "install OpenAI Codex CLI");
+  }
+  const version = parseVersion(res.stdout);
+  if (res.exitCode !== 0 || !version) {
+    return fail("codex", `\`codex --version\` failed: ${res.stderr.trim() || res.stdout.trim()}`);
+  }
+  if (compareVersions(version, MINIMUM.codex) < 0) {
+    return fail(
+      "codex",
+      `OpenAI Codex CLI ${version}; LunasQ needs ${MINIMUM.codex} or newer`,
+      "actualiza OpenAI Codex CLI",
+    );
+  }
+  return ok("codex", `OpenAI Codex CLI ${version}`);
+}
+
 export async function checkGh(ctx: MachineContext): Promise<CheckResult> {
   const res = await run(ctx, "gh auth status");
   if (res.exitCode === NOT_FOUND_EXIT_CODE)
@@ -221,15 +244,20 @@ export async function checkGh(ctx: MachineContext): Promise<CheckResult> {
 
 /** Tools LunasQ does not install: without them `install` does not continue. */
 export async function checkPrerequisites(ctx: MachineContext): Promise<CheckResult[]> {
-  const [herdr, claude, copilot, gh] = await Promise.all([
+  const [herdr, claude, copilot, codex, gh] = await Promise.all([
     checkHerdr(ctx),
     checkClaude(ctx),
     checkCopilot(ctx),
+    checkCodex(ctx),
     checkGh(ctx),
   ]);
-  if (claude.status === "ok" && copilot.status !== "ok") copilot.status = "warn";
-  if (copilot.status === "ok" && claude.status !== "ok") claude.status = "warn";
-  return [...herdr, claude, copilot, gh];
+  const providers = [claude, copilot, codex];
+  if (providers.some((provider) => provider.status === "ok")) {
+    for (const provider of providers) {
+      if (provider.status !== "ok") provider.status = "warn";
+    }
+  }
+  return [...herdr, ...providers, gh];
 }
 
 /** Fix for a foreign destination: LunasQ does not overwrite it (ADR uw-28-instalador). */

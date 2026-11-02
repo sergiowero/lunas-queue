@@ -22,6 +22,16 @@ import { Dialog } from "./ui/dialog.tsx";
 import { Input, Label, Select, Textarea } from "./ui/input.tsx";
 
 const PHASES: Phase[] = ["refine", "implement", "verify", "deliver"];
+const PROVIDER_LABEL: Record<AgentKind, string> = {
+  claude: "Claude",
+  copilot: "Copilot",
+  codex: "Codex",
+};
+const PROVIDER_COMMAND: Record<AgentKind, string> = {
+  claude: "claude",
+  copilot: "copilot",
+  codex: "codex",
+};
 
 type PhaseFields = {
   kind: AgentKind;
@@ -279,12 +289,11 @@ export function ProjectFormDialog({
                 <Select
                   id={`project-agent-${phase}`}
                   value={phases[phase].kind}
-                  onChange={(e) =>
-                    setPhase(phase, { kind: e.target.value === "copilot" ? "copilot" : "claude" })
-                  }
+                  onChange={(e) => setPhase(phase, { kind: e.target.value as AgentKind })}
                 >
                   <option value="claude">Claude Code</option>
                   <option value="copilot">GitHub Copilot CLI</option>
+                  <option value="codex">OpenAI Codex CLI</option>
                 </Select>
               </div>
               <div className="flex gap-4">
@@ -326,14 +335,11 @@ export function ProjectFormDialog({
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor={`project-args-${phase}`}>
-                  {t.projectForm.argsLabel(
-                    phases[phase].kind === "claude" ? "Claude" : "Copilot",
-                    phase,
-                  )}
+                  {t.projectForm.argsLabel(PROVIDER_LABEL[phases[phase].kind], phase)}
                 </Label>
                 <p id={`project-args-help-${phase}`} className="text-xs text-muted-foreground">
                   {t.projectForm.argsHelp.before}
-                  <code>{phases[phase].kind === "claude" ? "claude" : "copilot"}</code>
+                  <code>{PROVIDER_COMMAND[phases[phase].kind]}</code>
                   {t.projectForm.argsHelp.after}
                 </p>
                 <Textarea
