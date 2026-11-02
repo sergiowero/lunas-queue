@@ -134,7 +134,7 @@ describe("install", () => {
     writeFileSync(join(ctx.paths.agents, "lunasq-viejo-reviewer.md"), "viejo");
 
     const result = await install(ctx);
-    expect(result.changes).toEqual([`subagentes revisores → ${ctx.paths.agents}`]);
+    expect(result.changes).toEqual([`reviewer subagents → ${ctx.paths.agents}`]);
     expect(readFileSync(join(ctx.paths.agents, "lunasq-code-reviewer.md"), "utf8")).not.toBe(
       "editado",
     );
@@ -193,7 +193,7 @@ describe("install", () => {
     const result = await install(ctx);
 
     expect(existsSync(old)).toBe(false);
-    expect(result.changes).toEqual([`asset retirado borrado: ${old}`]);
+    expect(result.changes).toEqual([`retired asset removed: ${old}`]);
     expect(result.ok).toBe(true);
   });
 

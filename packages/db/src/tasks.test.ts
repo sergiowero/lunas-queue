@@ -515,7 +515,7 @@ describe("task number", () => {
     expect(repo.get(task.id)?.number).toBe(7);
     expect(() =>
       db.$client.prepare("update tasks set number = 99 where id = ?").run(task.id),
-    ).toThrow(/a task number does not change/);
+    ).toThrow(/el número de una tarea no cambia/);
   });
 
   it("does not reuse the number of a canceled task", () => {

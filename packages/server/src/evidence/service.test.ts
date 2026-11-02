@@ -226,15 +226,15 @@ describe("EvidenceService.recordRun", () => {
         title: "Sesión del agente",
         jsonl: JSON.stringify({ type: "user", message: { role: "user", content: "hola agente" } }),
       },
-      { title: "Subagente lunasq-code-reviewer (ag-1)", jsonl: null, note: "no se encontró" },
+      { title: "Subagent lunasq-code-reviewer (ag-1)", jsonl: null, note: "not found" },
     ];
     await service.recordRun(run.id);
     expect(transcripts.requests[0]?.worktreePath).toBe(wt);
     expect(transcripts.requests[0]?.subagents.map((s) => s.agentId)).toEqual(["ag-1"]);
     const md = readFileSync(file(), "utf8");
     expect(md).toContain("hola agente");
-    expect(md).toContain("<summary>Subagente lunasq-code-reviewer (ag-1)</summary>");
-    expect(md).toContain("no se encontró");
+    expect(md).toContain("<summary>Subagent lunasq-code-reviewer (ag-1)</summary>");
+    expect(md).toContain("not found");
   });
 
   it("redacts secrets before writing", async () => {

@@ -234,15 +234,15 @@ describe("renderRunSection", () => {
       data({
         transcripts: [
           { title: "Sesión del agente", markdown: "**Usuario**\n\nhola" },
-          { title: "Subagente lunasq-code-reviewer", markdown: null, note: "no se encontró" },
+          { title: "Subagent lunasq-code-reviewer", markdown: null, note: "not found" },
         ],
       }),
     );
     expect(md).toContain("### Transcripts");
     expect(md).toContain("<summary>Sesión del agente</summary>");
     expect(md).toContain("**Usuario**\n\nhola");
-    expect(md).toContain("<summary>Subagente lunasq-code-reviewer</summary>");
-    expect(md).toContain("no se encontró");
+    expect(md).toContain("<summary>Subagent lunasq-code-reviewer</summary>");
+    expect(md).toContain("not found");
   });
 
   it("redacts secrets across the whole section", () => {

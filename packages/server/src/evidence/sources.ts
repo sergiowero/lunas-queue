@@ -54,7 +54,7 @@ export class ClaudeTranscriptSource implements TranscriptSource {
   async forRun({ run, worktreePath, subagents }: TranscriptRequest): Promise<RawTranscript[]> {
     const out: RawTranscript[] = [await this.#session(run, worktreePath)];
     for (const sub of subagents) {
-      const title = `Subagente ${sub.agentType} (${sub.agentId})`;
+      const title = `Subagent ${sub.agentType} (${sub.agentId})`;
       if (!sub.transcriptPath) {
         out.push({ title, jsonl: null, note: "no transcript: the subagent did not finish" });
         continue;
@@ -134,7 +134,7 @@ export class CopilotReviewerTranscriptSource implements TranscriptSource {
       },
     ];
     for (const subagent of request.subagents) {
-      const title = `Subagente ${subagent.agentType} (${subagent.agentId})`;
+      const title = `Subagent ${subagent.agentType} (${subagent.agentId})`;
       if (!subagent.agentId.startsWith("copilot-") || !subagent.transcriptPath) {
         out.push({
           title,

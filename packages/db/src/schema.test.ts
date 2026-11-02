@@ -155,7 +155,7 @@ describe("tasks", () => {
       // The tasks triggers are recreated: the number is assigned and does not change.
       expect(paused?.number).toBe((numberBefore ?? 0) + 1);
       expect(() => db.update(tasks).set({ number: 99 }).where(eq(tasks.id, t.id)).run()).toThrow(
-        /a task number does not change/,
+        /el número de una tarea no cambia/,
       );
       expect(() => insertTask(db, p.id, { state: "otro" as never })).toThrow(CHECK);
       expect(db.$client.pragma("foreign_keys", { simple: true })).toBe(1);
@@ -193,7 +193,7 @@ describe("tasks", () => {
       // The tasks triggers are recreated: the number is assigned and does not change.
       expect(insertTask(db, p.id).number).toBe((t.number ?? 0) + 1);
       expect(() => db.update(tasks).set({ number: 99 }).where(eq(tasks.id, t.id)).run()).toThrow(
-        /a task number does not change/,
+        /el número de una tarea no cambia/,
       );
       expect(db.$client.pragma("foreign_keys", { simple: true })).toBe(1);
       expect(db.$client.pragma("foreign_key_check")).toEqual([]);

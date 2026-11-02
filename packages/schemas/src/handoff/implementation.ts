@@ -27,7 +27,7 @@ export const ImplementationBody = z
       body.criterionTests,
       (c) => c.criterionId,
       (i) => ["criterionTests", i, "criterionId"],
-      "criterio",
+      "criterion",
     );
   });
 

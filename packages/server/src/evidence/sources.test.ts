@@ -86,7 +86,7 @@ describe("ClaudeTranscriptSource", () => {
       });
 
       expect(out[1]).toMatchObject({
-        title: `Subagente lunasq-code-reviewer (${agentId})`,
+        title: `Subagent lunasq-code-reviewer (${agentId})`,
         jsonl: expect.stringContaining("NO FINDINGS"),
       });
     });
@@ -155,7 +155,7 @@ describe("ClaudeTranscriptSource", () => {
       subagents: [subagent({ transcriptPath: path })],
     });
     expect(out[1]).toEqual({
-      title: "Subagente lunasq-code-reviewer (ag-1)",
+      title: "Subagent lunasq-code-reviewer (ag-1)",
       jsonl: "sub\n",
     });
   });

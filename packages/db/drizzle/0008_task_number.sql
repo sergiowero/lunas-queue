@@ -17,5 +17,5 @@ END;
 CREATE TRIGGER `tasks_number_immutable` BEFORE UPDATE OF `number` ON `tasks`
 WHEN OLD.`number` IS NOT NULL AND NEW.`number` IS NOT OLD.`number`
 BEGIN
-  SELECT RAISE(ABORT, 'a task number does not change');
+  SELECT RAISE(ABORT, 'el número de una tarea no cambia');
 END;

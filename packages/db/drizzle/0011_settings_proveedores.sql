@@ -29,10 +29,10 @@ CREATE INDEX `events_task_idx` ON `events` (`task_id`,`id`);--> statement-breakp
 -- Rebuilding events drops its triggers: the append-only ones are recreated (migration 0001, ADR 0007).
 CREATE TRIGGER `events_no_update` BEFORE UPDATE ON `events`
 BEGIN
-  SELECT RAISE(ABORT, 'events is append-only: an event cannot be modified');
+  SELECT RAISE(ABORT, 'events es append-only: no se puede modificar un evento');
 END;
 --> statement-breakpoint
 CREATE TRIGGER `events_no_delete` BEFORE DELETE ON `events`
 BEGIN
-  SELECT RAISE(ABORT, 'events is append-only: an event cannot be deleted');
+  SELECT RAISE(ABORT, 'events es append-only: no se puede borrar un evento');
 END;

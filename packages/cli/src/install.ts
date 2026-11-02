@@ -78,17 +78,17 @@ export async function install(
     if (changed.length > 0) {
       const label =
         target.kind === "agents"
-          ? "subagentes revisores"
+          ? "reviewer subagents"
           : target.kind === "copilot-agents"
-            ? "subagentes revisores de Copilot CLI"
-            : `skill ${target.name}${target.kind === "copilot-skill" ? " de Copilot" : ""}`;
+            ? "reviewer subagents for Copilot CLI"
+            : `skill ${target.name}${target.kind === "copilot-skill" ? " for Copilot" : ""}`;
       changes.push(`${label} → ${target.dest}`);
     }
   }
   for (const dest of retired(targets, manifest)) {
     await rm(dest, { recursive: true, force: true });
     installed.delete(dest);
-    changes.push(`asset retirado borrado: ${dest}`);
+    changes.push(`retired asset removed: ${dest}`);
   }
   const sorted = [...installed].sort();
   if (sorted.join("\n") !== [...manifest].sort().join("\n")) {

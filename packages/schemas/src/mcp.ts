@@ -46,7 +46,7 @@ export const UpdateChecklistInput = z
       input.items,
       (i) => i.taskId,
       (i) => ["items", i, "taskId"],
-      "item del checklist",
+      "checklist item",
     );
   });
 export type UpdateChecklistInput = z.infer<typeof UpdateChecklistInput>;

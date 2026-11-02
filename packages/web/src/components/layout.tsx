@@ -50,7 +50,7 @@ export function Layout() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-20 border-b border-border bg-surface/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-2 px-4 sm:gap-4 sm:px-6">
+        <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 sm:gap-x-4 sm:px-6 lg:flex-nowrap lg:py-0">
           <Link
             to="/queue"
             aria-label="LunasQ"
@@ -59,7 +59,7 @@ export function Layout() {
             <BrandMark />
             <span className="hidden sm:inline">LunasQ</span>
           </Link>
-          <nav className="-my-2 flex min-w-0 gap-1 overflow-x-auto px-1 py-2">
+          <nav className="order-last -my-2 flex w-full min-w-0 gap-1 overflow-x-auto px-1 py-2 lg:order-none lg:w-auto">
             <Link to="/queue" className={nav} activeProps={active}>
               {t.nav.queue}
             </Link>

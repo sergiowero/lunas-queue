@@ -249,10 +249,10 @@ export async function checkAssets(ctx: MachineContext): Promise<CheckResult[]> {
             : `${t.kind === "copilot-skill" ? "copilot-skill" : "skill"}:${t.name}`;
       const label =
         t.kind === "agents"
-          ? "subagentes revisores"
+          ? "reviewer subagents"
           : t.kind === "copilot-agents"
-            ? "subagentes revisores de Copilot CLI"
-            : `skill ${t.name}${t.kind === "copilot-skill" ? " de Copilot" : ""}`;
+            ? "reviewer subagents for Copilot CLI"
+            : `skill ${t.name}${t.kind === "copilot-skill" ? " for Copilot" : ""}`;
       if (await isForeign(t, manifest)) {
         return fail(
           id,

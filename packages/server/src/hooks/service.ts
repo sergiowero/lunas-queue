@@ -487,7 +487,7 @@ export class HookService {
     if (blocked && hookPointEscalates(final.point)) {
       const note = final.failedScript
         ? `hook ${final.point}/${final.failedScript} failed`
-        : `hooks de ${final.point}: ${final.error ?? "fallo"}`;
+        : `hooks of ${final.point}: ${final.error ?? "failed"}`;
       const res = transitionTask(this.db, {
         taskId: input.taskId,
         actor: "system",
