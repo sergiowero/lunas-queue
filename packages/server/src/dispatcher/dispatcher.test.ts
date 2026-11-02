@@ -550,6 +550,40 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     expect(panes.some((p) => p.paneId === run?.herdrPane)).toBe(true);
   });
 
+  it("si todos se deshabilitan mientras se prepara el lanzamiento, no arranca nada y la tarea vuelve a queued", async () => {
+    const { db, project, herdr, dispatcher, runs, taskRow } = setup();
+    const task = insertTask(db, project.id);
+    const startAgent = vi.spyOn(herdr, "startAgent");
+    const split = herdr.splitPane.bind(herdr);
+    let disabled = false;
+    vi.spyOn(herdr, "splitPane").mockImplementation(async (input) => {
+      if (!disabled) {
+        disabled = true;
+        new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
+      }
+      return split(input);
+    });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    expect(startAgent).not.toHaveBeenCalled();
+    // Es una pausa, no un fallo: la tarea espera en queued y el Run no cuenta como fallido.
+    expect(taskRow(task.id)).toMatchObject({ state: "draft", subState: "queued" });
+    const [run] = runs.forTask(task.id);
+    expect(run).toMatchObject({ result: "cancelled" });
+    expect(run?.failureReason).toContain("deshabilitados");
+    expect(runs.consecutiveFailures(task.id, "refine")).toBe(0);
+    const { panes } = await herdr.snapshot();
+    expect(panes.some((p) => p.paneId === run?.herdrPane)).toBe(false);
+
+    // Al habilitar uno, la tarea se despacha con normalidad.
+    new SettingsRepository(db).saveProviders({ copilot: true });
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+    expect(runs.forTask(task.id).at(-1)).toMatchObject({ agentKind: "copilot", endedAt: null });
+  });
+
   it("rechaza el claim si todos los proveedores se deshabilitaron tras planear y la tarea sigue en queued", async () => {
     const { db, project, dispatcher, runs, taskRow } = setup();
     const task = insertTask(db, project.id);
@@ -564,7 +598,7 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     expect(runs.forTask(task.id)).toEqual([]);
   });
 
-  it("deshabilitar claude no interrumpe a un agente vivo ni cierra su Run", async () => {
+  it("deshabilitar claude no interrumpe a un agente vivo ni cierra su Run (guarda de la invariante)", async () => {
     const { db, project, herdr, dispatcher, runs, taskRow } = setup({
       config: { agentKindConcurrency: { claude: 1, copilot: 1 } },
     });
@@ -593,11 +627,25 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     const snapshot = await herdr.snapshot();
     expect(snapshot.panes.some((p) => p.paneId === vivaRun?.herdrPane)).toBe(true);
     expect(snapshot.agents.some((a) => a.paneId === vivaRun?.herdrPane)).toBe(true);
+  });
 
-    // Sigue ocupando su slot de claude y la tarea nueva va al proveedor habilitado.
+  it("el agente vivo de un proveedor deshabilitado conserva su slot y la tarea nueva va al habilitado", async () => {
+    // Con un slot por tipo, si el agente vivo dejara de contar al apagar claude, o el claim lo
+    // siguiera contando en el proveedor del perfil, la tarea nueva no cabría o pisaría el slot.
+    const { db, project, dispatcher, runs } = setup({
+      config: { agentKindConcurrency: { claude: 1, copilot: 1 } },
+    });
+    const viva = insertTask(db, project.id);
+    await dispatcher.dispatch(refine(viva));
+    await dispatcher.idle();
+    const [vivaRun] = runs.forTask(viva.id);
+    expect(vivaRun).toMatchObject({ agentKind: "claude", endedAt: null });
+
+    new SettingsRepository(db).saveProviders({ claude: false });
     const nueva = insertTask(db, project.id);
     await dispatcher.dispatch(refine(nueva));
     await dispatcher.idle();
+
     expect(runs.forTask(nueva.id)[0]).toMatchObject({ agentKind: "copilot", endedAt: null });
     expect(runs.get(vivaRun?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
   });

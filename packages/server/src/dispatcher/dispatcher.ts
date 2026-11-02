@@ -294,6 +294,17 @@ export class PhaseDispatcher implements Dispatcher {
     });
   }
 
+  /** Despacho en pausa: cierra el Run sin contarlo como fallo y la tarea vuelve a queued. */
+  pauseRun(runId: string, reason: string): Promise<FailRunResult> {
+    return this.closeLocks.run(runId, async () => {
+      if (!this.runs.get(runId))
+        throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
+      const res = this.runs.pause(runId, reason);
+      await this.releaseAndRecord(runId);
+      return res;
+    });
+  }
+
   /**
    * Cierra el pane y después deja la evidencia: con el agente ya detenido, su transcript está
    * completo (una tool de salida del MCP cierra el Run mientras el agente termina su turno). Si
@@ -503,10 +514,13 @@ export class PhaseDispatcher implements Dispatcher {
       }
     }
 
-    const none = order.every((p) => !isEnabled(p.kind))
-      ? "todos los proveedores están deshabilitados en Settings"
-      : "";
-    const reason = `ningún proveedor respondió al arrancar: ${diagnostics.join("; ") || none || "sin diagnóstico"}`;
+    if (order.every((p) => !isEnabled(p.kind))) {
+      // El humano apagó todos durante el lanzamiento: no es un fallo de los CLI, el despacho se
+      // pausa y la tarea espera en queued hasta que habilite uno.
+      await this.pauseRun(initial.id, "todos los proveedores están deshabilitados en Settings");
+      return null;
+    }
+    const reason = `ningún proveedor respondió al arrancar: ${diagnostics.join("; ") || "sin diagnóstico"}`;
     await this.failRun(initial.id, reason, { providersUnavailable: true });
     return null;
   }

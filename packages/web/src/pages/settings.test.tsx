@@ -32,6 +32,33 @@ describe("página Settings", () => {
     expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(true);
   });
 
+  it("con teclado, el interruptor guardando sigue enfocable y no se pulsa dos veces", async () => {
+    const fake = new FakeApi();
+    let release = () => {};
+    fake.holdProvidersPut = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { user } = renderApp("/settings", fake);
+    const claude = await screen.findByRole("switch", { name: "Claude" });
+    claude.focus();
+
+    await user.keyboard(" ");
+
+    // En vuelo: aria-disabled y no `disabled`, que sacaría al botón del orden de tabulación y
+    // soltaría el foco al terminar.
+    await waitFor(() => expect(claude.getAttribute("aria-disabled")).toBe("true"));
+    expect(claude.hasAttribute("disabled")).toBe(false);
+    expect(document.activeElement).toBe(claude);
+    await user.keyboard(" ");
+    expect(fake.requests.filter((r) => r.method === "PUT")).toHaveLength(1);
+
+    release();
+    await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
+    await waitFor(() => expect(claude.getAttribute("aria-disabled")).toBe("false"));
+    expect(document.activeElement).toBe(claude);
+    expect(fake.providers).toEqual({ claude: false, copilot: true });
+  });
+
   it("un cambio de otra pestaña no se pisa: cada interruptor envía solo su proveedor", async () => {
     const fake = new FakeApi();
     const { user } = renderApp("/settings", fake);

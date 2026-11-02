@@ -125,6 +125,8 @@ export class FakeApi {
   providersReadFails = false;
   /** Se ejecuta tras guardar un PUT y antes de responderlo: simula un cambio de otra pestaña. */
   afterProvidersPut: (() => void) | null = null;
+  /** Si se fija, el PUT de proveedores espera a esta promesa antes de responder. */
+  holdProvidersPut: Promise<void> | null = null;
   /** Si el agente que preguntó sigue vivo: la respuesta va al pane; si no, a un Run nuevo. */
   agentAlive = false;
   /** Si se fija, GET /api/queue responde esto tal cual. */
@@ -309,6 +311,7 @@ export class FakeApi {
     const body = typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : undefined;
     this.requests.push({ method, path: url.pathname + url.search, body });
     if (this.runsGate && /^\/api\/tasks\/[^/]+\/runs$/.test(url.pathname)) await this.runsGate;
+    if (method === "PUT" && url.pathname === "/api/settings/providers") await this.holdProvidersPut;
     const [status, payload] = this.route(method, url, body);
     return new Response(status === 204 ? null : JSON.stringify(payload), {
       status,

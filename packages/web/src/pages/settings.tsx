@@ -32,10 +32,14 @@ function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
+      // aria-disabled y no disabled: un botón disabled pierde el foco y el teclado se queda sin sitio.
+      // aria-disabled y no disabled: un botón disabled pierde el foco y el teclado se queda sin sitio.
+      aria-disabled={disabled}
+      onClick={() => {
+        if (!disabled) onChange(!checked);
+      }}
       className={cn(
-        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60",
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60",
         // El apagado usa un gris con contraste suficiente contra la tarjeta (≥3:1) para localizarlo.
         checked ? "border-primary bg-primary" : "border-text-muted bg-text-muted",
       )}

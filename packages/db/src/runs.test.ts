@@ -497,6 +497,26 @@ describe("RunRepository.fail", () => {
     });
   });
 
+  it("pause cierra el Run como cancelled, devuelve la tarea a queued y no cuenta como fallo", () => {
+    const { db, runs, task, claimOnce } = claimedInProgress();
+    // Tres fallos previos: la pausa no suma el cuarto que escalaría a needs_human.
+    for (let i = 0; i < 3; i++) runs.fail(claimOnce().id, `fallo ${i}`);
+    const run = claimOnce();
+
+    const res = runs.pause(run.id, "todos los proveedores están deshabilitados en Settings");
+
+    expect(res).toMatchObject({ closed: true, transitioned: true });
+    expect(runs.get(run.id)).toMatchObject({
+      result: "cancelled",
+      failureReason: "todos los proveedores están deshabilitados en Settings",
+    });
+    expect(db.select().from(tasks).where(eq(tasks.id, task.id)).get()).toMatchObject({
+      state: "in_progress",
+      subState: "queued",
+    });
+    expect(runs.pause(run.id, "otra vez")).toEqual({ closed: false, transitioned: false });
+  });
+
   it("los fallos consecutivos agotan los reintentos y escalan a needs_human", () => {
     const { db, runs, task, claimOnce } = claimedInProgress();
     for (let i = 0; i < 3; i++) runs.fail(claimOnce().id, `fallo ${i}`);

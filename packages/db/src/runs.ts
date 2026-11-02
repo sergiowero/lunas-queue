@@ -500,6 +500,36 @@ export class RunRepository {
     );
   }
 
+  /**
+   * Despacho en pausa: el humano apagó todos los proveedores después del claim y antes de que
+   * arrancara el agente. Cierra el Run como cancelled (no cuenta como fallo ni agota reintentos) y
+   * devuelve la tarea a queued para que espere a que se habilite un proveedor.
+   */
+  pause(runId: string, reason: string): FailRunResult {
+    return this.db.transaction(
+      (tx) => {
+        const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
+        if (!run) throw new Error(`no existe el Run ${runId}`);
+        if (!closeRun(tx, runId, { result: "cancelled", failureReason: reason })) {
+          return { closed: false, transitioned: false };
+        }
+        const task = tx.select().from(tasks).where(eq(tasks.id, run.taskId)).get();
+        if (task?.subState !== "running" || pendingPhase(task.state) !== run.phase) {
+          return { closed: true, transitioned: false };
+        }
+        const moved = applyTransition(tx, {
+          taskId: task.id,
+          actor: "system",
+          command: { type: "run_failed", attempt: 1 },
+          expected: { state: task.state, subState: "running" },
+        });
+        if (!moved.ok) throw new Error(`pausa de ${task.id}: ${moved.error.message}`);
+        return { closed: true, transitioned: true, task: moved.task };
+      },
+      { behavior: "immediate" },
+    );
+  }
+
   /** Runs fallidos seguidos de la fase, desde el último exitoso o el último resume (ADR 0007). */
   consecutiveFailures(taskId: string, phase: Phase): number {
     return consecutiveFailures(this.db, taskId, phase);

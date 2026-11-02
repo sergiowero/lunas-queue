@@ -417,8 +417,11 @@ describe("proveedores habilitados", () => {
   it("con claude y copilot deshabilitados no despacha nada y las tareas siguen en queued", () => {
     const tareas = [task("a"), task("b", { projectId: copilotPrimary.id })];
     const result = plan(tareas, [], {}, projects, { claude: false, copilot: false });
-    expect(result.dispatch).toEqual([]);
-    expect(tareas.every((t) => t.subState === "queued")).toBe(true);
+    // La pausa no escala ni descarta nada: el plan entero es vacío y las tareas esperan.
+    expect(result).toEqual({ dispatch: [], escalate: [] });
+    // Contraste: habilitado uno, las mismas tareas sí se despachan.
+    const reanudado = plan(tareas, [], {}, projects, { claude: true, copilot: false });
+    expect(reanudado.dispatch.map((d) => d.taskId).sort()).toEqual(["a", "b"]);
   });
 
   it("con claude deshabilitado, una tarea con primario claude va a copilot y ocupa su slot", () => {
