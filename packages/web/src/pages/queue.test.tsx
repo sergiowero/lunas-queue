@@ -356,7 +356,7 @@ describe("global queue", () => {
 
       // The store belongs to the app instance: filters chosen here must not reach a fresh app
       // (guards against a module-level store that would outlive the instance).
-      await user.selectOptions(project(), fake.projects[0]?.name as string);
+      await user.selectOptions(project(), fake.projects[0]?.id as string);
       await user.selectOptions(screen.getByLabelText("Estado del PR"), "merged");
       unmount();
 
