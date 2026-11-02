@@ -613,6 +613,69 @@ describe("submit_for_verification", () => {
     });
   });
 
+  it("rejects a documentation-only branch when the approved spec declares code", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    h.commitVerifier.changed = ["docs/research.md", "lunasq/tasks/1.md"];
+
+    const result = await call("submit_for_verification", {
+      handoff: handoffFor("implementation", run),
+    });
+
+    expect(result).toMatchObject({
+      isError: true,
+      body: {
+        error: "docs_only_diff",
+        message: expect.stringContaining("submit_result"),
+      },
+    });
+    expect(result.body.message).toContain("reopen the spec with deliverable: docs");
+    expect(h.testGate.calls).toHaveLength(0);
+    expect(h.taskOf(task.id)).toMatchObject(implementing);
+    expect(runOf(h, run.id)?.endedAt).toBeNull();
+  });
+
+  it("allows a documentation-only branch when the approved spec declares docs", async () => {
+    const h = mcpHarness({ deliverable: "docs" });
+    const { task, run, call } = await h.ready("implement", implementing);
+    h.commitVerifier.changed = ["README.md", "lunasq/tasks/1.md"];
+
+    const result = await call("submit_for_verification", {
+      handoff: handoffFor("implementation", run),
+    });
+
+    expect(result).toEqual({ isError: false, body: { state: "verification" } });
+    expect(h.taskOf(task.id)).toMatchObject({ state: "verification", subState: "queued" });
+    expect(h.testGate.calls).toHaveLength(1);
+  });
+
+  it("allows mixed documentation and code changes for the default code deliverable", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("implement", implementing);
+    h.commitVerifier.changed = ["docs/research.md", "src/app.ts"];
+
+    const result = await call("submit_for_verification", {
+      handoff: handoffFor("implementation", run),
+    });
+
+    expect(result).toEqual({ isError: false, body: { state: "verification" } });
+    expect(h.testGate.calls).toHaveLength(1);
+  });
+
+  it("fails closed when git cannot report the changed files", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing);
+    h.commitVerifier.changed = null;
+
+    const result = await call("submit_for_verification", {
+      handoff: handoffFor("implementation", run),
+    });
+
+    expect(result.body).toMatchObject({ error: "changed_files_unavailable" });
+    expect(h.testGate.calls).toHaveLength(0);
+    expect(h.taskOf(task.id)).toMatchObject(implementing);
+  });
+
   it("runs after_implementation and before_verification before the gate", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);

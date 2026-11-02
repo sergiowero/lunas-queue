@@ -122,6 +122,17 @@ export class FakeCommitVerifier implements CommitVerifier {
     return this.ahead;
   }
 
+  changed: string[] | null = [];
+  readonly changedFileCalls: { worktreePath: string; baseBranch: string }[] = [];
+
+  async changedFiles(input: {
+    worktreePath: string;
+    baseBranch: string;
+  }): Promise<string[] | null> {
+    this.changedFileCalls.push(input);
+    return this.changed;
+  }
+
   headSha: string | null = "a".repeat(40);
 
   async head(_worktreePath: string): Promise<string | null> {
@@ -152,6 +163,7 @@ export interface McpHarnessOptions {
   testGate?: (db: LunasqDatabase) => TestGate;
   testCommand?: string;
   worktreePath?: string;
+  deliverable?: "code" | "docs";
   copilotReviewers?: CopilotReviewerExecutor;
 }
 
@@ -209,7 +221,10 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
     });
     if (opts.approved ?? true) {
       const specs = new SpecRepository(db);
-      const submitted = specs.submit(row.id, specContentExample());
+      const submitted = specs.submit(row.id, {
+        ...specContentExample(),
+        deliverable: options.deliverable ?? "code",
+      });
       if (!submitted.ok) throw new Error(submitted.error.message);
       const approved = specs.approve(row.id, submitted.spec.version);
       if (!approved.ok) throw new Error(approved.error.message);

@@ -47,6 +47,7 @@ const EMPTY: UsageTotals = {
 };
 
 export const SPEC_CONTENT: SpecContent = {
+  deliverable: "code",
   domainModel: {
     boundedContext: "Autenticación",
     glossary: [{ term: "Sesión", definition: "Login vigente" }],

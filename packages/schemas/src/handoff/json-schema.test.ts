@@ -29,6 +29,18 @@ describe("handoff v1 JSON Schema", () => {
     }
   });
 
+  it("keeps the defaulted deliverable optional in the input JSON Schema", () => {
+    const refinementProperties = generated["refinement.json"]?.properties as
+      | {
+          body?: { properties?: Record<string, { default?: unknown }>; required?: string[] };
+        }
+      | undefined;
+    const body = refinementProperties?.body;
+
+    expect(body?.properties?.deliverable?.default).toBe("code");
+    expect(body?.required).not.toContain("deliverable");
+  });
+
   it("each schema declares draft 2020-12 and a versioned $id", () => {
     for (const [file, schema] of Object.entries(generated)) {
       expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");

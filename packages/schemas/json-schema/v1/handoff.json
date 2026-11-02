@@ -87,6 +87,11 @@
               "minLength": 1,
               "maxLength": 72
             },
+            "deliverable": {
+              "default": "code",
+              "type": "string",
+              "enum": ["code", "docs"]
+            },
             "domainModel": {
               "type": "object",
               "properties": {

@@ -16,6 +16,7 @@
   "knownRisks": ["Orders already invoiced require a refund, out of scope"],
   "body": {
     "title": "Cancel orders before shipping",
+    "deliverable": "code",
     "domainModel": {
       "boundedContext": "Pedidos",
       "glossary": [

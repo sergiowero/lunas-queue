@@ -69,6 +69,24 @@ describe("handoff v1: invalid examples", () => {
 });
 
 describe("handoff: clear errors", () => {
+  it("defaults legacy refinement handoffs to code and accepts an explicit docs deliverable", () => {
+    const legacy = validExample("refinement");
+    delete (legacy.body as Record<string, unknown>).deliverable;
+    const parsedLegacy = parseHandoff(legacy);
+    expect(parsedLegacy.success && parsedLegacy.data.phase === "refinement").toBe(true);
+    if (parsedLegacy.success && parsedLegacy.data.phase === "refinement") {
+      expect(parsedLegacy.data.body.deliverable).toBe("code");
+    }
+
+    const requestedDocs = validExample("refinement");
+    (requestedDocs.body as Record<string, unknown>).deliverable = "docs";
+    const parsedDocs = parseHandoff(requestedDocs);
+    expect(parsedDocs.success && parsedDocs.data.phase === "refinement").toBe(true);
+    if (parsedDocs.success && parsedDocs.data.phase === "refinement") {
+      expect(parsedDocs.data.body.deliverable).toBe("docs");
+    }
+  });
+
   it("each error carries a readable path and a message in English", () => {
     const handoff = validExample("refinement");
     (handoff.body as { criteria: { id: string }[] }).criteria[0] = { id: "x" } as never;

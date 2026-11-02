@@ -1,3 +1,5 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Runtime, RuntimeOptions } from "@lunasq/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { writeConfig } from "./config.ts";
@@ -92,7 +94,58 @@ describe("lunasq", () => {
       telemetry: false,
     });
     expect(out).toContain("LunasQ at http://127.0.0.1:8125");
+    expect(out.some((line) => line.includes("Updated LunasQ assets"))).toBe(false);
     expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it("start restores stale skills before launching the runtime", async () => {
+    const { deps, ctx, out } = setup();
+    await install(ctx);
+    const skill = join(ctx.paths.skills, "implement-task", "SKILL.md");
+    writeFileSync(skill, "stale skill");
+    const startRuntime = vi.fn(
+      async (_: RuntimeOptions): Promise<Runtime> => ({
+        url: "http://x",
+        paneEnv: {},
+        stop: async () => {},
+      }),
+    );
+
+    expect(await main(["start"], { ...deps, startRuntime, untilSignal: async () => {} })).toBe(0);
+
+    expect(readFileSync(skill, "utf8")).not.toBe("stale skill");
+    expect(out.some((line) => line.includes("Updated LunasQ assets"))).toBe(true);
+    expect(startRuntime).toHaveBeenCalledOnce();
+  });
+
+  it("start warns about a foreign asset, leaves it alone and still launches", async () => {
+    const { deps, ctx, err } = setup();
+    await install(ctx);
+    const dest = join(ctx.paths.skills, "implement-task");
+    const manifest = JSON.parse(readFileSync(ctx.paths.manifest, "utf8")) as {
+      installed: string[];
+    };
+    writeFileSync(
+      ctx.paths.manifest,
+      JSON.stringify({ installed: manifest.installed.filter((path) => path !== dest) }),
+    );
+    const skill = join(dest, "SKILL.md");
+    writeFileSync(skill, "my skill");
+    const startRuntime = vi.fn(
+      async (_: RuntimeOptions): Promise<Runtime> => ({
+        url: "http://x",
+        paneEnv: {},
+        stop: async () => {},
+      }),
+    );
+
+    expect(await main(["start"], { ...deps, startRuntime, untilSignal: async () => {} })).toBe(0);
+
+    expect(readFileSync(skill, "utf8")).toBe("my skill");
+    expect(err.some((line) => line.includes(`left the foreign asset untouched: ${dest}`))).toBe(
+      true,
+    );
+    expect(startRuntime).toHaveBeenCalledOnce();
   });
 
   it("start serves the front end when the machine has its build", async () => {

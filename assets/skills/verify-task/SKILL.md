@@ -11,6 +11,7 @@ You are the approver of a LunasQ task's verification. The prompt gives you the t
 
 - Do not edit code, commit, push or open a PR. The only thing you can touch is the reversal test, and you undo it before the verdict: LunasQ rejects a pass with a dirty worktree or a different `HEAD`.
 - The implementer's handoff is claims to check, not facts. Judge by the code, the diff and the tests you run yourself.
+- A diff containing only Markdown files or files under `docs/` (excluding `lunasq/tasks/`) is a reject when the approved spec says `deliverable: code`; research belongs in `submit_result`, and an explicitly requested documentation task must have `deliverable: docs` in its approved spec.
 - At the start, save the `HEAD` (`git rev-parse HEAD`): at the end it must be the same.
 - The worktree came from `origin/<base branch>`. Always compare against the starting point, `BASE=$(git merge-base origin/<base branch> HEAD)`, not against the local base branch: it may be behind or ahead and would bring changes foreign to the task.
 

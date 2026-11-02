@@ -88,7 +88,11 @@ const PHASE_SKILL: Record<SchedulablePhase, string> = {
 
 /** Short phase prompt: the full context arrives through MCP, not through the prompt. */
 export function phasePrompt(phase: SchedulablePhase, taskId: string): string {
-  return `Use the skill ${PHASE_SKILL[phase]} for LunasQ task ${taskId}. Start by calling get_task_context from the lunasq MCP and finish with its exit tool.`;
+  const noCodeExit =
+    phase === "refine"
+      ? " If the task is research or otherwise has no code deliverable, close it with submit_result and put the findings in its result."
+      : "";
+  return `Use the skill ${PHASE_SKILL[phase]} for LunasQ task ${taskId}. Start by calling get_task_context from the lunasq MCP and finish with its exit tool.${noCodeExit}`;
 }
 
 /**

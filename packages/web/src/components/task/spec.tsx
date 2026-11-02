@@ -21,6 +21,10 @@ function Content({ spec }: { spec: Json<Spec> }) {
       <p>
         <span className="font-medium">{t.spec.boundedContext}</span> {domainModel.boundedContext}
       </p>
+      <p>
+        <span className="font-medium">{t.spec.deliverable}</span>{" "}
+        {t.spec.deliverables[spec.content.deliverable]}
+      </p>
       <div>
         <h3 className="font-medium">{t.spec.requirements}</h3>
         <ul className="list-disc pl-5">
@@ -52,8 +56,12 @@ function Content({ spec }: { spec: Json<Spec> }) {
 
 /** One line per change: + added, − removed, ~ modified. */
 function diffLines(diff: Json<SpecDiff>, t: Dictionary): string[] {
-  const { domainModel: dm, requirements, criteria, taskList } = diff.changes;
+  const { deliverable, domainModel: dm, requirements, criteria, taskList } = diff.changes;
   const lines: string[] = [];
+  if (deliverable) {
+    const from = deliverable.from ? t.spec.deliverables[deliverable.from] : "—";
+    lines.push(`~ ${t.spec.diffDeliverable}: ${from} → ${t.spec.deliverables[deliverable.to]}`);
+  }
   if (dm.boundedContext) {
     lines.push(
       `~ ${t.spec.diffBoundedContext}: ${dm.boundedContext.from} → ${dm.boundedContext.to}`,

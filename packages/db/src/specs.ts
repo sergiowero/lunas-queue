@@ -73,6 +73,7 @@ function toSpec(row: Row): Spec {
     taskId: row.taskId,
     version: row.version,
     content: {
+      deliverable: row.deliverable,
       domainModel: row.domainModel,
       requirements: row.requirements,
       criteria: row.acceptanceCriteria,
@@ -92,6 +93,7 @@ function toSpec(row: Row): Spec {
 }
 
 const contentColumns = (content: SpecContent) => ({
+  deliverable: content.deliverable,
   domainModel: content.domainModel,
   requirements: content.requirements,
   acceptanceCriteria: content.criteria,

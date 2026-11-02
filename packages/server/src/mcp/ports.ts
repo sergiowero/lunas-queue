@@ -47,6 +47,8 @@ export interface CommitVerifier {
    * task that may have code.
    */
   branchHasCommits(input: { worktreePath: string; baseBranch: string }): Promise<boolean>;
+  /** Files changed from the best available base ref to HEAD; null if git cannot check. */
+  changedFiles(input: { worktreePath: string; baseBranch: string }): Promise<string[] | null>;
   /** Sha of the worktree's HEAD; null if it cannot be read. */
   head(worktreePath: string): Promise<string | null>;
   /**
@@ -142,6 +144,28 @@ export class GitCommitVerifier implements CommitVerifier {
     });
     if (result.exitCode !== 0) return true;
     return Number.parseInt(result.stdout.trim(), 10) !== 0;
+  }
+
+  async changedFiles(input: {
+    worktreePath: string;
+    baseBranch: string;
+  }): Promise<string[] | null> {
+    for (const ref of [`origin/${input.baseBranch}`, input.baseBranch]) {
+      const exists = await this.#runner.run({
+        command: `git rev-parse --verify --quiet --end-of-options ${quote(`${ref}^{commit}`)}`,
+        cwd: input.worktreePath,
+      });
+      if (exists.exitCode !== 0) continue;
+
+      const result = await this.#runner.run({
+        // NUL delimiters keep unusual filenames from changing the file classification.
+        command: `git diff --name-only --no-renames -z --end-of-options ${quote(`${ref}...HEAD`)} --`,
+        cwd: input.worktreePath,
+      });
+      if (result.exitCode !== 0) return null;
+      return result.stdout.split("\0").filter((path) => path !== "");
+    }
+    return null;
   }
 
   async head(worktreePath: string): Promise<string | null> {

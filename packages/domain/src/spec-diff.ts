@@ -35,6 +35,10 @@ export function diffSpecContent(before: SpecContent | null, after: SpecContent):
   const b = after.domainModel;
   const boundedContext = a?.boundedContext ?? "";
   return {
+    deliverable:
+      before?.deliverable === after.deliverable
+        ? null
+        : { from: before?.deliverable ?? null, to: after.deliverable },
     domainModel: {
       boundedContext:
         boundedContext === b.boundedContext ? null : { from: boundedContext, to: b.boundedContext },
@@ -52,5 +56,9 @@ export function diffSpecContent(before: SpecContent | null, after: SpecContent):
 export function isEmptyDiff(diff: SpecContentDiff): boolean {
   const { boundedContext, ...lists } = diff.domainModel;
   const all = [...Object.values(lists), diff.requirements, diff.criteria, diff.taskList];
-  return boundedContext === null && all.every((d) => Object.values(d).every((v) => v.length === 0));
+  return (
+    diff.deliverable === null &&
+    boundedContext === null &&
+    all.every((d) => Object.values(d).every((v) => v.length === 0))
+  );
 }

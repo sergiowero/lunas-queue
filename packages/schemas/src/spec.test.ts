@@ -24,6 +24,11 @@ describe("SpecContent", () => {
     expect(SpecContent.parse(content)).toEqual(content);
   });
 
+  it("defaults older stored specs without a deliverable to code", () => {
+    const { deliverable: _deliverable, ...legacy } = specContentExample();
+    expect(SpecContent.parse(legacy).deliverable).toBe("code");
+  });
+
   it("rejects the assumptions: they go in the handoff, not in the spec", () => {
     expect(SpecContent.safeParse({ ...specContentExample(), assumptions: [] }).success).toBe(false);
   });
