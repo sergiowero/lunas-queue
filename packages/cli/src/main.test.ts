@@ -91,7 +91,7 @@ describe("lunasq", () => {
       copilotAgentsPath: ctx.paths.copilotAgents,
       telemetry: false,
     });
-    expect(out).toContain("LunasQ en http://127.0.0.1:8125");
+    expect(out).toContain("LunasQ at http://127.0.0.1:8125");
     expect(stop).toHaveBeenCalledOnce();
   });
 

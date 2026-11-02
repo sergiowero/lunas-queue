@@ -134,7 +134,7 @@ async function start(
     ...(ctx.webRoot && { webRoot: ctx.webRoot }),
     log: err,
   });
-  out(`LunasQ en ${runtime.url}`);
+  out(`LunasQ at ${runtime.url}`);
   await (deps.untilSignal ?? untilSignal)();
   await runtime.stop();
   return 0;

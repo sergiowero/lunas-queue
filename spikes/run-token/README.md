@@ -1,14 +1,14 @@
-# Spike UW-00/b — run token por Run vía `--mcp-config`
+# Spike UW-00/b — per-Run run token via `--mcp-config`
 
-Código desechable. Resultado y decisión en `docs/decisions/0002-run-token-mcp-config.md`. Reusa `../mcp-sdk/server.ts` (instala dependencias allí primero).
+Throwaway code. Result and decision in `docs/decisions/0002-run-token-mcp-config.md`. Reuses `../mcp-sdk/server.ts` (install dependencies there first).
 
 ```sh
-SEEN_LOG=seen.ndjson node serve.ts &   # MCP en http://127.0.0.1:4518/mcp; registra el header de cada request
-claude -p "Llama a la tool whoami del servidor lunasq y responde solo con su texto." \
+SEEN_LOG=seen.ndjson node serve.ts &   # MCP at http://127.0.0.1:4518/mcp; records each request's header
+claude -p "Call the lunasq server's whoami tool and answer only with its text." \
   --mcp-config mcp-run.json --strict-mcp-config --allowedTools mcp__lunasq__whoami --model haiku
 LUNASQ_RUN_TOKEN=run-env-0002 claude -p "…" --mcp-config mcp-run-env.json --strict-mcp-config --allowedTools mcp__lunasq__whoami --model haiku
 ```
 
-- `mcp-run.json`: token literal en el header (archivo por Run).
-- `mcp-run-env.json`: header `${LUNASQ_RUN_TOKEN}`, expandido desde el entorno del proceso.
-- `seen-claude-p.ndjson`: requests vistas con `claude -p`; `seen-herdr.ndjson`: requests del agente arrancado con `herdr agent start` (spike d, pasos 07–13).
+- `mcp-run.json`: literal token in the header (one file per Run).
+- `mcp-run-env.json`: `${LUNASQ_RUN_TOKEN}` header, expanded from the process environment.
+- `seen-claude-p.ndjson`: requests seen with `claude -p`; `seen-herdr.ndjson`: requests from the agent started with `herdr agent start` (spike d, steps 07–13).
