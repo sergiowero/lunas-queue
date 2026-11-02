@@ -57,6 +57,18 @@ describe("botón Nueva tarea del header", () => {
     }
   });
 
+  it("en móvil el header no desborda: el wordmark se oculta bajo sm y la marca conserva su nombre", async () => {
+    renderApp("/queue");
+    await newTaskButton();
+    const brand = screen.getByRole("link", { name: "LunasQ" });
+    expect(brand.getAttribute("href")).toBe("/queue");
+    const wordmark = within(brand).getByText("LunasQ");
+    expect(wordmark.className).toContain("hidden");
+    expect(wordmark.className).toContain("sm:inline");
+    expect(brand.parentElement?.className).toContain("px-4");
+    expect(brand.parentElement?.className).toContain("sm:px-6");
+  });
+
   it("un click desde /queue abre la página Nueva tarea existente", async () => {
     const { user, router } = renderApp("/queue");
     await user.click(await newTaskButton());
