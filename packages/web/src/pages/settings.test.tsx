@@ -96,14 +96,25 @@ describe("página Settings", () => {
 
     await user.click(screen.getByRole("switch", { name: "Copilot" }));
 
-    const alert = await screen.findByText(
-      /se muestra el último estado leído/,
-      {},
-      { timeout: 5000 },
-    );
+    // El PUT se guardó: el aviso lo dice y no habla de un cambio fallido (ver el test siguiente).
+    const alert = await screen.findByText(/El cambio se guardó/, {}, { timeout: 4000 });
     expect(alert).toBeTruthy();
     expect(screen.getByRole("switch", { name: "Claude" })).toBeTruthy();
     expect(screen.getByRole("switch", { name: "Copilot" })).toBeTruthy();
+  });
+
+  it("si el PUT se guarda pero la relectura falla, avisa que el cambio se guardó y no que falló", async () => {
+    const fake = new FakeApi();
+    const { user } = renderApp("/settings", fake);
+    await screen.findByRole("switch", { name: "Claude" });
+    fake.providersReadFails = true;
+
+    await user.click(screen.getByRole("switch", { name: "Copilot" }));
+
+    const alert = await screen.findByText(/El cambio se guardó/, {}, { timeout: 4000 });
+    expect(alert.textContent).toMatch(/no se pudo leer el estado/);
+    expect(alert.textContent).not.toMatch(/No se pudo actualizar la configuración/);
+    expect(fake.providers).toEqual({ claude: true, copilot: false });
   });
 
   it("muestra el error si el servidor rechaza el cambio y conserva el estado guardado", async () => {

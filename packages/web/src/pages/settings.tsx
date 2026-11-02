@@ -70,6 +70,9 @@ export function SettingsPage() {
     return settings.error ? <QueryError error={settings.error} /> : <Loading />;
   }
   const current = settings.data;
+  // El PUT del último cambio tuvo éxito y la lectura que lo siguió falló: el servidor ya guardó, pero
+  // los interruptores muestran un estado anterior. Hay que decirlo, no que "no se pudo actualizar".
+  const savedButUnread = update.isSuccess && settings.errorUpdatedAt >= update.submittedAt;
 
   return (
     <div className="flex flex-col gap-4">
@@ -100,7 +103,9 @@ export function SettingsPage() {
           ))}
           {settings.error && (
             <p role="alert" className="text-sm text-destructive">
-              No se pudo actualizar la configuración; se muestra el último estado leído:{" "}
+              {savedButUnread
+                ? "El cambio se guardó, pero no se pudo leer el estado; los interruptores muestran el último estado leído, que puede no reflejarlo: "
+                : "No se pudo actualizar la configuración; se muestra el último estado leído: "}
               {settings.error.message}
             </p>
           )}
