@@ -9,6 +9,7 @@ import { DependenciesPanel } from "../components/task/dependencies.tsx";
 import { EventLogPanel } from "../components/task/event-log.tsx";
 import { EvidencePanel } from "../components/task/evidence.tsx";
 import { IntentText } from "../components/task/intent-text.tsx";
+import { ResultPanel } from "../components/task/result.tsx";
 import { RunsPanel } from "../components/task/runs.tsx";
 import { SpecPanel } from "../components/task/spec.tsx";
 import { UsagePanel } from "../components/task/usage.tsx";
@@ -133,6 +134,8 @@ function Header({ task }: { task: Json<Task> }) {
             <a href={task.prUrl} target="_blank" rel="noreferrer" className="underline">
               {task.prUrl}
             </a>
+          ) : task.resultKind ? (
+            "Sin PR"
           ) : (
             "—"
           )}
@@ -163,6 +166,7 @@ export function TaskDetailPage() {
   return (
     <div className="flex flex-col gap-4">
       <Header task={task.data} />
+      <ResultPanel task={task.data} />
       <div className="grid gap-4 lg:grid-cols-2">
         <DependenciesPanel task={task.data} />
         <UsagePanel key={taskId} taskId={taskId} />
