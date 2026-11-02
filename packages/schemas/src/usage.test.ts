@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { OtlpLogsRequest } from "./usage.ts";
 
 describe("OtlpLogsRequest", () => {
-  it("tolera campos que no lee y rellena listas ausentes", () => {
+  it("tolerates fields it does not read and fills in absent lists", () => {
     const req = OtlpLogsRequest.parse({
       resourceLogs: [
         {
@@ -26,7 +26,7 @@ describe("OtlpLogsRequest", () => {
     expect(OtlpLogsRequest.parse({}).resourceLogs).toEqual([]);
   });
 
-  it("rechaza un cuerpo que no es OTLP", () => {
+  it("rejects a body that is not OTLP", () => {
     expect(() => OtlpLogsRequest.parse({ resourceLogs: "x" })).toThrow();
   });
 });

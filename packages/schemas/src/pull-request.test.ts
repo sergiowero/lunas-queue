@@ -3,8 +3,8 @@ import { TaskPrOpenedPayload, TaskPrStateChangedPayload } from "./pull-request.t
 
 const url = "https://github.com/sergiowero/lunas-queue/pull/7";
 
-describe("eventos del PR de una tarea", () => {
-  it("task.pr_opened lleva la URL y la del PR anterior", () => {
+describe("events of a task's PR", () => {
+  it("task.pr_opened carries the URL and that of the previous PR", () => {
     expect(TaskPrOpenedPayload.parse({ url, previousUrl: null })).toEqual({
       url,
       previousUrl: null,
@@ -12,7 +12,7 @@ describe("eventos del PR de una tarea", () => {
     expect(() => TaskPrOpenedPayload.parse({ url: "no-es-url", previousUrl: null })).toThrow();
   });
 
-  it("task.pr_state_changed solo sale de open hacia merged o closed", () => {
+  it("task.pr_state_changed only goes from open to merged or closed", () => {
     const at = "2026-10-29T17:54:13.000Z";
     expect(TaskPrStateChangedPayload.parse({ url, from: "open", to: "merged", at })).toEqual({
       url,

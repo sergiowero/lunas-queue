@@ -4,7 +4,7 @@
 
 ## Contexto
 
-El perfil de agente de cada fase ya tenía `model` y `args`. El esfuerzo de Claude Code (`claude --effort`) solo podía pasarse dentro de `args`, como texto libre, sin validación y sin ayuda en el formulario.
+El perfil de agente de cada fase ya tenía `model` y `args`. El esfuerzo de Claude Code (`claude --effort`) solo podía pasarse dentro de `args`, como free text, sin validación y sin ayuda en el formulario.
 
 ## Decisión
 

@@ -14,7 +14,7 @@ const id = "00000000-0000-4000-8000-000000000001";
 const other = "00000000-0000-4000-8000-000000000002";
 
 describe("QuestionAnswer", () => {
-  it("exige texto y acepta quién responde", () => {
+  it("requires text and accepts who answers", () => {
     expect(QuestionAnswer.parse({ answer: "Sí, bórrala" })).toEqual({ answer: "Sí, bórrala" });
     expect(QuestionAnswer.parse({ answer: "Sí", answeredBy: "sergio" }).answeredBy).toBe("sergio");
     expect(QuestionAnswer.safeParse({ answer: "  " }).success).toBe(false);
@@ -25,7 +25,7 @@ describe("QuestionAnswer", () => {
 });
 
 describe("QuestionListQuery", () => {
-  it("filtra por estado, tarea y proyecto", () => {
+  it("filters by state, task and project", () => {
     expect(QuestionListQuery.parse({})).toEqual({});
     expect(QuestionListQuery.parse({ status: "open", taskId: id, projectId: other })).toEqual({
       status: "open",
@@ -52,7 +52,7 @@ describe("Question", () => {
     createdAt: "2026-10-29T10:00:00.000Z",
   };
 
-  it("acepta una pregunta abierta y una respondida", () => {
+  it("accepts an open question and an answered one", () => {
     expect(Question.safeParse(base).success).toBe(true);
     const answered = {
       ...base,
@@ -64,13 +64,13 @@ describe("Question", () => {
     expect(Question.safeParse(answered).success).toBe(true);
   });
 
-  it("rechaza un estado desconocido", () => {
+  it("rejects an unknown state", () => {
     expect(Question.safeParse({ ...base, status: "closed" }).success).toBe(false);
   });
 });
 
 describe("eventos de Question", () => {
-  it("question.answered dice si la respuesta fue al pane vivo o a un Run nuevo", () => {
+  it("question.answered says whether the answer went to the live pane or to a new Run", () => {
     expect(QUESTION_ANSWERED).toBe("question.answered");
     const ok = { questionId: id, runId: other, delivery: "pane", answeredBy: "sergio" };
     expect(QuestionAnsweredPayload.safeParse(ok).success).toBe(true);
@@ -98,7 +98,7 @@ describe("BlockedAgent", () => {
     since: "2026-10-29T12:00:00.000Z",
   };
 
-  it("describe al agente que espera un permiso", () => {
+  it("describes the agent waiting for a permission", () => {
     expect(BlockedAgent.safeParse(blocked).success).toBe(true);
     expect(BlockedAgent.safeParse({ ...blocked, phase: "deliver" }).success).toBe(false);
   });

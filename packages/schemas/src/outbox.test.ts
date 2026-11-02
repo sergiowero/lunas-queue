@@ -12,19 +12,19 @@ const valid = {
 };
 
 describe("OutboxMessage", () => {
-  it("acepta un mensaje válido con cualquier payload", () => {
+  it("accepts a valid message with any payload", () => {
     expect(OutboxMessage.parse(valid)).toEqual(valid);
     expect(OutboxMessage.parse({ ...valid, payload: null })).toMatchObject({ payload: null });
   });
 
-  it("exige ids enteros positivos, topic no vacío y actor conocido", () => {
+  it("requires positive integer ids, a non-empty topic and a known actor", () => {
     expect(() => OutboxMessage.parse({ ...valid, id: 0 })).toThrow();
     expect(() => OutboxMessage.parse({ ...valid, eventId: 1.5 })).toThrow();
     expect(() => OutboxMessage.parse({ ...valid, topic: "" })).toThrow();
     expect(() => OutboxMessage.parse({ ...valid, actor: "robot" })).toThrow();
   });
 
-  it("rechaza campos extra", () => {
+  it("rejects extra fields", () => {
     expect(() => OutboxMessage.parse({ ...valid, extra: true })).toThrow();
   });
 });

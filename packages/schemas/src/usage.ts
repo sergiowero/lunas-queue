@@ -1,26 +1,26 @@
-// Telemetría OTLP/HTTP JSON de Claude Code hacia el usage collector (docs/design.md §Consumo,
-// ADR uw-20-usage-collector). Solo se modela lo que LunasQ lee de los logs: el resto se tolera,
-// porque Claude Code agrega atributos entre versiones.
+// OTLP/HTTP JSON telemetry from Claude Code to the usage collector (docs/design.md §Usage,
+// ADR uw-20-usage-collector). Only what LunasQ reads from the logs is modeled: the rest is tolerated,
+// because Claude Code adds attributes between versions.
 import { z } from "zod";
 
 export const OTLP_LOGS_PATH = "/v1/logs";
 export const OTLP_METRICS_PATH = "/v1/metrics";
 
-/** Atributos de recurso que el dispatcher fija con `OTEL_RESOURCE_ATTRIBUTES` en cada pane. */
+/** Resource attributes the dispatcher sets with `OTEL_RESOURCE_ATTRIBUTES` in each pane. */
 export const RESOURCE_ATTRIBUTES = {
   taskId: "lunasq.task_id",
   runId: "lunasq.run_id",
   phase: "lunasq.phase",
 } as const;
 
-/** Evento de Claude Code con los tokens y el costo de una llamada a la API. */
+/** Claude Code event with the tokens and the cost of an API call. */
 export const API_REQUEST_EVENT = "api_request";
 
-// Un valor con un tipo inesperado se lee como ausente (`catch`) en vez de rechazar el lote: los
-// exportadores OTLP no reintentan un 400 y se perdería el consumo de las demás llamadas.
+// A value with an unexpected type is read as absent (`catch`) instead of rejecting the batch: the
+// OTLP exporters do not retry a 400 and the usage of the other calls would be lost.
 const AnyValue = z.looseObject({
   stringValue: z.string().optional().catch(undefined),
-  // OTLP/JSON manda los int64 como string; Claude Code los manda como número.
+  // OTLP/JSON sends int64 as string; Claude Code sends them as a number.
   intValue: z.union([z.string(), z.number()]).optional().catch(undefined),
   doubleValue: z.number().optional().catch(undefined),
   boolValue: z.boolean().optional().catch(undefined),

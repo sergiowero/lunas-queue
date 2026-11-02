@@ -63,7 +63,7 @@ Ejemplo válido:
       },
       {
         "criterionId": "AC-2",
-        "tests": [{ "file": "src/orders/order.test.ts", "name": "un pedido enviado no se puede cancelar" }]
+        "tests": [{ "file": "src/orders/order.test.ts", "name": "a shipped order no se puede cancelar" }]
       }
     ],
     "commits": ["3f9a2c1b7d4e5f6a8b9c0d1e2f3a4b5c6d7e8f90"],
@@ -93,7 +93,7 @@ El handoff de `submit_result` es otro, no el de implementación: `schemaVersion`
   "runId": "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
   "phase": "implementation",
   "summary": "La cancelación de pedidos ya existe y está probada.",
-  "title": "Cancelar pedidos antes del envío",
+  "title": "Cancel orders before shipping",
   "resultKind": "already_implemented",
   "result": "# Ya implementada\n\n`Pedido.cancelar` en `src/orders/order.ts` cubre AC-1 y AC-2; los tests están en `src/orders/order.test.ts`."
 }
@@ -123,7 +123,7 @@ Un rechazo deja el Run abierto: corrige y vuelve a llamar en el mismo Run. Las r
 
 ## Preguntas y fallos
 
-- `ask_human` con `{ "question": "...", "context": "...", "options": [...] }` (`context` y `options` son opcionales) registra la pregunta y regresa de inmediato. Termina tu turno después de llamarla: la respuesta llega como un prompt nuevo o, si el Run se cerró, en `questions` del siguiente `get_task_context`. Si la pregunta es elegir entre alternativas concretas, agrega `options`: de 2 a 6 objetos `{ "label": "...", "description": "..." }` (`description` es opcional), con labels cortos y únicos (sin distinguir mayúsculas ni espacios extremos). El humano elige una o escribe «Otra respuesta», así que no incluyas una opción comodín; la respuesta llega como el label elegido o su texto libre. Sin alternativas claras, omite `options` y la pregunta es abierta.
+- `ask_human` con `{ "question": "...", "context": "...", "options": [...] }` (`context` y `options` son opcionales) registra la pregunta y regresa de inmediato. Termina tu turno después de llamarla: la respuesta llega como un prompt nuevo o, si el Run se cerró, en `questions` del siguiente `get_task_context`. Si la pregunta es elegir entre alternativas concretas, agrega `options`: de 2 a 6 objetos `{ "label": "...", "description": "..." }` (`description` es opcional), con labels cortos y únicos (sin distinguir mayúsculas ni espacios extremos). El humano elige una o escribe «Otra respuesta», así que no incluyas una opción comodín; la respuesta llega como el label elegido o su free text. Sin alternativas claras, omite `options` y la pregunta es abierta.
 - `report_failure` con `{ "reason": "..." }` cuando no puedes continuar (la spec es inviable, falta una dependencia). Cierra el Run como fallido; no la uses para un rechazo que puedes corregir.
 
 ## Memoria con engram (opcional)

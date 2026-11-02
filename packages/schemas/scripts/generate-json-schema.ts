@@ -1,4 +1,4 @@
-// Regenera json-schema/v1 desde los esquemas Zod. El test de drift falla si se olvida correrlo.
+// Regenerates json-schema/v1 from the Zod schemas. The drift test fails if it is forgotten.
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildHandoffJsonSchemas } from "../src/handoff/json-schema.ts";

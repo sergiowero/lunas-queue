@@ -68,12 +68,12 @@ describe("diffSpecContent", () => {
     const before = specContentExample();
     const after = specContentExample();
     after.domainModel.boundedContext = "Facturación";
-    after.domainModel.glossary = [{ term: "Pedido pendiente", definition: "Another definition" }];
+    after.domainModel.glossary = [{ term: "Pending order", definition: "Another definition" }];
     after.domainModel.aggregates.push({ name: "Invoice", entities: [] });
     after.domainModel.events = [];
     const { domainModel } = diffSpecContent(before, after);
     expect(domainModel.boundedContext).toEqual({ from: "Pedidos", to: "Facturación" });
-    expect(domainModel.glossary.changed.map((c) => c.key)).toEqual(["Pedido pendiente"]);
+    expect(domainModel.glossary.changed.map((c) => c.key)).toEqual(["Pending order"]);
     expect(domainModel.aggregates.added).toEqual([{ name: "Invoice", entities: [] }]);
     expect(domainModel.events.removed).toEqual(before.domainModel.events);
   });

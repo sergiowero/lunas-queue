@@ -29,7 +29,7 @@
 
 - **Contrato.** `ask_human` acepta `options` opcional: de 2 a 6 `{ label, description? }`. `label` de 1 a 100 caracteres recortados, `description` de hasta 500; los labels son únicos sin distinguir mayúsculas ni espacios extremos. Una entrada inválida se rechaza en la validación del input, antes de tocar la base: no se crea la Question ni cambia el estado de la tarea. Sin `options` la Question es abierta.
 - **Persistencia.** Columna `questions.options` JSON nullable (migración 0012); las Questions anteriores quedan en `null`. Las opciones no cambian después de crearse. `GET /api/questions`, `GET /api/questions/:id` y `questions` de `get_task_context` las devuelven (`options: null` si no hay).
-- **Respuesta.** No cambia: `POST /api/questions/:id/answer` sigue recibiendo `answer` como texto. Con una opción es su `label`; con «Otra respuesta», el texto libre recortado. El servidor no exige que la respuesta sea una de las opciones, porque «Otra respuesta» es válida.
+- **Respuesta.** No cambia: `POST /api/questions/:id/answer` sigue recibiendo `answer` como texto. Con una opción es su `label`; con «Otra respuesta», el free text recortado. El servidor no exige que la respuesta sea una de las opciones, porque «Otra respuesta» es válida.
 - **Bandeja.** Una pregunta con opciones se muestra como un `fieldset` con radios (label y descripción de cada opción) y un radio «Otra respuesta» que habilita un campo de texto. Responder se habilita con una opción elegida o con «Otra respuesta» y texto no vacío; cambiar a una opción envía su label, no el texto. Sin opciones se mantiene el campo de texto.
 - **Skills.** Las skills de fase explican cuándo mandar `options` (alternativas concretas) y que no hace falta una opción comodín.
 

@@ -19,23 +19,23 @@ const specId = "00000000-0000-4000-8000-000000000001";
 const taskId = "00000000-0000-4000-8000-000000000002";
 
 describe("SpecContent", () => {
-  it("acepta el contenido de una spec de refinamiento sin supuestos", () => {
+  it("accepts the content of a refinement spec without assumptions", () => {
     const content = specContentExample();
     expect(SpecContent.parse(content)).toEqual(content);
   });
 
-  it("rechaza los supuestos: van en el handoff, no en la spec", () => {
+  it("rejects the assumptions: they go in the handoff, not in the spec", () => {
     expect(SpecContent.safeParse({ ...specContentExample(), assumptions: [] }).success).toBe(false);
   });
 
-  it("exige requerimientos, criterios y task list", () => {
+  it("requires requirements, criteria and task list", () => {
     for (const field of ["requirements", "criteria", "taskList"] as const) {
       const result = SpecContent.safeParse({ ...specContentExample(), [field]: [] });
       expect(result.success, field).toBe(false);
     }
   });
 
-  it("rechaza términos, agregados y eventos repetidos: el diff compara por esas claves", () => {
+  it("rejects repeated terms, aggregates and events: the diff compares by those keys", () => {
     const content = specContentExample();
     const { glossary, aggregates, events } = content.domainModel;
     content.domainModel.glossary = [...glossary, ...glossary];
@@ -49,7 +49,7 @@ describe("SpecContent", () => {
     ]);
   });
 
-  it("rechaza ids repetidos y tareas que apuntan a criterios inexistentes", () => {
+  it("rejects repeated ids and tasks that point to nonexistent criteria", () => {
     const content = specContentExample();
     content.criteria.push({ id: "AC-1", given: "otro", when: "otro", outcome: "otro resultado" });
     content.taskList = [{ id: "T-1", title: "Comando", criterionIds: ["AC-9"] }];
@@ -62,7 +62,7 @@ describe("SpecContent", () => {
 });
 
 describe("Spec", () => {
-  it("describe una versión con su autor y su aprobación", () => {
+  it("describes a version with its author and its approval", () => {
     const spec = {
       id: specId,
       taskId,
@@ -80,21 +80,21 @@ describe("Spec", () => {
   });
 });
 
-describe("entradas de la API", () => {
-  it("SpecVersionParam acepta solo enteros positivos en texto", () => {
+describe("API inputs", () => {
+  it("SpecVersionParam accepts only positive integers as text", () => {
     expect(SpecVersionParam.parse("3")).toBe(3);
     for (const bad of ["0", "-1", "1.5", "abc", "01", ""]) {
       expect(SpecVersionParam.safeParse(bad).success, bad).toBe(false);
     }
   });
 
-  it("SpecDiffQuery toma la versión contra la que se compara", () => {
+  it("SpecDiffQuery takes the version to compare against", () => {
     expect(SpecDiffQuery.parse({})).toEqual({});
     expect(SpecDiffQuery.parse({ against: "1" })).toEqual({ against: 1 });
     expect(SpecDiffQuery.safeParse({ against: "x" }).success).toBe(false);
   });
 
-  it("SpecRequestChanges exige comentarios no vacíos y los recorta", () => {
+  it("SpecRequestChanges requires non-empty comments and trims them", () => {
     expect(SpecRequestChanges.parse({ comments: "  falta un criterio  " })).toEqual({
       comments: "falta un criterio",
     });
@@ -102,7 +102,7 @@ describe("entradas de la API", () => {
     expect(SpecRequestChanges.safeParse({}).success).toBe(false);
   });
 
-  it("SpecEditAndApprove exige contenido completo", () => {
+  it("SpecEditAndApprove requires complete content", () => {
     const content = specContentExample();
     expect(SpecEditAndApprove.parse({ content })).toEqual({ content });
     expect(SpecEditAndApprove.safeParse({ content: { ...content, criteria: [] } }).success).toBe(
@@ -112,7 +112,7 @@ describe("entradas de la API", () => {
 });
 
 describe("eventos de spec", () => {
-  it("tienen nombres estables", () => {
+  it("have stable names", () => {
     expect([SPEC_VERSION_CREATED, SPEC_APPROVED, SPEC_CHANGES_REQUESTED]).toEqual([
       "spec.version_created",
       "spec.approved",
@@ -120,7 +120,7 @@ describe("eventos de spec", () => {
     ]);
   });
 
-  it("validan sus payloads", () => {
+  it("validate their payloads", () => {
     expect(SpecVersionCreatedPayload.parse({ specId, version: 2, basedOn: 1 })).toMatchObject({
       version: 2,
       basedOn: 1,

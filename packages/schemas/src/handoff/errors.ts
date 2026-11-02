@@ -5,7 +5,7 @@ export interface HandoffError {
   message: string;
 }
 
-export const ROOT_PATH = "(raíz)";
+export const ROOT_PATH = "(root)";
 
 // ["body", "criteria", 2, "id"] → "body.criteria[2].id"
 export function formatPath(path: readonly PropertyKey[]): string {

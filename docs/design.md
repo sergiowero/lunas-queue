@@ -372,7 +372,7 @@ Reglas:
 
 **Formato del handoff (JSON)**
 
-El handoff nunca es texto libre: es un objeto JSON que el LunasQ MCP valida contra un JSON Schema versionado por fase. Si no cumple el esquema, la tool de salida rechaza la llamada con los errores de validación y el agente corrige y reintenta; la fase no se cierra con un handoff inválido.
+El handoff nunca es free text: es un objeto JSON que el LunasQ MCP valida contra un JSON Schema versionado por fase. Si no cumple el esquema, la tool de salida rechaza la llamada con los errores de validación y el agente corrige y reintenta; la fase no se cierra con un handoff inválido.
 
 Todos los handoffs comparten un sobre común y agregan un cuerpo según la fase:
 
@@ -536,7 +536,7 @@ Flujo de `ask_human`:
 0. El agente puede mandar la pregunta de forma estructurada: `options` con 2 a 6 alternativas `{ label, description? }` (labels únicos sin distinguir mayúsculas ni espacios extremos; inmutables tras crearse). Sin `options` la pregunta es abierta.
 1. El backend guarda la Question ligada a la tarea y al Run; la tarea pasa a `waiting_human` y el timeout de fase se pausa.
 2. La Question aparece de inmediato en la bandeja; si sigue abierta después de 1 minuto, se notifica por herdr y por la UI.
-3. El humano responde en la bandeja: una pregunta con opciones se muestra como un grupo de radios (label y descripción) más «Otra respuesta», que habilita un campo de texto; sin opciones, el campo de texto. La respuesta es el label elegido o el texto libre recortado, nunca ambos.
+3. El humano responde en la bandeja: una pregunta con opciones se muestra como un grupo de radios (label y descripción) más «Otra respuesta», que habilita un campo de texto; sin opciones, el campo de texto. La respuesta es el label elegido o el free text recortado, nunca ambos.
 4. Si el agente sigue vivo, el dispatcher le envía la respuesta al mismo pane con `agent prompt`. Si ya se cerró, se crea un Run nuevo y la Question con su respuesta llega en `get_task_context`. Detalle, API y casos límite: [ADR uw-22-preguntas](decisions/uw-22-preguntas.md).
 
 La tool no espera la respuesta dentro de la llamada MCP: los clientes MCP tienen timeouts y una llamada colgada por horas es frágil. Registra la pregunta, le indica al agente que termine su turno y la respuesta entra después como prompt nuevo. Escribir directo en el pane de herdr también funciona, pero esa respuesta no queda en el historial de la tarea.
@@ -589,7 +589,7 @@ Cada intento es un Run ligado a una fase, y cada transición queda en el Event l
 | Qué entregó el agente | Handoff, versión de spec, veredicto |
 | La conversación completa | Archivo de evidencia de la tarea |
 
-`failure_reason` es texto libre que escribe LunasQ al cerrar un Run sin éxito: por ejemplo, el gate de tests en rojo con el resumen de la salida, el timeout de fase, el crash del proceso o la tool MCP rechazada y por qué.
+`failure_reason` es free text que escribe LunasQ al cerrar un Run sin éxito: por ejemplo, el gate de tests en rojo con el resumen de la salida, el timeout de fase, el crash del proceso o la tool MCP rechazada y por qué.
 
 **Trazabilidad del código**
 
@@ -690,7 +690,7 @@ Resumen de lo ya decidido; cada punto está reflejado en su sección.
 | Refinamiento | DDD: la spec incluye modelo de dominio y criterios en lenguaje del dominio |
 | Implementación | TDD: test que falla, implementación mínima, refactor; mapa criterio → tests en el handoff |
 | Tests en verificación | Gate de tests ejecutado por LunasQ + checklist de coherencia con prueba de reversión; sin ambos no hay pass |
-| Motivo de fallo | failure\_reason en cada Run, como texto libre |
+| Motivo de fallo | failure\_reason en cada Run, como free text |
 | Trazabilidad del código | Trailers LunasQ-Task y LunasQ-Run en cada commit y en el PR |
 | Archivo de evidencia | lunasq/tasks/{id}.md dentro del repo del proyecto, una sección por Run |
 | Hallazgos refutados | Se guardan en el veredicto con su motivo |

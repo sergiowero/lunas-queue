@@ -1,5 +1,5 @@
 {
-  "description": "Etiqueta de riesgo fuera de bajo/medio/alto",
+  "description": "Risk label outside low/medium/high",
   "expectedErrors": [
     {
       "path": "body.riskLabel"
@@ -11,7 +11,7 @@
     "runId": "42-verification-1",
     "phase": "verification",
     "result": "completed",
-    "summary": "Ambos criterios verificados; un hallazgo de UX refutado.",
+    "summary": "Both criteria verified; one UX finding refuted.",
     "relevantFiles": ["src/orders/order.ts"],
     "decisions": [],
     "knownRisks": [],
@@ -21,12 +21,12 @@
         {
           "criterionId": "AC-1",
           "verdict": "pass",
-          "evidence": "order.test.ts cubre el caso y falla al revertir order.ts"
+          "evidence": "order.test.ts covers the case and fails when order.ts is reverted"
         },
         {
           "criterionId": "AC-2",
           "verdict": "pass",
-          "evidence": "order.test.ts rechaza la cancelación de un pedido enviado"
+          "evidence": "order.test.ts rejects the cancellation of a shipped order"
         }
       ],
       "reviewers": {
@@ -40,7 +40,7 @@
             {
               "severity": "minor",
               "file": "web/orders/OrderView.tsx",
-              "evidence": "No hay confirmación antes de cancelar",
+              "evidence": "There is no confirmation before cancelling",
               "criterionId": "AC-1"
             }
           ]
@@ -60,10 +60,10 @@
           "finding": {
             "severity": "minor",
             "file": "web/orders/OrderView.tsx",
-            "evidence": "No hay confirmación antes de cancelar",
+            "evidence": "There is no confirmation before cancelling",
             "criterionId": "AC-1"
           },
-          "reason": "La confirmación existe en ConfirmDialog, que el revisor no abrió",
+          "reason": "The confirmation exists in ConfirmDialog, which the reviewer did not open",
           "source": "lunasq-ux-reviewer"
         }
       ],

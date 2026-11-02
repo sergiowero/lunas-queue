@@ -12,7 +12,7 @@ const valid = {
 };
 
 describe("Notification", () => {
-  it("cubre los cuatro puntos de escalamiento del diseño y los reintentos agotados", () => {
+  it("covers the four escalation points of the design and the exhausted retries", () => {
     expect(NotificationKind.options).toEqual([
       "question_open",
       "agent_blocked",
@@ -23,28 +23,28 @@ describe("Notification", () => {
     ]);
   });
 
-  it("acepta una notificación válida, con y sin runId", () => {
+  it("accepts a valid notification, with and without runId", () => {
     expect(Notification.parse(valid)).toEqual(valid);
     const { runId: _, ...sinRun } = valid;
     expect(Notification.parse(sinRun)).toEqual(sinRun);
   });
 
-  it("acepta ids con prefijo y separadores de dos puntos", () => {
+  it("accepts prefixed ids and colon separators", () => {
     expect(Notification.safeParse({ ...valid, id: "blocked:r-1:2" }).success).toBe(true);
   });
 
   it.each([
-    ["id vacío", { id: "" }],
-    ["id con espacios", { id: "question q-1" }],
-    ["kind desconocido", { kind: "chat" }],
-    ["título vacío", { title: "" }],
-    ["fecha que no es ISO", { createdAt: "ayer" }],
-    ["taskId inválido", { taskId: "t 1" }],
-  ])("rechaza %s", (_, patch) => {
+    ["empty id", { id: "" }],
+    ["id with spaces", { id: "question q-1" }],
+    ["unknown kind", { kind: "chat" }],
+    ["empty title", { title: "" }],
+    ["date that is not ISO", { createdAt: "yesterday" }],
+    ["invalid taskId", { taskId: "t 1" }],
+  ])("rejects %s", (_, patch) => {
     expect(Notification.safeParse({ ...valid, ...patch }).success).toBe(false);
   });
 
-  it("rechaza campos desconocidos", () => {
+  it("rejects unknown fields", () => {
     expect(Notification.safeParse({ ...valid, extra: 1 }).success).toBe(false);
   });
 });

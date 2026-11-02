@@ -1,9 +1,9 @@
-// Eventos del Event log (docs/design.md §Máquina de estados y §Auditoría).
-// task.transitioned es el único evento que cambia estado; ADR 0007 fija su forma.
+// Event log events (docs/design.md §State machine and §Audit).
+// task.transitioned is the only event that changes state; ADR 0007 fixes its shape.
 import { z } from "zod";
 import { Actor, SubState, TaskState } from "./enums.ts";
 
-/** Comandos de la máquina de estados: los primeros mueven el estado, los últimos el sub-estado. */
+/** State machine commands: the first ones move the state, the last ones the sub-state. */
 export const TaskCommand = z.enum([
   "submit_spec",
   "request_changes",
@@ -24,7 +24,7 @@ export const TaskCommand = z.enum([
 ]);
 export type TaskCommand = z.infer<typeof TaskCommand>;
 
-/** Por qué una tarea pasó a needs_human (§Human-in-the-loop, puntos de escalamiento). */
+/** Why a task moved to needs_human (§Human-in-the-loop, escalation points). */
 export const EscalationReason = z.enum([
   "blocked",
   "phase_timeout",
@@ -50,7 +50,7 @@ export const TaskTransitionedPayload = z.strictObject({
   command: TaskCommand,
   from: StatePosition,
   to: StatePosition,
-  // Iteración de verificación después de la transición.
+  // Verification iteration after the transition.
   verificationIteration: z.int().min(0),
   reason: EscalationReason.optional(),
   note: z.string().min(1).max(2000).optional(),

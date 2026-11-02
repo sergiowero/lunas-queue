@@ -1,5 +1,5 @@
-// Eventos del PR de una tarea (ADR uw-14-adapter-github). El PR solo avanza de open a merged o
-// closed; un PR nuevo (otra entrega tras un cierre sin merge) vuelve a abrir con task.pr_opened.
+// Events of a task's PR (ADR uw-14-adapter-github). The PR only advances from open to merged or
+// closed; a new PR (another delivery after a close without merge) opens again with task.pr_opened.
 import { z } from "zod";
 
 export const TASK_PR_OPENED = "task.pr_opened";
@@ -7,7 +7,7 @@ export const TASK_PR_STATE_CHANGED = "task.pr_state_changed";
 
 export const TaskPrOpenedPayload = z.strictObject({
   url: z.url(),
-  // PR anterior de la tarea (cerrado sin merge), si lo había.
+  // Previous PR of the task (closed without merge), if there was one.
   previousUrl: z.string().nullable(),
 });
 export type TaskPrOpenedPayload = z.infer<typeof TaskPrOpenedPayload>;
@@ -19,7 +19,7 @@ export const TaskPrStateChangedPayload = z.strictObject({
   url: z.url(),
   from: z.literal("open"),
   to: ClosedPrState,
-  // Hora del merge o del cierre según GitHub (ISO 8601); null si GitHub no la dio.
+  // Time of the merge or the close according to GitHub (ISO 8601); null if GitHub did not give it.
   at: z.iso.datetime().nullable(),
 });
 export type TaskPrStateChangedPayload = z.infer<typeof TaskPrStateChangedPayload>;

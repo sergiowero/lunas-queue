@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { EntityId, FilePath, list, Text } from "./common.ts";
 
-// Fases que entregan handoff. Distinto de `Phase` (enums.ts), la fase del Run en el dominio.
+// Phases that deliver a handoff. Different from `Phase` (enums.ts), the Run's phase in the domain.
 export const HANDOFF_PHASES = ["refinement", "implementation", "verification"] as const;
 export const HandoffPhase = z.enum(HANDOFF_PHASES);
 export type HandoffPhase = z.infer<typeof HandoffPhase>;
 
-// Un fallo no deja handoff: se declara con report_failure.
+// A failure leaves no handoff: it is declared with report_failure.
 export const HandoffResult = z.enum(["completed", "partial"]);
 
 export const Decision = z.strictObject({
@@ -15,7 +15,7 @@ export const Decision = z.strictObject({
   discarded: list(Text, 20).optional(),
 });
 
-// Sobre común a todas las fases; cada fase agrega `phase` y su `body`.
+// Envelope common to all phases; each phase adds `phase` and its `body`.
 export const envelopeShape = {
   schemaVersion: z.literal(1),
   taskId: EntityId,

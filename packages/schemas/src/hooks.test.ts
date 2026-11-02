@@ -9,8 +9,8 @@ import {
 
 const sha = "a".repeat(40);
 
-describe("puntos de enganche", () => {
-  it("before y after de cada fase, after_merge y on_failure", () => {
+describe("hook points", () => {
+  it("before and after of each phase, after_merge and on_failure", () => {
     expect(HookPoint.options).toEqual([
       "before_refinement",
       "after_refinement",
@@ -27,7 +27,7 @@ describe("puntos de enganche", () => {
 });
 
 describe("lunasq/hooks/config", () => {
-  it("timeout y política por script, agrupados por punto", () => {
+  it("timeout and policy per script, grouped by point", () => {
     const config = {
       before_delivery: { "10-bump-version": { timeoutSeconds: 300, policy: "warn" } },
       after_merge: { "10-deploy": { policy: "block" } },
@@ -36,14 +36,14 @@ describe("lunasq/hooks/config", () => {
     expect(HooksConfig.parse({})).toEqual({});
   });
 
-  it("rechaza puntos desconocidos, campos extra y nombres que no son un archivo", () => {
+  it("rejects unknown points, extra fields and names that are not a file", () => {
     expect(() => HooksConfig.parse({ before_lunch: {} })).toThrow();
     expect(() => HooksConfig.parse({ after_merge: { a: { retries: 2 } } })).toThrow();
     expect(() => HooksConfig.parse({ after_merge: { "../a": {} } })).toThrow();
     expect(() => HooksConfig.parse({ after_merge: { "a/b": {} } })).toThrow();
   });
 
-  it("rechaza políticas desconocidas y timeouts no positivos o enormes", () => {
+  it("rejects unknown policies and non-positive or huge timeouts", () => {
     expect(() => HooksConfig.parse({ after_merge: { a: { policy: "ignore" } } })).toThrow();
     expect(() => HooksConfig.parse({ after_merge: { a: { timeoutSeconds: 0 } } })).toThrow();
     expect(() => HooksConfig.parse({ after_merge: { a: { timeoutSeconds: 1.5 } } })).toThrow();
@@ -68,7 +68,7 @@ describe("eventos de hooks", () => {
     output: "ok\n",
   };
 
-  it("hook.executed guarda resultado, duración y salida", () => {
+  it("hook.executed stores result, duration and output", () => {
     expect(HookExecutedPayload.parse(executed)).toEqual(executed);
     expect(() => HookExecutedPayload.parse({ ...executed, baseRef: "main" })).toThrow();
     expect(() =>
@@ -76,7 +76,7 @@ describe("eventos de hooks", () => {
     ).toThrow();
   });
 
-  it("hook.point_completed resume el punto", () => {
+  it("hook.point_completed summarizes the point", () => {
     const completed = {
       point: "before_delivery",
       baseRef: sha,
@@ -88,9 +88,9 @@ describe("eventos de hooks", () => {
       commitSkipped: false,
     };
     expect(HookPointCompletedPayload.parse(completed)).toEqual(completed);
-    // Sin base legible (fetch o config inválida) no hay ref.
+    // Without a readable base (fetch or invalid config) there is no ref.
     expect(
-      HookPointCompletedPayload.parse({ ...completed, baseRef: null, error: "config inválida" })
+      HookPointCompletedPayload.parse({ ...completed, baseRef: null, error: "invalid config" })
         .baseRef,
     ).toBeNull();
     expect(() => HookPointCompletedPayload.parse({ ...completed, outcome: "ok" })).toThrow();

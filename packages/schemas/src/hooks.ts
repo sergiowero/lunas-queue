@@ -1,6 +1,6 @@
-// Hooks por fase (docs/design.md §Hooks por fase, ADR uw-10-hooks). Los scripts viven en
-// lunasq/hooks/<punto>/ del repo del proyecto y su timeout y política en lunasq/hooks/config
-// (JSON); LunasQ los lee siempre de la rama base.
+// Phase hooks (docs/design.md §Phase hooks, ADR uw-10-hooks). The scripts live in
+// lunasq/hooks/<point>/ of the project repo and their timeout and policy in lunasq/hooks/config
+// (JSON); LunasQ always reads them from the base branch.
 import { z } from "zod";
 
 export const HookPoint = z.enum([
@@ -17,20 +17,20 @@ export const HookPoint = z.enum([
 ]);
 export type HookPoint = z.infer<typeof HookPoint>;
 
-/** `block` detiene la transición y manda la tarea a needs_human; `warn` solo se registra. */
+/** `block` stops the transition and sends the task to needs_human; `warn` is only recorded. */
 export const HookPolicy = z.enum(["block", "warn"]);
 export type HookPolicy = z.infer<typeof HookPolicy>;
 
-// setTimeout trata más de 2^31-1 ms como 1 ms; una semana queda muy por debajo.
+// setTimeout treats more than 2^31-1 ms as 1 ms; a week is well below that.
 export const MAX_HOOK_TIMEOUT_SECONDS = 7 * 24 * 3600;
 
-/** Un nombre de archivo dentro del directorio del punto, sin rutas. */
+/** A file name inside the point directory, without paths. */
 export const HookScriptName = z
   .string()
   .min(1)
   .max(255)
-  .regex(/^[^/\0]+$/, "el nombre del script no puede tener /")
-  .refine((name) => name !== "." && name !== "..", "nombre de script inválido");
+  .regex(/^[^/\0]+$/, "the script name cannot contain /")
+  .refine((name) => name !== "." && name !== "..", "invalid script name");
 
 export const HookSettings = z.strictObject({
   timeoutSeconds: z.int().min(1).max(MAX_HOOK_TIMEOUT_SECONDS).optional(),
@@ -38,14 +38,14 @@ export const HookSettings = z.strictObject({
 });
 export type HookSettings = z.infer<typeof HookSettings>;
 
-/** Contenido de lunasq/hooks/config: por punto, los ajustes de cada script que no usa los defaults. */
+/** Content of lunasq/hooks/config: per point, the settings of each script that does not use the defaults. */
 export const HooksConfig = z.partialRecord(HookPoint, z.record(HookScriptName, HookSettings));
 export type HooksConfig = z.infer<typeof HooksConfig>;
 
 export const HOOK_EXECUTED = "hook.executed";
 export const HOOK_POINT_COMPLETED = "hook.point_completed";
 
-/** Cuánto de la salida de un hook entra en su evento: el final, que es donde está el error. */
+/** How much of a hook's output goes into its event: the end, which is where the error is. */
 export const HOOK_OUTPUT_LIMIT = 16 * 1024;
 
 const commitSha = z.string().regex(/^[0-9a-f]{40}$/, "sha de commit");
@@ -53,7 +53,7 @@ const commitSha = z.string().regex(/^[0-9a-f]{40}$/, "sha de commit");
 export const HookExecutedPayload = z.strictObject({
   point: HookPoint,
   script: HookScriptName,
-  // Commit de la rama base del que se leyó el script.
+  // Commit of the base branch from which the script was read.
   baseRef: commitSha,
   runId: z.string().min(1).nullable(),
   policy: HookPolicy,
@@ -62,7 +62,7 @@ export const HookExecutedPayload = z.strictObject({
   timedOut: z.boolean(),
   durationMs: z.int().min(0),
   passed: z.boolean(),
-  // stdout y stderr juntos, recortados al final.
+  // stdout and stderr together, trimmed at the end.
   output: z.string().max(HOOK_OUTPUT_LIMIT),
 });
 export type HookExecutedPayload = z.infer<typeof HookExecutedPayload>;
@@ -72,22 +72,22 @@ export type HookPointOutcome = z.infer<typeof HookPointOutcome>;
 
 export const HookPointCompletedPayload = z.strictObject({
   point: HookPoint,
-  // null si no se pudo leer la rama base.
+  // null if the base branch could not be read.
   baseRef: commitSha.nullable(),
   runId: z.string().min(1).nullable(),
   outcome: HookPointOutcome,
-  // Script con política block que falló, si lo hubo.
+  // Script with block policy that failed, if any.
   failedScript: HookScriptName.nullable(),
-  // Fallo antes de correr scripts: fetch de la base o config inválida.
+  // Failure before running scripts: fetch of the base or invalid config.
   error: z.string().min(1).max(2000).nullable(),
-  // Commit con los cambios que dejaron los hooks, con los trailers de la tarea.
+  // Commit with the changes the hooks left, with the task trailers.
   commit: commitSha.nullable(),
-  // Los hooks dejaron cambios pero el worktree ya tenía cambios sin commit: no se commiteó.
+  // The hooks left changes but the worktree already had uncommitted changes: it was not committed.
   commitSkipped: z.boolean(),
 });
 export type HookPointCompletedPayload = z.infer<typeof HookPointCompletedPayload>;
 
-/** Un hook de la rama base tal como lo ve la vista: script, ajustes efectivos y contenido. */
+/** A base-branch hook as the view sees it: script, effective settings and content. */
 export const HookView = z.strictObject({
   script: HookScriptName,
   policy: HookPolicy,
@@ -96,16 +96,16 @@ export const HookView = z.strictObject({
 });
 export type HookView = z.infer<typeof HookView>;
 
-/** Los hooks de un proyecto en `lunasq/hooks/` de la rama base, por punto y en orden de ejecución. */
+/** The hooks of a project in `lunasq/hooks/` of the base branch, per point and in execution order. */
 export const ProjectHooksView = z.strictObject({
   baseRef: commitSha,
-  // Error de lunasq/hooks/config; con él, los ajustes mostrados son los defaults.
+  // Error of lunasq/hooks/config; with it, the displayed settings are the defaults.
   configError: z.string().nullable(),
   points: z.array(z.strictObject({ point: HookPoint, hooks: z.array(HookView) })),
 });
 export type ProjectHooksView = z.infer<typeof ProjectHooksView>;
 
-/** Una ejecución de hook (evento hook.executed) con la tarea en la que corrió. */
+/** A hook execution (hook.executed event) with the task in which it ran. */
 export const HookExecutionView = z.strictObject({
   eventId: z.int().min(1),
   taskId: z.uuid(),
@@ -118,7 +118,7 @@ export type HookExecutionView = z.infer<typeof HookExecutionView>;
 
 export const DEFAULT_HOOK_EXECUTIONS_PER_HOOK = 10;
 
-/** `limit`: a lo más cuántas tareas (las más recientes) por punto y script. */
+/** `limit`: at most how many tasks (the most recent ones) per point and script. */
 export const HookExecutionsQuery = z.strictObject({
   limit: z.coerce.number().int().min(1).max(100).default(DEFAULT_HOOK_EXECUTIONS_PER_HOOK),
 });

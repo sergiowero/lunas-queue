@@ -21,16 +21,16 @@ export const ReviewerReport = z.discriminatedUnion(
   {
     error: (issue) => {
       if (issue.input === undefined) {
-        return "falta el reporte del revisor o la justificación de por qué no se lanzó";
+        return "the reviewer's report or the justification for why it was not launched is missing";
       }
       return issue.code === "invalid_union"
-        ? "estado de revisor inválido: se esperaba ran o skipped"
+        ? "invalid reviewer status: ran or skipped expected"
         : undefined;
     },
   },
 );
 
-// Los 4 revisores de la fase de verificación; cada uno reporta o queda omitido con justificación.
+// The 4 reviewers of the verification phase; each one reports or is skipped with a justification.
 export const Reviewers = z.strictObject({
   "lunasq-security-reviewer": ReviewerReport,
   "lunasq-ux-reviewer": ReviewerReport,
@@ -40,10 +40,10 @@ export const Reviewers = z.strictObject({
 export const REVIEWER_NAMES = Reviewers.keyof().options;
 export type ReviewerName = (typeof REVIEWER_NAMES)[number];
 
-// Quién originó un hallazgo consolidado: un revisor o el propio approver.
+// Who originated a consolidated finding: a reviewer or the approver itself.
 export const FindingSource = z.enum([...REVIEWER_NAMES, "approver"]);
 
-// Hallazgo que el implementador debe corregir, con el revisor (o el approver) que lo originó.
+// A finding the implementer must fix, with the reviewer (or the approver) that originated it.
 export const MustFixFinding = Finding.extend({ source: FindingSource });
 export type MustFixFinding = z.infer<typeof MustFixFinding>;
 
@@ -69,7 +69,7 @@ export const VerificationBody = z
       body.criteriaVerdicts,
       (c) => c.criterionId,
       (i) => ["criteriaVerdicts", i, "criterionId"],
-      "veredicto de criterio",
+      "criterion verdict",
     );
     if (body.verdict === "pass") {
       body.criteriaVerdicts.forEach((c, i) => {
@@ -77,7 +77,7 @@ export const VerificationBody = z
           ctx.addIssue({
             code: "custom",
             path: ["criteriaVerdicts", i, "verdict"],
-            message: `un veredicto pass exige que todos los criterios pasen; ${c.criterionId} falla`,
+            message: `a pass verdict requires all criteria to pass; ${c.criterionId} fails`,
           });
         }
       });
@@ -85,14 +85,14 @@ export const VerificationBody = z
         ctx.addIssue({
           code: "custom",
           path: ["mustFix"],
-          message: "un veredicto pass no admite must-fix pendientes",
+          message: "a pass verdict does not allow pending must-fix findings",
         });
       }
     } else if (body.mustFix.length === 0) {
       ctx.addIssue({
         code: "custom",
         path: ["mustFix"],
-        message: "un veredicto reject exige al menos un must-fix con su evidencia",
+        message: "a reject verdict requires at least one must-fix with its evidence",
       });
     }
   });

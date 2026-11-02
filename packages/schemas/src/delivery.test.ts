@@ -4,7 +4,7 @@ import { DELIVERY_CONFLICT, DeliveryConflictPayload } from "./delivery.ts";
 describe("delivery.conflict", () => {
   const runId = "0b7f1f52-6c8a-4a58-9a4b-3f6c1d1f2a10";
 
-  it("guarda la rama base, el motivo y los archivos en conflicto", () => {
+  it("stores the base branch, the reason and the conflicting files", () => {
     const payload = {
       runId,
       reason: "rebase_conflict",
@@ -16,7 +16,7 @@ describe("delivery.conflict", () => {
     expect(DeliveryConflictPayload.parse(payload)).toEqual(payload);
   });
 
-  it("la suite en rojo tras el rebase lleva la cola de la salida", () => {
+  it("the suite in red after the rebase carries the tail of the output", () => {
     const payload = {
       runId,
       reason: "tests_failed",
@@ -27,7 +27,7 @@ describe("delivery.conflict", () => {
     expect(DeliveryConflictPayload.parse(payload)).toEqual(payload);
   });
 
-  it("los checks fallidos del PR incluyen el motivo y el detalle", () => {
+  it("the failed PR checks include the reason and the detail", () => {
     const payload = {
       runId,
       reason: "ci_failed",
@@ -38,9 +38,9 @@ describe("delivery.conflict", () => {
     expect(DeliveryConflictPayload.parse(payload)).toEqual(payload);
   });
 
-  it("rechaza motivos desconocidos, runs inválidos y campos extra", () => {
+  it("rejects unknown reasons, invalid runs and extra fields", () => {
     const ok = { runId, reason: "rebase_conflict", baseBranch: "main", files: [], output: null };
-    expect(() => DeliveryConflictPayload.parse({ ...ok, reason: "otro" })).toThrow();
+    expect(() => DeliveryConflictPayload.parse({ ...ok, reason: "other" })).toThrow();
     expect(() => DeliveryConflictPayload.parse({ ...ok, runId: "r1" })).toThrow();
     expect(() => DeliveryConflictPayload.parse({ ...ok, extra: 1 })).toThrow();
   });

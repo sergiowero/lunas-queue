@@ -1,11 +1,11 @@
-// Configuración de un Project (docs/design.md §Modelo de dominio, §Concurrencia, §Timeout de fase).
-// Forma y defaults en docs/decisions/0008-config-proyecto.md.
+// Configuration of a Project (docs/design.md §Domain model, §Concurrency, §Phase timeout).
+// Shape and defaults in docs/decisions/0008-config-proyecto.md.
 import { z } from "zod";
 import { AgentKind, Phase } from "./enums.ts";
 
 const nonEmpty = z.string().trim().min(1);
 
-// Niveles de esfuerzo compartidos por `claude --effort` y `copilot --reasoning-effort`.
+// Effort levels shared by `claude --effort` and `copilot --reasoning-effort`.
 export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export const EffortLevel = z.enum(EFFORT_LEVELS);
 export type EffortLevel = z.infer<typeof EffortLevel>;
@@ -19,8 +19,8 @@ const profileFields = {
 export const AgentProfile = z.strictObject({ kind: AgentKind, ...profileFields });
 export type AgentProfile = z.infer<typeof AgentProfile>;
 
-// La verificación depende de los subagentes de Claude Code (§Verificación con subagentes):
-// su perfil se ata a "claude" y no a AgentKind, para que siga así cuando v2 sume otros kinds.
+// Verification depends on the Claude Code subagents (§Verification with subagents):
+// its profile is tied to "claude" and not to AgentKind, so that it stays that way when v2 adds other kinds.
 export const VerifyAgentProfile = AgentProfile;
 
 const defaultProfile = (): AgentProfile => ({ kind: "claude", args: [] });
@@ -35,22 +35,22 @@ export type AgentProfiles = z.infer<typeof AgentProfiles>;
 
 const positiveInt = z.int().min(1);
 
-// setTimeout trata más de 2^31-1 ms como 1 ms; una semana queda muy por debajo.
+// setTimeout treats more than 2^31-1 ms as 1 ms; a week is well below that.
 export const MAX_PHASE_TIMEOUT_MINUTES = 7 * 24 * 60;
 
 export const ProjectLimits = z.strictObject({
-  // Agentes vivos del proyecto en todas las fases (ADR 0014); sin valor, solo aplica el global.
+  // Live agents of the project across all phases (ADR 0014); without a value, only the global one applies.
   concurrency: positiveInt.optional(),
-  // Sin valor para una fase, aplica el default de 30 minutos.
+  // Without a value for a phase, the default of 30 minutes applies.
   phaseTimeoutMinutes: z
     .partialRecord(Phase, positiveInt.max(MAX_PHASE_TIMEOUT_MINUTES))
     .optional(),
-  // Reworks del loop de verificación antes de needs_human; sin valor, 3 (ADR 0007).
+  // Reworks of the verification loop before needs_human; without a value, 3 (ADR 0007).
   maxVerificationIterations: positiveInt.max(20).optional(),
 });
 export type ProjectLimits = z.infer<typeof ProjectLimits>;
 
-/** Normaliza una ruta POSIX absoluta sin node:path: quita `//`, `.`, `..` y la `/` final. */
+/** Normalizes an absolute POSIX path without node:path: removes `//`, `.`, `..` and the trailing `/`. */
 function normalizePosixPath(path: string): string {
   const parts: string[] = [];
   for (const part of path.split("/")) {
@@ -63,17 +63,17 @@ function normalizePosixPath(path: string): string {
 
 const configFields = {
   name: nonEmpty,
-  // owner/name en GitHub, como lo recibe `gh --repo`.
+  // owner/name on GitHub, as `gh --repo` receives it.
   repo: z
     .string()
-    .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*\/(?!\.{1,2}$)[A-Za-z0-9._-]+$/, "repo debe ser owner/name"),
+    .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*\/(?!\.{1,2}$)[A-Za-z0-9._-]+$/, "repo must be owner/name"),
   baseBranch: nonEmpty,
-  // Normalizada para que la unicidad de local_path no se salte con `/a/` o `/./a`.
+  // Normalized so that the uniqueness of local_path is not bypassed with `/a/` or `/./a`.
   localPath: z
     .string()
-    .startsWith("/", "localPath debe ser una ruta absoluta")
+    .startsWith("/", "localPath must be an absolute path")
     .transform(normalizePosixPath)
-    .refine((path) => path !== "/", "localPath no puede ser la raíz"),
+    .refine((path) => path !== "/", "localPath cannot be the root"),
   agentProfiles: AgentProfiles.prefault({}),
   limits: ProjectLimits.default(() => ({})),
 };
@@ -85,8 +85,8 @@ export const ProjectCreate = z.strictObject({
 });
 export type ProjectCreate = z.input<typeof ProjectCreate>;
 
-// PATCH: cada campo presente reemplaza al guardado, salvo agentProfiles, que se mezcla por fase;
-// null borra los opcionales.
+// PATCH: each present field replaces the stored one, except agentProfiles, which is merged per phase;
+// null deletes the optional ones.
 export const ProjectUpdate = z.strictObject({
   name: configFields.name.optional(),
   repo: configFields.repo.optional(),

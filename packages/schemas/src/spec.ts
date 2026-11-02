@@ -1,5 +1,5 @@
-// Spec versionada y su aprobación (docs/design.md §Modelo de dominio y §Human-in-the-loop,
-// ADR 0013). El contenido es el mismo del handoff de refinamiento, sin los supuestos.
+// Versioned Spec and its approval (docs/design.md §Domain model and §Human-in-the-loop,
+// ADR 0013). The content is the same as the refinement handoff, without the assumptions.
 import { z } from "zod";
 import { Actor, SpecApproval } from "./enums.ts";
 import {
@@ -23,7 +23,7 @@ export const Spec = z.strictObject({
   version: Version,
   content: SpecContent,
   approval: SpecApproval,
-  // Autor de la versión: el refinador, o el humano que la editó antes de aprobar.
+  // Author of the version: the refiner, or the human who edited it before approving.
   createdBy: Actor,
   approvedBy: Actor.nullable(),
   approvedAt: z.date().nullable(),
@@ -32,10 +32,10 @@ export const Spec = z.strictObject({
 });
 export type Spec = z.infer<typeof Spec>;
 
-/** Versión en la ruta: entero positivo sin ceros a la izquierda. */
+/** Version in the path: positive integer without leading zeros. */
 export const SpecVersionParam = z
   .string()
-  .regex(/^[1-9]\d{0,8}$/, { error: "versión inválida: se esperaba un entero positivo" })
+  .regex(/^[1-9]\d{0,8}$/, { error: "invalid version: a positive integer was expected" })
   .transform(Number);
 
 export const SpecDiffQuery = z.strictObject({ against: SpecVersionParam.optional() });
@@ -49,8 +49,8 @@ export type SpecRequestChanges = z.infer<typeof SpecRequestChanges>;
 export const SpecEditAndApprove = z.strictObject({ content: SpecContent });
 export type SpecEditAndApprove = z.infer<typeof SpecEditAndApprove>;
 
-// Diff entre dos versiones. Las listas con id (criterios, tareas, términos, agregados, eventos)
-// se comparan por su clave; las de texto, por valor.
+// Diff between two versions. Lists with an id (criteria, tasks, terms, aggregates, events)
+// are compared by their key; text lists, by value.
 
 function keyedDiff<T extends z.ZodType>(item: T) {
   return z.strictObject({
@@ -81,7 +81,7 @@ export const SpecContentDiff = z.strictObject({
 export type SpecContentDiff = z.infer<typeof SpecContentDiff>;
 
 export const SpecDiff = z.strictObject({
-  // null cuando `to` es la primera versión: todo aparece como agregado.
+  // null when `to` is the first version: everything appears as added.
   from: Version.nullable(),
   to: Version,
   identical: z.boolean(),
@@ -93,7 +93,7 @@ export const SPEC_VERSION_CREATED = "spec.version_created";
 export const SPEC_APPROVED = "spec.approved";
 export const SPEC_CHANGES_REQUESTED = "spec.changes_requested";
 
-/** El actor del evento es el autor; `basedOn` es la versión que el humano editó. */
+/** The event actor is the author; `basedOn` is the version the human edited. */
 export const SpecVersionCreatedPayload = z.strictObject({
   specId: z.uuid(),
   version: Version,

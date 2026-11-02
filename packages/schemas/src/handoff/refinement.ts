@@ -24,14 +24,14 @@ export const AcceptanceCriterion = z.strictObject({
 
 export const SpecTask = z.strictObject({
   id: z.string().regex(/^T-[1-9]\d*$/, {
-    error: "id de tarea inválido: se esperaba T-<n>, por ejemplo T-1",
+    error: "invalid task id: T-<n> expected, for example T-1",
   }),
   title: ShortText,
   criterionIds: list(CriterionId, 50),
 });
 
-// Contenido de una versión de Spec (docs/design.md §Modelo de dominio). La Spec lo guarda tal
-// cual; el handoff de refinamiento lo envía junto con los supuestos.
+// Content of a Spec version (docs/design.md §Domain model). The Spec stores it as
+// is; the refinement handoff sends it together with the assumptions.
 export const specContentShape = {
   domainModel: DomainModel,
   requirements: list(Text, 50).min(1),
@@ -40,8 +40,8 @@ export const specContentShape = {
 };
 
 /**
- * Ids y nombres únicos (el diff entre versiones compara por esas claves) y tareas que solo
- * apuntan a criterios de la misma spec.
+ * Unique ids and names (the diff between versions compares by those keys) and tasks that only
+ * point to criteria of the same spec.
  */
 export function checkSpecReferences(
   body: {
@@ -57,35 +57,35 @@ export function checkSpecReferences(
     glossary,
     (g) => g.term,
     (i) => ["domainModel", "glossary", i, "term"],
-    "término del glosario",
+    "glossary term",
   );
   checkUnique(
     ctx,
     aggregates,
     (a) => a.name,
     (i) => ["domainModel", "aggregates", i, "name"],
-    "agregado",
+    "aggregate",
   );
   checkUnique(
     ctx,
     events,
     (e) => e.name,
     (i) => ["domainModel", "events", i, "name"],
-    "evento de dominio",
+    "domain event",
   );
   checkUnique(
     ctx,
     body.criteria,
     (c) => c.id,
     (i) => ["criteria", i, "id"],
-    "id de criterio",
+    "criterion id",
   );
   checkUnique(
     ctx,
     body.taskList,
     (t) => t.id,
     (i) => ["taskList", i, "id"],
-    "id de tarea",
+    "task id",
   );
   const criterionIds = new Set(body.criteria.map((c) => c.id));
   body.taskList.forEach((task, i) => {
@@ -94,7 +94,7 @@ export function checkSpecReferences(
         ctx.addIssue({
           code: "custom",
           path: ["taskList", i, "criterionIds", j],
-          message: `la tarea apunta a un criterio que no existe en la spec: ${id}`,
+          message: `the task points to a criterion that does not exist in the spec: ${id}`,
         });
       }
     });
@@ -102,7 +102,7 @@ export function checkSpecReferences(
 }
 
 export const RefinementBody = z
-  // `title` solo se guarda en el primer refinamiento de la tarea (docs/design.md §Modelo de dominio).
+  // `title` is only saved in the first refinement of the task (docs/design.md §Domain model).
   .strictObject({ title: TaskTitle, ...specContentShape, assumptions: list(Text, 50) })
   .superRefine(checkSpecReferences);
 

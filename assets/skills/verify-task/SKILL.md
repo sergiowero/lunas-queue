@@ -83,8 +83,8 @@ Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (
         "status": "skipped",
         "justification": "El diff solo cambia src/orders/order.ts: lógica de dominio sin entradas externas"
       },
-      "lunasq-ux-reviewer": { "status": "skipped", "justification": "El diff no toca el front end" },
-      "lunasq-ui-reviewer": { "status": "skipped", "justification": "El diff no toca el front end" },
+      "lunasq-ux-reviewer": { "status": "skipped", "justification": "The diff does not touch the front end" },
+      "lunasq-ui-reviewer": { "status": "skipped", "justification": "The diff does not touch the front end" },
       "lunasq-code-reviewer": {
         "status": "ran",
         "findings": [
@@ -92,7 +92,7 @@ Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (
             "severity": "major",
             "file": "src/orders/order.test.ts",
             "line": 31,
-            "evidence": "La aserción solo comprueba que no se lanzó una excepción",
+            "evidence": "The assertion only checks that no exception was thrown",
             "criterionId": "AC-2"
           },
           {
@@ -110,7 +110,7 @@ Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (
         "severity": "major",
         "file": "src/orders/order.test.ts",
         "line": 31,
-        "evidence": "La aserción solo comprueba que no se lanzó una excepción",
+        "evidence": "The assertion only checks that no exception was thrown",
         "criterionId": "AC-2",
         "source": "lunasq-code-reviewer"
       }
@@ -147,8 +147,8 @@ Un pass lleva todos los `criteriaVerdicts` en `pass` y `mustFix` vacío. Solo `b
       "status": "skipped",
       "justification": "El diff solo cambia src/orders/order.ts: lógica de dominio sin entradas externas"
     },
-    "lunasq-ux-reviewer": { "status": "skipped", "justification": "El diff no toca el front end" },
-    "lunasq-ui-reviewer": { "status": "skipped", "justification": "El diff no toca el front end" },
+    "lunasq-ux-reviewer": { "status": "skipped", "justification": "The diff does not touch the front end" },
+    "lunasq-ui-reviewer": { "status": "skipped", "justification": "The diff does not touch the front end" },
     "lunasq-code-reviewer": { "status": "ran", "findings": [] }
   },
   "mustFix": [],
@@ -180,7 +180,7 @@ Un pass que falla por `dirty_worktree` o `head_changed` que no puedes arreglar t
 
 ## Preguntas y fallos
 
-- `ask_human` con `{ "question": "...", "context": "...", "options": [...] }` (`context` y `options` son opcionales) registra la pregunta y regresa de inmediato. Termina tu turno después de llamarla: la respuesta llega como un prompt nuevo o, si el Run se cerró, en `questions` del siguiente `get_task_context`. Si la pregunta es elegir entre alternativas concretas, agrega `options`: de 2 a 6 objetos `{ "label": "...", "description": "..." }` (`description` es opcional), con labels cortos y únicos (sin distinguir mayúsculas ni espacios extremos). El humano elige una o escribe «Otra respuesta», así que no incluyas una opción comodín; la respuesta llega como el label elegido o su texto libre. Sin alternativas claras, omite `options` y la pregunta es abierta. Úsala solo si un criterio es ambiguo; una duda sobre el código se resuelve leyéndolo.
+- `ask_human` con `{ "question": "...", "context": "...", "options": [...] }` (`context` y `options` son opcionales) registra la pregunta y regresa de inmediato. Termina tu turno después de llamarla: la respuesta llega como un prompt nuevo o, si el Run se cerró, en `questions` del siguiente `get_task_context`. Si la pregunta es elegir entre alternativas concretas, agrega `options`: de 2 a 6 objetos `{ "label": "...", "description": "..." }` (`description` es opcional), con labels cortos y únicos (sin distinguir mayúsculas ni espacios extremos). El humano elige una o escribe «Otra respuesta», así que no incluyas una opción comodín; la respuesta llega como el label elegido o su free text. Sin alternativas claras, omite `options` y la pregunta es abierta. Úsala solo si un criterio es ambiguo; una duda sobre el código se resuelve leyéndolo.
 - `report_failure` con `{ "reason": "..." }` cuando no puedes verificar (no hay worktree, la suite no arranca por algo ajeno al diff). Cierra el Run como fallido; un código que no cumple es un reject, no un fallo.
 
 ## Memoria con engram (opcional)

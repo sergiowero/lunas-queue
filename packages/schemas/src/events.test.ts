@@ -15,7 +15,7 @@ const payload = {
 };
 
 describe("evento task.transitioned", () => {
-  it("TaskCommand enumera los comandos de estado y de sub-estado", () => {
+  it("TaskCommand lists the state and sub-state commands", () => {
     expect(TaskCommand.options).toEqual([
       "submit_spec",
       "request_changes",
@@ -36,7 +36,7 @@ describe("evento task.transitioned", () => {
     ]);
   });
 
-  it("EscalationReason cubre los puntos de escalamiento del diseño", () => {
+  it("EscalationReason covers the escalation points of the design", () => {
     expect(EscalationReason.options).toEqual([
       "blocked",
       "phase_timeout",
@@ -50,26 +50,26 @@ describe("evento task.transitioned", () => {
     ]);
   });
 
-  it("acepta un payload completo, con razón y nota opcionales", () => {
+  it("accepts a complete payload, with optional reason and note", () => {
     expect(TaskTransitionedPayload.parse(payload)).toEqual(payload);
     const escalated = {
       ...payload,
       command: "escalate",
       to: { state: "needs_human", subState: null },
       reason: "phase_timeout",
-      note: "30 minutos en running",
+      note: "30 minutes in running",
     };
     expect(TaskTransitionedPayload.parse(escalated)).toEqual(escalated);
   });
 
-  it("rechaza estados fuera del enum, iteraciones negativas y campos extra", () => {
+  it("rejects states outside the enum, negative iterations and extra fields", () => {
     const bad = [
       { ...payload, from: { state: "new", subState: null } },
       { ...payload, to: { state: "draft", subState: "sleeping" } },
       { ...payload, verificationIteration: -1 },
       { ...payload, verificationIteration: 1.5 },
       { ...payload, command: "teleport" },
-      { ...payload, reason: "aburrido" },
+      { ...payload, reason: "boring" },
       { ...payload, extra: true },
     ];
     for (const value of bad) {
@@ -77,7 +77,7 @@ describe("evento task.transitioned", () => {
     }
   });
 
-  it("el evento fija su tipo y exige actor del enum", () => {
+  it("the event fixes its type and requires an actor from the enum", () => {
     const event = { type: TASK_TRANSITIONED, actor: "agent", payload };
     expect(TaskTransitionedEvent.parse(event)).toEqual(event);
     expect(TaskTransitionedEvent.safeParse({ ...event, type: "task.created" }).success).toBe(false);

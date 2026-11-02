@@ -1,5 +1,5 @@
 {
-  "description": "Must-fix sin el revisor que lo originó",
+  "description": "Must-fix without the reviewer that originated it",
   "expectedErrors": [
     {
       "path": "body.mustFix[0].source"
@@ -11,7 +11,7 @@
     "runId": "42-verification-2",
     "phase": "verification",
     "result": "completed",
-    "summary": "AC-2 falla: un pedido enviado se puede cancelar.",
+    "summary": "AC-2 fails: a shipped order can be cancelled.",
     "relevantFiles": ["src/orders/order.ts"],
     "decisions": [],
     "knownRisks": [],
@@ -26,7 +26,7 @@
         {
           "criterionId": "AC-2",
           "verdict": "fail",
-          "evidence": "El test pasa con cualquier implementación: no comprueba el estado"
+          "evidence": "The test passes with any implementation: it does not check the state"
         }
       ],
       "reviewers": {
@@ -36,11 +36,11 @@
         },
         "lunasq-ux-reviewer": {
           "status": "skipped",
-          "justification": "El diff no toca el front end"
+          "justification": "The diff does not touch the front end"
         },
         "lunasq-ui-reviewer": {
           "status": "skipped",
-          "justification": "El diff no toca el front end"
+          "justification": "The diff does not touch the front end"
         },
         "lunasq-code-reviewer": {
           "status": "ran",
@@ -49,7 +49,7 @@
               "severity": "major",
               "file": "src/orders/order.test.ts",
               "line": 31,
-              "evidence": "La aserción solo comprueba que no se lanzó una excepción",
+              "evidence": "The assertion only checks that no exception was thrown",
               "criterionId": "AC-2"
             }
           ]
@@ -60,7 +60,7 @@
           "severity": "major",
           "file": "src/orders/order.test.ts",
           "line": 31,
-          "evidence": "La aserción solo comprueba que no se lanzó una excepción",
+          "evidence": "The assertion only checks that no exception was thrown",
           "criterionId": "AC-2"
         }
       ],

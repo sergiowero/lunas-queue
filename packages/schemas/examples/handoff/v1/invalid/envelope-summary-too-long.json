@@ -1,5 +1,5 @@
 {
-  "description": "Resumen que excede el límite",
+  "description": "Summary that exceeds the limit",
   "expectedErrors": [
     {
       "path": "summary"
@@ -19,7 +19,7 @@
     ],
     "decisions": [
       {
-        "decision": "El botón se oculta si el pedido no es cancelable"
+        "decision": "The button is hidden if the order is not cancellable"
       }
     ],
     "knownRisks": [],
@@ -30,11 +30,11 @@
           "tests": [
             {
               "file": "src/orders/order.test.ts",
-              "name": "un pedido pendiente se cancela"
+              "name": "a pending order is cancelled"
             },
             {
               "file": "web/orders/OrderView.test.tsx",
-              "name": "el cliente cancela desde la vista"
+              "name": "the customer cancels from the view"
             }
           ]
         },
@@ -43,7 +43,7 @@
           "tests": [
             {
               "file": "src/orders/order.test.ts",
-              "name": "un pedido enviado no se cancela"
+              "name": "a shipped order is not cancelled"
             }
           ]
         }
@@ -52,11 +52,11 @@
       "changesByModule": [
         {
           "module": "src/orders",
-          "summary": "Comando cancel y evento OrderCancelled"
+          "summary": "cancel command and OrderCancelled event"
         },
         {
           "module": "web/orders",
-          "summary": "Botón de cancelar con confirmación"
+          "summary": "Cancel button with confirmation"
         }
       ],
       "howToTest": {

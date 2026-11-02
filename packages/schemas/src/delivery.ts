@@ -1,7 +1,7 @@
-// Entrega (docs/design.md §Entrega, ADR uw-26-entrega). Un conflicto al integrar la rama base, o
-// la suite en rojo después del rebase, regresa la tarea a in_progress sin subir la iteración; el
-// evento deja al implementador qué arreglar. También la regresa un PR ya abierto que GitHub marca
-// en conflicto con la base (ADR pr-en-conflicto).
+// Delivery (docs/design.md §Delivery, ADR uw-26-entrega). A conflict when integrating the base branch, or
+// the suite in red after the rebase, returns the task to in_progress without raising the iteration; the
+// event tells the implementer what to fix. A PR that is already open and that GitHub marks as
+// conflicting with the base also returns it (ADR pr-en-conflicto).
 import { z } from "zod";
 
 export const DELIVERY_CONFLICT = "delivery.conflict";
@@ -17,13 +17,13 @@ export const DeliveryConflictReason = z.enum([
 export type DeliveryConflictReason = z.infer<typeof DeliveryConflictReason>;
 
 export const DeliveryConflictPayload = z.strictObject({
-  // Run del verificador dentro del cual corrió la entrega (en fallos de PR, el del último pass).
+  // Verifier Run within which delivery ran (for PR failures, that of the last pass).
   runId: z.uuid(),
   reason: DeliveryConflictReason,
   baseBranch: z.string().min(1),
-  // Archivos con conflicto (rebase_conflict); vacío si falla la suite o un check de GitHub.
+  // Files in conflict (rebase_conflict); empty if the suite or a GitHub check fails.
   files: z.array(z.string().min(1)).max(200),
-  // Salida de la suite (tests_failed) o detalles del CI; null en conflictos de rebase/PR.
+  // Output of the suite (tests_failed) or CI details; null on rebase/PR conflicts.
   output: z.string().max(DELIVERY_OUTPUT_LIMIT).nullable(),
 });
 export type DeliveryConflictPayload = z.infer<typeof DeliveryConflictPayload>;
