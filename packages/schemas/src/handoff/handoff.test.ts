@@ -79,7 +79,7 @@ describe("handoff: clear errors", () => {
     });
     expect(errors).toContainEqual({
       path: "body.criteria[0].given",
-      message: expect.stringMatching(/se esperaba texto/i),
+      message: expect.stringMatching(/expected string/i),
     });
   });
 

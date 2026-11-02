@@ -28,8 +28,6 @@ export type ParseResultHandoffResult =
   | { success: true; data: ResultHandoff }
   | { success: false; errors: HandoffError[] };
 
-const spanish = z.locales.es().localeError;
-
 export function parseResultHandoff(input: unknown): ParseResultHandoffResult {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     return {
@@ -37,7 +35,7 @@ export function parseResultHandoff(input: unknown): ParseResultHandoffResult {
       errors: [{ path: ROOT_PATH, message: "the handoff must be a JSON object" }],
     };
   }
-  const result = ResultHandoff.safeParse(input, { error: spanish });
+  const result = ResultHandoff.safeParse(input);
   return result.success
     ? { success: true, data: result.data }
     : { success: false, errors: toHandoffErrors(result.error) };
