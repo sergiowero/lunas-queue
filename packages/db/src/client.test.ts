@@ -69,13 +69,13 @@ describe("migraciones", () => {
 
   it("la migración de settings conserva las filas del outbox y de events de una base ya en uso", () => {
     const { db } = freshDatabase();
-    // Base en el estado anterior a la migración 0010: el journal se recorta a las nueve primeras.
+    // Base en el estado anterior a la migración 0011: el journal se recorta a las once primeras.
     const previous = mkdtempSync(join(tmpdir(), "lunasq-migrations-"));
     try {
       cpSync(migrationsFolder, previous, { recursive: true });
       const journalFile = join(previous, "meta", "_journal.json");
       const journal = JSON.parse(readFileSync(journalFile, "utf8")) as { entries: unknown[] };
-      journal.entries = journal.entries.slice(0, 10);
+      journal.entries = journal.entries.slice(0, 11);
       writeFileSync(journalFile, JSON.stringify(journal));
       migrate(db, { migrationsFolder: previous });
     } finally {

@@ -5,7 +5,9 @@ CREATE TABLE `app_settings` (
 );
 --> statement-breakpoint
 -- Drizzle ejecuta la migración dentro de una transacción, donde PRAGMA foreign_keys no tiene efecto:
--- DROP TABLE events dispara el ON DELETE CASCADE de outbox. Se respalda el outbox y se restaura.
+-- si las llaves foráneas están activas, DROP TABLE events dispara el ON DELETE CASCADE de outbox.
+-- Se respalda el outbox y se restaura; migrateDatabase las apaga y entonces las filas siguen ahí,
+-- por eso la restauración ignora las que ya existen.
 CREATE TABLE `__outbox_backup` AS SELECT * FROM `outbox`;--> statement-breakpoint
 CREATE TABLE `__new_events` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -21,7 +23,7 @@ CREATE TABLE `__new_events` (
 INSERT INTO `__new_events`("id", "task_id", "type", "actor", "payload", "created_at") SELECT "id", "task_id", "type", "actor", "payload", "created_at" FROM `events`;--> statement-breakpoint
 DROP TABLE `events`;--> statement-breakpoint
 ALTER TABLE `__new_events` RENAME TO `events`;--> statement-breakpoint
-INSERT INTO `outbox` SELECT * FROM `__outbox_backup`;--> statement-breakpoint
+INSERT OR IGNORE INTO `outbox` SELECT * FROM `__outbox_backup`;--> statement-breakpoint
 DROP TABLE `__outbox_backup`;--> statement-breakpoint
 CREATE INDEX `events_task_idx` ON `events` (`task_id`,`id`);--> statement-breakpoint
 -- Reconstruir events borra sus triggers: se recrean los de append-only (migración 0001, ADR 0007).

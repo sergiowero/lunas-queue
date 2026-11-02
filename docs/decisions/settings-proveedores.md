@@ -2,7 +2,7 @@
 
 - Estado: aceptada
 - Fecha: 2026-11-01
-- Código: `packages/schemas/src/settings.ts` (`AgentProviderSettings`, `settings.updated`), `packages/db/src/settings.ts` y migración `0010_settings_proveedores`, `packages/domain/src/providers.ts` (`effectiveAgentKind`, `enabledFallbackOrder`), `packages/domain/src/scheduler.ts` (`schedule`, `Occupancy`), `packages/db/src/runs.ts` (`claimRun`), `packages/server/src/dispatcher/dispatcher.ts` (`startAgentWithFallback`), `packages/server/src/api/settings.ts`, `packages/web/src/pages/settings.tsx`
+- Código: `packages/schemas/src/settings.ts` (`AgentProviderSettings`, `settings.updated`), `packages/db/src/settings.ts` y migración `0011_settings_proveedores`, `packages/domain/src/providers.ts` (`effectiveAgentKind`, `enabledFallbackOrder`), `packages/domain/src/scheduler.ts` (`schedule`, `Occupancy`), `packages/db/src/runs.ts` (`claimRun`), `packages/server/src/dispatcher/dispatcher.ts` (`startAgentWithFallback`), `packages/server/src/api/settings.ts`, `packages/web/src/pages/settings.tsx`
 
 ## Contexto
 
