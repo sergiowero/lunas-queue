@@ -25,7 +25,9 @@ describe("selector de tema", () => {
       const bar = button.parentElement;
       expect(bar?.parentElement?.tagName).toBe("HEADER");
       expect(bar?.lastElementChild).toBe(button);
-      expect(button.className).toContain("ml-auto");
+      expect(button.className).not.toContain("ml-auto");
+      expect(button.previousElementSibling?.getAttribute("href")).toBe("/settings");
+      expect(button.previousElementSibling?.className).toContain("ml-auto");
     },
   );
 

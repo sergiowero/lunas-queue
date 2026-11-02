@@ -395,15 +395,16 @@ describe("aviso de despacho en pausa", () => {
 });
 
 describe("navegación con Settings", () => {
-  it("enlaza Settings y permite desplazar el nav en anchos estrechos", async () => {
+  it("enlaza Settings desde el header y deja desplazar el nav en anchos estrechos", async () => {
     renderApp("/queue", new FakeApi());
     const link = await screen.findByRole("link", { name: "Settings" });
-    const nav = link.closest("nav");
-    expect(nav?.className).toContain("overflow-x-auto");
-    expect(nav?.className).toContain("min-w-0");
+    const nav = screen.getByRole("navigation");
+    expect(nav.contains(link)).toBe(false);
+    expect(nav.className).toContain("overflow-x-auto");
+    expect(nav.className).toContain("min-w-0");
     // El relleno evita que overflow-x-auto recorte el anillo de foco de los enlaces.
-    expect(nav?.className).toMatch(/\bpy-2\b/);
-    expect(nav?.className).toMatch(/\bpx-1\b/);
+    expect(nav.className).toMatch(/\bpy-2\b/);
+    expect(nav.className).toMatch(/\bpx-1\b/);
     expect(link.className).toContain("shrink-0");
   });
 });
