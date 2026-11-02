@@ -60,10 +60,12 @@ describe("GET /api/questions", () => {
       options,
     });
     const list = (await (await send("GET", "/api/questions")).json()) as unknown[];
-    expect(list.map((q) => Question.parse(q)).find((q) => q.id === withOptions.id)?.options).toEqual(
-      options,
+    expect(
+      list.map((q) => Question.parse(q)).find((q) => q.id === withOptions.id)?.options,
+    ).toEqual(options);
+    const detail = Question.parse(
+      await (await send("GET", `/api/questions/${withOptions.id}`)).json(),
     );
-    const detail = Question.parse(await (await send("GET", `/api/questions/${withOptions.id}`)).json());
     expect(detail.options).toEqual(options);
   });
 

@@ -275,7 +275,12 @@ export class FakeApi {
   }
 
   /** Como `ask_human`: guarda la Question y pasa la tarea a waiting_human. */
-  ask(taskId: string, question: string, context: string | null = null): Json<Question> {
+  ask(
+    taskId: string,
+    question: string,
+    context: string | null = null,
+    options: Json<Question>["options"] = null,
+  ): Json<Question> {
     const task = this.task(taskId);
     const run = this.runs.findLast((r) => r.taskId === taskId);
     const created: Json<Question> = {
@@ -284,6 +289,7 @@ export class FakeApi {
       runId: run?.id ?? null,
       question,
       context,
+      options,
       status: "open",
       answer: null,
       answeredBy: null,

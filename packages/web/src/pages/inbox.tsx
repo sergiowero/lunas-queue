@@ -133,6 +133,9 @@ function EscalatedSection({
   );
 }
 
+/** Valor de `choice` para «Otra respuesta»: el humano escribe su propio texto. */
+const OTHER = "other";
+
 function QuestionItem({
   question,
   task,
@@ -145,9 +148,19 @@ function QuestionItem({
   const queryClient = useQueryClient();
   const runs = useQuery(queries.runs(question.taskId));
   const phase = runs.data?.find((r) => r.id === question.runId)?.phase;
-  const [answer, setAnswer] = useState("");
+  const [typed, setTyped] = useState("");
+  // Índice de la opción elegida, OTHER para «Otra respuesta» y null mientras no haya elección.
+  const [choice, setChoice] = useState<number | typeof OTHER | null>(null);
+  const options = question.options;
+  const answer = options
+    ? choice === OTHER
+      ? typed.trim()
+      : choice === null
+        ? ""
+        : (options[choice]?.label ?? "")
+    : typed.trim();
   const send = useMutation({
-    mutationFn: () => api.answerQuestion(question.id, answer.trim()),
+    mutationFn: () => api.answerQuestion(question.id, answer),
     onMutate: () => onResult(null),
     onSuccess: ({ delivery }) => onResult({ ok: true, delivery }),
     // Un 409 (not_open, task_not_waiting) también cambia la bandeja: la pregunta ya no espera.
@@ -170,11 +183,53 @@ function QuestionItem({
       {question.context && (
         <p className="whitespace-pre-wrap text-sm text-muted-foreground">{question.context}</p>
       )}
-      <Label htmlFor={field}>Respuesta</Label>
-      <Textarea id={field} value={answer} onChange={(e) => setAnswer(e.target.value)} />
+      {options ? (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1 text-[13px] font-medium">Respuesta</legend>
+          {options.map((option, index) => (
+            <label key={option.label} className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name={field}
+                className="mt-1"
+                checked={choice === index}
+                onChange={() => setChoice(index)}
+              />
+              <span className="flex flex-col">
+                <span>{option.label}</span>
+                {option.description && (
+                  <span className="text-muted-foreground">{option.description}</span>
+                )}
+              </span>
+            </label>
+          ))}
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name={field}
+              className="mt-1"
+              checked={choice === OTHER}
+              onChange={() => setChoice(OTHER)}
+            />
+            <span>Otra respuesta</span>
+          </label>
+          {choice === OTHER && (
+            <Textarea
+              aria-label="Otra respuesta"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+            />
+          )}
+        </fieldset>
+      ) : (
+        <>
+          <Label htmlFor={field}>Respuesta</Label>
+          <Textarea id={field} value={typed} onChange={(e) => setTyped(e.target.value)} />
+        </>
+      )}
       <Button
         className="self-start"
-        disabled={send.isPending || answer.trim() === ""}
+        disabled={send.isPending || answer === ""}
         onClick={() => send.mutate()}
       >
         Responder

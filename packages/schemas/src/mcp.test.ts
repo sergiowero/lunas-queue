@@ -31,7 +31,11 @@ describe("entradas de las tools del LunasQ MCP", () => {
     const opts = (n: number) => Array.from({ length: n }, (_, i) => ({ label: `Opción ${i + 1}` }));
 
     it("acepta de 2 a 6 opciones, con descripción opcional, y conserva el orden", () => {
-      const parsed = ask([{ label: "A", description: "la primera" }, { label: "B" }, { label: "C" }]);
+      const parsed = ask([
+        { label: "A", description: "la primera" },
+        { label: "B" },
+        { label: "C" },
+      ]);
       expect(parsed.success).toBe(true);
       expect(parsed.data?.options?.map((o) => o.label)).toEqual(["A", "B", "C"]);
       expect(ask(opts(2)).success).toBe(true);
