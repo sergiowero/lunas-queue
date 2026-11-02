@@ -1,5 +1,5 @@
-// Criterio de terminado de UW-21: una tarea se crea y se sigue de punta a punta sin usar la API a
-// mano. El FakeApi hace de scheduler y de agentes; el humano solo usa la UI.
+// UW-21 done criterion: a task is created and followed end to end without using the API by
+// hand. The FakeApi acts as scheduler and agents; the human only uses the UI.
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "./fake-api.ts";
@@ -7,13 +7,13 @@ import { renderApp } from "./render.tsx";
 
 const section = async (name: string) => within(await screen.findByRole("region", { name }));
 
-describe("flujo de punta a punta desde la UI", () => {
-  it("crea una tarea, aprueba su spec y la sigue hasta el PR", async () => {
+describe("end-to-end flow from the UI", () => {
+  it("creates a task, approves its spec and follows it to the PR", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     const { user, router, refresh } = renderApp("/queue", fake);
 
-    // Alta desde el botón Nueva tarea del header.
+    // Creation from the header's Nueva tarea button.
     await user.click(await screen.findByRole("link", { name: "Nueva tarea" }));
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "lunas-queue");
     await user.type(screen.getByLabelText("Intent"), "Login con email");
@@ -22,7 +22,7 @@ describe("flujo de punta a punta desde la UI", () => {
     expect(screen.getByText("Draft")).toBeTruthy();
     const taskId = router.state.location.pathname.split("/").at(-1) as string;
 
-    // El scheduler despacha el refinamiento y el agente entrega la spec.
+    // The scheduler dispatches the refinement and the agent delivers the spec.
     const refine = fake.startRun(taskId, "refine");
     fake.transition(taskId, "draft", "running");
     fake.addSpec(taskId);
@@ -31,11 +31,11 @@ describe("flujo de punta a punta desde la UI", () => {
     await refresh();
     expect(await screen.findByText("Refined")).toBeTruthy();
 
-    // Gate humano: aprobar la spec desde el detalle.
+    // Human gate: approve the spec from the detail.
     await user.click(await (await section("Spec")).findByRole("button", { name: "Aprobar v1" }));
     expect(await screen.findByText("In progress")).toBeTruthy();
 
-    // Implementación, verificación con pass y entrega.
+    // Implementation, verification with pass and delivery.
     const implement = fake.startRun(taskId, "implement");
     fake.transition(taskId, "in_progress", "running", { branch: "lunasq/login" });
     fake.endRun(implement.id, {});
@@ -61,7 +61,7 @@ describe("flujo de punta a punta desde la UI", () => {
     await user.click(evidence.getByRole("button", { name: "Mostrar evidencia" }));
     expect(await evidence.findByRole("heading", { name: "Run verify" })).toBeTruthy();
 
-    // En el tablero del proyecto queda en Completed.
+    // On the project board it ends up in Completed.
     await user.click(screen.getByRole("link", { name: "lunas-queue" }));
     const completed = within(await screen.findByRole("region", { name: "Completed" }));
     expect(completed.getByRole("link", { name: "Login con email" })).toBeTruthy();

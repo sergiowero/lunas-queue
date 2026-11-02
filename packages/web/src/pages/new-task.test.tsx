@@ -4,13 +4,13 @@ import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 import { queries } from "../lib/queries.ts";
 
-/** Las etiquetas de las opciones del selector de dependencias (#N · intent), sin el placeholder. */
+/** The labels of the dependency selector's options (#N · intent), without the placeholder. */
 function candidateOptions(): string[] {
   const select = screen.getByLabelText("Depende de") as HTMLSelectElement;
   return [...select.options].filter((o) => o.value !== "").map((o) => o.text);
 }
 
-/** El value de la opción cuyo intent es el dado: la etiqueta lleva el #N delante. */
+/** The value of the option whose intent is the given one: the label carries the #N in front. */
 function optionOf(intent: string): string {
   const select = screen.getByLabelText("Depende de") as HTMLSelectElement;
   const option = [...select.options].find((o) => o.text.endsWith(` · ${intent}`));
@@ -26,8 +26,8 @@ function chosen(): string[] {
     .map((item) => item.querySelector("[data-intent]")?.textContent ?? "");
 }
 
-describe("alta de tareas", () => {
-  it("crea la tarea con tags, prioridad y dependencias y abre su detalle", async () => {
+describe("task creation", () => {
+  it("creates the task with tags, priority and dependencies and opens its detail", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     const dep = fake.addTask(project.id, { intent: "Base de datos" });
@@ -52,7 +52,7 @@ describe("alta de tareas", () => {
     expect(await screen.findByRole("heading", { name: "Login con email" })).toBeTruthy();
   });
 
-  it("«Depende de» es un selector de tareas, sin checkboxes", async () => {
+  it("«Depende de» is a task selector, without checkboxes", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     fake.addTask(project.id, { intent: "Base de datos" });
@@ -66,7 +66,7 @@ describe("alta de tareas", () => {
     expect(screen.queryAllByRole("checkbox")).toEqual([]);
   });
 
-  it("el selector y la lista de elegidas muestran el #N de cada tarea", async () => {
+  it("the selector and the list of chosen ones show each task's #N", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     const dep = fake.addTask(project.id, { intent: "Base de datos", number: 17 });
@@ -81,7 +81,7 @@ describe("alta de tareas", () => {
     expect(within(list).getByText("Base de datos")).toBeTruthy();
   });
 
-  it("el selector no ofrece tareas terminales", async () => {
+  it("the selector does not offer terminal tasks", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     fake.addTask(project.id, { intent: "Viva" });
@@ -94,7 +94,7 @@ describe("alta de tareas", () => {
     expect(candidateOptions()[0]).toMatch(/ · Viva$/);
   });
 
-  it("elegir una tarea la agrega a la lista, la quita del selector y vuelve al placeholder", async () => {
+  it("choosing a task adds it to the list, removes it from the selector and goes back to the placeholder", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     fake.addTask(project.id, { intent: "Base de datos" });
@@ -110,7 +110,7 @@ describe("alta de tareas", () => {
     expect((screen.getByLabelText("Depende de") as HTMLSelectElement).value).toBe("");
   });
 
-  it("quitar una dependencia la devuelve al selector y conserva las demás", async () => {
+  it("removing a dependency returns it to the selector and keeps the others", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     fake.addTask(project.id, { intent: "Base de datos" });
@@ -128,7 +128,7 @@ describe("alta de tareas", () => {
     expect(candidateOptions()[0]).toMatch(/ · Base de datos$/);
   });
 
-  it("envía dependsOn con las elegidas en el orden en que se agregaron", async () => {
+  it("sends dependsOn with the chosen ones in the order they were added", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     const db = fake.addTask(project.id, { intent: "Base de datos" });
@@ -147,7 +147,7 @@ describe("alta de tareas", () => {
     });
   });
 
-  it("permite depender de tareas de otro proyecto y las marca", async () => {
+  it("allows depending on tasks of another project and marks them", async () => {
     const fake = new FakeApi();
     const mine = fake.addProject({ name: "web" });
     const other = fake.addProject({ name: "api" });
@@ -169,7 +169,7 @@ describe("alta de tareas", () => {
     });
   });
 
-  it("cambiar de proyecto vacía las dependencias elegidas", async () => {
+  it("changing project empties the chosen dependencies", async () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     fake.addProject({ name: "dos" });
@@ -184,7 +184,7 @@ describe("alta de tareas", () => {
     expect(chosen()).toEqual([]);
   });
 
-  it("no muestra «Depende de» si no hay tareas vivas", async () => {
+  it("does not show «Depende de» if there are no live tasks", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "uno" });
     fake.addTask(project.id, { intent: "Ya cancelada", state: "cancelled", subState: null });
@@ -192,7 +192,7 @@ describe("alta de tareas", () => {
 
     await user.selectOptions(await screen.findByLabelText("Proyecto"), "uno");
     await screen.findByLabelText("Intent");
-    // Espera a que las candidatas estén cargadas: sin esto la ausencia sería trivial.
+    // Waits for the candidates to be loaded: without this the absence would be trivial.
     await waitFor(() =>
       expect(queryClient.getQueryState(queries.tasks().queryKey)?.status).toBe("success"),
     );
@@ -200,7 +200,7 @@ describe("alta de tareas", () => {
     expect(screen.queryByLabelText("Depende de")).toBeNull();
   });
 
-  it("agrupa las candidatas con el proyecto elegido primero", async () => {
+  it("groups the candidates with the chosen project first", async () => {
     const fake = new FakeApi();
     const first = fake.addProject({ name: "primero" });
     const chosenProject = fake.addProject({ name: "elegido" });
@@ -214,7 +214,7 @@ describe("alta de tareas", () => {
     expect(groups).toEqual(["elegido", "primero · otro proyecto"]);
   });
 
-  it("preselecciona el proyecto de la URL", async () => {
+  it("preselects the project from the URL", async () => {
     const fake = new FakeApi();
     fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
@@ -224,7 +224,7 @@ describe("alta de tareas", () => {
     );
   });
 
-  it("muestra los errores de validación del servidor", async () => {
+  it("shows the server's validation errors", async () => {
     const fake = new FakeApi();
     fake.addProject({ name: "uno" });
     const { user, router } = renderApp("/tasks/new", fake);

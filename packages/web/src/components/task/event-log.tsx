@@ -1,4 +1,4 @@
-// Event log de la tarea: quién la movió, cuándo y por qué (docs/design.md §Auditoría).
+// Task Event log: who moved it, when and why (docs/design.md §Audit).
 import type {
   EventView,
   TASK_TRANSITIONED,
@@ -15,7 +15,7 @@ import { Muted, Section } from "../section.tsx";
 import { Loading, QueryError, stateText } from "../status.tsx";
 import { Badge } from "../ui/badge.tsx";
 
-// Solo tipos de @lunasq/schemas: importar sus valores mete zod en el bundle.
+// Types only from @lunasq/schemas: importing its values pulls zod into the bundle.
 const TRANSITIONED: typeof TASK_TRANSITIONED = "task.transitioned";
 const TEST_GATE: typeof TEST_GATE_EXECUTED = "test_gate.executed";
 

@@ -1,5 +1,5 @@
-// Rutas del front end (TanStack Router, definidas en código). Las páginas leen sus parámetros con
-// getRouteApi para no importar este módulo.
+// Front end routes (TanStack Router, defined in code). The pages read their parameters with
+// getRouteApi so as not to import this module.
 import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,

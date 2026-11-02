@@ -1,4 +1,4 @@
-// Consumo de la tarea (docs/design.md §Consumo): read-only, lo escribe el usage collector (UW-20).
+// Task consumption (docs/design.md §Consumption): read-only, written by the usage collector (UW-20).
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { formatCost, formatTokens } from "../../lib/format.ts";

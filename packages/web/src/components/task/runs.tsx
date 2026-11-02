@@ -1,5 +1,5 @@
-// Runs de la tarea (docs/design.md §Auditoría): cada intento por fase, con su motivo de fallo y
-// el handoff que entregó el agente.
+// Task Runs (docs/design.md §Audit): each attempt per phase, with its failure reason and
+// the handoff the agent delivered.
 import type { RunView } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";

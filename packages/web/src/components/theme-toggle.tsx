@@ -30,7 +30,7 @@ function SunIcon() {
   );
 }
 
-/** Alterna claro y oscuro; el icono muestra el tema al que se cambiaría. */
+/** Toggles light and dark; the icon shows the theme it would switch to. */
 export function ThemeToggle({ className }: { className?: string }) {
   const theme = useTheme();
   const t = useT();

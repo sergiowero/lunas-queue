@@ -4,7 +4,7 @@ import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 import { CHANGE_STREAM_URL } from "./live.ts";
 
-/** EventSource mínimo: los tests disparan los mensajes a mano. */
+/** Minimal EventSource: the tests fire the messages by hand. */
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
   readonly url: string;
@@ -38,8 +38,8 @@ afterEach(() => {
   FakeEventSource.instances = [];
 });
 
-describe("actualización en vivo por SSE", () => {
-  it("un change de la tarea refresca su detalle sin esperar el intervalo", async () => {
+describe("live updates over SSE", () => {
+  it("a task change refreshes its detail without waiting for the interval", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
     const project = fake.addProject();
@@ -54,7 +54,7 @@ describe("actualización en vivo por SSE", () => {
     expect(await screen.findByText("Refined")).toBeTruthy();
   });
 
-  it("un change refresca las ejecuciones de hooks", async () => {
+  it("a change refreshes the hook executions", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
     const project = fake.addProject();
@@ -71,14 +71,14 @@ describe("actualización en vivo por SSE", () => {
     );
   });
 
-  it("un change de configuración refresca Settings y el aviso aunque no haya tareas", async () => {
+  it("a configuration change refreshes Settings and the notice even without tasks", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
     renderApp("/settings", fake);
     const claude = await screen.findByRole("switch", { name: "Claude" });
     expect(claude.getAttribute("aria-checked")).toBe("true");
 
-    // Otra pestaña apaga ambos proveedores: aquí solo llega el change global.
+    // Another tab turns off both providers: here only the global change arrives.
     fake.providers = { claude: false, copilot: false };
     FakeEventSource.instances[0]?.emit("change", JSON.stringify({ taskIds: [], settings: true }));
     await waitFor(() =>
@@ -89,7 +89,7 @@ describe("actualización en vivo por SSE", () => {
     expect(await screen.findByRole("status")).toBeTruthy();
   });
 
-  it("ignora mensajes ilegibles y cierra la conexión al desmontar", async () => {
+  it("ignores unreadable messages and closes the connection on unmount", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const { unmount } = renderApp("/queue");
     await screen.findByText("No hay tareas vivas en la cola.");
@@ -99,7 +99,7 @@ describe("actualización en vivo por SSE", () => {
     expect(source?.closed).toBe(true);
   });
 
-  it("una tarea que sale de In progress desaparece de la pestaña En curso", async () => {
+  it("a task that leaves In progress disappears from the In progress tab", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
     const project = fake.addProject();
@@ -120,7 +120,7 @@ describe("actualización en vivo por SSE", () => {
     expect(screen.getByText("Sigue en curso")).toBeTruthy();
   });
 
-  it("un change trae a la bandeja la pregunta nueva", async () => {
+  it("a change brings the new question to the inbox", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
     const task = fake.addTask(fake.addProject().id, { intent: "Pregunta en vivo" });

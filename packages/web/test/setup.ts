@@ -9,7 +9,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-// React Flow mide el DOM con APIs que jsdom no trae.
+// React Flow measures the DOM with APIs that jsdom does not provide.
 class ResizeObserverStub {
   observe() {}
   unobserve() {}
@@ -20,8 +20,8 @@ globalThis.DOMMatrixReadOnly ??= class {
   m22 = 1;
 } as unknown as typeof DOMMatrixReadOnly;
 
-// jsdom no trae matchMedia: por defecto el sistema no declara esquema oscuro. Un test que quiera
-// otro esquema usa stubColorScheme de test/render.tsx.
+// jsdom has no matchMedia: by default the system declares no dark scheme. A test that wants
+// another scheme uses stubColorScheme from test/render.tsx.
 globalThis.matchMedia ??= ((query: string) => ({
   matches: false,
   media: query,

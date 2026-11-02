@@ -15,49 +15,49 @@ function brokenStorage() {
   });
 }
 
-describe("resolver el tema", () => {
-  it("sin preferencia guardada y con el sistema en claro, el tema es claro", () => {
+describe("resolve the theme", () => {
+  it("without a saved preference and with the system light, the theme is light", () => {
     stubColorScheme("light");
     expect(resolveTheme()).toBe("light");
   });
 
-  it("la preferencia guardada «dark» gana aunque el sistema esté en claro", () => {
+  it("the saved preference «dark» wins even if the system is light", () => {
     stubColorScheme("light");
     localStorage.setItem(THEME_KEY, "dark");
     expect(resolveTheme()).toBe("dark");
   });
 
-  it("la preferencia guardada «light» gana aunque el sistema esté en oscuro", () => {
+  it("the saved preference «light» wins even if the system is dark", () => {
     stubColorScheme("dark");
     localStorage.setItem(THEME_KEY, "light");
     expect(resolveTheme()).toBe("light");
   });
 
-  it("sin preferencia guardada y con el sistema en oscuro, el tema es oscuro", () => {
+  it("without a saved preference and with the system dark, the theme is dark", () => {
     stubColorScheme("dark");
     expect(resolveTheme()).toBe("dark");
   });
 
-  it("un valor guardado inválido se ignora y cae a la preferencia del sistema", () => {
+  it("an invalid saved value is ignored and falls back to the system preference", () => {
     localStorage.setItem(THEME_KEY, "sepia");
     expect(resolveTheme()).toBe("light");
     stubColorScheme("dark");
     expect(resolveTheme()).toBe("dark");
   });
 
-  it("un localStorage que lanza error no rompe: usa el tema claro", () => {
+  it("a localStorage that throws does not break: it uses the light theme", () => {
     brokenStorage();
     expect(resolveTheme()).toBe("light");
   });
 
-  it("sin matchMedia en el entorno, el tema por defecto es claro", () => {
+  it("without matchMedia in the environment, the default theme is light", () => {
     vi.stubGlobal("matchMedia", undefined);
     expect(resolveTheme()).toBe("light");
   });
 });
 
-describe("aplicar el tema", () => {
-  it("al cargar, aplica el tema resuelto en <html> sin guardarlo", () => {
+describe("apply the theme", () => {
+  it("on load, it applies the resolved theme to <html> without saving it", () => {
     stubColorScheme("dark");
     initTheme();
     expect(html.classList.contains("dark")).toBe(true);
@@ -65,13 +65,13 @@ describe("aplicar el tema", () => {
     expect(localStorage.getItem(THEME_KEY)).toBeNull();
   });
 
-  it("cambiar a oscuro pone la clase dark y guarda «dark»", () => {
+  it("switching to dark sets the dark class and saves «dark»", () => {
     setTheme("dark");
     expect(html.classList.contains("dark")).toBe(true);
     expect(localStorage.getItem(THEME_KEY)).toBe("dark");
   });
 
-  it("cambiar a claro quita la clase dark y guarda «light»", () => {
+  it("switching to light removes the dark class and saves «light»", () => {
     setTheme("dark");
     setTheme("light");
     expect(html.classList.contains("dark")).toBe(false);
@@ -79,14 +79,14 @@ describe("aplicar el tema", () => {
     expect(localStorage.getItem(THEME_KEY)).toBe("light");
   });
 
-  it("con un localStorage que lanza error, el cambio de tema se aplica igual", () => {
+  it("with a localStorage that throws, the theme change is applied anyway", () => {
     brokenStorage();
     setTheme("dark");
     expect(currentTheme()).toBe("dark");
   });
 });
 
-describe("animación del cambio de tema", () => {
+describe("theme change animation", () => {
   function stubViewTransition() {
     const start = vi.fn((update: () => void) => {
       update();
@@ -105,7 +105,7 @@ describe("animación del cambio de tema", () => {
     vi.useRealTimers();
   });
 
-  it("con View Transitions, revela el tema nuevo con un círculo que crece desde el origen", async () => {
+  it("with View Transitions, it reveals the new theme with a circle that grows from the origin", async () => {
     const { start, animate } = stubViewTransition();
     setTheme("dark", { x: 10, y: 20 });
     expect(start).toHaveBeenCalledOnce();
@@ -121,7 +121,7 @@ describe("animación del cambio de tema", () => {
     expect(options.pseudoElement).toBe("::view-transition-new(root)");
   });
 
-  it("si el tema no cambia o se prefiere menos movimiento, se aplica sin animación", () => {
+  it("if the theme does not change or reduced motion is preferred, it applies without animation", () => {
     const { start } = stubViewTransition();
     setTheme("light");
     expect(start).not.toHaveBeenCalled();
@@ -132,7 +132,7 @@ describe("animación del cambio de tema", () => {
     expect(html.classList.contains("dark")).toBe(true);
   });
 
-  it("sin View Transitions, funde los colores con una clase temporal", () => {
+  it("without View Transitions, it fades the colors with a temporary class", () => {
     vi.useFakeTimers();
     setTheme("dark");
     expect(html.classList.contains("dark")).toBe(true);

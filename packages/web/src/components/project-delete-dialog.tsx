@@ -1,4 +1,4 @@
-// Confirmación de borrado. El servidor rechaza con 409 `has_tasks` un proyecto con tareas.
+// Delete confirmation. The server rejects with 409 `has_tasks` a project that has tasks.
 
 import type { Project } from "@lunasq/schemas";
 import { useMutation, useQueryClient } from "@tanstack/react-query";

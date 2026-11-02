@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 
-describe("tablero por proyecto", () => {
-  it("agrupa las tareas del proyecto en columnas por estado", async () => {
+describe("per-project board", () => {
+  it("groups the project's tasks into columns by state", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     const other = fake.addProject();
@@ -36,7 +36,7 @@ describe("tablero por proyecto", () => {
     expect(screen.queryByText("Ajena")).toBeNull();
   });
 
-  it("una tarea pausada aparece en la columna Paused con su etiqueta", async () => {
+  it("a paused task appears in the Paused column with its label", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     fake.addTask(project.id, { intent: "En pausa", state: "paused", subState: null });
@@ -46,7 +46,7 @@ describe("tablero por proyecto", () => {
     expect(column.getByRole("link", { name: "En pausa" })).toBeTruthy();
   });
 
-  it("muestra el título de la tarea y, mientras no hay, su intent", async () => {
+  it("shows the task's title and, while there is none, its intent", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     fake.addTask(project.id, { intent: "Intent largo de la primera", title: "Título corto" });
@@ -58,7 +58,7 @@ describe("tablero por proyecto", () => {
     expect(screen.queryByText("Intent largo de la primera")).toBeNull();
   });
 
-  it("enlaza al alta de tareas con el proyecto elegido", async () => {
+  it("links to task creation with the chosen project", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     const { user, router } = renderApp(`/projects/${project.id}`, fake);
@@ -67,7 +67,7 @@ describe("tablero por proyecto", () => {
     expect(router.state.location.search).toEqual({ projectId: project.id });
   });
 
-  it("lista los proyectos en /projects", async () => {
+  it("lists the projects at /projects", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue", repo: "sergiowero/lunas-queue" });
     renderApp("/projects", fake);

@@ -1,5 +1,5 @@
-// Vista de hooks por proyecto (docs/design.md §Hooks por fase): lo que hay en lunasq/hooks/ de la
-// rama base y las últimas ejecuciones por tarea. Solo lectura: los hooks se cambian por PR.
+// Per-project hooks view (docs/design.md §Per-phase hooks): what is in the base branch's lunasq/hooks/
+// and the latest executions per task. Read-only: hooks are changed by PR.
 import type { HookExecutionView, HookPoint, HookView } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
@@ -21,11 +21,11 @@ function PointSection({
 }: {
   point: HookPoint;
   hooks: Json<HookView>[];
-  /** Las del punto, o el estado de la consulta mientras no hay lista. */
+  /** The point's, or the query state while there is no list. */
   executions: Execution[] | "loading" | "failed";
 }) {
   const known = new Set(hooks.map((h) => h.script));
-  // Scripts que corrieron pero ya no están en la rama base (se borraron o renombraron).
+  // Scripts that ran but are no longer in the base branch (deleted or renamed).
   const list = Array.isArray(executions) ? executions : [];
   const forScript = (script: string): ExecutionsState =>
     Array.isArray(executions) ? list.filter((e) => e.script === script) : executions;

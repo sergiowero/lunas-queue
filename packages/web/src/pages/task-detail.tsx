@@ -1,5 +1,5 @@
-// Detalle de tarea (docs/design.md §Front end y §Auditoría): estado, spec y versiones, Runs,
-// Event log, usage y evidencia.
+// Task detail (docs/design.md §Front end and §Audit): state, spec and versions, Runs,
+// Event log, usage and evidence.
 import type { Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";

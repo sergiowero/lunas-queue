@@ -1,4 +1,4 @@
-// Número de tarea (#N): cómo se identifica una tarea ante personas, junto a su intent (ADR 0015).
+// Task number (#N): how a task is identified to people, next to its intent (ADR 0015).
 import { cn } from "../lib/utils.ts";
 
 export function taskLabel(number: number): string {

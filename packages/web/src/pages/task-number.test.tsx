@@ -6,21 +6,21 @@ import { renderApp } from "../../test/render.tsx";
 function seeded() {
   const fake = new FakeApi();
   const project = fake.addProject({ name: "lunas-queue" });
-  // Números lejos del 1 para que no coincidan con posiciones ni prioridades.
+  // Numbers far from 1 so they do not coincide with positions or priorities.
   const base = fake.addTask(project.id, { intent: "Esquema base", number: 41 });
   const task = fake.addTask(project.id, { intent: "Login con email", number: 42 });
   fake.edges.push({ taskId: task.id, dependsOnId: base.id });
   return { fake, project, base, task };
 }
 
-/** El #N de la tarea va junto a su intent: el elemento que lo contiene también tiene el intent. */
+/** The task's #N goes next to its intent: the element containing it also has the intent. */
 function nextToIntent(scope: ReturnType<typeof within>, number: number, intent: string) {
   const label = scope.getByText(`#${number}`);
   expect(label.parentElement?.textContent).toContain(intent);
 }
 
-describe("número de tarea en las vistas", () => {
-  it("tablero: cada tarjeta muestra el #N junto al intent", async () => {
+describe("task number in the views", () => {
+  it("board: each card shows the #N next to the intent", async () => {
     const { fake, project } = seeded();
     renderApp(`/projects/${project.id}`, fake);
     const draft = within(await screen.findByRole("region", { name: "Draft" }));
@@ -29,7 +29,7 @@ describe("número de tarea en las vistas", () => {
     nextToIntent(draft, 41, "Esquema base");
   });
 
-  it("cola: cada fila muestra el #N junto al intent", async () => {
+  it("queue: each row shows the #N next to the intent", async () => {
     const { fake, task } = seeded();
     fake.queue = [
       {
@@ -52,7 +52,7 @@ describe("número de tarea en las vistas", () => {
     nextToIntent(table, 42, "Login con email");
   });
 
-  it("en curso: una tarea in_progress muestra el #N junto al intent y el enlace conserva su nombre", async () => {
+  it("in progress: an in_progress task shows the #N next to the intent and the link keeps its name", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "in_progress", "queued");
     renderApp("/in-progress", fake);
@@ -62,7 +62,7 @@ describe("número de tarea en las vistas", () => {
     nextToIntent(table, 42, "Login con email");
   });
 
-  it("en curso: una tarea con sub-estado running en otro estado muestra el #N junto al intent", async () => {
+  it("in progress: a task with running sub-state in another state shows the #N next to the intent", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "verification", "running");
     renderApp("/in-progress", fake);
@@ -71,7 +71,7 @@ describe("número de tarea en las vistas", () => {
     nextToIntent(table, 42, "Login con email");
   });
 
-  it("completed: una tarea completada muestra el #N junto al intent y el enlace conserva su nombre", async () => {
+  it("completed: a completed task shows the #N next to the intent and the link keeps its name", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "completed", null);
     renderApp("/completed", fake);
@@ -81,7 +81,7 @@ describe("número de tarea en las vistas", () => {
     nextToIntent(table, 42, "Login con email");
   });
 
-  it("bandeja: cada pendiente muestra el #N de su tarea", async () => {
+  it("inbox: each pending item shows the #N of its task", async () => {
     const { fake, task } = seeded();
     fake.addSpec(task.id);
     fake.transition(task.id, "refined", null);
@@ -91,7 +91,7 @@ describe("número de tarea en las vistas", () => {
     nextToIntent(specs, 42, "Login con email");
   });
 
-  it("detalle: la cabecera y las dependencias muestran el #N", async () => {
+  it("detail: the header and the dependencies show the #N", async () => {
     const { fake, task } = seeded();
     renderApp(`/tasks/${task.id}`, fake);
     await screen.findByRole("heading", { name: "Login con email" });
@@ -101,7 +101,7 @@ describe("número de tarea en las vistas", () => {
     nextToIntent(deps, 41, "Esquema base");
   });
 
-  it("detalle: el selector para agregar dependencia muestra el #N de cada candidata", async () => {
+  it("detail: the selector for adding a dependency shows the #N of each candidate", async () => {
     const { fake, project, task } = seeded();
     fake.addTask(project.id, { intent: "Endpoint de login", number: 43 });
     renderApp(`/tasks/${task.id}`, fake);

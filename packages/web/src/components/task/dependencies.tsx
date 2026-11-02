@@ -1,5 +1,5 @@
-// Dependencias de una tarea. En draft se editan (el servidor solo las acepta antes de refinar,
-// docs/design.md §Máquina de estados); después el panel es de solo lectura.
+// A task's dependencies. In draft they are edited (the server only accepts them before refining,
+// docs/design.md §State machine); afterwards the panel is read-only.
 import type { DependencyLink, Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -64,7 +64,7 @@ function useDependencyMutation(mutationFn: (dependsOnId: string) => Promise<unkn
   return useMutation({
     mutationFn,
     onSuccess: async () => {
-      // Cambia también el panel de la otra tarea (sus dependientes), por eso todo ["task"].
+      // It also changes the other task's panel (its dependents), hence all of ["task"].
       await Promise.all(
         ["task", "tasks", "queue"].map((key) => queryClient.invalidateQueries({ queryKey: [key] })),
       );

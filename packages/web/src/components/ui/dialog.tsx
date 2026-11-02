@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useId } from "react";
 
-/** Popup modal: se cierra con Escape o al pulsar el fondo. Quien lo usa lo monta solo mientras está abierto. */
+/** Modal popup: closes with Escape or when the background is clicked. Whoever uses it mounts it only while open. */
 export function Dialog({
   title,
   onClose,

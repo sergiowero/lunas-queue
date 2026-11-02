@@ -1,10 +1,10 @@
-// Menciones #N en el intent de una tarea (ADR 0015): `#` seguido de dígitos, sin una letra, dígito
-// o `#` pegados antes ni una letra o dígito pegados después. Así `a#5`, `#5x` y `#abc` son texto.
+// #N mentions in a task's intent (ADR 0015): `#` followed by digits, without a letter, digit
+// or `#` stuck before nor a letter or digit stuck after. This way `a#5`, `#5x` and `#abc` are text.
 export type Mention = { number: number; text: string };
 
 const MENTION = /(?<![\p{L}\p{N}_#])#([1-9]\d*)(?![\p{L}\p{N}_])/gu;
 
-/** Parte `text` en trozos de texto y menciones, en orden; omite los trozos vacíos. */
+/** Splits `text` into text chunks and mentions, in order; omits the empty chunks. */
 export function splitMentions(text: string): (string | Mention)[] {
   const parts: (string | Mention)[] = [];
   let last = 0;

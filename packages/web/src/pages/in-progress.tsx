@@ -1,5 +1,5 @@
-// Pestaña En curso: las tareas en In progress y cualquier tarea con un agente corriendo (sub-estado running), de todos los proyectos.
-// Lee la lista de tareas, así que el stream en vivo la refresca al invalidar ["tasks"].
+// In progress tab: tasks in In progress and any task with a running agent (running sub-state), across all projects.
+// It reads the task list, so the live stream refreshes it when ["tasks"] is invalidated.
 import type { RunView, Task } from "@lunasq/schemas";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -21,7 +21,7 @@ type Row = Json<Task>;
 type Run = Json<RunView>;
 const column = createColumnHelper<Row>();
 
-/** El último Run por startedAt: el abierto si hay agente corriendo. */
+/** The last Run by startedAt: the open one if an agent is running. */
 function latestRun(runs: Run[]): Run | undefined {
   return runs.reduce<Run | undefined>(
     (latest, run) =>
@@ -30,10 +30,10 @@ function latestRun(runs: Run[]): Run | undefined {
   );
 }
 
-/** Runs de una tarea: cargando, con error, sin ninguno (`null`) o el más reciente. */
+/** A task's Runs: loading, with an error, with none (`null`) or the most recent. */
 type LatestRun = Run | null | "loading" | "error";
 
-/** «…» mientras cargan los Runs de la tarea; «error» si falló la consulta; «—» si no tiene ninguno. */
+/** «…» while the task's Runs load; «error» if the query failed; «—» if it has none. */
 function runCell(
   run: LatestRun | undefined,
   format: (run: Run) => string,
@@ -45,10 +45,10 @@ function runCell(
 }
 
 /**
- * Solo el icono: el nombre accesible lleva la tarea. Una tarea pausada deja de estar en la lista al
- * refrescar, así que aquí solo hay pausa. Es un componente de módulo (no una función en línea):
- * las columnas se recrean al llegar los Runs y una celda nueva remontaría el botón, perdiendo su
- * estado pendiente y su error.
+ * Icon only: the accessible name carries the task. A paused task leaves the list on
+ * refresh, so only pause is here. It is a module component (not an inline function):
+ * the columns are recreated when the Runs arrive and a new cell would remount the button, losing its
+ * pending state and its error.
  */
 function ActionsCell({ row }: CellContext<Row, unknown>) {
   return canPause(row.original.state) ? (
@@ -66,17 +66,17 @@ export function InProgressPage() {
     [projects.data],
   );
   const inProgress = useMemo(() => tasks.data?.filter(isInProgress), [tasks.data]);
-  // Un query por tarea, con la misma clave que el panel de Runs: el stream en vivo la invalida
-  // junto con ["task", id], así que las columnas de Run se refrescan solas.
-  // Distingue cargando, error de la consulta y «sin Runs» (`null`): un fallo no se muestra como vacío.
+  // One query per task, with the same key as the Runs panel: the live stream invalidates it
+  // together with ["task", id], so the Run columns refresh on their own.
+  // Distinguishes loading, query error and «no Runs» (`null`): a failure is not shown as empty.
   const latestRuns = useQueries({
     queries: (inProgress ?? []).map((t) => queries.runs(t.id)),
     combine: (results) => {
       const byTask = new Map<string, LatestRun>();
       (inProgress ?? []).forEach((t, i) => {
         const result = results[i];
-        // El error gana sobre los datos en caché: un refetch fallido conserva `data`, pero la fila
-        // debe decir «error» y no ofrecer enfocar un pane que quizá ya no es el vigente.
+        // The error wins over the cached data: a failed refetch keeps `data`, but the row
+        // must say «error» and not offer to focus a pane that may no longer be the current one.
         byTask.set(
           t.id,
           result?.isError
@@ -122,8 +122,8 @@ export function InProgressPage() {
         ),
       }),
       column.accessor("priority", { header: t.columns.priority }),
-      // Columnas de display: TanStack Table cachea el valor de los accessors por fila mientras
-      // `data` no cambie, y los Runs llegan después de la lista de tareas.
+      // Display columns: TanStack Table caches the accessors' value per row while
+      // `data` does not change, and the Runs arrive after the task list.
       column.display({
         id: "iteration",
         header: t.inProgressPage.iteration,

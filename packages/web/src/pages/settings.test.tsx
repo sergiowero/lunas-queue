@@ -5,8 +5,8 @@ import { renderApp } from "../../test/render.tsx";
 
 const on = (el: HTMLElement) => el.getAttribute("aria-checked") === "true";
 
-describe("página Settings", () => {
-  it("está enlazada en la navegación y muestra un interruptor por proveedor, ambos encendidos", async () => {
+describe("Settings page", () => {
+  it("is linked in the navigation and shows a switch per provider, both on", async () => {
     const { user } = renderApp("/queue");
     await user.click(await screen.findByRole("link", { name: "Settings" }));
     const claude = await screen.findByRole("switch", { name: "Claude" });
@@ -15,7 +15,7 @@ describe("página Settings", () => {
     expect(on(copilot)).toBe(true);
   });
 
-  it("apagar Claude envía el PUT y el interruptor queda apagado tras recargar", async () => {
+  it("turning Claude off sends the PUT and the switch stays off after reloading", async () => {
     const { user, fake, unmount } = renderApp("/settings");
     await user.click(await screen.findByRole("switch", { name: "Claude" }));
 
@@ -25,14 +25,14 @@ describe("página Settings", () => {
     ]);
     expect(fake.providers).toEqual({ claude: false, copilot: true });
 
-    // Recargar: una app nueva contra el mismo estado guardado.
+    // Reload: a new app against the same saved state.
     unmount();
     renderApp("/settings", fake);
     expect(on(await screen.findByRole("switch", { name: "Claude" }))).toBe(false);
     expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(true);
   });
 
-  it("con teclado, el interruptor guardando sigue enfocable y no se pulsa dos veces", async () => {
+  it("with the keyboard, the saving switch stays focusable and is not pressed twice", async () => {
     const fake = new FakeApi();
     let release = () => {};
     fake.holdProvidersPut = new Promise<void>((resolve) => {
@@ -44,8 +44,8 @@ describe("página Settings", () => {
 
     await user.keyboard(" ");
 
-    // En vuelo: aria-disabled y no `disabled`, que sacaría al botón del orden de tabulación y
-    // soltaría el foco al terminar.
+    // In flight: aria-disabled and not `disabled`, which would take the button out of the tab order and
+    // drop focus when finished.
     await waitFor(() => expect(claude.getAttribute("aria-disabled")).toBe("true"));
     expect(claude.hasAttribute("disabled")).toBe(false);
     expect(document.activeElement).toBe(claude);
@@ -59,11 +59,11 @@ describe("página Settings", () => {
     expect(fake.providers).toEqual({ claude: false, copilot: true });
   });
 
-  it("un cambio de otra pestaña no se pisa: cada interruptor envía solo su proveedor", async () => {
+  it("a change from another tab is not overwritten: each switch sends only its provider", async () => {
     const fake = new FakeApi();
     const { user } = renderApp("/settings", fake);
     await screen.findByRole("switch", { name: "Claude" });
-    // Otra pestaña apaga Claude mientras esta conserva la vista vieja (Claude encendido).
+    // Another tab turns Claude off while this one keeps the old view (Claude on).
     fake.providers = { claude: false, copilot: true };
 
     await user.click(screen.getByRole("switch", { name: "Copilot" }));
@@ -73,11 +73,11 @@ describe("página Settings", () => {
     expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false);
   });
 
-  it("la respuesta de un PUT viejo no restaura una vista anterior a un cambio posterior", async () => {
+  it("the response of an old PUT does not restore a view earlier than a later change", async () => {
     const fake = new FakeApi();
     const { user } = renderApp("/settings", fake);
     await screen.findByRole("switch", { name: "Claude" });
-    // Otra pestaña apaga Claude justo después de que este PUT se guarda y antes de que responda.
+    // Another tab turns Claude off right after this PUT is saved and before it responds.
     fake.afterProvidersPut = () => {
       fake.providers = { ...fake.providers, claude: false };
     };
@@ -88,7 +88,7 @@ describe("página Settings", () => {
     await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
   });
 
-  it("un error al volver a leer conserva los interruptores con el último estado y avisa", async () => {
+  it("an error when reading again keeps the switches with the last state and warns", async () => {
     const fake = new FakeApi();
     const { user } = renderApp("/settings", fake);
     await screen.findByRole("switch", { name: "Claude" });
@@ -96,15 +96,15 @@ describe("página Settings", () => {
 
     await user.click(screen.getByRole("switch", { name: "Copilot" }));
 
-    // El PUT se guardó: el aviso lo dice y no habla de un cambio fallido (ver el test siguiente).
+    // The PUT was saved: the notice says so and does not talk about a failed change (see the next test).
     const alert = await screen.findByText(/El cambio se guardó/, {}, { timeout: 4000 });
     expect(alert.getAttribute("role")).toBe("alert");
-    // Los interruptores conservan el último estado leído: ambos siguen encendidos.
+    // The switches keep the last state read: both are still on.
     expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(true);
     expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(true);
   });
 
-  it("una lectura fallida posterior a una relectura exitosa no dice que el cambio no se leyó", async () => {
+  it("a failed read after a successful re-read does not say the change was not read", async () => {
     const fake = new FakeApi();
     const { user, refresh } = renderApp("/settings", fake);
     await screen.findByRole("switch", { name: "Claude" });
@@ -112,13 +112,13 @@ describe("página Settings", () => {
     await user.click(screen.getByRole("switch", { name: "Copilot" }));
     await screen.findByText(/El cambio se guardó/, {}, { timeout: 4000 });
 
-    // Una lectura posterior al PUT tiene éxito: los interruptores ya reflejan lo guardado.
+    // A read after the PUT succeeds: the switches already reflect what was saved.
     fake.providersReadFails = false;
     await refresh();
     await waitFor(() => expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(false));
     expect(screen.queryByText(/El cambio se guardó/)).toBeNull();
 
-    // Otra lectura falla después: es un fallo ajeno al cambio, con el texto genérico.
+    // Another read fails afterwards: it is a failure unrelated to the change, with the generic text.
     fake.providersReadFails = true;
     await refresh();
     const alert = await screen.findByText(/No se pudo actualizar la configuración/);
@@ -126,7 +126,7 @@ describe("página Settings", () => {
     expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(false);
   });
 
-  it("si el PUT se guarda pero la relectura falla, avisa que el cambio se guardó y no que falló", async () => {
+  it("if the PUT is saved but the re-read fails, it warns that the change was saved and not that it failed", async () => {
     const fake = new FakeApi();
     const { user } = renderApp("/settings", fake);
     await screen.findByRole("switch", { name: "Claude" });
@@ -140,7 +140,7 @@ describe("página Settings", () => {
     expect(fake.providers).toEqual({ claude: true, copilot: false });
   });
 
-  it("muestra el error si el servidor rechaza el cambio y conserva el estado guardado", async () => {
+  it("shows the error if the server rejects the change and keeps the saved state", async () => {
     const fake = new FakeApi();
     fake.providersError = { status: 400, error: "invalid_input", message: "entrada inválida" };
     const { user } = renderApp("/settings", fake);
@@ -153,10 +153,10 @@ describe("página Settings", () => {
   });
 });
 
-describe("sección Concurrencia", () => {
+describe("Concurrencia section", () => {
   const field = () => screen.findByRole("spinbutton", { name: /Agentes concurrentes/ });
 
-  it("muestra el límite vigente en un campo numérico con su botón Guardar", async () => {
+  it("shows the current limit in a numeric field with its Guardar button", async () => {
     renderApp("/settings");
     expect((await field()).getAttribute("type")).toBe("number");
     expect((await field()) as HTMLInputElement).toHaveProperty("value", "5");
@@ -164,7 +164,7 @@ describe("sección Concurrencia", () => {
     expect(screen.getByRole("button", { name: "Guardar" })).toBeTruthy();
   });
 
-  it("escribir 3 y guardar envía el PUT, muestra 3 tras releer y deshabilita Guardar mientras guarda", async () => {
+  it("typing 3 and saving sends the PUT, shows 3 after re-reading and disables Guardar while saving", async () => {
     const fake = new FakeApi();
     let release = () => {};
     fake.holdConcurrencyPut = new Promise<void>((resolve) => {
@@ -195,7 +195,7 @@ describe("sección Concurrencia", () => {
     expect((await field()) as HTMLInputElement).toHaveProperty("value", "3");
   });
 
-  it("sobrevive a recargar: una app nueva lee el límite guardado", async () => {
+  it("survives a reload: a new app reads the saved limit", async () => {
     const fake = new FakeApi();
     const { user, unmount } = renderApp("/settings", fake);
     const input = (await field()) as HTMLInputElement;
@@ -232,7 +232,7 @@ describe("sección Concurrencia", () => {
     },
   );
 
-  it("el mensaje de validación desaparece al corregir el valor y guardar", async () => {
+  it("the validation message disappears when correcting the value and saving", async () => {
     const fake = new FakeApi();
     const { user } = renderApp("/settings", fake);
     const input = (await field()) as HTMLInputElement;
@@ -248,7 +248,7 @@ describe("sección Concurrencia", () => {
     expect(input.getAttribute("aria-invalid")).not.toBe("true");
   });
 
-  it("si falla el guardado muestra un aviso, conserva el último valor leído y los proveedores siguen", async () => {
+  it("if saving fails it shows a notice, keeps the last value read and the providers keep working", async () => {
     const fake = new FakeApi();
     fake.concurrencyError = { status: 500, error: "internal", message: "disco lleno" };
     const { user } = renderApp("/settings", fake);
@@ -262,13 +262,13 @@ describe("sección Concurrencia", () => {
     expect(alert.textContent).toContain("disco lleno");
     expect(alert.textContent).toContain("sigue vigente 5");
     expect(fake.concurrency).toEqual({ globalConcurrency: 5 });
-    // Los proveedores siguen funcionando.
+    // The providers keep working.
     await user.click(screen.getByRole("switch", { name: "Claude" }));
     await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
     expect(fake.providers).toEqual({ claude: false, copilot: true });
   });
 
-  it("si el PUT se guarda pero la relectura falla, el campo muestra el valor guardado y el aviso dice que se guardó", async () => {
+  it("if the PUT is saved but the re-read fails, the field shows the saved value and the notice says it was saved", async () => {
     const fake = new FakeApi();
     const { user } = renderApp("/settings", fake);
     const input = (await field()) as HTMLInputElement;
@@ -288,7 +288,7 @@ describe("sección Concurrencia", () => {
     );
   }, 15000);
 
-  it("si un guardado falla después de uno que se guardó sin releerse, el aviso indica el valor guardado", async () => {
+  it("if a save fails after one that was saved without being re-read, the notice shows the saved value", async () => {
     const fake = new FakeApi();
     const { user } = renderApp("/settings", fake);
     const input = (await field()) as HTMLInputElement;
@@ -309,7 +309,7 @@ describe("sección Concurrencia", () => {
     expect(fake.concurrency).toEqual({ globalConcurrency: 3 });
   }, 20000);
 
-  it("si falla la lectura muestra un aviso y la sección de proveedores sigue funcionando", async () => {
+  it("if the read fails it shows a notice and the providers section keeps working", async () => {
     const fake = new FakeApi();
     fake.concurrencyReadFails = true;
     const { user } = renderApp("/settings", fake);
@@ -320,7 +320,7 @@ describe("sección Concurrencia", () => {
     await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
   });
 
-  it("si falla una relectura conserva el último valor leído y avisa", async () => {
+  it("if a re-read fails it keeps the last value read and warns", async () => {
     const fake = new FakeApi();
     const { refresh } = renderApp("/settings", fake);
     expect((await field()) as HTMLInputElement).toHaveProperty("value", "5");
@@ -334,8 +334,8 @@ describe("sección Concurrencia", () => {
   });
 });
 
-describe("aviso de despacho en pausa", () => {
-  it("no aparece mientras haya algún proveedor habilitado", async () => {
+describe("paused dispatch notice", () => {
+  it("does not appear while any provider is enabled", async () => {
     const fake = new FakeApi();
     fake.providers = { claude: false, copilot: true };
     renderApp("/queue", fake);
@@ -358,7 +358,7 @@ describe("aviso de despacho en pausa", () => {
     },
   );
 
-  it("avisa que el estado es desconocido si la configuración no se puede leer", async () => {
+  it("warns that the state is unknown if the configuration cannot be read", async () => {
     const fake = new FakeApi();
     fake.providersReadFails = true;
     renderApp("/queue", fake);
@@ -367,12 +367,12 @@ describe("aviso de despacho en pausa", () => {
     expect(banner.querySelector('a[href="/settings"]')).not.toBeNull();
   });
 
-  it("con datos en caché, un error al volver a leer no oculta el aviso de estado desconocido", async () => {
+  it("with cached data, an error when reading again does not hide the unknown state notice", async () => {
     const fake = new FakeApi();
     const { user } = renderApp("/settings", fake);
     await screen.findByRole("switch", { name: "Claude" });
     expect(screen.queryByText(/Estado del despacho desconocido/)).toBeNull();
-    // La lectura falla después de haber visto ambos proveedores habilitados; el PUT los deshabilita.
+    // The read fails after having seen both providers enabled; the PUT disables them.
     fake.providersReadFails = true;
 
     await user.click(screen.getByRole("switch", { name: "Claude" }));
@@ -386,7 +386,7 @@ describe("aviso de despacho en pausa", () => {
     ).toBeTruthy();
   });
 
-  it("desaparece al habilitar un proveedor desde Settings", async () => {
+  it("disappears when enabling a provider from Settings", async () => {
     const fake = new FakeApi();
     fake.providers = { claude: false, copilot: false };
     const { user } = renderApp("/settings", fake);
@@ -396,15 +396,15 @@ describe("aviso de despacho en pausa", () => {
   });
 });
 
-describe("navegación con Settings", () => {
-  it("enlaza Settings desde el header y deja desplazar el nav en anchos estrechos", async () => {
+describe("navigation with Settings", () => {
+  it("links Settings from the header and lets the nav scroll at narrow widths", async () => {
     renderApp("/queue", new FakeApi());
     const link = await screen.findByRole("link", { name: "Settings" });
     const nav = screen.getByRole("navigation");
     expect(nav.contains(link)).toBe(false);
     expect(nav.className).toContain("overflow-x-auto");
     expect(nav.className).toContain("min-w-0");
-    // El relleno evita que overflow-x-auto recorte el anillo de foco de los enlaces.
+    // The padding keeps overflow-x-auto from clipping the focus ring of the links.
     expect(nav.className).toMatch(/\bpy-2\b/);
     expect(nav.className).toMatch(/\bpx-1\b/);
     expect(link.className).toContain("shrink-0");

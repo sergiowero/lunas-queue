@@ -12,7 +12,7 @@ export function App({
   router: ReturnType<typeof createAppRouter>;
   queryClient: QueryClient;
 }) {
-  // Antes de pintar: confirma en <html> el tema que ya puso el script de index.html.
+  // Before painting: confirms on <html> the theme the index.html script already set.
   useLayoutEffect(initTheme, []);
   // Same for the language: the inline script already set `lang` and this only confirms it.
   useLayoutEffect(initLanguage, []);

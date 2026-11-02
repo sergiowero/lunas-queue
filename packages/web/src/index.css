@@ -1,11 +1,11 @@
-/* Design system de MoonlightQ (design-system/ del repo moonlight-task-queue): neutros zinc sobre un
-   `canvas` casi blanco, un único índigo `primary` y seis tonos semánticos. Cada tono trae su relleno
-   sólido, `-hover`, `-fg` (texto sobre el sólido) y `-text` (texto de color sobre superficies neutras). */
+/* MoonlightQ design system (design-system/ of the moonlight-task-queue repo): zinc neutrals over an
+   almost white `canvas`, a single indigo `primary` and six semantic tones. Each tone carries its solid
+   fill, `-hover`, `-fg` (text over the solid) and `-text` (colored text over neutral surfaces). */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
-/* `dark:` se activa con la clase `dark` de <html>, que pone lib/theme.ts (o el script de index.html
-   antes de montar React), no con prefers-color-scheme. */
+/* `dark:` is activated by the `dark` class on <html>, which lib/theme.ts sets (or the index.html script
+   before mounting React), not by prefers-color-scheme. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
@@ -65,7 +65,7 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Nombres de shadcn/ui que usan las páginas: apuntan a los tokens de arriba y siguen al tema. */
+/* shadcn/ui names the pages use: they point to the tokens above and follow the theme. */
 @theme inline {
   --color-background: var(--color-surface);
   --color-foreground: var(--color-text);
@@ -74,14 +74,14 @@
   --color-primary-foreground: var(--color-primary-fg);
   --color-secondary: var(--color-surface-secondary);
   --color-secondary-foreground: var(--color-text);
-  /* Solo se usa como color de texto (`text-destructive`): la variante -text mantiene el contraste en ambos temas. */
+  /* Only used as a text color (`text-destructive`): the -text variant keeps contrast in both themes. */
   --color-destructive: var(--color-danger-text);
   --color-destructive-foreground: var(--color-danger-fg);
   --color-info-foreground: var(--color-info-fg);
   --color-ring: var(--color-primary);
 }
 
-/* Tema oscuro: los mismos tokens con los valores oscuros de MoonlightQ. */
+/* Dark theme: the same tokens with MoonlightQ's dark values. */
 .dark {
   color-scheme: dark;
 
@@ -166,34 +166,34 @@
 }
 
 @layer components {
-  /* Contenedor estático: paneles, filas de lista, secciones de formulario. */
+  /* Static container: panels, list rows, form sections. */
   .card {
     @apply rounded-xl border border-border bg-surface shadow-xs;
   }
 
-  /* Micro-etiqueta en mayúsculas sobre un valor o sección. */
+  /* Uppercase micro-label over a value or section. */
   .eyebrow {
     @apply text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted;
   }
 }
 
-/* Cambio de tema: revelado circular con View Transitions (lib/theme.ts anima el clip-path). */
+/* Theme switch: circular reveal with View Transitions (lib/theme.ts animates the clip-path). */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
   mix-blend-mode: normal;
 }
 
-/* Sin View Transitions: fundido corto de colores mientras dura la clase. */
+/* Without View Transitions: short color fade for as long as the class lasts. */
 .theme-transition,
 .theme-transition *,
 .theme-transition *::before,
 .theme-transition *::after {
-  /* biome-ignore lint/complexity/noImportantStyles: el fundido debe ganar a las transiciones de cada componente. */
+  /* biome-ignore lint/complexity/noImportantStyles: the fade must win over each component's transitions. */
   transition-property: background-color, border-color, color, fill, stroke, box-shadow !important;
-  /* biome-ignore lint/complexity/noImportantStyles: el fundido debe ganar a las transiciones de cada componente. */
+  /* biome-ignore lint/complexity/noImportantStyles: the fade must win over each component's transitions. */
   transition-duration: 300ms !important;
-  /* biome-ignore lint/complexity/noImportantStyles: el fundido debe ganar a las transiciones de cada componente. */
+  /* biome-ignore lint/complexity/noImportantStyles: the fade must win over each component's transitions. */
   transition-timing-function: ease !important;
 }
 
@@ -201,13 +201,13 @@
   *,
   *::before,
   *::after {
-    /* biome-ignore lint/complexity/noImportantStyles: anula las animaciones de cualquier componente. */
+    /* biome-ignore lint/complexity/noImportantStyles: overrides any component's animations. */
     animation-duration: 0.01ms !important;
-    /* biome-ignore lint/complexity/noImportantStyles: anula las animaciones de cualquier componente. */
+    /* biome-ignore lint/complexity/noImportantStyles: overrides any component's animations. */
     animation-iteration-count: 1 !important;
-    /* biome-ignore lint/complexity/noImportantStyles: anula las animaciones de cualquier componente. */
+    /* biome-ignore lint/complexity/noImportantStyles: overrides any component's animations. */
     transition-duration: 0.01ms !important;
-    /* biome-ignore lint/complexity/noImportantStyles: anula las animaciones de cualquier componente. */
+    /* biome-ignore lint/complexity/noImportantStyles: overrides any component's animations. */
     scroll-behavior: auto !important;
   }
 }

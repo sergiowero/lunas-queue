@@ -1,8 +1,8 @@
-// Bandeja (docs/design.md §Preguntas del agente y bloqueos, ADR uw-27-bandeja): todo lo que espera
-// al humano en un solo lugar. Las specs por aprobar (tareas en refined) son solo una lista de
-// enlaces: la spec y su gate se revisan en el detalle de la tarea (ADR 0015); las preguntas se
-// responden aquí; los bloqueos por permiso se responden en herdr, y la bandeja lleva la vista al
-// pane del agente.
+// Inbox (docs/design.md §Agent questions and blocks, ADR uw-27-bandeja): everything that waits
+// for the human in a single place. The specs to approve (tasks in refined) are just a list of
+// links: the spec and its gate are reviewed in the task detail (ADR 0015); the questions are
+// answered here; permission blocks are answered in herdr, and the inbox takes the view to the
+// agent's pane.
 import type { BlockedAgent, Question, QuestionDelivery, Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -20,10 +20,10 @@ import { type Inbox, type TasksById, useInbox } from "../lib/inbox.ts";
 import { invalidateInbox } from "../lib/live.ts";
 import { queries } from "../lib/queries.ts";
 
-/** Resultado de la última respuesta; se muestra en la sección porque la tarjeta puede desaparecer. */
+/** Result of the last answer; shown in the section because the card can disappear. */
 type Notice = { ok: true; delivery: QuestionDelivery } | { ok: false; error: Error };
 
-/** Nombre del proyecto de la tarea, si ya cargó la lista de proyectos. */
+/** Name of the task's project, if the project list has already loaded. */
 function ProjectName({ task }: { task: Json<Task> | undefined }) {
   const projects = useQuery(queries.projects());
   const project = projects.data?.find((p) => p.id === task?.projectId);
@@ -49,7 +49,7 @@ function TaskLink({
   );
 }
 
-/** Un pendiente: tarjeta con nombre (la tarea) para lectores de pantalla y tests. */
+/** A pending item: card with a name (the task) for screen readers and tests. */
 function Item({
   task,
   taskId,
@@ -74,7 +74,7 @@ function Item({
   );
 }
 
-/** Una fila por tarea en refined: la spec y su gate viven en el detalle de la tarea. */
+/** One row per task in refined: the spec and its gate live in the task detail. */
 function SpecsSection({ refined, tasks }: { refined: Json<Task>[]; tasks: Inbox["tasks"] }) {
   const t = useT();
   return (
@@ -131,7 +131,7 @@ function EscalatedSection({
   );
 }
 
-/** Valor de `choice` para «Otra respuesta»: el humano escribe su propio texto. */
+/** Value of `choice` for «Otra respuesta»: the human writes their own text. */
 const OTHER = "other";
 
 function QuestionItem({
@@ -148,7 +148,7 @@ function QuestionItem({
   const runs = useQuery(queries.runs(question.taskId));
   const phase = runs.data?.find((r) => r.id === question.runId)?.phase;
   const [typed, setTyped] = useState("");
-  // Índice de la opción elegida, OTHER para «Otra respuesta» y null mientras no haya elección.
+  // Index of the chosen option, OTHER for «Otra respuesta» and null while there is no choice.
   const [choice, setChoice] = useState<number | typeof OTHER | null>(null);
   const options = question.options;
   const answer = options
@@ -162,7 +162,7 @@ function QuestionItem({
     mutationFn: () => api.answerQuestion(question.id, answer),
     onMutate: () => onResult(null),
     onSuccess: ({ delivery }) => onResult({ ok: true, delivery }),
-    // Un 409 (not_open, task_not_waiting) también cambia la bandeja: la pregunta ya no espera.
+    // A 409 (not_open, task_not_waiting) also changes the inbox: the question no longer waits.
     onError: (error) => onResult({ ok: false, error }),
     onSettled: async () => {
       invalidateInbox(queryClient);
@@ -276,7 +276,7 @@ function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Ta
   const queryClient = useQueryClient();
   const focus = useMutation({
     mutationFn: () => api.focusBlocked(agent.runId),
-    // 404 not_blocked o 409 agent_gone: la lista quedó vieja, se vuelve a pedir sin esperar el refresco.
+    // 404 not_blocked or 409 agent_gone: the list went stale, it is re-requested without waiting for the refresh.
     onError: () => queryClient.invalidateQueries({ queryKey: ["blocked"] }),
   });
   return (
@@ -331,7 +331,7 @@ function BlockedSection({ blocked, tasks }: { blocked: Inbox["blocked"]; tasks: 
 export function InboxPage() {
   const t = useT();
   const inbox = useInbox();
-  // Solo con las tres consultas en éxito: una que falló no puede leerse como «nada pendiente».
+  // Only with the three queries successful: one that failed cannot be read as «nothing pending».
   const loaded = inbox.tasks.isSuccess && inbox.questions.isSuccess && inbox.blocked.isSuccess;
   return (
     <div className="flex flex-col gap-4">

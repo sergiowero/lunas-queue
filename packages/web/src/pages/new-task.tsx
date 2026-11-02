@@ -1,7 +1,7 @@
-// Alta de tareas: intent, tags, prioridad y dependencias iniciales (TaskCreate, ADR 0010). La
-// validación es la del servidor; aquí solo se muestran sus issues. Las dependencias se agregan una a
-// una con un selector y quedan en una lista de elegidas, en el orden en que se agregaron. Pueden ser
-// de cualquier proyecto; las de otro se marcan como riesgo, igual que en el detalle.
+// Task creation: intent, tags, priority and initial dependencies (TaskCreate, ADR 0010). The
+// validation is the server's; here only its issues are shown. Dependencies are added one by
+// one with a selector and end up in a list of chosen ones, in the order they were added. They can be
+// from any project; those from another are flagged as a risk, like in the detail.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
@@ -75,7 +75,7 @@ export function NewTaskPage() {
   if (projects.error) return <QueryError error={projects.error} />;
   if (!projects.data) return <Loading />;
   const live = (candidates.data ?? []).filter((c) => !isTerminal(c.state));
-  // El proyecto elegido primero; después los demás en el orden del listado de proyectos.
+  // The chosen project first; then the others in the order of the project list.
   const groups = [...projects.data]
     .sort((a, b) => Number(b.id === projectId) - Number(a.id === projectId))
     .map((project) => ({
@@ -148,7 +148,7 @@ export function NewTaskPage() {
         <div className="flex flex-col gap-2">
           <Label htmlFor="task-depends-on">{t.newTask.dependsOn}</Label>
           {groups.length > 0 && (
-            // Controlado con value="": al elegir una tarea se agrega y el selector vuelve al placeholder.
+            // Controlled with value="": choosing a task adds it and the selector goes back to the placeholder.
             <Select id="task-depends-on" value="" onChange={(e) => add(e.target.value)}>
               <option value="">{t.newTask.addDependency}</option>
               {groups.map(({ project, tasks }) => (

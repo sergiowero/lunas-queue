@@ -1,5 +1,5 @@
-// Versiones de la spec, su contenido y el diff contra la anterior (ADR 0013), con el gate: aprobar,
-// pedir cambios o editar y aprobar. Solo lo monta el detalle de tarea: la bandeja enlaza a él (ADR 0015).
+// Spec versions, their content and the diff against the previous one (ADR 0013), with the gate: approve,
+// request changes or edit and approve. Only the task detail mounts it: the inbox links to it (ADR 0015).
 import type { Spec, SpecContent, SpecDiff, Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -25,7 +25,7 @@ function Content({ spec }: { spec: Json<Spec> }) {
         <h3 className="font-medium">{t.spec.requirements}</h3>
         <ul className="list-disc pl-5">
           {requirements.map((r, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: los textos pueden repetirse y la lista no se reordena.
+            // biome-ignore lint/suspicious/noArrayIndexKey: the texts can repeat and the list is not reordered.
             <li key={i}>{r}</li>
           ))}
         </ul>
@@ -50,7 +50,7 @@ function Content({ spec }: { spec: Json<Spec> }) {
   );
 }
 
-/** Una línea por cambio: + agregado, − quitado, ~ modificado. */
+/** One line per change: + added, − removed, ~ modified. */
 function diffLines(diff: Json<SpecDiff>, t: Dictionary): string[] {
   const { domainModel: dm, requirements, criteria, taskList } = diff.changes;
   const lines: string[] = [];
@@ -97,7 +97,7 @@ function Diff({ taskId, version }: { taskId: string; version: number }) {
       ) : (
         <ul className="font-mono text-xs">
           {lines.map((line, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: las líneas pueden repetirse y la lista no se reordena.
+            // biome-ignore lint/suspicious/noArrayIndexKey: the lines can repeat and the list is not reordered.
             <li key={i}>{line}</li>
           ))}
         </ul>
@@ -106,7 +106,7 @@ function Diff({ taskId, version }: { taskId: string; version: number }) {
   );
 }
 
-/** Editar y aprobar (§Aprobación de la spec): el contenido va como JSON y el servidor lo valida. */
+/** Edit and approve (§Spec approval): the content goes as JSON and the server validates it. */
 function Editor({
   spec,
   pending,
@@ -169,8 +169,8 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
     await queryClient.invalidateQueries({ queryKey: ["queue"] });
     await queryClient.invalidateQueries({ queryKey: ["tasks"] });
   };
-  // Solo se muestra el error de la última acción: cada una limpia el de las otras. Un 409 no
-  // refresca el panel: desmontaría el gate con el error; el cambio que lo causó llega por SSE.
+  // Only the last action's error is shown: each one clears the others'. A 409 does not
+  // refresh the panel: it would unmount the gate with the error; the change that caused it arrives by SSE.
   const approve = useMutation({
     mutationFn: () => api.approveSpec(task.id, spec.version),
     onMutate: () => {
@@ -241,12 +241,12 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
   );
 }
 
-/** Versiones, contenido, diff y gate; sin marco. */
+/** Versions, content, diff and gate; without a frame. */
 export function SpecVersions({ task }: { task: Json<Task> }) {
   const t = useT();
   const specs = useQuery(queries.specs(task.id));
-  // La elección vale contra la última versión que había: si llega otra, se muestra la nueva para
-  // que el gate (que solo aplica a la última) no quede oculto.
+  // The choice holds against the last version there was: if another arrives, the new one is shown so
+  // the gate (which only applies to the last one) is not hidden.
   const [choice, setChoice] = useState<{ version: number; latest: number } | null>(null);
 
   if (specs.error) return <QueryError error={specs.error} />;

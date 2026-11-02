@@ -4,7 +4,7 @@ import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 
 describe("cola global", () => {
-  it("muestra las tareas en el orden del servidor, con score, estado, proyecto y usage", async () => {
+  it("shows the tasks in the server order, with score, state, project and usage", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     const a = fake.addTask(project.id, { intent: "Primera", priority: 10 });
@@ -38,7 +38,7 @@ describe("cola global", () => {
 
     const rows = await screen.findAllByRole("row");
     const body = rows.slice(1).map((row) => within(row).getAllByRole("cell"));
-    // La celda de la tarea lleva su #N antes del intent.
+    // The task cell carries its #N before the intent.
     expect(body.map((cells) => cells[1]?.textContent)).toEqual([
       `#${b.number}Segunda`,
       `#${a.number}Primera`,
@@ -61,7 +61,7 @@ describe("cola global", () => {
     );
   });
 
-  it("la columna Estado muestra una etiqueta por tarea, azul solo para In progress", async () => {
+  it("the Estado column shows a label per task, blue only for In progress", async () => {
     const fake = new FakeApi();
     const project = fake.addProject();
     fake.addTask(project.id, { intent: "Borrador" });
@@ -94,7 +94,7 @@ describe("cola global", () => {
     expect(screen.getAllByText("In progress")).toHaveLength(1);
   });
 
-  describe("columna Acciones", () => {
+  describe("Acciones column", () => {
     const queueOf = (fake: FakeApi) => {
       fake.queue = fake.tasks.map((task) => ({
         task,
@@ -113,7 +113,7 @@ describe("cola global", () => {
     const rowOf = async (intent: string) =>
       within((await screen.findByRole("link", { name: intent })).closest("tr") as HTMLElement);
 
-    it("la pausable lleva solo el icono de pausa; la pausada y la de needs_human solo el de reanudar", async () => {
+    it("the pausable one carries only the pause icon; the paused one and the needs_human one only the resume icon", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       fake.addTask(project.id, { intent: "Pausable", state: "in_progress", subState: "running" });
@@ -145,7 +145,7 @@ describe("cola global", () => {
       }
     });
 
-    it("pausar desde la Cola mueve la tarea a Paused y ofrece reanudarla", async () => {
+    it("pausing from the Cola moves the task to Paused and offers to resume it", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       const task = fake.addTask(project.id, {
@@ -167,7 +167,7 @@ describe("cola global", () => {
       expect(fake.task(task.id).state).toBe("refined");
     });
 
-    it("si la API rechaza la acción muestra el error con role alert en esa fila", async () => {
+    it("if the API rejects the action it shows the error with role alert in that row", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       const task = fake.addTask(project.id, { intent: "Rechazada", state: "draft" });
@@ -185,7 +185,7 @@ describe("cola global", () => {
     });
   });
 
-  it("filtra por proyecto", async () => {
+  it("filters by project", async () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
@@ -200,7 +200,7 @@ describe("cola global", () => {
     expect(fake.requests.at(-1)?.path).toBe(`/api/queue?projectId=${one.id}`);
   });
 
-  it("explica cuando la cola está vacía", async () => {
+  it("explains when the queue is empty", async () => {
     renderApp("/queue");
     expect(await screen.findByText("No hay tareas vivas en la cola.")).toBeTruthy();
   });

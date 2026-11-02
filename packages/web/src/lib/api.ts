@@ -1,5 +1,5 @@
-// Cliente de la API de LunasQ. Los tipos vienen de @lunasq/schemas; por JSON las fechas llegan
-// como string ISO, así que cada respuesta se tipa con Json<T>.
+// LunasQ API client. The types come from @lunasq/schemas; over JSON the dates arrive
+// as ISO strings, so each response is typed with Json<T>.
 import type {
   AgentProviderPatch,
   AgentProviderSettings,
@@ -90,7 +90,7 @@ export const api = {
   runs: (id: string) => request<RunView[]>(`${task(id)}/runs`),
   events: (id: string) => request<EventView[]>(`${task(id)}/events`),
   usage: (id: string) => request<TaskUsage>(`${task(id)}/usage`),
-  /** null mientras la tarea no tiene archivo de evidencia. */
+  /** null while the task has no evidence file. */
   evidence: async (id: string): Promise<Json<TaskEvidence> | null> => {
     try {
       return await request<TaskEvidence>(`${task(id)}/evidence`);
@@ -144,6 +144,6 @@ export const api = {
       body: JSON.stringify(input),
     }),
   focusBlocked: (runId: string) => post<void>(`/api/blocked/${encodeURIComponent(runId)}/focus`),
-  /** Enfoca en herdr el agente de un Run (columna Pane de las tablas de Runs). */
+  /** Focuses a Run's agent in herdr (Pane column of the Runs tables). */
   focusRun: (runId: string) => post<void>(`/api/runs/${encodeURIComponent(runId)}/focus`),
 };

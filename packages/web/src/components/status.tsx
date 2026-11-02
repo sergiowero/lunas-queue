@@ -1,4 +1,4 @@
-// Piezas compartidas por las páginas: estado de una tarea, carga y errores de consulta y escritura.
+// Pieces shared by the pages: a task's state, loading and query and write errors.
 import type { SubState, TaskState } from "@lunasq/schemas";
 import type { ComponentProps } from "react";
 import { ApiError } from "../lib/api.ts";
@@ -7,7 +7,7 @@ import { useErrorText } from "../lib/error-text.ts";
 import { useT } from "../lib/i18n.ts";
 import { Badge } from "./ui/badge.tsx";
 
-/** Solo In progress va en azul y Needs human en rojo; el resto queda neutro. */
+/** Only In progress is blue and Needs human red; the rest stays neutral. */
 function stateVariant(state: TaskState): ComponentProps<typeof Badge>["variant"] {
   if (state === "in_progress") return "info";
   if (state === "needs_human") return "destructive";
@@ -47,7 +47,7 @@ export function QueryError({ error }: { error: Error }) {
   );
 }
 
-/** Error de una escritura, con los issues de validación del servidor si los trae. */
+/** A write error, with the server's validation issues if it carries them. */
 export function MutationError({ error }: { error: Error }) {
   const t = useT();
   const errorText = useErrorText();
@@ -58,7 +58,7 @@ export function MutationError({ error }: { error: Error }) {
       {issues.length > 0 && (
         <ul className="list-disc pl-5 font-mono text-xs">
           {issues.map((issue, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: los issues pueden repetirse y la lista no se reordena.
+            // biome-ignore lint/suspicious/noArrayIndexKey: the issues can repeat and the list is not reordered.
             <li key={i}>{`${issue.path.join(".") || t.common.root}: ${issue.message}`}</li>
           ))}
         </ul>

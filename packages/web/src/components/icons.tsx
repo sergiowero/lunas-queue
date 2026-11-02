@@ -1,4 +1,4 @@
-// Iconos SVG decorativos de las acciones sobre una tarea; el nombre accesible lo pone el botón.
+// Decorative SVG icons for the actions on a task; the button provides the accessible name.
 import type { ComponentProps } from "react";
 
 function Icon(props: ComponentProps<"svg"> & { name: string }) {
@@ -22,7 +22,7 @@ function Icon(props: ComponentProps<"svg"> & { name: string }) {
   );
 }
 
-/** Engrane de ajustes (contorno, 18px como los iconos del header). */
+/** Settings gear (outline, 18px like the header icons). */
 export function SettingsIcon() {
   return (
     <Icon name="settings" width={18} height={18} fill="none">
@@ -32,7 +32,7 @@ export function SettingsIcon() {
   );
 }
 
-/** Signo más (contorno, 18px como los iconos del header). */
+/** Plus sign (outline, 18px like the header icons). */
 export function PlusIcon() {
   return (
     <Icon name="plus" width={18} height={18} fill="none">
@@ -41,7 +41,7 @@ export function PlusIcon() {
   );
 }
 
-/** Dos barras verticales. */
+/** Two vertical bars. */
 export function PauseIcon() {
   return (
     <Icon name="pause">
@@ -51,7 +51,7 @@ export function PauseIcon() {
   );
 }
 
-/** Triángulo de reproducción. */
+/** Play triangle. */
 export function ResumeIcon() {
   return (
     <Icon name="resume">

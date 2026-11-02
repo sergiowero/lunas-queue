@@ -1,5 +1,5 @@
-// Resultado de una tarea completada sin código (submit_result, ADR 0007): una investigación,
-// un pedido que ya estaba implementado o uno sin resolución. Se muestra directo en el detalle.
+// Result of a task completed without code (submit_result, ADR 0007): a research,
+// a request that was already implemented or one without resolution. It is shown directly in the detail.
 import type { Task } from "@lunasq/schemas";
 import type { Json } from "../../lib/api.ts";
 import { useT } from "../../lib/i18n.ts";

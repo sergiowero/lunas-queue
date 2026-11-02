@@ -1,4 +1,4 @@
-// Tareas completadas de todos los proyectos; el filtro permite enfocarse en uno.
+// Completed tasks across all projects; the filter lets you focus on one.
 import { PrState, type Task } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -19,10 +19,10 @@ import { queries } from "../lib/queries.ts";
 type Row = Json<Task>;
 const column = createColumnHelper<Row>();
 
-// Valor del selector para las tareas completadas sin PR (prState null).
+// Selector value for completed tasks without a PR (prState null).
 const NO_PR = "none";
 
-// Filas del resto que se muestran a la vez dentro de la sección colapsable.
+// Rest rows shown at once inside the collapsible section.
 const REST_PAGE_SIZE = 20;
 
 export function CompletedPage() {
@@ -36,7 +36,7 @@ export function CompletedPage() {
     () => new Map((projects.data ?? []).map((project) => [project.id, project.name])),
     [projects.data],
   );
-  // Toda tarea completada que pasa los filtros cae en exactamente una de las dos listas.
+  // Every completed task that passes the filters falls into exactly one of the two lists.
   const lists = useMemo(() => {
     if (!tasks.data) return undefined;
     const completed = tasks.data.filter(
@@ -74,7 +74,7 @@ export function CompletedPage() {
         header: t.columns.project,
       }),
       column.accessor("priority", { header: t.columns.priority }),
-      // Sin PR: una tarea completada con Resultado muestra su tipo en lugar del PR.
+      // Without a PR: a completed task with a Result shows its type instead of the PR.
       column.accessor(
         (task) => (task.resultKind ? t.resultKind[task.resultKind] : (task.prState ?? "—")),
         {

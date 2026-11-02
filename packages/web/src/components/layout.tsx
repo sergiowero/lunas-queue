@@ -16,7 +16,7 @@ const nav =
   "shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text";
 const active = { className: "bg-primary/10 text-primary-text hover:bg-primary/10" };
 
-/** Marca de LunasQ: tile con degradado índigo-violeta y tres fases lunares en cola (nueva, cuarto, llena). */
+/** LunasQ brand: tile with an indigo-violet gradient and three moon phases in a row (new, quarter, full). */
 function BrandMark() {
   return (
     <svg

@@ -1,7 +1,7 @@
-// Alta (ProjectCreate) y edición (ProjectUpdate) de proyectos, ADR 0008. La validación es la del
-// servidor; aquí solo se muestran sus issues. Al crear, los campos vacíos no se envían para que
-// apliquen los defaults del servidor; al editar se envía todo, porque PATCH reemplaza cada campo
-// presente y `null` borra los comandos opcionales.
+// Creation (ProjectCreate) and editing (ProjectUpdate) of projects, ADR 0008. Validation is the
+// server's; here only its issues are shown. On create, empty fields are not sent so that
+// the server defaults apply; on edit everything is sent, because PATCH replaces each present
+// field and `null` clears the optional commands.
 import {
   type AgentKind,
   EFFORT_LEVELS,
@@ -38,7 +38,7 @@ function describe(error: Error, t: Dictionary): string {
   return errorText(error, t);
 }
 
-/** Un argumento por línea, para no depender de comillas ni de espacios dentro de un argumento. */
+/** One argument per line, so as not to depend on quotes or spaces inside an argument. */
 function parseArgs(text: string): string[] {
   return text
     .split("\n")
@@ -125,7 +125,7 @@ export function ProjectFormDialog({
   project,
   onClose,
 }: {
-  /** Con proyecto, el formulario edita; sin él, crea. */
+  /** With a project, the form edits; without it, it creates. */
   project?: Json<Project>;
   onClose: () => void;
 }) {

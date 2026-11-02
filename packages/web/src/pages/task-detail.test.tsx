@@ -26,8 +26,8 @@ function seeded() {
 
 const section = async (name: string) => within(await screen.findByRole("region", { name }));
 
-describe("detalle de tarea", () => {
-  it("muestra cabecera, dependencias y estado", async () => {
+describe("task detail", () => {
+  it("shows header, dependencies and state", async () => {
     const { fake, task, dep } = seeded();
     fake.transition(task.id, "refined", null);
     renderApp(`/tasks/${task.id}`, fake);
@@ -41,7 +41,7 @@ describe("detalle de tarea", () => {
     ).toBeTruthy();
   });
 
-  it("con título lo muestra como encabezado y deja el intent debajo", async () => {
+  it("with a title it shows it as the heading and leaves the intent below", async () => {
     const { fake, task } = seeded();
     task.title = "Login por correo";
     renderApp(`/tasks/${task.id}`, fake);
@@ -50,7 +50,7 @@ describe("detalle de tarea", () => {
     expect(screen.getByText("Login con email")).toBeTruthy();
   });
 
-  it("una tarea In progress muestra su etiqueta de estado en azul", async () => {
+  it("an In progress task shows its state label in blue", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "in_progress", "running");
     renderApp(`/tasks/${task.id}`, fake);
@@ -60,7 +60,7 @@ describe("detalle de tarea", () => {
     expect(screen.getByText("corriendo")).toBeTruthy();
   });
 
-  it("agrega y quita dependencias mientras la tarea está en draft", async () => {
+  it("adds and removes dependencies while the task is in draft", async () => {
     const { fake, project, task, dep } = seeded();
     const other = fake.addProject({ name: "api" });
     const extra = fake.addTask(other.id, { intent: "Endpoint de login" });
@@ -69,7 +69,7 @@ describe("detalle de tarea", () => {
 
     const deps = await section("Dependencias");
     const select = await deps.findByLabelText("Agregar dependencia");
-    // Las opciones llevan el #N delante («#N · intent»): se busca por el final del nombre.
+    // The options carry the #N in front («#N · intent»): it is looked up by the end of the name.
     expect(select.querySelectorAll("option")).toHaveLength(2);
     expect(deps.queryByRole("option", { name: new RegExp(`· ${dep.intent}$`) })).toBeNull();
     expect(deps.queryByRole("option", { name: /· Ya cancelada$/ })).toBeNull();
@@ -87,7 +87,7 @@ describe("detalle de tarea", () => {
     expect(fake.edges).toEqual([{ taskId: task.id, dependsOnId: extra.id }]);
   });
 
-  it("muestra el error del servidor si la dependencia cierra un ciclo", async () => {
+  it("shows the server's error if the dependency closes a cycle", async () => {
     const { fake, task, dep } = seeded();
     const { user } = renderApp(`/tasks/${dep.id}`, fake);
 
@@ -98,7 +98,7 @@ describe("detalle de tarea", () => {
     expect(fake.edges).toHaveLength(1);
   });
 
-  it("no ofrece editar dependencias fuera de draft", async () => {
+  it("does not offer editing dependencies outside draft", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "refined", null);
     renderApp(`/tasks/${task.id}`, fake);
@@ -109,7 +109,7 @@ describe("detalle de tarea", () => {
     expect(deps.queryByRole("button", { name: /Quitar dependencia/ })).toBeNull();
   });
 
-  it("lista los Runs con resultado, failure_reason, pane y handoff", async () => {
+  it("lists the Runs with result, failure_reason, pane and handoff", async () => {
     const { fake, task } = seeded();
     const failed = fake.startRun(task.id, "refine");
     fake.endRun(failed.id, { result: "failure", failureReason: "timeout de fase (60 min)" });
@@ -157,7 +157,7 @@ describe("detalle de tarea", () => {
     expect(within(rows[1] as HTMLElement).getByText(failed.herdrPane as string)).toBeTruthy();
   });
 
-  it("el pane id de un Run del panel de Runs enfoca su agente en herdr", async () => {
+  it("the pane id of a Run in the Runs panel focuses its agent in herdr", async () => {
     const { fake, task } = seeded();
     const first = fake.startRun(task.id, "refine");
     fake.endRun(first.id, {});
@@ -180,7 +180,7 @@ describe("detalle de tarea", () => {
     ).toBeTruthy();
   });
 
-  it("un Run sin pane muestra «—» como texto, sin botón de foco", async () => {
+  it("a Run without a pane shows «—» as text, without a focus button", async () => {
     const { fake, task } = seeded();
     const run = fake.startRun(task.id, "refine");
     run.herdrPane = null;
@@ -192,7 +192,7 @@ describe("detalle de tarea", () => {
     expect(row.queryByRole("button", { name: /Enfocar pane/ })).toBeNull();
   });
 
-  it("si el foco falla muestra el error junto a ese pane y deja la tabla y las demás filas", async () => {
+  it("if the focus fails it shows the error next to that pane and leaves the table and the other rows", async () => {
     const { fake, task } = seeded();
     const first = fake.startRun(task.id, "refine");
     fake.endRun(first.id, {});
@@ -218,7 +218,7 @@ describe("detalle de tarea", () => {
     expect(fake.focused).toEqual([]);
   });
 
-  it("el panel de Runs obtiene el Agente del helper compartido formatAgent", async () => {
+  it("the Runs panel gets the Agent from the shared formatAgent helper", async () => {
     const { fake, task } = seeded();
     fake.startRun(task.id, "refine");
     const original = vi.mocked(format.formatAgent).getMockImplementation();
@@ -232,7 +232,7 @@ describe("detalle de tarea", () => {
     }
   });
 
-  it("muestra la última página de Runs por default y permite navegar", async () => {
+  it("shows the last page of Runs by default and allows navigating", async () => {
     const { fake, task } = seeded();
     const runs = Array.from({ length: 11 }, () => fake.startRun(task.id, "implement"));
     const { user } = renderApp(`/tasks/${task.id}`, fake);
@@ -248,7 +248,7 @@ describe("detalle de tarea", () => {
     expect(within(panel.getByRole("table")).getAllByRole("row")).toHaveLength(11);
   });
 
-  it("muestra el Event log con actor y transición", async () => {
+  it("shows the Event log with actor and transition", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "refined", null);
     renderApp(`/tasks/${task.id}`, fake);
@@ -258,7 +258,7 @@ describe("detalle de tarea", () => {
     expect(log.getAllByText("system")).toHaveLength(1);
   });
 
-  it("el Event log va colapsado por default", async () => {
+  it("the Event log is collapsed by default", async () => {
     const { fake, task } = seeded();
     renderApp(`/tasks/${task.id}`, fake);
     const log = await section("Event log");
@@ -266,7 +266,7 @@ describe("detalle de tarea", () => {
     expect(details?.open).toBe(false);
   });
 
-  it("muestra consumo registrado y explica que el usage de Copilot no está disponible", async () => {
+  it("shows recorded consumption and explains that Copilot's usage is not available", async () => {
     const { fake, task } = seeded();
     const run = fake.startRun(task.id, "implement");
     const copilotRun = fake.startRun(task.id, "verify");
@@ -296,7 +296,7 @@ describe("detalle de tarea", () => {
     expect(block.getAllByText("No disponible")).toHaveLength(4);
   });
 
-  it("muestra la última página de Usage por default y permite navegar", async () => {
+  it("shows the last page of Usage by default and allows navigating", async () => {
     const { fake, task } = seeded();
     const runs = Array.from({ length: 11 }, () => fake.startRun(task.id, "implement"));
     fake.usage.set(task.id, {
@@ -336,7 +336,7 @@ describe("detalle de tarea", () => {
     expect(within(panel.getByRole("table")).getAllByRole("row")).toHaveLength(11);
   });
 
-  describe("Resultado de una tarea sin código", () => {
+  describe("Result of a task without code", () => {
     const withResult = () => {
       const { fake, task } = seeded();
       Object.assign(task, {
@@ -348,7 +348,7 @@ describe("detalle de tarea", () => {
       return { fake, task };
     };
 
-    it("AC-9: muestra la sección Resultado con el tipo y el texto renderizado como Markdown", async () => {
+    it("AC-9: shows the Resultado section with the type and the text rendered as Markdown", async () => {
       const { fake, task } = withResult();
       renderApp(`/tasks/${task.id}`, fake);
 
@@ -358,7 +358,7 @@ describe("detalle de tarea", () => {
       expect(block.getByText("un").tagName).toBe("STRONG");
     });
 
-    it("AC-9: el campo PR indica que no tiene PR", async () => {
+    it("AC-9: the PR field says it has no PR", async () => {
       const { fake, task } = withResult();
       renderApp(`/tasks/${task.id}`, fake);
 
@@ -378,7 +378,7 @@ describe("detalle de tarea", () => {
       expect(await (await section("Resultado")).findByText(label)).toBeTruthy();
     });
 
-    it("AC-11: una tarea sin Resultado no muestra la sección Resultado", async () => {
+    it("AC-11: a task without a Result does not show the Resultado section", async () => {
       const { fake, task } = seeded();
       Object.assign(task, { state: "completed", subState: null, prState: "merged" });
       renderApp(`/tasks/${task.id}`, fake);
@@ -391,7 +391,7 @@ describe("detalle de tarea", () => {
     });
   });
 
-  it("el panel Evidencia nace colapsado y no muestra la evidencia", async () => {
+  it("the Evidencia panel starts collapsed and does not show the evidence", async () => {
     const { fake, task } = seeded();
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");
     renderApp(`/tasks/${task.id}`, fake);
@@ -402,7 +402,7 @@ describe("detalle de tarea", () => {
     expect(block.queryByText(`/w/login/lunasq/tasks/${task.id}.md`)).toBeNull();
   });
 
-  it("expandir el panel Evidencia muestra origen, ruta y markdown", async () => {
+  it("expanding the Evidencia panel shows origin, path and markdown", async () => {
     const { fake, task } = seeded();
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");
     const { user } = renderApp(`/tasks/${task.id}`, fake);
@@ -414,7 +414,7 @@ describe("detalle de tarea", () => {
     expect(block.getByText(`/w/login/lunasq/tasks/${task.id}.md`)).toBeTruthy();
   });
 
-  it("colapsar de nuevo el panel Evidencia oculta la evidencia", async () => {
+  it("collapsing the Evidencia panel again hides the evidence", async () => {
     const { fake, task } = seeded();
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");
     const { user } = renderApp(`/tasks/${task.id}`, fake);
@@ -428,7 +428,7 @@ describe("detalle de tarea", () => {
     expect(screen.getByRole("region", { name: "Evidencia" })).toBeTruthy();
   });
 
-  it("el panel Evidencia se expande con el teclado", async () => {
+  it("the Evidencia panel expands with the keyboard", async () => {
     const { fake, task } = seeded();
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1");
     const { user } = renderApp(`/tasks/${task.id}`, fake);
@@ -440,7 +440,7 @@ describe("detalle de tarea", () => {
     expect(await block.findByRole("heading", { name: "Run 1" })).toBeTruthy();
   });
 
-  it("el panel Evidencia nace colapsado al volver a una tarea ya visitada", async () => {
+  it("the Evidencia panel starts collapsed when returning to an already visited task", async () => {
     const { fake, task, dep } = seeded();
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1");
     fake.evidence.set(dep.id, "# Evidencia\n\n## Run 2");
@@ -467,7 +467,7 @@ describe("detalle de tarea", () => {
     expect((await toggleOf()).getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("avisa cuando aún no hay archivo de evidencia al expandir el panel", async () => {
+  it("warns when there is no evidence file yet on expanding the panel", async () => {
     const { fake, task } = seeded();
     const { user } = renderApp(`/tasks/${task.id}`, fake);
     const block = await section("Evidencia");
@@ -479,7 +479,7 @@ describe("detalle de tarea", () => {
     expect(block.queryByText("Todavía no hay archivo de evidencia.")).toBeNull();
   });
 
-  it("indica de dónde salió la evidencia cuando ya no hay worktree", async () => {
+  it("says where the evidence came from when there is no worktree anymore", async () => {
     const { fake, task } = seeded();
     fake.evidence.set(task.id, "# Evidencia");
     fake.evidenceSource.set(task.id, "branch");
@@ -490,7 +490,7 @@ describe("detalle de tarea", () => {
     expect(block.getByText(/Desde branch de la tarea/)).toBeTruthy();
   });
 
-  it("muestra las versiones de la spec, su contenido y el diff contra la anterior", async () => {
+  it("shows the spec versions, their content and the diff against the previous one", async () => {
     const { fake, task } = seeded();
     fake.addSpec(task.id);
     fake.addSpec(task.id, {
@@ -513,7 +513,7 @@ describe("detalle de tarea", () => {
     expect(await spec.findByText("Primera versión")).toBeTruthy();
   });
 
-  it("aprueba la versión pendiente de una tarea refined", async () => {
+  it("approves the pending version of a refined task", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "refined", null);
     fake.addSpec(task.id);
@@ -527,7 +527,7 @@ describe("detalle de tarea", () => {
     expect((await section("Spec")).queryByRole("button", { name: "Aprobar v1" })).toBeNull();
   });
 
-  it("muestra el 409 del servidor si la spec ya no está pendiente", async () => {
+  it("shows the server's 409 if the spec is no longer pending", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "refined", null);
     const spec = fake.addSpec(task.id);
@@ -541,7 +541,7 @@ describe("detalle de tarea", () => {
     );
   });
 
-  it("muestra la versión nueva cuando llega mientras se revisaba una anterior", async () => {
+  it("shows the new version when it arrives while reviewing an earlier one", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "refined", null);
     fake.addSpec(task.id);
@@ -554,7 +554,7 @@ describe("detalle de tarea", () => {
     expect(await spec.findByRole("button", { name: "Aprobar v3" })).toBeTruthy();
   });
 
-  it("pide cambios con comentarios", async () => {
+  it("requests changes with comments", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "refined", null);
     fake.addSpec(task.id);
@@ -569,7 +569,7 @@ describe("detalle de tarea", () => {
     });
   });
 
-  it("edita la spec y la aprueba como una versión nueva del humano", async () => {
+  it("edits the spec and approves it as a new human version", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "refined", null);
     fake.addSpec(task.id);
@@ -581,7 +581,7 @@ describe("detalle de tarea", () => {
     expect(JSON.parse(editor.value)).toEqual(SPEC_CONTENT);
     const edited = { ...SPEC_CONTENT, requirements: ["El usuario inicia sesión con SSO"] };
     await user.clear(editor);
-    // user.type interpreta { y [ como teclas especiales; se pega el JSON tal cual.
+    // user.type interprets { and [ as special keys; the JSON is pasted as is.
     await user.click(editor);
     await user.paste(JSON.stringify(edited));
     await user.click(spec.getByRole("button", { name: "Guardar y aprobar" }));
@@ -593,7 +593,7 @@ describe("detalle de tarea", () => {
     expect(fake.task(task.id).state).toBe("in_progress");
   });
 
-  it("no manda una edición que no es JSON válido", async () => {
+  it("does not send an edit that is not valid JSON", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "refined", null);
     fake.addSpec(task.id);
@@ -610,7 +610,7 @@ describe("detalle de tarea", () => {
     expect(fake.requests.some((r) => r.path.endsWith("/edit-and-approve"))).toBe(false);
   });
 
-  it("muestra los errores de validación del servidor al editar", async () => {
+  it("shows the server's validation errors when editing", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "refined", null);
     fake.addSpec(task.id);
@@ -628,14 +628,14 @@ describe("detalle de tarea", () => {
     expect(fake.task(task.id).state).toBe("refined");
   });
 
-  it("muestra solo el error de la última acción sobre la spec", async () => {
+  it("shows only the error of the last action on the spec", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "refined", null);
     fake.addSpec(task.id);
     const { user } = renderApp(`/tasks/${task.id}`, fake);
 
     const spec = await section("Spec");
-    // Otro actor saca la tarea de refined: aprobar responde 409.
+    // Another actor takes the task out of refined: approving answers 409.
     fake.task(task.id).state = "in_progress";
     await user.click(await spec.findByRole("button", { name: "Aprobar v1" }));
     expect((await spec.findByRole("alert")).textContent).toMatch(/no en refined/);
@@ -652,7 +652,7 @@ describe("detalle de tarea", () => {
     expect(alert.textContent).not.toMatch(/no en refined/);
   });
 
-  it("cancela la tarea tras confirmar", async () => {
+  it("cancels the task after confirming", async () => {
     const { fake, task } = seeded();
     const { user } = renderApp(`/tasks/${task.id}`, fake);
     await user.click(await screen.findByRole("button", { name: "Cancelar tarea" }));
@@ -661,7 +661,7 @@ describe("detalle de tarea", () => {
     expect(screen.queryByRole("button", { name: "Cancelar tarea" })).toBeNull();
   });
 
-  it("reanuda una tarea en needs_human hacia el estado desde el que se escaló", async () => {
+  it("resumes a task in needs_human to the state it was escalated from", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "needs_human", null);
     const { user } = renderApp(`/tasks/${task.id}`, fake);
@@ -673,14 +673,14 @@ describe("detalle de tarea", () => {
     expect(screen.getByRole("button", { name: "Cancelar tarea" })).toBeTruthy();
   });
 
-  it("no ofrece reanudar fuera de needs_human y paused", async () => {
+  it("does not offer resuming outside needs_human and paused", async () => {
     const { fake, task } = seeded();
     renderApp(`/tasks/${task.id}`, fake);
     await screen.findByRole("button", { name: "Cancelar tarea" });
     expect(screen.queryByRole("button", { name: "Reanudar tarea" })).toBeNull();
   });
 
-  it("una tarea pausable muestra el botón con icono de pausa y al pulsarlo la pausa", async () => {
+  it("a pausable task shows the pause icon button and clicking it pauses it", async () => {
     const { fake, task } = seeded();
     const { user } = renderApp(`/tasks/${task.id}`, fake);
     const button = await screen.findByRole("button", { name: "Pausar tarea" });
@@ -695,7 +695,7 @@ describe("detalle de tarea", () => {
     expect(screen.queryByRole("button", { name: "Pausar tarea" })).toBeNull();
   });
 
-  it("una tarea pausada muestra el badge Paused y Reanudar tarea con icono, sin el botón de pausa", async () => {
+  it("a paused task shows the Paused badge and Reanudar tarea with icon, without the pause button", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "paused", null, {}, "pause");
     const { user } = renderApp(`/tasks/${task.id}`, fake);
@@ -713,7 +713,7 @@ describe("detalle de tarea", () => {
     expect(screen.queryByRole("button", { name: "Reanudar tarea" })).toBeNull();
   });
 
-  it("una tarea en needs_human ofrece reanudar y no pausar", async () => {
+  it("a task in needs_human offers resuming and not pausing", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "needs_human", null);
     renderApp(`/tasks/${task.id}`, fake);
@@ -721,7 +721,7 @@ describe("detalle de tarea", () => {
     expect(screen.queryByRole("button", { name: "Pausar tarea" })).toBeNull();
   });
 
-  it("una tarea terminada no ofrece pausar ni reanudar", async () => {
+  it("a finished task offers neither pausing nor resuming", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "completed", null);
     renderApp(`/tasks/${task.id}`, fake);
@@ -730,24 +730,24 @@ describe("detalle de tarea", () => {
     expect(screen.queryByRole("button", { name: "Reanudar tarea" })).toBeNull();
   });
 
-  it("si la API rechaza la pausa muestra el error con role alert", async () => {
+  it("if the API rejects the pause it shows the error with role alert", async () => {
     const { fake, task } = seeded();
     const { user } = renderApp(`/tasks/${task.id}`, fake);
     const button = await screen.findByRole("button", { name: "Pausar tarea" });
-    // La tarea se completó mientras la pantalla seguía abierta: el servidor rechaza la pausa.
+    // The task completed while the screen was still open: the server rejects the pause.
     fake.task(task.id).state = "completed";
     await user.click(button);
     expect((await screen.findByRole("alert")).textContent).toMatch(/pause no aplica/);
   });
 
-  it("avisa si la tarea no existe", async () => {
+  it("warns if the task does not exist", async () => {
     renderApp("/tasks/00000000-0000-4000-8000-000000000999");
     expect(await screen.findByText("La tarea no existe.")).toBeTruthy();
   });
 });
 
-describe("menciones #N en el intent del detalle", () => {
-  it("una mención a una tarea existente es un enlace a su detalle", async () => {
+describe("#N mentions in the detail's intent", () => {
+  it("a mention of an existing task is a link to its detail", async () => {
     const { fake, project, dep } = seeded();
     const task = fake.addTask(project.id, { intent: `Depende de #${dep.number} para arrancar` });
     renderApp(`/tasks/${task.id}`, fake);
@@ -759,9 +759,9 @@ describe("menciones #N en el intent del detalle", () => {
     expect(link).toHaveProperty("href", expect.stringContaining(`/tasks/${dep.id}`));
   });
 
-  it("un número inexistente, #abc o a#5 se muestran tal cual, sin enlace", async () => {
+  it("a nonexistent number, #abc or a#5 are shown as is, without a link", async () => {
     const { fake, project, dep } = seeded();
-    // La última mención sí existe: cuando es enlace, las tareas ya cargaron.
+    // The last mention does exist: when it is a link, the tasks have already loaded.
     const intent = `Ver #999, #abc, a#${dep.number} y #${dep.number}`;
     const task = fake.addTask(project.id, { intent });
     renderApp(`/tasks/${task.id}`, fake);
@@ -772,8 +772,8 @@ describe("menciones #N en el intent del detalle", () => {
   });
 });
 
-describe("menciones #N en tarjetas y filas que ya son enlace", () => {
-  it("el tablero y la cola muestran el intent como texto plano, sin enlaces anidados", async () => {
+describe("#N mentions in cards and rows that are already a link", () => {
+  it("the board and the queue show the intent as plain text, without nested links", async () => {
     const { fake, project, dep } = seeded();
     const intent = `Depende de #${dep.number}`;
     const task = fake.addTask(project.id, { intent });

@@ -17,8 +17,8 @@ function runInline() {
   new Function(inline?.textContent ?? "")();
 }
 
-describe("tema antes de montar React", () => {
-  it("el script inline va en <head>, antes del módulo de la app", () => {
+describe("theme before mounting React", () => {
+  it("the inline script goes in <head>, before the app module", () => {
     expect(inline?.parentElement?.tagName).toBe("HEAD");
     const scripts = [...doc.querySelectorAll("script")];
     const app = scripts.find((s) => s.getAttribute("src") === "/src/main.tsx");
@@ -27,20 +27,20 @@ describe("tema antes de montar React", () => {
     );
   });
 
-  it("con «dark» guardado aplica la clase dark a <html> aunque el sistema esté en claro", () => {
+  it("with «dark» saved it applies the dark class to <html> even if the system is light", () => {
     stubColorScheme("light");
     localStorage.setItem(THEME_KEY, "dark");
     runInline();
     expect(html.classList.contains("dark")).toBe(true);
   });
 
-  it("sin preferencia guardada sigue al sistema en oscuro", () => {
+  it("without a saved preference it follows the system dark", () => {
     stubColorScheme("dark");
     runInline();
     expect(html.classList.contains("dark")).toBe(true);
   });
 
-  it("con «light» guardado o un valor inválido no aplica la clase dark", () => {
+  it("with «light» saved or an invalid value it does not apply the dark class", () => {
     stubColorScheme("light");
     localStorage.setItem(THEME_KEY, "sepia");
     runInline();
@@ -51,7 +51,7 @@ describe("tema antes de montar React", () => {
     expect(html.classList.contains("dark")).toBe(false);
   });
 
-  it("no falla con un localStorage que lanza error ni sin matchMedia", () => {
+  it("does not fail with a localStorage that throws or without matchMedia", () => {
     vi.stubGlobal("matchMedia", undefined);
     vi.stubGlobal("localStorage", {
       getItem: () => {

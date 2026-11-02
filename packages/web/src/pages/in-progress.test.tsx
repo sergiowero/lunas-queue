@@ -4,8 +4,8 @@ import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 import { queries } from "../lib/queries.ts";
 
-describe("pestaña En curso", () => {
-  it("el enlace En curso de la navegación lleva a /in-progress y queda activo", async () => {
+describe("In progress tab", () => {
+  it("the En curso nav link leads to /in-progress and becomes active", async () => {
     const { user, router } = renderApp("/queue");
     const nav = within(await screen.findByRole("navigation"));
     const link = nav.getByRole("link", { name: "En curso" });
@@ -18,7 +18,7 @@ describe("pestaña En curso", () => {
     expect(await screen.findByRole("heading", { name: "En curso" })).toBeTruthy();
   });
 
-  it("lista las tareas In progress y las que tienen un agente corriendo, con proyecto, estado y prioridad", async () => {
+  it("lists the In progress tasks and those with a running agent, with project, state and priority", async () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
@@ -52,7 +52,7 @@ describe("pestaña En curso", () => {
     expect(link.getAttribute("href")).toBe(`/tasks/${running.id}`);
     await waitFor(() => expect(screen.queryAllByText("…")).toHaveLength(0));
     const rows = screen.getAllByRole("row").slice(1);
-    // Sin la columna Acciones, que se prueba aparte.
+    // Without the Acciones column, which is tested separately.
     const cells = rows.map((r) =>
       within(r)
         .getAllByRole("cell")
@@ -84,7 +84,7 @@ describe("pestaña En curso", () => {
     expect(screen.queryByText("Terminada")).toBeNull();
   });
 
-  it("la columna Estado muestra el estado de la tarea (no solo el sub-estado), igual que la pestaña Cola", async () => {
+  it("the Estado column shows the task's state (not just the sub-state), like the Cola tab", async () => {
     const fake = new FakeApi();
     const project = fake.addProject();
     fake.addTask(project.id, { intent: "Refinando", state: "draft", subState: "running" });
@@ -114,7 +114,7 @@ describe("pestaña En curso", () => {
     expect(stateCell("Verificando").textContent).toBe("Verificationcorriendo");
   });
 
-  it("la celda Estado de una tarea es idéntica en En curso y en Cola", async () => {
+  it("a task's Estado cell is identical in En curso and in Cola", async () => {
     const fake = new FakeApi();
     const project = fake.addProject();
     fake.addTask(project.id, { intent: "En ambas", state: "verification", subState: "running" });
@@ -151,15 +151,15 @@ describe("pestaña En curso", () => {
     expect(await stateText()).toBe(inQueue);
   });
 
-  describe("botón de pausa por fila", () => {
-    it("cada fila tiene un botón con icono de pausa y nombre accesible con la tarea, sin texto visible", async () => {
+  describe("per-row pause button", () => {
+    it("each row has a button with a pause icon and an accessible name with the task, without visible text", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       fake.addTask(project.id, { intent: "Una", state: "in_progress", subState: "running" });
       fake.addTask(project.id, { intent: "Otra", state: "verification", subState: "running" });
       renderApp("/in-progress", fake);
 
-      // Las filas se vuelven a montar al llegar los Runs: se espera a que dejen de cargar.
+      // The rows are remounted when the Runs arrive: wait for them to stop loading.
       await screen.findByRole("link", { name: "Una" });
       await waitFor(() => expect(screen.queryAllByText("…")).toHaveLength(0));
       for (const name of ["Una", "Otra"]) {
@@ -170,7 +170,7 @@ describe("pestaña En curso", () => {
       }
     });
 
-    it("al pulsarlo la tarea se pausa y deja de aparecer tras refrescar", async () => {
+    it("on click the task is paused and stops appearing after refreshing", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       const task = fake.addTask(project.id, {
@@ -189,7 +189,7 @@ describe("pestaña En curso", () => {
       expect(screen.getByRole("link", { name: "Sigue" })).toBeTruthy();
     });
 
-    it("si la API rechaza la pausa muestra el error con role alert en esa fila y la tarea sigue", async () => {
+    it("if the API rejects the pause it shows the error with role alert in that row and the task stays", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       const task = fake.addTask(project.id, {
@@ -200,7 +200,7 @@ describe("pestaña En curso", () => {
       fake.addTask(project.id, { intent: "Intacta", state: "in_progress", subState: "queued" });
       const { user } = renderApp("/in-progress", fake);
       const button = await screen.findByRole("button", { name: "Pausar tarea Rechazada" });
-      // Salió de los estados pausables mientras la lista seguía abierta.
+      // It left the pausable states while the list stayed open.
       fake.task(task.id).state = "needs_human";
 
       await user.click(button);
@@ -216,7 +216,7 @@ describe("pestaña En curso", () => {
     });
   });
 
-  it("filtra por proyecto y Todos vuelve a mostrar ambos", async () => {
+  it("filters by project and Todos shows both again", async () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
@@ -234,7 +234,7 @@ describe("pestaña En curso", () => {
     expect(screen.getByText("De uno")).toBeTruthy();
   });
 
-  it("explica que no hay tareas en curso, sin tabla vacía", async () => {
+  it("explains there are no tasks in progress, without an empty table", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, { intent: "Borrador" });
     renderApp("/in-progress", fake);
@@ -243,10 +243,10 @@ describe("pestaña En curso", () => {
     expect(screen.queryByRole("table")).toBeNull();
   });
 
-  describe("columnas Iteración, Agente y Pane", () => {
+  describe("Iteración, Agente and Pane columns", () => {
     const rowOf = async (text: string) => {
       await screen.findByRole("link", { name: text });
-      // La fila se vuelve a montar al cambiar las columnas: se busca de nuevo en cada lectura.
+      // The row is remounted when the columns change: it is looked up again on each read.
       const read = () =>
         within(screen.getByRole("link", { name: text }).closest("tr") as HTMLElement)
           .getAllByRole("cell")
@@ -256,7 +256,7 @@ describe("pestaña En curso", () => {
       return read();
     };
 
-    it("encabezados de la tabla: las existentes, las tres de Run y Acciones al final", async () => {
+    it("table headers: the existing ones, the three Run ones and Acciones at the end", async () => {
       const fake = new FakeApi();
       fake.addTask(fake.addProject().id, { intent: "Una", state: "in_progress" });
       renderApp("/in-progress", fake);
@@ -275,7 +275,7 @@ describe("pestaña En curso", () => {
       ]);
     });
 
-    it("muestra iteración, agente con modelo y pane del Run abierto", async () => {
+    it("shows iteration, agent with model and pane of the open Run", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject({ name: "uno" }).id, {
         intent: "Con run",
@@ -299,7 +299,7 @@ describe("pestaña En curso", () => {
       ]);
     });
 
-    it("usa el Run más reciente cuando hay uno anterior terminado", async () => {
+    it("uses the most recent Run when there is an earlier finished one", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject().id, {
         intent: "Dos runs",
@@ -319,7 +319,7 @@ describe("pestaña En curso", () => {
       expect(cells.slice(4)).toEqual(["2", "claude · sonnet", "p-2"]);
     });
 
-    it("el Run más reciente se decide por startedAt, no por el orden de la respuesta", async () => {
+    it("the most recent Run is decided by startedAt, not by the response order", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject().id, {
         intent: "Desordenados",
@@ -336,7 +336,7 @@ describe("pestaña En curso", () => {
       expect(cells[6]).toBe("p-new");
     });
 
-    it("sin Runs, las tres columnas muestran «—» y el resto de la fila se conserva", async () => {
+    it("without Runs, the three columns show «—» and the rest of the row is kept", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject({ name: "uno" }).id, {
         intent: "Sin runs",
@@ -357,7 +357,7 @@ describe("pestaña En curso", () => {
       ]);
     });
 
-    it("sin modelo ni pane, Agente muestra solo el agentKind y Pane «—»", async () => {
+    it("without model or pane, Agente shows only the agentKind and Pane «—»", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject().id, {
         intent: "Sin modelo",
@@ -372,7 +372,7 @@ describe("pestaña En curso", () => {
       expect(cells.slice(4)).toEqual(["0", "claude", "—"]);
     });
 
-    it("un Run nuevo que llega por el stream en vivo reemplaza los valores de la fila", async () => {
+    it("a new Run arriving over the live stream replaces the row's values", async () => {
       class FakeEventSource {
         static instances: FakeEventSource[] = [];
         private readonly listeners = new Map<string, Set<(e: MessageEvent<string>) => void>>();
@@ -417,7 +417,7 @@ describe("pestaña En curso", () => {
       );
     });
 
-    it("una consulta de Runs fallida muestra «error» y no «—», sin afectar a las demás filas", async () => {
+    it("a failed Runs query shows «error» and not «—», without affecting the other rows", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       const broken = fake.addTask(project.id, { intent: "Rota", state: "in_progress" });
@@ -431,7 +431,7 @@ describe("pestaña En curso", () => {
       expect((await rowOf("Sana")).slice(4)).toEqual(["0", "claude · opus", "p-ok"]);
     });
 
-    it("el pane id del último Run de la tarea enfoca su agente en herdr", async () => {
+    it("the last Run's pane id of the task focuses its agent in herdr", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject().id, { intent: "Con foco", state: "in_progress" });
       const older = fake.startRun(task.id, "implement");
@@ -454,7 +454,7 @@ describe("pestaña En curso", () => {
       ).toBeNull();
     });
 
-    it("cargando, con error o sin Runs la celda Pane es texto, sin botón de foco", async () => {
+    it("while loading, with an error or without Runs the Pane cell is text, without a focus button", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       fake.addTask(project.id, { intent: "Sin runs", state: "in_progress" });
@@ -471,7 +471,7 @@ describe("pestaña En curso", () => {
       expect(screen.queryByRole("button", { name: /Enfocar pane/ })).toBeNull();
     });
 
-    it("mientras carga los Runs la celda Pane dice «…» como texto, sin botón de foco", async () => {
+    it("while the Runs load the Pane cell says «…» as text, without a focus button", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject().id, {
         intent: "Pendiente",
@@ -485,7 +485,7 @@ describe("pestaña En curso", () => {
       renderApp("/in-progress", fake);
 
       await screen.findByRole("link", { name: "Pendiente" });
-      // La fila se vuelve a montar al cargar las columnas: se lee de nuevo hasta que aparezca «…».
+      // The row is remounted when the columns load: it is read again until «…» appears.
       const read = () =>
         within(screen.getByRole("link", { name: "Pendiente" }).closest("tr") as HTMLElement)
           .getAllByRole("cell")
@@ -500,7 +500,7 @@ describe("pestaña En curso", () => {
       expect(await screen.findByRole("button", { name: /Enfocar pane/ })).toBeTruthy();
     });
 
-    it("si un refetch de los Runs falla con datos previos en caché la celda Pane dice «error», sin botón de foco", async () => {
+    it("if a Runs refetch fails with previous cached data the Pane cell says «error», without a focus button", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       const task = fake.addTask(project.id, { intent: "Se rompe", state: "in_progress" });
@@ -518,7 +518,7 @@ describe("pestaña En curso", () => {
       expect(screen.queryByRole("button", { name: /Enfocar pane/ })).toBeNull();
     });
 
-    it("si el foco falla muestra el error junto a ese pane sin tocar las demás filas", async () => {
+    it("if the focus fails it shows the error next to that pane without touching the other rows", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       const a = fake.addTask(project.id, { intent: "Falla", state: "in_progress" });
@@ -540,7 +540,7 @@ describe("pestaña En curso", () => {
       expect(row("Intacta").getByText(runB.herdrPane as string)).toBeTruthy();
     });
 
-    it("al filtrar por proyecto cada fila conserva los valores de su propia tarea", async () => {
+    it("when filtering by project each row keeps the values of its own task", async () => {
       const fake = new FakeApi();
       const one = fake.addProject({ name: "uno" });
       const two = fake.addProject({ name: "dos" });

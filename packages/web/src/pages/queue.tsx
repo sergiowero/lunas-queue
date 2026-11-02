@@ -1,5 +1,5 @@
-// Cola global (docs/design.md §Front end): el ready set en el orden del scheduler y después las
-// demás tareas vivas. El score y el usage los calcula el servidor.
+// Global queue (docs/design.md §Front end): the ready set in the scheduler order and then the
+// other live tasks. The score and the usage are computed by the server.
 import type { QueueEntry } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -29,7 +29,7 @@ function priority(entry: Entry): string {
     : String(base);
 }
 
-/** Solo iconos, con la tarea en el aria-label: pausar si se puede pausar, reanudar si está pausada o escalada. */
+/** Icons only, with the task in the aria-label: pause if it can be paused, resume if it is paused or escalated. */
 function ActionsCell({ row }: CellContext<Entry, unknown>) {
   const { task } = row.original;
   if (canPause(task.state)) return <PauseTaskButton task={task} variant="icon" />;

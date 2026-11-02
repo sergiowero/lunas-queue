@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { StateBadges } from "./status.tsx";
 
-describe("etiqueta de estado", () => {
-  it("una tarea In progress lleva la etiqueta azul info con su sub-estado", () => {
+describe("status label", () => {
+  it("an In progress task carries the blue info label with its sub-state", () => {
     render(<StateBadges state="in_progress" subState="running" />);
     const label = screen.getByText("In progress");
     expect(label.dataset.variant).toBe("info");
@@ -11,7 +11,7 @@ describe("etiqueta de estado", () => {
     expect(screen.getByText("corriendo").dataset.variant).toBe("outline");
   });
 
-  it("los demás estados no se pintan de azul y Needs human sigue en destructive", () => {
+  it("the other states are not painted blue and Needs human stays destructive", () => {
     render(
       <>
         <StateBadges state="draft" subState="queued" />

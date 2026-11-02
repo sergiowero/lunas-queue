@@ -17,6 +17,6 @@ export function Select({ className, ...props }: ComponentProps<"select">) {
 }
 
 export function Label({ className, ...props }: ComponentProps<"label">) {
-  // biome-ignore lint/a11y/noLabelWithoutControl: el control se asocia con htmlFor desde quien llama.
+  // biome-ignore lint/a11y/noLabelWithoutControl: the control is associated with htmlFor by the caller.
   return <label className={cn("text-[13px] font-medium text-text", className)} {...props} />;
 }

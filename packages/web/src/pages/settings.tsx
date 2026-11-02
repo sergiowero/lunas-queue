@@ -1,7 +1,7 @@
-// Settings: el humano habilita o deshabilita cada proveedor de agente y fija el límite global de
-// agentes concurrentes (docs/decisions/settings-proveedores.md). Apagar un proveedor aplica las
-// reglas de fallback; apagar ambos pausa el despacho. Los agentes vivos nunca se interrumpen, ni
-// al apagar un proveedor ni al bajar el límite.
+// Settings: the human enables or disables each agent provider and sets the global limit of
+// concurrent agents (docs/decisions/settings-proveedores.md). Turning a provider off applies the
+// fallback rules; turning both off pauses dispatch. Live agents are never interrupted, neither
+// when turning a provider off nor when lowering the limit.
 import {
   AgentKind,
   type AgentProviderPatch,
@@ -37,15 +37,15 @@ function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      // aria-disabled y no disabled: un botón disabled pierde el foco y el teclado se queda sin sitio.
-      // aria-disabled y no disabled: un botón disabled pierde el foco y el teclado se queda sin sitio.
+      // aria-disabled and not disabled: a disabled button loses focus and the keyboard is left with nowhere to go.
+      // aria-disabled and not disabled: a disabled button loses focus and the keyboard is left with nowhere to go.
       aria-disabled={disabled}
       onClick={() => {
         if (!disabled) onChange(!checked);
       }}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60",
-        // El apagado usa un gris con contraste suficiente contra la tarjeta (≥3:1) para localizarlo.
+        // The off state uses a gray with enough contrast against the card (≥3:1) to spot it.
         checked ? "border-primary bg-primary" : "border-text-muted bg-text-muted",
       )}
     >
@@ -78,18 +78,18 @@ function ConcurrencySection() {
   const messageId = useId();
   const settings = useQuery(queries.concurrencySettings());
   const queryClient = useQueryClient();
-  // null: el campo sigue al valor leído; un texto: lo que el humano está escribiendo.
+  // null: the field follows the value read; a text: what the human is typing.
   const [draft, setDraft] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
-  // Último límite que un PUT guardó y que ninguna lectura posterior llegó a leer: el servidor ya lo
-  // tiene, pero la caché sigue con un valor anterior.
+  // Last limit a PUT saved and that no later read managed to read: the server already
+  // has it, but the cache still holds an earlier value.
   const [unread, setUnread] = useState<{ value: number; at: number } | null>(null);
   const update = useMutation({
     mutationFn: (input: ConcurrencySettings) => api.updateConcurrencySettings(input),
-    // Se vuelve a leer en vez de pisar la caché con la respuesta del PUT, y el campo solo vuelve a
-    // seguir al servidor cuando llegó la lectura: así muestra el valor guardado y no uno viejo.
-    // invalidateQueries no lanza si la lectura falla: en ese caso el campo conserva el valor que el
-    // PUT confirmó y el aviso dice que se guardó, en vez de mostrar el valor anterior.
+    // It is re-read instead of overwriting the cache with the PUT response, and the field only goes back to
+    // following the server when the read arrived: this way it shows the saved value and not an old one.
+    // invalidateQueries does not throw if the read fails: in that case the field keeps the value the
+    // PUT confirmed and the notice says it was saved, instead of showing the previous value.
     onSuccess: async (saved) => {
       const queryKey = queries.concurrencySettings().queryKey;
       await queryClient.invalidateQueries({ queryKey });
@@ -118,7 +118,7 @@ function ConcurrencySection() {
     update.mutate(parsed.data);
   }
 
-  // Una lectura posterior al PUT ya refleja lo guardado: entonces rige settings.data.
+  // A read after the PUT already reflects what was saved: then settings.data governs.
   const savedUnread = unread && (settings.dataUpdatedAt ?? 0) < unread.at ? unread.value : null;
   const effective = savedUnread ?? settings.data?.globalConcurrency;
 
@@ -188,9 +188,9 @@ function ProvidersSection() {
   const queryClient = useQueryClient();
   const update = useMutation({
     mutationFn: (input: AgentProviderPatch) => api.updateProviderSettings(input),
-    // Se vuelve a leer en vez de pisar la caché con la respuesta: un PUT lento no debe restaurar una
-    // vista anterior a un cambio posterior (de otra pestaña). La mutación sigue pendiente hasta
-    // que llega la lectura fresca, así los interruptores no se mueven con datos viejos.
+    // It is re-read instead of overwriting the cache with the response: a slow PUT must not restore a
+    // view earlier than a later change (from another tab). The mutation stays pending until
+    // the fresh read arrives, so the switches do not move with old data.
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queries.providerSettings().queryKey }),
   });
@@ -198,9 +198,9 @@ function ProvidersSection() {
     return settings.error ? <QueryError error={settings.error} /> : <Loading />;
   }
   const current = settings.data;
-  // El PUT del último cambio tuvo éxito y ninguna lectura posterior llegó a leerlo: el servidor ya
-  // guardó, pero los interruptores muestran un estado anterior. Si una lectura posterior al PUT
-  // tuvo éxito, los datos ya reflejan el cambio y un fallo más tardío es ajeno a él.
+  // The last change's PUT succeeded and no later read managed to read it: the server already
+  // saved, but the switches show an earlier state. If a read after the PUT
+  // succeeded, the data already reflects the change and a later failure is unrelated to it.
   const savedButUnread =
     update.isSuccess &&
     settings.errorUpdatedAt >= update.submittedAt &&

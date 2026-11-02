@@ -40,7 +40,7 @@ function ExecutionRow({ execution: e }: { execution: Execution }) {
   );
 }
 
-/** Lo que la tarjeta sabe de las ejecuciones: cargando, fallo de la consulta o la lista. */
+/** What the card knows about the executions: loading, query failure or the list. */
 export type ExecutionsState = Execution[] | "loading" | "failed";
 
 function Executions({ executions }: { executions: ExecutionsState }) {
@@ -48,7 +48,7 @@ function Executions({ executions }: { executions: ExecutionsState }) {
   if (executions === "loading") return <Muted>{t.hooks.loadingExecutions}</Muted>;
   if (executions === "failed") return <Muted>{t.hooks.executionsFailed}</Muted>;
   if (executions.length === 0) return <Muted>{t.hooks.noExecutions}</Muted>;
-  // El servidor ya deja la ejecución más reciente de cada tarea en este script.
+  // The server already leaves each task's most recent execution in this script.
   return (
     <Table>
       <TableHeader>
@@ -69,7 +69,7 @@ function Executions({ executions }: { executions: ExecutionsState }) {
   );
 }
 
-/** Un script de la rama base (o, sin `hook`, uno que ya no está) con sus últimas ejecuciones. */
+/** A base branch script (or, without `hook`, one that no longer exists) with its latest executions. */
 export function HookCard({
   script,
   hook,
@@ -81,7 +81,7 @@ export function HookCard({
 }) {
   const t = useT();
   return (
-    // biome-ignore lint/a11y/useSemanticElements: un fieldset no aplica, esto no es un formulario.
+    // biome-ignore lint/a11y/useSemanticElements: a fieldset does not apply, this is not a form.
     <div
       role="group"
       aria-label={script}

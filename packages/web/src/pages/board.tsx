@@ -1,4 +1,4 @@
-// Tablero por proyecto (docs/design.md §Front end): una columna por estado de la máquina.
+// Per-project board (docs/design.md §Front end): one column per state of the machine.
 import type { Task, TaskState } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";

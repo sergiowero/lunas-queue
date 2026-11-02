@@ -1,7 +1,7 @@
 import { type ReactNode, useId } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card.tsx";
 
-/** Bloque con título que los lectores de pantalla (y los tests) ven como región con nombre. */
+/** Block with a title that screen readers (and tests) see as a named region. */
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   const id = useId();
   return (

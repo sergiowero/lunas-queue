@@ -1,6 +1,6 @@
-// Archivo de evidencia `lunasq/tasks/{id}.md` (lo escribe UW-24), en markdown: del worktree o,
-// si ya se limpió, de la branch de la tarea o de la rama base tras el merge. Nace colapsado,
-// con el mismo estilo que el Event log.
+// Evidence file `lunasq/tasks/{id}.md` (written by UW-24), in markdown: from the worktree or,
+// if it was already cleaned up, from the task's branch or the base branch after the merge. It starts collapsed,
+// with the same style as the Event log.
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { useT } from "../../lib/i18n.ts";

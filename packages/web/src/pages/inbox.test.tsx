@@ -11,10 +11,10 @@ function seeded() {
 }
 
 const section = async (name: string) => within(await screen.findByRole("region", { name }));
-/** Pendiente dentro de su sección: una tarea puede aparecer en más de una. */
+/** Pending within its section: a task can appear in more than one. */
 const item = async (sectionName: string, name: string) =>
   within(await (await section(sectionName)).findByRole("article", { name }));
-/** Fila de la lista de specs: la tarea en refined con su enlace. */
+/** Row of the specs list: the task in refined with its link. */
 const specRow = async (name: string) => {
   const specs = await section("Specs por aprobar");
   const link = await specs.findByRole("link", { name });
@@ -22,7 +22,7 @@ const specRow = async (name: string) => {
 };
 
 describe("bandeja", () => {
-  it("sin nada pendiente lo dice en cada sección", async () => {
+  it("with nothing pending it says so in each section", async () => {
     const { fake } = seeded();
     renderApp("/inbox", fake);
     expect(await screen.findByText("Nada espera por ti.")).toBeTruthy();
@@ -42,7 +42,7 @@ describe("bandeja", () => {
     ).toBeTruthy();
   });
 
-  it("lista la spec por aprobar como enlace a la tarea con su proyecto", async () => {
+  it("lists the spec to approve as a link to the task with its project", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Login con email" });
     fake.addSpec(task.id);
@@ -56,7 +56,7 @@ describe("bandeja", () => {
     expect(await row.findByText("lunas-queue")).toBeTruthy();
   });
 
-  it("la lista de specs no muestra la spec ni su gate", async () => {
+  it("the specs list shows neither the spec nor its gate", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Login con email" });
     fake.addSpec(task.id);
@@ -65,7 +65,7 @@ describe("bandeja", () => {
 
     await specRow("Login con email");
     const specs = await section("Specs por aprobar");
-    // Lo que el detalle muestra en cuanto carga la spec; aquí nunca debe aparecer.
+    // What the detail shows as soon as the spec loads; it must never appear here.
     await expect(specs.findByText(/AC-1: dado un usuario/, {}, { timeout: 200 })).rejects.toThrow();
     expect(specs.queryByText("Primera versión")).toBeNull();
     expect(specs.queryByRole("button", { name: "v1" })).toBeNull();
@@ -76,7 +76,7 @@ describe("bandeja", () => {
     expect(fake.requests.some((r) => r.path.includes("/specs"))).toBe(false);
   });
 
-  it("cada tarea en refined aparece una sola vez en la lista de specs", async () => {
+  it("each task in refined appears only once in the specs list", async () => {
     const { fake, project } = seeded();
     for (const intent of ["Login con email", "Logout", "Reset de contraseña"]) {
       const task = fake.addTask(project.id, { intent });
@@ -95,7 +95,7 @@ describe("bandeja", () => {
     ]);
   });
 
-  it("el enlace de la spec lleva al detalle de la tarea con su gate", async () => {
+  it("the spec link leads to the task detail with its gate", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Login con email" });
     fake.addSpec(task.id);
@@ -111,7 +111,7 @@ describe("bandeja", () => {
     expect(await spec.findByRole("button", { name: "Aprobar v1" })).toBeTruthy();
   });
 
-  it("lista la tarea en needs_human y la cuenta en el menú", async () => {
+  it("lists the task in needs_human and counts it in the menu", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Migrar a Postgres" });
     fake.transition(task.id, "needs_human", null);
@@ -124,7 +124,7 @@ describe("bandeja", () => {
     expect(screen.queryByText("Nada espera por ti.")).toBeNull();
   });
 
-  it("una tarea pausada no está en la bandeja ni suma al menú; la de needs_human sí", async () => {
+  it("a paused task is not in the inbox nor adds to the menu; the needs_human one does", async () => {
     const { fake, project } = seeded();
     const paused = fake.addTask(project.id, { intent: "Pausada por mí" });
     fake.transition(paused.id, "paused", null);
@@ -138,7 +138,7 @@ describe("bandeja", () => {
     expect(await screen.findByRole("link", { name: "Bandeja, 1 pendientes" })).toBeTruthy();
   });
 
-  it("muestra la pregunta abierta con su contexto y la responde", async () => {
+  it("shows the open question with its context and answers it", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Migrar usuarios" });
     fake.transition(task.id, "in_progress", "running");
@@ -162,7 +162,7 @@ describe("bandeja", () => {
     );
   });
 
-  describe("pregunta de opción múltiple", () => {
+  describe("multiple-choice question", () => {
     const OPTIONS = [
       { label: "Postgres", description: "ya está en el stack" },
       { label: "SQLite" },
@@ -176,7 +176,7 @@ describe("bandeja", () => {
       return renderApp("/inbox", fake);
     }
 
-    it("AC-4: muestra un grupo de radios con label y descripción, más «Otra respuesta», sin elegir", async () => {
+    it("AC-4: shows a radio group with label and description, plus «Otra respuesta», with nothing chosen", async () => {
       asked();
       const question = await item("Preguntas abiertas", "Elegir motor");
       const group = within(await question.findByRole("group", { name: "Respuesta" }));
@@ -194,7 +194,7 @@ describe("bandeja", () => {
       expect(send.disabled).toBe(true);
     });
 
-    it("AC-5: elegir una opción y responder envía su label", async () => {
+    it("AC-5: choosing an option and answering sends its label", async () => {
       const { fake, user } = asked();
       const question = await item("Preguntas abiertas", "Elegir motor");
       await user.click(question.getByRole("radio", { name: /^SQLite/ }));
@@ -203,7 +203,7 @@ describe("bandeja", () => {
       expect(fake.questions[0]?.answer).toBe("SQLite");
     });
 
-    it("AC-6: «Otra respuesta» abre un campo de texto y exige texto no vacío; envía el texto recortado", async () => {
+    it("AC-6: «Otra respuesta» opens a text field and requires non-empty text; sends the trimmed text", async () => {
       const { fake, user } = asked();
       const question = await item("Preguntas abiertas", "Elegir motor");
       await user.click(question.getByRole("radio", { name: "Otra respuesta" }));
@@ -219,7 +219,7 @@ describe("bandeja", () => {
       expect(fake.questions[0]?.answer).toBe("DuckDB");
     });
 
-    it("AC-7: si cambia de «Otra respuesta» a una opción se envía el label, no el texto", async () => {
+    it("AC-7: switching from «Otra respuesta» to an option sends the label, not the text", async () => {
       const { fake, user } = asked();
       const question = await item("Preguntas abiertas", "Elegir motor");
       await user.click(question.getByRole("radio", { name: "Otra respuesta" }));
@@ -230,7 +230,7 @@ describe("bandeja", () => {
       expect(fake.questions[0]?.answer).toBe("Postgres");
     });
 
-    it("AC-8: sin opciones solo hay el campo de texto Respuesta, sin radios", async () => {
+    it("AC-8: without options there is only the Respuesta text field, without radios", async () => {
       asked(null);
       const question = await item("Preguntas abiertas", "Elegir motor");
       expect(question.getByLabelText("Respuesta")).toBeTruthy();
@@ -239,7 +239,7 @@ describe("bandeja", () => {
     });
   });
 
-  it("si la pregunta ya no está abierta muestra el error del servidor", async () => {
+  it("if the question is no longer open it shows the server's error", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Migrar usuarios" });
     fake.transition(task.id, "in_progress", "running");
@@ -253,11 +253,11 @@ describe("bandeja", () => {
 
     const questions = await section("Preguntas abiertas");
     expect((await questions.findByRole("alert")).textContent).toMatch(/ya está en cancelled/);
-    // La pregunta ya no espera: sale de la bandeja sin esperar el refresco.
+    // The question no longer waits: it leaves the inbox without waiting for the refresh.
     expect(await questions.findByText("Ningún agente espera una respuesta.")).toBeTruthy();
   });
 
-  it("muestra el agente bloqueado y enfoca su pane en herdr", async () => {
+  it("shows the blocked agent and focuses its pane in herdr", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Agregar índice" });
     fake.transition(task.id, "in_progress", "running");
@@ -277,7 +277,7 @@ describe("bandeja", () => {
     );
   });
 
-  it("si herdr ya no tiene el agente lo dice", async () => {
+  it("if herdr no longer has the agent it says so", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Agregar índice" });
     fake.block(fake.startRun(task.id, "implement"));
@@ -293,7 +293,7 @@ describe("bandeja", () => {
     expect((await agent.findByRole("alert")).textContent).toMatch(/ya no está en herdr/);
   });
 
-  it("el agente desbloqueado sale de la bandeja al refrescar", async () => {
+  it("the unblocked agent leaves the inbox on refresh", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Agregar índice" });
     fake.block(fake.startRun(task.id, "implement"));
@@ -305,7 +305,7 @@ describe("bandeja", () => {
     expect(await screen.findByText("Ningún agente espera un permiso.")).toBeTruthy();
   });
 
-  it("el menú muestra cuántas cosas esperan al humano", async () => {
+  it("the menu shows how many things wait for the human", async () => {
     const { fake, project } = seeded();
     const refined = fake.addTask(project.id, { intent: "Spec" });
     fake.addSpec(refined.id);
@@ -322,7 +322,7 @@ describe("bandeja", () => {
     );
   });
 
-  it("las preguntas y bloqueos se resuelven en la bandeja y la spec en el detalle", async () => {
+  it("questions and blocks are resolved in the inbox and the spec in the detail", async () => {
     const { fake, project } = seeded();
     const refined = fake.addTask(project.id, { intent: "Spec pendiente" });
     fake.addSpec(refined.id);
@@ -342,7 +342,7 @@ describe("bandeja", () => {
     const agent = await item("Agentes bloqueados", "Permiso pendiente");
     await user.click(agent.getByRole("button", { name: "Abrir pane en herdr" }));
     await agent.findByRole("status");
-    // El humano responde el permiso en herdr y el RunWatcher deja de verlo bloqueado.
+    // The human answers the permission in herdr and the RunWatcher stops seeing it blocked.
     fake.blocked = [];
     await refresh();
     expect(await screen.findByText("Ningún agente espera un permiso.")).toBeTruthy();
@@ -407,7 +407,7 @@ describe("bandeja", () => {
     expect(screen.queryByText(empty)).toBeNull();
   });
 
-  it("los bloqueos se refrescan solos aunque no lleguen eventos", () => {
+  it("blocks refresh on their own even if no events arrive", () => {
     expect(queries.blocked().refetchInterval).toBe(BLOCKED_REFRESH_MS);
   });
 });

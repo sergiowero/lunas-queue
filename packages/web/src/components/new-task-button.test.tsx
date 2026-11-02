@@ -9,8 +9,8 @@ async function newTaskButton() {
   return screen.findByRole("link", { name: "Nueva tarea" });
 }
 
-describe("botón Nueva tarea del header", () => {
-  it.each(PAGES)("en %s, el nav de pestañas no contiene Nueva tarea", async (path) => {
+describe("header New task button", () => {
+  it.each(PAGES)("on %s, the tab nav does not contain Nueva tarea", async (path) => {
     renderApp(path);
     await newTaskButton();
     const nav = within(screen.getByRole("navigation"));
@@ -35,7 +35,7 @@ describe("botón Nueva tarea del header", () => {
     },
   );
 
-  it("queda justo antes de Settings y del selector de tema, y empuja las acciones a la derecha", async () => {
+  it("sits right before Settings and the theme toggle, and pushes the actions to the right", async () => {
     renderApp("/queue");
     const button = await newTaskButton();
     const settings = await screen.findByRole("link", { name: "Settings" });
@@ -51,7 +51,7 @@ describe("botón Nueva tarea del header", () => {
     expect(settings.className).not.toContain("ml-auto");
   });
 
-  it("usa el estilo de botón primario pequeño del sistema de diseño", async () => {
+  it("uses the system's small primary button style", async () => {
     renderApp("/queue");
     const button = await newTaskButton();
     for (const cls of buttonVariants({ size: "sm" }).split(" ")) {
@@ -59,7 +59,7 @@ describe("botón Nueva tarea del header", () => {
     }
   });
 
-  it("en móvil el header no desborda: el wordmark se oculta bajo sm y la marca conserva su nombre", async () => {
+  it("on mobile the header does not overflow: the wordmark hides below sm and the brand keeps its name", async () => {
     renderApp("/queue");
     await newTaskButton();
     const brand = screen.getByRole("link", { name: "LunasQ" });
@@ -71,7 +71,7 @@ describe("botón Nueva tarea del header", () => {
     expect(brand.parentElement?.className).toContain("sm:px-6");
   });
 
-  it("un click desde /queue abre la página Nueva tarea existente", async () => {
+  it("a click from /queue opens the existing New task page", async () => {
     const { user, router } = renderApp("/queue");
     await user.click(await newTaskButton());
     expect(router.state.location.pathname).toBe("/tasks/new");

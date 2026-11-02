@@ -1,6 +1,6 @@
-// Lo que espera al humano (ADR uw-27-bandeja): specs por aprobar (tareas en refined), tareas
-// escaladas (needs_human), preguntas abiertas y agentes bloqueados. La bandeja lo muestra y el
-// menú cuenta el total.
+// What waits for the human (ADR uw-27-bandeja): specs to approve (tasks in refined), escalated
+// tasks (needs_human), open questions and blocked agents. The inbox shows it and the
+// menu counts the total.
 import type { Task } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -9,7 +9,7 @@ import { queries } from "./queries.ts";
 
 export type TasksById = Map<string, Json<Task>>;
 
-/** Lo que espera al humano; el menú muestra el total. */
+/** What waits for the human; the menu shows the total. */
 export function useInbox() {
   const tasks = useQuery(queries.tasks());
   const questions = useQuery(queries.openQuestions());
