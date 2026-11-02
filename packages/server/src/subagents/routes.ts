@@ -1,7 +1,7 @@
-// Endpoint de los hooks SubagentStart y SubagentStop de Claude Code (ADR uw-19-revisores). El
-// archivo de settings del dispatcher los manda aquí con el run token en el header, igual que el
-// LunasQ MCP. Responder distinto de 2xx no detiene a Claude Code, pero un token inválido responde
-// {} sin efectos ni detalles: así una sesión vieja no deja errores en la pantalla del agente.
+// Endpoint for Claude Code's SubagentStart and SubagentStop hooks (ADR uw-19-revisores). The
+// dispatcher's settings file sends them here with the run token in the header, like the
+// LunasQ MCP. Answering with a non-2xx does not stop Claude Code, but an invalid token answers
+// {} with no effects or details: this way an old session leaves no errors on the agent's screen.
 import { type LunasqDatabase, RunRepository, RunSubagentRepository } from "@lunasq/db";
 import { RUN_TOKEN_HEADER, SubagentHookInput } from "@lunasq/schemas";
 import { Hono } from "hono";
@@ -19,8 +19,8 @@ export function subagentHookRoutes(db: LunasqDatabase): Hono {
     if (!input.success) {
       return c.json({ error: "invalid_hook_input", message: input.error.message }, 400);
     }
-    // Con el session id nativo fijado en el claim, solo cuenta la sesión del Run: otro `claude`
-    // que herede el token (un proceso hijo) no deja evidencia en este Run.
+    // With the native session id fixed at the claim, only the Run's session counts: another `claude`
+    // that inherits the token (a child process) leaves no evidence in this Run.
     if (run.agentSessionSource === "native" && input.data.session_id !== run.agentSession) {
       return c.json({});
     }

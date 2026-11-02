@@ -1,6 +1,6 @@
-// Criterio de UW-11 de punta a punta: el LunasQ MCP con el gate real (pane de FakeHerdr, que
-// ejecuta de verdad, sobre un repo git real). Una suite en rojo bloquea la transición aunque el
-// handoff del agente mapee cada criterio a tests que dice en verde.
+// UW-11 criterion end to end: the LunasQ MCP with the real gate (FakeHerdr pane, which
+// actually executes, over a real git repo). A red suite blocks the transition even if the agent's
+// handoff maps each criterion to tests it claims are green.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,7 +20,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-/** Worktree con una suite que falla hasta que exista `fixed`. */
+/** Worktree with a suite that fails until `fixed` exists. */
 async function harness() {
   const wt = realpathSync(mkdtempSync(join(tmpdir(), "lunasq-gate-mcp-")));
   dirs.push(wt);
@@ -54,8 +54,8 @@ async function harness() {
   return { ...h, wt, gateEvents, fix: () => writeFileSync(join(wt, "fixed"), "") };
 }
 
-describe("gate de tests en el LunasQ MCP", () => {
-  it("submit_for_verification con la suite real en rojo no transiciona; en verde, sí", async () => {
+describe("test gate in the LunasQ MCP", () => {
+  it("submit_for_verification with the real suite red does not transition; with it green, it does", async () => {
     const h = await harness();
     const { task, run, call } = await h.ready("implement", implementing);
     const handoff = handoffFor("implementation", run);
@@ -77,7 +77,7 @@ describe("gate de tests en el LunasQ MCP", () => {
     ]);
   });
 
-  it("un pass con la suite real en rojo no se acepta", async () => {
+  it("a pass with the real suite red is not accepted", async () => {
     const h = await harness();
     const { task, run, call } = await h.ready("verify", verifying);
     const result = await call("submit_verdict", {
@@ -85,7 +85,7 @@ describe("gate de tests en el LunasQ MCP", () => {
     });
     expect(result.body).toMatchObject({ error: "test_gate_failed" });
     expect(new RunRepository(h.db).get(run.id)?.handoff).toBeNull();
-    // El primero es el gate en verde de submit_for_verification con que llega la tarea.
+    // The first is the green gate of the submit_for_verification the task arrives with.
     expect(h.gateEvents(task.id)).toMatchObject([
       { trigger: "submit_for_verification", passed: true },
       { trigger: "verdict_pass", passed: false, output: "FAIL order.test.ts\n" },

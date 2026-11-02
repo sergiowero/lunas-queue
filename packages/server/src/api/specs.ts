@@ -1,5 +1,5 @@
-// Rutas de specs y del gate humano (UW-12, ADR 0013), montadas bajo /api/tasks/:id/specs. La
-// versión entregada por el refinador entra por el LunasQ MCP (UW-15), no por aquí.
+// Spec routes and the human gate (UW-12, ADR 0013), mounted under /api/tasks/:id/specs. The
+// version delivered by the refiner comes in through the LunasQ MCP (UW-15), not from here.
 import type { SpecRepository, SpecResult } from "@lunasq/db";
 import {
   SpecDiffQuery,
@@ -20,7 +20,7 @@ function respond(c: Context, result: SpecResult) {
 
 function taskId(c: Context): string {
   const id = c.req.param("id");
-  if (!id) throw new Error("ruta de specs montada sin :id");
+  if (!id) throw new Error("specs route mounted without :id");
   return id;
 }
 

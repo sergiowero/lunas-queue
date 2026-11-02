@@ -1,6 +1,6 @@
-// Sección de un Run del archivo de evidencia (docs/design.md §Archivo de evidencia, ADR
-// uw-24-archivo-evidencia): metadatos, handoff, veredicto, gate de tests, hooks y transcripts. Es
-// una función pura sobre datos ya leídos; el servicio los reúne y escribe el archivo.
+// Section of a Run in the evidence file (docs/design.md §Evidence file, ADR
+// uw-24-archivo-evidencia): metadata, handoff, verdict, test gate, hooks and transcripts. It is
+// a pure function over data already read; the service gathers them and writes the file.
 import type { RunRow } from "@lunasq/db";
 import {
   type Finding,
@@ -17,7 +17,7 @@ export type HookLogEntry =
 
 export type SectionTranscript = {
   title: string;
-  /** null si no se pudo leer; `note` dice por qué. */
+  /** null if it could not be read; `note` says why. */
   markdown: string | null;
   note?: string;
 };
@@ -38,10 +38,10 @@ export function runMarkers(runId: string) {
   };
 }
 
-/** Un marcador de LunasQ dentro del contenido del agente rompería la lectura del archivo. */
-const neutralize = (text: string) => text.replaceAll(MARKER_PREFIX, "<!-- lunasq-escapado:");
+/** A LunasQ marker inside the agent's content would break reading the file. */
+const neutralize = (text: string) => text.replaceAll(MARKER_PREFIX, "<!-- lunasq-escaped:");
 
-/** Cerca de código más larga que cualquier racha de backticks del contenido. */
+/** Code fence longer than any run of backticks in the content. */
 function fenced(text: string, lang = ""): string {
   const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map((m) => m[0].length));
   const fence = "`".repeat(Math.max(3, longest + 1));
@@ -58,24 +58,24 @@ function duration(ms: number): string {
 
 function metadata(run: RunRow): string {
   const rows: [string, string][] = [
-    ["Fase", run.phase],
-    ["Agente", run.agentKind],
-    ["Modelo", run.model ?? "—"],
-    ["Iteración", String(run.iteration)],
-    ["Inicio", iso(run.startedAt)],
-    ["Fin", run.endedAt ? iso(run.endedAt) : "sin cerrar"],
-    ["Resultado", run.result ?? "—"],
+    ["Phase", run.phase],
+    ["Agent", run.agentKind],
+    ["Model", run.model ?? "—"],
+    ["Iteration", String(run.iteration)],
+    ["Start", iso(run.startedAt)],
+    ["End", run.endedAt ? iso(run.endedAt) : "not closed"],
+    ["Result", run.result ?? "—"],
     ["failure_reason", run.failureReason ?? "—"],
-    ["Sesión", run.agentSession ?? "—"],
+    ["Session", run.agentSession ?? "—"],
   ];
   return [
-    "| Campo | Valor |",
+    "| Field | Value |",
     "| --- | --- |",
     ...rows.map(([k, v]) => `| ${k} | ${cell(v)} |`),
   ].join("\n");
 }
 
-/** Una celda de tabla en una sola línea. */
+/** A table cell on a single line. */
 const cell = (value: string) => value.replaceAll("|", "\\|").replace(/\s*\n\s*/g, " ");
 
 function findingLine(f: Finding & { source?: string }): string {
@@ -83,7 +83,7 @@ function findingLine(f: Finding & { source?: string }): string {
   const parts = [`[${f.severity}] ${where}`];
   if (f.criterionId) parts.push(f.criterionId);
   parts.push(f.evidence);
-  if (f.source) parts.push(`origen: ${f.source}`);
+  if (f.source) parts.push(`source: ${f.source}`);
   return `- ${parts.join(" · ")}`;
 }
 
@@ -93,37 +93,37 @@ function verdictSection(run: RunRow): string | null {
   if (!parsed.success) return null;
   const { body } = parsed.data;
   const out = [
-    "### Veredicto",
+    "### Verdict",
     "",
-    `- Veredicto: **${body.verdict}**`,
-    `- Riesgo: ${body.riskLabel}`,
+    `- Verdict: **${body.verdict}**`,
+    `- Risk: ${body.riskLabel}`,
     "",
-    "#### Criterios",
+    "#### Criteria",
     "",
     ...body.criteriaVerdicts.map((c) => `- ${c.criterionId} · ${c.verdict} · ${c.evidence}`),
     "",
-    "#### Revisores",
+    "#### Reviewers",
     "",
   ];
   for (const [name, report] of Object.entries(body.reviewers)) {
     if (report.status === "skipped") {
-      out.push(`- \`${name}\` · omitido · ${report.justification}`);
+      out.push(`- \`${name}\` · skipped · ${report.justification}`);
     } else if (report.findings.length === 0) {
-      out.push(`- \`${name}\` · SIN HALLAZGOS`);
+      out.push(`- \`${name}\` · NO FINDINGS`);
     } else {
-      out.push(`- \`${name}\` · ${report.findings.length} hallazgos`);
+      out.push(`- \`${name}\` · ${report.findings.length} findings`);
       out.push(...report.findings.map((f) => `  ${findingLine(f)}`));
     }
   }
   out.push("", "#### Must-fix", "");
-  out.push(...(body.mustFix.length ? body.mustFix.map(findingLine) : ["Ninguno."]));
-  out.push("", "#### Hallazgos refutados", "");
+  out.push(...(body.mustFix.length ? body.mustFix.map(findingLine) : ["None."]));
+  out.push("", "#### Refuted findings", "");
   out.push(
     ...(body.refuted.length
       ? body.refuted.map(
-          (r) => `${findingLine({ ...r.finding, source: r.source })}\n  - Motivo: ${r.reason}`,
+          (r) => `${findingLine({ ...r.finding, source: r.source })}\n  - Reason: ${r.reason}`,
         )
-      : ["Ninguno."]),
+      : ["None."]),
   );
   return out.join("\n");
 }
@@ -135,15 +135,15 @@ function handoffSection(run: RunRow, hasVerdict: boolean): string | null {
 
 function gateSection(gates: TestGateExecutedPayload[]): string | null {
   if (gates.length === 0) return null;
-  const out = ["### Gate de tests"];
+  const out = ["### Test gate"];
   for (const g of gates) {
     const verdict =
-      g.error !== null && g.exitCode === null ? "no corrió" : g.passed ? "verde" : "rojo";
+      g.error !== null && g.exitCode === null ? "did not run" : g.passed ? "green" : "red";
     out.push("", `#### ${g.trigger} · ${verdict}`, "");
-    out.push(`- Comando: ${g.command ? `\`${g.command}\`` : "—"}`);
-    out.push(`- Commit probado: ${g.headSha ?? "—"}`);
+    out.push(`- Command: ${g.command ? `\`${g.command}\`` : "—"}`);
+    out.push(`- Tested commit: ${g.headSha ?? "—"}`);
     out.push(`- Exit code: ${g.exitCode ?? "—"}${g.timedOut ? " (timeout)" : ""}`);
-    out.push(`- Duración: ${duration(g.durationMs)}`);
+    out.push(`- Duration: ${duration(g.durationMs)}`);
     if (g.error) out.push(`- Error: ${g.error}`);
     if (g.output.trim() !== "") out.push("", fenced(g.output.trimEnd()));
   }
@@ -155,18 +155,18 @@ function hooksSection(hooks: HookLogEntry[]): string | null {
   const out = ["### Hooks"];
   for (const h of hooks) {
     if (h.kind === "executed") {
-      out.push("", `#### ${h.point} · ${h.script} · ${h.passed ? "ok" : "falló"}`, "");
-      out.push(`- Política: ${h.policy} · timeout ${h.timeoutSeconds} s`);
+      out.push("", `#### ${h.point} · ${h.script} · ${h.passed ? "ok" : "failed"}`, "");
+      out.push(`- Policy: ${h.policy} · timeout ${h.timeoutSeconds} s`);
       out.push(`- Exit code: ${h.exitCode}${h.timedOut ? " (timeout)" : ""}`);
-      out.push(`- Duración: ${duration(h.durationMs)}`);
-      out.push(`- Rama base: ${h.baseRef}`);
+      out.push(`- Duration: ${duration(h.durationMs)}`);
+      out.push(`- Base branch: ${h.baseRef}`);
       if (h.output.trim() !== "") out.push("", fenced(h.output.trimEnd()));
     } else {
-      out.push("", `#### ${h.point} · resultado: ${h.outcome}`, "");
-      if (h.failedScript) out.push(`- Script que bloqueó: ${h.failedScript}`);
+      out.push("", `#### ${h.point} · result: ${h.outcome}`, "");
+      if (h.failedScript) out.push(`- Blocking script: ${h.failedScript}`);
       if (h.error) out.push(`- Error: ${h.error}`);
-      if (h.commit) out.push(`- Commit de los hooks: ${h.commit}`);
-      if (h.commitSkipped) out.push("- Los hooks dejaron cambios sin commitear");
+      if (h.commit) out.push(`- Hooks commit: ${h.commit}`);
+      if (h.commitSkipped) out.push("- The hooks left uncommitted changes");
     }
   }
   return out.join("\n");
@@ -176,17 +176,17 @@ function transcriptsSection(transcripts: SectionTranscript[]): string | null {
   if (transcripts.length === 0) return null;
   const out = ["### Transcripts"];
   for (const t of transcripts) {
-    const body = t.markdown ?? `_${t.note ?? "sin transcript"}_`;
+    const body = t.markdown ?? `_${t.note ?? "no transcript"}_`;
     out.push("", "<details>", `<summary>${t.title}</summary>`, "", body, "", "</details>");
   }
   return out.join("\n");
 }
 
-/** Markdown de un Run, con marcadores de inicio y fin para reemplazarlo al reescribir. */
+/** Markdown of a Run, with start and end markers to replace it when rewriting. */
 export function renderRunSection({ run, gates, hooks, transcripts }: RunSectionData): string {
   const verdict = verdictSection(run);
   const body = [
-    `## Run ${run.id} · ${run.phase} · iteración ${run.iteration}`,
+    `## Run ${run.id} · ${run.phase} · iteration ${run.iteration}`,
     metadata(run),
     verdict,
     handoffSection(run, verdict !== null),

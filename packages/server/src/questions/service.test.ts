@@ -15,7 +15,7 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-/** Tarea en refine con el agente vivo que acaba de llamar ask_human. */
+/** Task in refine with the live agent that just called ask_human. */
 async function asked() {
   const h = harness();
   stops.push(h.stop);
@@ -41,7 +41,7 @@ async function asked() {
 }
 
 describe("QuestionService.answer", () => {
-  it("con el agente vivo manda la respuesta al mismo pane y la tarea sigue en running", async () => {
+  it("with the live agent it sends the answer to the same pane and the task stays in running", async () => {
     const { h, service, taskId, run, name, question } = await asked();
 
     const result = await service.answer(question.id, {
@@ -63,10 +63,10 @@ describe("QuestionService.answer", () => {
     expect(h.errors).toEqual([]);
   });
 
-  it("una respuesta horas después llega al mismo agente y no vence la fase", async () => {
+  it("an answer hours later reaches the same agent and does not expire the phase", async () => {
     const { h, service, taskId, run, name, question } = await asked();
     await vi.advanceTimersByTimeAsync(20 * MIN);
-    // El outbox pausa el reloj de fase al pasar a waiting_human.
+    // The outbox pauses the phase clock on moving to waiting_human.
     h.watcher.onTransition({
       id: 1,
       eventId: 1,
@@ -89,11 +89,11 @@ describe("QuestionService.answer", () => {
 
     const result = await service.answer(question.id, { answer: "Sí" });
     expect(result).toMatchObject({ ok: true, delivery: "pane" });
-    expect(await h.herdr.readAgent({ name })).toContain('Respuesta: "Sí"');
+    expect(await h.herdr.readAgent({ name })).toContain('Answer: "Sí"');
     expect(h.taskRow(taskId)).toMatchObject({ subState: "running" });
   });
 
-  it("sin agente vivo cierra el Run viejo y deja la tarea en queued para un Run nuevo", async () => {
+  it("without a live agent it closes the old Run and leaves the task in queued for a new Run", async () => {
     const { h, service, taskId, run, name, question } = await asked();
     h.herdr.exitAgent(name);
     await settle(vi);
@@ -108,7 +108,7 @@ describe("QuestionService.answer", () => {
     expect(h.errors).toEqual([]);
   });
 
-  it("si el pane de ese nombre ya es otro, no se le manda la respuesta", async () => {
+  it("if the pane of that name is already another one, the answer is not sent to it", async () => {
     const { h, service, run, name, question } = await asked();
     vi.spyOn(h.herdr, "getAgent").mockResolvedValue({
       name,
@@ -123,7 +123,7 @@ describe("QuestionService.answer", () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 
-  it("si herdr rechaza el prompt, la respuesta se entrega en un Run nuevo", async () => {
+  it("if herdr rejects the prompt, the answer is delivered in a new Run", async () => {
     const { h, service, taskId, run, question } = await asked();
     vi.spyOn(h.herdr, "promptAgent").mockRejectedValue(new Error("pane no responde"));
 
@@ -134,7 +134,7 @@ describe("QuestionService.answer", () => {
     expect(h.runs.get(run.id)).toMatchObject({ result: "cancelled" });
   });
 
-  it("responder dos veces a la vez manda un solo prompt", async () => {
+  it("answering twice at the same time sends a single prompt", async () => {
     const { h, service, question } = await asked();
     const prompt = vi.spyOn(h.herdr, "promptAgent");
 
@@ -148,7 +148,7 @@ describe("QuestionService.answer", () => {
     expect(prompt).toHaveBeenCalledTimes(1);
   });
 
-  it("rechaza una pregunta inexistente o una tarea que ya no espera", async () => {
+  it("rejects a nonexistent question or a task that no longer waits", async () => {
     const { h, service, taskId, question } = await asked();
     expect(
       await service.answer("00000000-0000-4000-8000-000000000009", { answer: "x" }),
@@ -167,7 +167,7 @@ describe("QuestionService.answer", () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 
-  it("avisa al terminar para que el scheduler despache sin esperar el tick", async () => {
+  it("notifies on finishing so the scheduler dispatches without waiting for the tick", async () => {
     const { h, question } = await asked();
     const woke = vi.fn();
     const service = new QuestionService({

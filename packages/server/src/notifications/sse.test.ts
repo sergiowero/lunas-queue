@@ -17,7 +17,7 @@ async function until(cond: () => boolean) {
 }
 
 describe("GET /stream (SSE de notificaciones)", () => {
-  it("emite cada notificación como evento con su id", async () => {
+  it("emits each notification as an event with its id", async () => {
     const hub = new NotificationHub();
     const body = await open(hub);
     await until(() => hub.subscriberCount === 1);
@@ -29,7 +29,7 @@ describe("GET /stream (SSE de notificaciones)", () => {
     ]);
   });
 
-  it("al reconectar con Last-Event-ID no repite lo ya visto", async () => {
+  it("on reconnecting with Last-Event-ID it does not repeat what was already seen", async () => {
     const hub = new NotificationHub();
     hub.publish(notification({ id: "n:1" }));
     hub.publish(notification({ id: "n:2" }));
@@ -41,7 +41,7 @@ describe("GET /stream (SSE de notificaciones)", () => {
     expect(events.map((e) => e.id)).toEqual(["n:2", "n:3"]);
   });
 
-  it("cerrar la conexión libera la suscripción", async () => {
+  it("closing the connection releases the subscription", async () => {
     const hub = new NotificationHub();
     const body = await open(hub);
     await until(() => hub.subscriberCount === 1);

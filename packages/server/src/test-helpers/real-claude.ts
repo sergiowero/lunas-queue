@@ -1,12 +1,12 @@
-// Arnés de las pruebas contra Claude Code real (`test:claude`, `test:skills`): sirve la app de Hono
-// en un puerto local y abre `claude -p` como lo haría un pane.
+// Harness for tests against real Claude Code (`test:claude`, `test:skills`): serves the Hono app
+// on a local port and opens `claude -p` as a pane would.
 import { spawn } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { Readable } from "node:stream";
 
 export const claudeBin = process.env.CLAUDE_BIN ?? "claude";
 
-/** Sirve una app de Hono con node:http, sin agregar @hono/node-server. */
+/** Serves a Hono app with node:http, without adding @hono/node-server. */
 export function serve(fetch: (req: Request) => Response | Promise<Response>): Promise<Server> {
   const server = createServer(async (req, res) => {
     const body = req.method === "GET" || req.method === "HEAD" ? undefined : Readable.toWeb(req);
@@ -40,7 +40,7 @@ export function runClaude(
     });
     child.on("error", reject);
     child.on("close", (code) =>
-      code === 0 ? resolve(out) : reject(new Error(`claude salió con ${code}:\n${out}`)),
+      code === 0 ? resolve(out) : reject(new Error(`claude exited with ${code}:\n${out}`)),
     );
   });
 }

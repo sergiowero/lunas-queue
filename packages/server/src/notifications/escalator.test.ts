@@ -19,11 +19,11 @@ describe("Escalator", () => {
     vi.useRealTimers();
   });
 
-  it("escala a 1 minuto por defecto", () => {
+  it("escalates at 1 minute by default", () => {
     expect(ESCALATION_DELAY_MS).toBe(60_000);
   });
 
-  it("no notifica antes del minuto y sí al cumplirse", () => {
+  it("does not notify before the minute and does so when it is up", () => {
     escalator.watch(pending);
     vi.advanceTimersByTime(59_999);
     expect(sent).toEqual([]);
@@ -32,7 +32,7 @@ describe("Escalator", () => {
     expect(escalator.pending()).toEqual([]);
   });
 
-  it("resolver antes del minuto cancela la notificación", () => {
+  it("resolving before the minute cancels the notification", () => {
     escalator.watch(pending);
     vi.advanceTimersByTime(30_000);
     escalator.resolve(pending.id);
@@ -40,7 +40,7 @@ describe("Escalator", () => {
     expect(sent).toEqual([]);
   });
 
-  it("vigilar dos veces el mismo id produce una sola notificación y no reinicia el plazo", () => {
+  it("watching the same id twice produces a single notification and does not reset the deadline", () => {
     escalator.watch(pending);
     vi.advanceTimersByTime(40_000);
     escalator.watch(pending);
@@ -50,7 +50,7 @@ describe("Escalator", () => {
     expect(sent).toHaveLength(1);
   });
 
-  it("con since cuenta el minuto desde ese instante (re-armado tras reinicio)", () => {
+  it("with since it counts the minute from that instant (re-armed after a restart)", () => {
     escalator.watch(pending, { since: new Date("2026-10-29T11:59:30.000Z") });
     vi.advanceTimersByTime(29_999);
     expect(sent).toEqual([]);
@@ -58,18 +58,18 @@ describe("Escalator", () => {
     expect(sent).toHaveLength(1);
   });
 
-  it("con since ya vencido notifica de inmediato en el siguiente tick", () => {
+  it("with since already expired it notifies immediately on the next tick", () => {
     escalator.watch(pending, { since: new Date("2026-10-29T11:00:00.000Z") });
     vi.advanceTimersByTime(0);
     expect(sent).toHaveLength(1);
   });
 
-  it("rechaza un since inválido", () => {
+  it("rejects an invalid since", () => {
     expect(() => escalator.watch(pending, { since: new Date("no es fecha") })).toThrow(/since/);
     expect(escalator.pending()).toEqual([]);
   });
 
-  it("tras escalar, vigilar el mismo id no arma otro timer hasta que se resuelva", () => {
+  it("after escalating, watching the same id does not arm another timer until it is resolved", () => {
     escalator.watch(pending);
     vi.advanceTimersByTime(60_000);
     escalator.watch(pending);
@@ -83,7 +83,7 @@ describe("Escalator", () => {
     expect(escalator.pending()).toEqual([pending.id]);
   });
 
-  it("vigila ids distintos de forma independiente", () => {
+  it("watches different ids independently", () => {
     escalator.watch(pending);
     escalator.watch({ ...pending, id: "blocked:r-1:1", kind: "agent_blocked" });
     escalator.resolve(pending.id);
@@ -91,7 +91,7 @@ describe("Escalator", () => {
     expect(sent.map((n) => n.id)).toEqual(["blocked:r-1:1"]);
   });
 
-  it("stop cancela todo lo pendiente", () => {
+  it("stop cancels everything pending", () => {
     escalator.watch(pending);
     escalator.stop();
     vi.advanceTimersByTime(60_000);
@@ -99,7 +99,7 @@ describe("Escalator", () => {
     expect(escalator.pending()).toEqual([]);
   });
 
-  it("un fallo al notificar se reporta y no rompe el escalador", async () => {
+  it("a failure notifying is reported and does not break the escalator", async () => {
     const onError = vi.fn();
     const failing = new Escalator({ notify: () => Promise.reject(new Error("x")), onError });
     failing.watch(pending);

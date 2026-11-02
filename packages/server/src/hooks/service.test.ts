@@ -1,4 +1,4 @@
-// HookService con fakes de git, herdr y runner. La prueba con git y procesos reales está en
+// HookService with git, herdr and runner fakes. The test with real git and processes is in
 // service.git.test.ts.
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -35,7 +35,7 @@ afterEach(() => {
   for (const dir of scriptsDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-/** Ruta del script que recibió el runner (el comando es la ruta entre comillas simples). */
+/** Path of the script the runner received (the command is the path in single quotes). */
 const scriptPath = (call: ProcessInput) => call.command.slice(1, -1);
 const scriptName = (call: ProcessInput) => scriptPath(call).split("/").at(-1);
 
@@ -60,7 +60,7 @@ async function setup(opts: { tree?: FakeTree; handler?: FakeProcessHandler } = {
   };
   const runner = new FakeProcessRunner(opts.handler);
   const panes: string[] = [];
-  /** Contenido de cada script y de sus vecinos en el momento de correrlo (después se borran). */
+  /** Content of each script and its neighbors at the moment it runs (they are deleted afterwards). */
   const seen: { name: string; content: string; dir: string[] }[] = [];
   const scriptsDir = mkdtempSync(join(tmpdir(), "lunasq-hooks-test-"));
   scriptsDirs.push(scriptsDir);
@@ -109,7 +109,7 @@ async function setup(opts: { tree?: FakeTree; handler?: FakeProcessHandler } = {
 }
 
 describe("HookService.run", () => {
-  it("corre los scripts ejecutables del punto en orden alfabético, en el worktree y con el contexto", async () => {
+  it("runs the point's executable scripts in alphabetical order, in the worktree and with the context", async () => {
     const { project, task, wtPath, rootPaneId, runner, panes, service, events } = await setup();
 
     const res = await service.run({
@@ -147,7 +147,7 @@ describe("HookService.run", () => {
     ]);
   });
 
-  it("ejecuta el contenido de origin/<base>, copiado fuera del worktree, y borra la copia", async () => {
+  it("runs the content of origin/<base>, copied outside the worktree, and deletes the copy", async () => {
     const { task, wtPath, runner, seen, scriptsDir, service, git, project } = await setup();
     await service.run({ taskId: task.id, point: "before_delivery" });
 
@@ -159,7 +159,7 @@ describe("HookService.run", () => {
     });
     expect(readdirSync(scriptsDir)).toEqual([]);
 
-    // Un cambio al hook entra en vigor cuando llega a la rama base (su PR se mergeó).
+    // A change to the hook takes effect when it reaches the base branch (its PR was merged).
     git.pushToRemote(project.localPath, "main", {
       ...baseTree,
       "lunasq/hooks/before_delivery/10-bump": sh("echo bump v2"),
@@ -168,9 +168,9 @@ describe("HookService.run", () => {
     expect(seen[2]?.content).toBe("#!/bin/sh\necho bump v2\n");
   });
 
-  it("un hook agregado o modificado en el branch de la tarea nunca se ejecuta", async () => {
+  it("a hook added or modified on the task's branch never runs", async () => {
     const { task, wtPath, runner, seen, service, git } = await setup();
-    // El worktree de la tarea tiene otro árbol (el agente cambió hooks) y cambios sin commit.
+    // The task's worktree has another tree (the agent changed hooks) and uncommitted changes.
     git.addCheckout(wtPath, {
       branch: taskBranch(task.id),
       tree: {
@@ -188,7 +188,7 @@ describe("HookService.run", () => {
     for (const { content } of seen) expect(content).not.toMatch(/evil/);
   });
 
-  it("dos tareas en el mismo punto y la misma base no comparten directorio", async () => {
+  it("two tasks at the same point and the same base do not share a directory", async () => {
     const a = await setup();
     const results = await Promise.all([
       a.service.run({ taskId: a.task.id, point: "on_failure" }),
@@ -201,7 +201,7 @@ describe("HookService.run", () => {
     expect(dirs.size).toBe(2);
   });
 
-  it("un fallo al preparar la ejecución (p. ej. el worktree) bloquea y queda registrado", async () => {
+  it("a failure preparing the execution (e.g. the worktree) blocks and is recorded", async () => {
     const { task, worktrees, runner, service, events, taskRow, scriptsDir } = await setup();
     worktrees.ensure.mockRejectedValue(new Error("bootstrap_failed"));
     const res = await service.run({ taskId: task.id, point: "before_delivery" });
@@ -213,7 +213,7 @@ describe("HookService.run", () => {
     expect(readdirSync(scriptsDir)).toEqual([]);
   });
 
-  it("aplica timeout y política de lunasq/hooks/config de la rama base", async () => {
+  it("applies timeout and policy from lunasq/hooks/config of the base branch", async () => {
     const { task, runner, service } = await setup({
       tree: {
         ...baseTree,
@@ -238,7 +238,7 @@ describe("HookService.run", () => {
     ]);
   });
 
-  it("un block que falla detiene los siguientes y manda la tarea a needs_human con hook_failed", async () => {
+  it("a block that fails stops the following ones and sends the task to needs_human with hook_failed", async () => {
     const { task, runner, service, events, taskRow } = await setup({
       handler: () => ({ exitCode: 2, stdout: "boom\n" }),
     });
@@ -260,7 +260,7 @@ describe("HookService.run", () => {
     });
   });
 
-  it("un warn que falla se registra y el punto sigue", async () => {
+  it("a warn that fails is recorded and the point continues", async () => {
     const { task, runner, service, taskRow } = await setup({
       tree: {
         ...baseTree,
@@ -278,13 +278,13 @@ describe("HookService.run", () => {
     expect(taskRow()?.state).not.toBe("needs_human");
   });
 
-  it("un timeout cuenta como fallo aunque el exit code sea 0", async () => {
+  it("a timeout counts as a failure even if the exit code is 0", async () => {
     const { task, service } = await setup({ handler: () => ({ exitCode: 0, timedOut: true }) });
     const res = await service.run({ taskId: task.id, point: "before_delivery" });
     expect(res).toMatchObject({ outcome: "blocked", failedScript: "10-bump" });
   });
 
-  it("si el runner no puede lanzar el hook, es un fallo con el motivo en la salida", async () => {
+  it("if the runner cannot launch the hook, it is a failure with the reason in the output", async () => {
     const { task, service } = await setup({
       handler: () => {
         throw new Error("herdr no responde");
@@ -295,7 +295,7 @@ describe("HookService.run", () => {
     expect(res.executions[0]?.output).toMatch(/herdr no responde/);
   });
 
-  it("una config inválida bloquea sin correr nada", async () => {
+  it("an invalid config blocks without running anything", async () => {
     const { task, runner, service, taskRow } = await setup({
       tree: { ...baseTree, "lunasq/hooks/config": { content: "{ no es json" } },
     });
@@ -306,7 +306,7 @@ describe("HookService.run", () => {
     expect(taskRow()?.state).toBe("needs_human");
   });
 
-  it("si no se puede leer la rama base, bloquea", async () => {
+  it("if the base branch cannot be read, it blocks", async () => {
     const { task, git, runner, service } = await setup();
     vi.spyOn(git, "fetch").mockRejectedValue(new GitError("git_failed", "sin red"));
     const res = await service.run({ taskId: task.id, point: "before_delivery" });
@@ -315,7 +315,7 @@ describe("HookService.run", () => {
     expect(res.error).toMatch(/origin\/main.*sin red/);
   });
 
-  it("sin scripts en el punto no corre nada, no registra eventos ni toca el worktree", async () => {
+  it("with no scripts at the point it runs nothing, records no events or touches the worktree", async () => {
     const { task, runner, service, events, worktrees } = await setup();
     const res = await service.run({ taskId: task.id, point: "before_refinement" });
     expect(res).toMatchObject({ outcome: "passed", executions: [] });
@@ -324,7 +324,7 @@ describe("HookService.run", () => {
     expect(worktrees.ensure).not.toHaveBeenCalled();
   });
 
-  it("lanza si la tarea no existe", async () => {
+  it("throws if the task does not exist", async () => {
     const { service } = await setup();
     await expect(
       service.run({ taskId: "00000000-0000-4000-8000-000000000000", point: "before_delivery" }),
@@ -332,8 +332,8 @@ describe("HookService.run", () => {
   });
 });
 
-describe("HookService: commit de lo que dejan los hooks", () => {
-  it("commitea los cambios con los trailers de la tarea; repetir sin cambios no crea otro commit", async () => {
+describe("HookService: commit of what the hooks leave", () => {
+  it("commits the changes with the task trailers; repeating without changes creates no other commit", async () => {
     const ctx = await setup();
     ctx.runner.respond((input) => {
       if (input.command.includes("10-bump")) ctx.git.setDirty(ctx.wtPath);
@@ -367,7 +367,7 @@ describe("HookService: commit de lo que dejan los hooks", () => {
     expect(ctx.git.commitLog).toHaveLength(1);
   });
 
-  it("si el worktree ya tenía cambios sin commit, no commitea y avisa", async () => {
+  it("if the worktree already had uncommitted changes, it does not commit and warns", async () => {
     const { task, wtPath, git, service } = await setup();
     git.setDirty(wtPath);
     const res = await service.run({ taskId: task.id, point: "before_delivery" });
@@ -375,7 +375,7 @@ describe("HookService: commit de lo que dejan los hooks", () => {
     expect(git.commitLog).toEqual([]);
   });
 
-  it("si el punto bloquea, no commitea", async () => {
+  it("if the point blocks, it does not commit", async () => {
     const ctx = await setup();
     ctx.runner.respond(() => {
       ctx.git.setDirty(ctx.wtPath);
@@ -386,7 +386,7 @@ describe("HookService: commit de lo que dejan los hooks", () => {
     expect(ctx.git.commitLog).toEqual([]);
   });
 
-  it("un commit que falla bloquea el punto", async () => {
+  it("a commit that fails blocks the point", async () => {
     const ctx = await setup();
     ctx.runner.respond(() => {
       ctx.git.setDirty(ctx.wtPath);
@@ -400,7 +400,7 @@ describe("HookService: commit de lo que dejan los hooks", () => {
 });
 
 describe("HookService: after_merge y on_failure", () => {
-  it("after_merge corre en un checkout temporal del commit de la base, no commitea y un fallo no escala", async () => {
+  it("after_merge runs on a temporary checkout of the base commit, does not commit and a failure does not escalate", async () => {
     const ctx = await setup();
     let checkout = "";
     ctx.runner.respond((input) => {
@@ -425,7 +425,7 @@ describe("HookService: after_merge y on_failure", () => {
     expect(ctx.taskRow()?.state).not.toBe("needs_human");
   });
 
-  it("on_failure recibe el resultado de la fase y un fallo no escala", async () => {
+  it("on_failure receives the phase result and a failure does not escalate", async () => {
     const { task, runner, service, taskRow } = await setup({ handler: () => ({ exitCode: 1 }) });
     const res = await service.run({
       taskId: task.id,
@@ -443,7 +443,7 @@ describe("HookService: after_merge y on_failure", () => {
 });
 
 describe("HookService.listHooks", () => {
-  it("muestra los hooks de cada punto tal como están en la rama base", async () => {
+  it("shows the hooks of each point as they are in the base branch", async () => {
     const { project, service } = await setup({
       tree: {
         ...baseTree,

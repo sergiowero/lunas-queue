@@ -32,7 +32,7 @@ function setup(answer?: (id: string, input: unknown) => Promise<AnswerOutcome>) 
 }
 
 describe("GET /api/questions", () => {
-  it("lista las preguntas con el contrato Question", async () => {
+  it("lists the questions with the Question contract", async () => {
     const { send, question, task, run } = setup();
     const res = await send("GET", "/api/questions");
     expect(res.status).toBe(200);
@@ -50,7 +50,7 @@ describe("GET /api/questions", () => {
     ]);
   });
 
-  it("expone las opciones de una pregunta de opción múltiple en la lista y en el detalle", async () => {
+  it("exposes the options of a multiple-choice question in the list and in the detail", async () => {
     const { send, db, task, run } = setup();
     const options = [{ label: "Sí", description: "borra la tabla" }, { label: "No" }];
     const withOptions = createQuestion(db, {
@@ -69,7 +69,7 @@ describe("GET /api/questions", () => {
     expect(detail.options).toEqual(options);
   });
 
-  it("filtra por estado, tarea y proyecto", async () => {
+  it("filters by state, task and project", async () => {
     const { send, task, project } = setup();
     const ids = async (query: string) =>
       ((await (await send("GET", `/api/questions${query}`)).json()) as unknown[]).length;
@@ -80,14 +80,14 @@ describe("GET /api/questions", () => {
     expect(await ids(`?projectId=${project.id}`)).toBe(1);
   });
 
-  it("responde 400 con un filtro inválido", async () => {
+  it("answers 400 with an invalid filter", async () => {
     const { send } = setup();
     expect((await send("GET", "/api/questions?status=closed")).status).toBe(400);
   });
 });
 
 describe("GET /api/questions/:id", () => {
-  it("devuelve la pregunta o 404", async () => {
+  it("returns the question or 404", async () => {
     const { send, question } = setup();
     const res = await send("GET", `/api/questions/${question.id}`);
     expect(res.status).toBe(200);
@@ -115,7 +115,7 @@ describe("POST /api/questions/:id/answer", () => {
       return { ok: true, question: row, delivery };
     });
 
-  it("responde 200 con la pregunta respondida y cómo se entregó", async () => {
+  it("answers 200 with the answered question and how it was delivered", async () => {
     const answer = outcome("pane");
     const { send, question } = setup(answer);
     const res = await send("POST", `/api/questions/${question.id}/answer`, {
@@ -143,7 +143,7 @@ describe("POST /api/questions/:id/answer", () => {
     expect(await res.json()).toMatchObject({ error: code });
   });
 
-  it("responde 400 con JSON o respuesta inválidos sin llamar al servicio", async () => {
+  it("answers 400 with invalid JSON or answer without calling the service", async () => {
     const answer = outcome("pane");
     const { send, question } = setup(answer);
     expect((await send("POST", `/api/questions/${question.id}/answer`, "{no")).status).toBe(400);
@@ -154,7 +154,7 @@ describe("POST /api/questions/:id/answer", () => {
     expect(answer).not.toHaveBeenCalled();
   });
 
-  it("responde 404 a una pregunta inexistente sin llamar al servicio", async () => {
+  it("answers 404 to a nonexistent question without calling the service", async () => {
     const answer = outcome("pane");
     const { send } = setup(answer);
     expect((await send("POST", `/api/questions/${missing}/answer`, { answer: "Sí" })).status).toBe(
@@ -163,7 +163,7 @@ describe("POST /api/questions/:id/answer", () => {
     expect(answer).not.toHaveBeenCalled();
   });
 
-  it("sin servicio de respuestas responde 503", async () => {
+  it("without an answer service it answers 503", async () => {
     const { send, question } = setup();
     const res = await send("POST", `/api/questions/${question.id}/answer`, { answer: "Sí" });
     expect(res.status).toBe(503);
@@ -172,7 +172,7 @@ describe("POST /api/questions/:id/answer", () => {
 });
 
 describe("GET /api/blocked", () => {
-  it("lista los agentes bloqueados que reporta la fuente", async () => {
+  it("lists the blocked agents the source reports", async () => {
     const blocked = [
       {
         runId: missing,
@@ -190,7 +190,7 @@ describe("GET /api/blocked", () => {
     expect(await res.json()).toEqual(blocked);
   });
 
-  it("sin fuente responde una lista vacía", async () => {
+  it("without a source it answers an empty list", async () => {
     const app = createApp({ db: migratedDatabase() });
     expect(await (await app.request("/api/blocked")).json()).toEqual([]);
   });
@@ -210,14 +210,14 @@ describe("POST /api/blocked/:runId/focus", () => {
   const post = (app: ReturnType<typeof createApp>, runId: string) =>
     app.request(`/api/blocked/${runId}/focus`, { method: "POST" });
 
-  it("enfoca en herdr el agente bloqueado de ese Run", async () => {
+  it("focuses the Run's blocked agent in herdr", async () => {
     const focus = vi.fn(async () => undefined);
     const res = await post(focusApp(focus), agent.runId);
     expect(res.status).toBe(204);
     expect(focus).toHaveBeenCalledWith("t1-implement-1");
   });
 
-  it("un Run que no está bloqueado responde 404 not_blocked sin tocar herdr", async () => {
+  it("a Run that is not blocked answers 404 not_blocked without touching herdr", async () => {
     const focus = vi.fn(async () => undefined);
     const res = await post(focusApp(focus), missing);
     expect(res.status).toBe(404);
@@ -225,7 +225,7 @@ describe("POST /api/blocked/:runId/focus", () => {
     expect(focus).not.toHaveBeenCalled();
   });
 
-  it("si el agente ya no existe en herdr responde 409 agent_gone", async () => {
+  it("if the agent no longer exists in herdr it answers 409 agent_gone", async () => {
     const res = await post(
       focusApp(async () => {
         throw new HerdrError("agent_not_found", "agent target t1-implement-1 not found");
@@ -236,21 +236,21 @@ describe("POST /api/blocked/:runId/focus", () => {
     expect(await res.json()).toMatchObject({ error: "agent_gone" });
   });
 
-  it("otro error de herdr responde 502 herdr_error con el mensaje", async () => {
+  it("another herdr error answers 502 herdr_error with the message", async () => {
     const res = await post(
       focusApp(async () => {
-        throw new HerdrError("server_unavailable", "herdr no responde");
+        throw new HerdrError("server_unavailable", "herdr is not responding");
       }),
       agent.runId,
     );
     expect(res.status).toBe(502);
     expect(await res.json()).toMatchObject({
       error: "herdr_error",
-      message: expect.stringContaining("herdr no responde"),
+      message: expect.stringContaining("herdr is not responding"),
     });
   });
 
-  it("sin herdr responde 503 focus_unavailable", async () => {
+  it("without herdr it answers 503 focus_unavailable", async () => {
     const res = await post(focusApp(), agent.runId);
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({ error: "focus_unavailable" });

@@ -1,7 +1,7 @@
-// Normaliza los logs OTLP de Claude Code a UsageInput (ADR uw-20-usage-collector). La fuente es el
-// evento `api_request`: trae tokens, costo, `request_id` y `agent_id` por llamada. Las métricas
-// `claude_code.token.usage` y `claude_code.cost.usage` son delta y no traen request id, así que
-// reenviar un lote las duplicaría; no se usan.
+// Normalizes Claude Code's OTLP logs to UsageInput (ADR uw-20-usage-collector). The source is the
+// `api_request` event: it carries tokens, cost, `request_id` and `agent_id` per call. The
+// `claude_code.token.usage` and `claude_code.cost.usage` metrics are delta and carry no request id, so
+// resending a batch would duplicate them; they are not used.
 import type { UsageInput } from "@lunasq/db";
 import {
   API_REQUEST_EVENT,
@@ -23,7 +23,7 @@ function text(attrs: Attributes, key: string): string | null {
   return value ? value : null;
 }
 
-/** Entero no negativo; ausente vale 0 y un valor inválido da null para descartar la llamada. */
+/** Non-negative integer; absent is 0 and an invalid value gives null to discard the call. */
 function count(attrs: Attributes, key: string): number | null {
   const value = attrs.get(key);
   if (value === undefined) return 0;
@@ -33,8 +33,8 @@ function count(attrs: Attributes, key: string): number | null {
 }
 
 /**
- * Id estable de la llamada. Sin `request_id` se usa la secuencia del evento dentro de la sesión:
- * un `source_ref` NULL no deduplica en SQLite y un lote reenviado se contaría dos veces.
+ * Stable id of the call. Without `request_id` the event's sequence within the session is used:
+ * a NULL `source_ref` does not deduplicate in SQLite and a resent batch would be counted twice.
  */
 function sourceRef(attrs: Attributes): string | null {
   const requestId = text(attrs, "request_id");
@@ -51,13 +51,13 @@ function cost(attrs: Attributes): number | null {
 }
 
 export type ApiRequestUsage = {
-  /** `lunasq.run_id` que declaró el pane; el collector lo contrasta con el Run del token. */
+  /** `lunasq.run_id` declared by the pane; the collector checks it against the token's Run. */
   runId: string | null;
   sessionId: string | null;
   usage: UsageInput;
 };
 
-/** Las llamadas a la API del lote. Una llamada mal formada se descarta sin tumbar el resto. */
+/** The batch's API calls. A malformed call is discarded without taking down the rest. */
 export function apiRequests(request: OtlpLogsRequest): ApiRequestUsage[] {
   const found: ApiRequestUsage[] = [];
   for (const resourceLogs of request.resourceLogs) {

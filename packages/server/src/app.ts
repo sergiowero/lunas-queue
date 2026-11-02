@@ -1,5 +1,5 @@
-// Composición de la API HTTP, del LunasQ MCP, del endpoint de hooks de subagentes y de los
-// estáticos del front end. El servidor (listen, SSE de notificaciones) lo monta `startRuntime`
+// Composition of the HTTP API, the LunasQ MCP, the subagent hooks endpoint and the
+// front end static files. The server (listen, notifications SSE) is mounted by `startRuntime`
 // (runtime/runtime.ts).
 import { type GitAdapter, RealGit, ShellProcessRunner } from "@lunasq/adapters";
 import {
@@ -51,51 +51,51 @@ import { webRoutes } from "./web/static.ts";
 export interface AppDeps {
   db: LunasqDatabase;
   /**
-   * Gate de tests: quien compone el servidor pasa un PaneTestGate. Sin él, ninguna verificación
-   * pasa. Los tests pasan fakes.
+   * Test gate: whoever composes the server passes a PaneTestGate. Without it, no verification
+   * passes. Tests pass fakes.
    */
   testGate?: TestGate;
-  /** Por defecto corre git en el worktree. */
+  /** By default it runs git in the worktree. */
   commitVerifier?: CommitVerifier;
   /**
-   * Hooks after_implementation, before_verification y after_verification: quien compone el
-   * servidor pasa el HookService. Sin él, los puntos pasan sin correr nada.
+   * Hooks after_implementation, before_verification and after_verification: whoever composes the
+   * server passes the HookService. Without it, the points pass without running anything.
    */
   phaseHooks?: PhaseHooks;
   /**
-   * Hooks de la rama base para la vista de hooks: quien compone el servidor pasa el HookService.
-   * Sin él, `GET /api/projects/:id/hooks` responde 503.
+   * Base branch hooks for the hooks view: whoever composes the server passes the HookService.
+   * Without it, `GET /api/projects/:id/hooks` answers 503.
    */
   hooks?: HookLister;
   /**
-   * Responde las Questions: quien compone el servidor pasa el QuestionService del orquestador.
-   * Sin él, `POST /api/questions/:id/answer` responde 503.
+   * Answers the Questions: whoever composes the server passes the orchestrator's QuestionService.
+   * Without it, `POST /api/questions/:id/answer` answers 503.
    */
   questions?: QuestionAnswerer;
   /**
-   * Agentes bloqueados por un permiso: quien compone el servidor pasa `watcher.blocked`. Sin él,
-   * `GET /api/blocked` responde una lista vacía.
+   * Agents blocked by a permission: whoever composes the server passes `watcher.blocked`. Without it,
+   * `GET /api/blocked` answers an empty list.
    */
   blocked?: BlockedSource;
   /**
-   * Enfoca en herdr el pane de un agente (`herdr.focusAgent`). Sin él, `POST /api/blocked/:runId/focus`
-   * y `POST /api/runs/:runId/focus` responden 503.
+   * Focuses an agent's pane in herdr (`herdr.focusAgent`). Without it, `POST /api/blocked/:runId/focus`
+   * and `POST /api/runs/:runId/focus` answer 503.
    */
   focus?: AgentFocuser;
   /**
-   * Usage collector (`POST /v1/logs`, `/v1/metrics`). `false` no monta los endpoints y Claude Code
-   * recibe 404; es el feature flag `telemetry` de `~/.lunasq/config.json` (ADR uw-20-usage-collector).
+   * Usage collector (`POST /v1/logs`, `/v1/metrics`). `false` does not mount the endpoints and Claude Code
+   * gets 404; it is the `telemetry` feature flag of `~/.lunasq/config.json` (ADR uw-20-usage-collector).
    */
   telemetry?: boolean;
   copilotReviewers?: CopilotReviewerExecutor;
-  /** Configuración del scheduler: la cola muestra el mismo score con el que despacha. */
+  /** Scheduler configuration: the queue shows the same score it dispatches with. */
   scheduler?: SchedulerConfigInput;
-  /** Lectura de la evidencia en el repo cuando el worktree ya no existe; por defecto git real. */
+  /** Reading the evidence in the repo when the worktree no longer exists; real git by default. */
   git?: GitAdapter;
-  /** Build del front end (`packages/web/dist`); sin él no se sirven estáticos. */
+  /** Front end build (`packages/web/dist`); without it no static files are served. */
   webRoot?: string;
   now?: () => Date;
-  /** Cada cuánto el stream SSE de cambios mira el Event log. */
+  /** How often the SSE change stream looks at the Event log. */
   changeStreamIntervalMs?: number;
 }
 

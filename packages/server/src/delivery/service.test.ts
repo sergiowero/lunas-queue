@@ -17,7 +17,7 @@ const eventsOf = (h: ReturnType<typeof deliveryHarness>, type: string) =>
   listEvents(h.db, h.task.id).filter((e) => e.type === type);
 
 describe("DeliveryService.deliver", () => {
-  it("una tarea con pass termina en un PR con trailers y etiqueta de riesgo", async () => {
+  it("a task with a pass ends in a PR with trailers and a risk label", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     h.baseMoves({ "CHANGELOG.md": { content: "v2\n" } });
@@ -25,8 +25,8 @@ describe("DeliveryService.deliver", () => {
     const result = await h.service.deliver(h.task.id);
 
     expect(result).toMatchObject({ status: "delivered", created: true });
-    // Orden de la entrega: hook, evidencia pendiente, rebase, trailers, suite final, cierre del
-    // Run y evidencia, push, PR con su etiqueta y after_delivery.
+    // Delivery order: hook, pending evidence, rebase, trailers, final suite, closing the
+    // Run and evidence, push, PR with its label and after_delivery.
     expect(h.calls).toEqual([
       "hook:before_delivery",
       "evidence",
@@ -44,7 +44,7 @@ describe("DeliveryService.deliver", () => {
       { trigger: "delivery", command: "pnpm test", worktreePath: WORKTREE, runId: h.verify.id },
     ]);
 
-    // El branch publicado lleva los commits del agente con los trailers de la tarea y su Run.
+    // The published branch carries the agent's commits with the task and Run trailers.
     const commits = await h.git.listCommits({ cwd: WORKTREE, base: "origin/main" });
     expect(commits).toHaveLength(2);
     for (const commit of commits) {
@@ -55,26 +55,26 @@ describe("DeliveryService.deliver", () => {
       await h.git.resolveCommit({ cwd: WORKTREE, ref: "HEAD" }),
     );
 
-    // El PR trae intent, criterios, evidencia, riesgo y trailers, y su etiqueta.
+    // The PR carries intent, criteria, evidence, risk and trailers, and its label.
     const [input] = h.github.created;
     expect(input).toMatchObject({ cwd: WORKTREE, head: BRANCH, base: "main" });
     expect(input?.title).toBe("Permitir cancelar pedidos pendientes");
     expect(input?.body).toContain("Permitir cancelar pedidos pendientes");
     expect(input?.body).toContain("AC-1");
-    expect(input?.body).toContain("Riesgo: **bajo**");
+    expect(input?.body).toContain("Risk: **low**");
     expect(input?.body).toContain(`LunasQ-Task: ${h.task.id}`);
     expect(input?.body).toContain(`LunasQ-Run: ${h.verify.id}`);
     expect(result.status === "delivered" && (await h.github.getPr(result.prUrl)).labels).toEqual([
       "lunasq:risk-low",
     ]);
 
-    // La tarea queda completada con su PR abierto registrado y el Run del verificador cerrado.
+    // The task ends up completed with its open PR recorded and the verifier's Run closed.
     expect(h.taskNow()).toMatchObject({ state: "completed", prState: "open" });
     expect(h.taskNow()?.prUrl).toBe(result.status === "delivered" ? result.prUrl : "");
     expect(eventsOf(h, TASK_PR_OPENED)).toHaveLength(1);
     expect(h.closedRuns).toEqual([h.verify.id]);
     expect(new RunRepository(h.db).get(h.verify.id)).toMatchObject({ result: "success" });
-    // Se commitea antes del rebase y otra vez tras cerrar el Run del verificador (idempotente).
+    // Committed before the rebase and again after closing the verifier's Run (idempotent).
     expect(h.evidenceCommits).toEqual([h.task.id, h.task.id]);
     expect(h.hooks.calls.at(-1)).toMatchObject({
       point: "after_delivery",
@@ -83,7 +83,7 @@ describe("DeliveryService.deliver", () => {
     });
   });
 
-  it("repetirla con la tarea ya completada no crea otro PR", async () => {
+  it("repeating it with the task already completed does not create another PR", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     await h.service.deliver(h.task.id);
@@ -92,7 +92,7 @@ describe("DeliveryService.deliver", () => {
     expect(h.github.created).toHaveLength(1);
   });
 
-  it("retomada tras una caída (Run ya cerrado, PR ya creado) completa con el mismo PR", async () => {
+  it("resumed after a crash (Run already closed, PR already created) completes with the same PR", async () => {
     const h = deliveryHarness({ verifierClosed: true });
     await h.agentCommits();
     const pr = await h.github.createPr({
@@ -107,22 +107,22 @@ describe("DeliveryService.deliver", () => {
 
     expect(result).toMatchObject({ status: "delivered", created: false, prUrl: pr.pr.url });
     expect(h.taskNow()).toMatchObject({ state: "completed", prUrl: pr.pr.url });
-    // El Run ya estaba cerrado: no se vuelve a cerrar.
+    // The Run was already closed: it is not closed again.
     expect(h.closedRuns).toEqual([]);
   });
 
-  it("sin comando de tests no hay gate en verde: la entrega se detiene", async () => {
+  it("without a test command there is no green gate: the delivery stops", async () => {
     const h = deliveryHarness({ testCommand: null });
     await h.agentCommits();
-    h.testGate.result = { passed: false, output: "el proyecto no tiene comando de tests" };
+    h.testGate.result = { passed: false, output: "the project has no test command" };
     const result = await h.service.deliver(h.task.id);
     expect(result).toMatchObject({ status: "conflict", reason: "tests_failed" });
     expect(h.git.remoteBranch(WORKTREE, BRANCH)).toBeNull();
   });
 
-  it("un conflicto al integrar la base regresa la tarea a in_progress sin subir la iteración", async () => {
+  it("a conflict when integrating the base sends the task back to in_progress without raising the iteration", async () => {
     const h = deliveryHarness();
-    // Mismo archivo que cambió la base.
+    // Same file the base changed.
     h.git.writeWorkingFile(WORKTREE, "src/a.ts");
     await h.git.commitAll({ cwd: WORKTREE, message: "feat: a", trailers: {} });
     h.baseMoves({ "src/a.ts": { content: "otra versión\n" } });
@@ -143,7 +143,7 @@ describe("DeliveryService.deliver", () => {
       files: ["src/a.ts"],
       output: null,
     });
-    // Sin suite, push ni PR; el Run del verificador se cerró con éxito para dejar su evidencia.
+    // Without suite, push or PR; the verifier's Run was closed successfully to leave its evidence.
     expect(h.calls).toEqual([
       "hook:before_delivery",
       "evidence",
@@ -157,7 +157,7 @@ describe("DeliveryService.deliver", () => {
     expect(transitioned.command).toBe("delivery_conflict");
   });
 
-  it("la suite en rojo tras el rebase también regresa la tarea, con la cola de la salida", async () => {
+  it("a red suite after the rebase also sends the task back, with the tail of the output", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     h.testGate.result = { passed: false, output: "FAIL src/a.test.ts\n1 failed" };
@@ -175,7 +175,7 @@ describe("DeliveryService.deliver", () => {
     expect(h.github.created).toEqual([]);
   });
 
-  it("tras tantos conflictos como iteraciones de verificación, escala a needs_human", async () => {
+  it("after as many conflicts as verification iterations, it escalates to needs_human", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     h.testGate.result = { passed: false, output: "1 failed" };
@@ -193,7 +193,7 @@ describe("DeliveryService.deliver", () => {
         },
       });
     }
-    // Con 2 conflictos previos y tope 3, el tercero todavía regresa a implementación...
+    // With 2 previous conflicts and cap 3, the third still goes back to implementation...
     expect((await h.service.deliver(h.task.id)).status).toBe("conflict");
 
     const second = deliveryHarness();
@@ -213,7 +213,7 @@ describe("DeliveryService.deliver", () => {
         },
       });
     }
-    // ...y el cuarto no.
+    // ...and the fourth does not.
     const result = await second.service.deliver(second.task.id);
     expect(result).toMatchObject({ status: "escalated" });
     expect(second.taskNow()).toMatchObject({ state: "needs_human" });
@@ -221,7 +221,7 @@ describe("DeliveryService.deliver", () => {
     expect(escalation).toMatchObject({ command: "escalate", reason: "delivery_failed" });
   });
 
-  it("un PR entregado que queda en conflicto se entrega de nuevo sobre el mismo PR, con el conteo de conflictos desde cero", async () => {
+  it("a delivered PR that ends up in conflict is delivered again on the same PR, with the conflict count from zero", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     for (let i = 0; i < 3; i++) {
@@ -241,12 +241,12 @@ describe("DeliveryService.deliver", () => {
     const first = await h.service.deliver(h.task.id);
     if (first.status !== "delivered") throw new Error(`entrega: ${first.status}`);
 
-    // Otro PR se mergeó y GitHub marca este en conflicto: el poller reabre la tarea.
+    // Another PR was merged and GitHub marks this one in conflict: the poller reopens the task.
     expect(new TaskPrRepository(h.db).recordPrConflict(h.task.id, first.prUrl)).toBe(true);
     expect(h.taskNow()).toMatchObject({ state: "in_progress", prState: "open" });
 
-    // El implementador integra la base y vuelve a pasar la verificación; la suite final falla una
-    // vez: es el primer conflicto desde el pass, no el cuarto.
+    // The implementer integrates the base and passes verification again; the final suite fails once:
+    // it is the first conflict since the pass, not the fourth.
     setTaskPosition(h.db, h.task.id, { state: "verification", subState: "running" });
     h.testGate.result = { passed: false, output: "1 failed" };
     expect((await h.service.deliver(h.task.id)).status).toBe("conflict");
@@ -259,7 +259,7 @@ describe("DeliveryService.deliver", () => {
     expect(h.taskNow()).toMatchObject({ state: "completed", prUrl: first.prUrl });
   });
 
-  it("un hook before_delivery bloqueado detiene la entrega antes de tocar git", async () => {
+  it("a blocked before_delivery hook stops the delivery before touching git", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     h.hooks.results.before_delivery = {
@@ -275,7 +275,7 @@ describe("DeliveryService.deliver", () => {
     expect(h.closedRuns).toEqual([]);
   });
 
-  it("un hook bloqueado que HookService no escaló lo escala la entrega", async () => {
+  it("a blocked hook that HookService did not escalate is escalated by the delivery", async () => {
     const h = deliveryHarness();
     h.hooks.results.before_delivery = {
       outcome: "blocked",
@@ -290,7 +290,7 @@ describe("DeliveryService.deliver", () => {
     });
   });
 
-  it("si el push falla, escala con delivery_failed y no crea el PR", async () => {
+  it("if the push fails, it escalates with delivery_failed and does not create the PR", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     h.git.push = async () => {
@@ -312,7 +312,7 @@ describe("DeliveryService.deliver", () => {
     expect(h.github.created).toEqual([]);
   });
 
-  it("si gh falla después del push, escala y el PR no queda registrado", async () => {
+  it("if gh fails after the push, it escalates and the PR is not recorded", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     h.github.createPr = async () => {
@@ -321,11 +321,11 @@ describe("DeliveryService.deliver", () => {
 
     expect(await h.service.deliver(h.task.id)).toMatchObject({ status: "escalated" });
     expect(h.taskNow()).toMatchObject({ state: "needs_human", prUrl: null });
-    // El Run del verificador no queda abierto con la tarea en needs_human.
+    // The verifier's Run is not left open with the task in needs_human.
     expect(new RunRepository(h.db).get(h.verify.id)?.endedAt).not.toBeNull();
   });
 
-  it("un hook after_delivery bloqueado deja el PR registrado y escala sin completar", async () => {
+  it("a blocked after_delivery hook leaves the PR recorded and escalates without completing", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     h.hooks.results.after_delivery = {
@@ -340,7 +340,7 @@ describe("DeliveryService.deliver", () => {
     expect(h.taskNow()?.state).not.toBe("completed");
   });
 
-  it("si after_delivery commitea, hace un segundo push para que entre al PR", async () => {
+  it("if after_delivery commits, it makes a second push so it enters the PR", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     h.hooks.onRun = (input) => {
@@ -365,14 +365,14 @@ describe("DeliveryService.deliver", () => {
     expect(h.taskNow()).toMatchObject({ state: "completed" });
   });
 
-  it("si after_delivery no commitea, no vuelve a hacer push", async () => {
+  it("if after_delivery does not commit, it does not push again", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     await h.service.deliver(h.task.id);
     expect(h.calls.filter((c) => c === "push")).toHaveLength(1);
   });
 
-  it("sin pass del verificador, o con la tarea fuera de verification/running, no hace nada", async () => {
+  it("without a verifier pass, or with the task outside verification/running, it does nothing", async () => {
     const reject = deliveryHarness({ verdict: "verification-reject" });
     expect(await reject.service.deliver(reject.task.id)).toEqual({
       status: "skipped",
@@ -390,13 +390,13 @@ describe("DeliveryService.deliver", () => {
     expect(moved.calls).toEqual([]);
   });
 
-  it("sin EvidenceService la entrega sigue", async () => {
+  it("without EvidenceService the delivery continues", async () => {
     const h = deliveryHarness({ without: { evidence: true } });
     await h.agentCommits();
     expect((await h.service.deliver(h.task.id)).status).toBe("delivered");
   });
 
-  it("dos entregas simultáneas de la misma tarea abren un solo PR", async () => {
+  it("two simultaneous deliveries of the same task open a single PR", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     const [a, b] = await Promise.all([h.service.deliver(h.task.id), h.service.deliver(h.task.id)]);
@@ -406,7 +406,7 @@ describe("DeliveryService.deliver", () => {
 });
 
 describe("DeliveryService.recover", () => {
-  it("retoma las tareas en verification/running con un pass guardado", async () => {
+  it("resumes the tasks in verification/running with a saved pass", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     const results = await h.service.recover();
@@ -414,7 +414,7 @@ describe("DeliveryService.recover", () => {
     expect(h.taskNow()).toMatchObject({ state: "completed" });
   });
 
-  it("deja en paz una verificación en curso (sin pass guardado)", async () => {
+  it("leaves an ongoing verification (without a saved pass) alone", async () => {
     const h = deliveryHarness({ verdict: "verification-reject" });
     expect(await h.service.recover()).toEqual([]);
     expect(h.taskNow()).toMatchObject({ state: "verification" });
@@ -422,7 +422,7 @@ describe("DeliveryService.recover", () => {
 });
 
 describe("subscribeDelivery", () => {
-  it("un pass registrado arranca la entrega por el outbox; un reject no", async () => {
+  it("a registered pass starts the delivery through the outbox; a reject does not", async () => {
     const h = deliveryHarness();
     await h.agentCommits();
     const publisher = new OutboxPublisher({ db: h.db });
@@ -451,7 +451,7 @@ describe("subscribeDelivery", () => {
     unsubscribe();
   });
 
-  it("un error de la entrega se reporta y no rompe al publicador", async () => {
+  it("an error of the delivery is reported and does not break the publisher", async () => {
     const h = deliveryHarness();
     const publisher = new OutboxPublisher({ db: h.db });
     const errors: string[] = [];

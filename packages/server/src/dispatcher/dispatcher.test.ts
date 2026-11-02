@@ -114,14 +114,14 @@ const refine = (task: { id: string; projectId: string }): DispatchDecision => ({
 async function rejection(promise: Promise<unknown>) {
   return promise.then(
     () => {
-      throw new Error("no lanzó");
+      throw new Error("did not throw");
     },
     (err: unknown) => err,
   );
 }
 
-describe("PhaseDispatcher: despacho de punta a punta", () => {
-  it("lanza Copilot con MCP tokenizado por Run y sin entorno de telemetría de Claude", async () => {
+describe("PhaseDispatcher: end-to-end dispatch", () => {
+  it("launches Copilot with a per-Run tokenized MCP and without Claude telemetry environment", async () => {
     const configDir = mkdtempSync(join(tmpdir(), "lunasq-copilot-mcp-"));
     stoppables.push({ stop: async () => rmSync(configDir, { recursive: true, force: true }) });
     const { db, project, herdr, runs, make } = setup({
@@ -180,12 +180,12 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
     expect(herdr.paneEnv(run?.herdrPane ?? "")).toMatchObject({ LUNASQ_RUN_TOKEN: run?.runToken });
   });
 
-  it("reclama, prepara el worktree, levanta el agente con su entorno y le manda la fase", async () => {
+  it("claims, prepares the worktree, brings up the agent with its environment and sends it the phase", async () => {
     const { db, project, herdr, dispatcher, runs, taskRow, errors, workspaces } = setup();
     const task = insertTask(db, project.id);
 
     await dispatcher.dispatch(refine(task));
-    // Al resolver, el claim ya está confirmado: la tarea ocupa su slot.
+    // On resolving, the claim is already confirmed: the task occupies its slot.
     expect(taskRow(task.id)).toMatchObject({ state: "draft", subState: "running" });
     await dispatcher.idle();
 
@@ -207,7 +207,7 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
       paneId: run.herdrPane,
       workspaceId: run.herdrWorkspace,
     });
-    // El título del pane identifica la tarea por su número; branch y agente siguen con el UUID.
+    // The pane title identifies the task by its number; branch and agent continue with the UUID.
     expect(agent?.title).toBe(`LunasQ refine #${task.number}`);
     expect(agent?.tokens).toEqual({
       task: task.id,
@@ -239,14 +239,14 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
     });
     expect(await herdr.readAgent({ name })).toBe(phasePrompt("refine", task.id));
 
-    // El pane abre en el worktree de la tarea, dentro del workspace del worktree.
+    // The pane opens in the task's worktree, inside the worktree's workspace.
     const row = taskRow(task.id);
     const snap = await herdr.snapshot();
     expect(snap.panes.find((p) => p.paneId === run.herdrPane)?.cwd).toBe(row?.worktreePath);
     expect(workspaces.get(project.id)).not.toBeNull();
   });
 
-  it("paneEnv sobrescribe los defaults del pane, como CLAUDE_CODE_FORK_SUBAGENT", async () => {
+  it("paneEnv overrides the pane defaults, like CLAUDE_CODE_FORK_SUBAGENT", async () => {
     const { db, project, herdr, dispatcher, runs } = setup({
       dispatcher: { paneEnv: { CLAUDE_CODE_FORK_SUBAGENT: "1" } },
     });
@@ -257,7 +257,7 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
     expect(herdr.paneEnv(run?.herdrPane ?? "")).toMatchObject({ CLAUDE_CODE_FORK_SUBAGENT: "1" });
   });
 
-  it("con telemetría activa, el pane lleva los atributos del Run y el run token como header OTLP", async () => {
+  it("with telemetry on, the pane carries the Run attributes and the run token as an OTLP header", async () => {
     const { db, project, herdr, dispatcher, runs } = setup({
       dispatcher: { paneEnv: { CLAUDE_CODE_ENABLE_TELEMETRY: "1" } },
     });
@@ -271,7 +271,7 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
     });
   });
 
-  it("con telemetría apagada, el pane no lleva variables OTEL", async () => {
+  it("with telemetry off, the pane carries no OTEL variables", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();
     const task = insertTask(db, project.id);
     await dispatcher.dispatch(refine(task));
@@ -281,7 +281,7 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
     expect(Object.keys(env).filter((k) => k.startsWith("OTEL_"))).toEqual([]);
   });
 
-  it("repetir el despacho no duplica agentes ni panes", async () => {
+  it("repeating the dispatch does not duplicate agents or panes", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();
     const task = insertTask(db, project.id);
     await dispatcher.dispatch(refine(task));
@@ -298,7 +298,7 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
     expect(runs.forTask(task.id)).toHaveLength(1);
   });
 
-  it("rechaza sin tocar herdr si no hay slot", async () => {
+  it("rejects without touching herdr if there is no slot", async () => {
     const { db, project, herdr, dispatcher } = setup({ concurrency: 1 });
     await dispatcher.dispatch(refine(insertTask(db, project.id)));
     const spy = vi.spyOn(herdr, "splitPane");
@@ -311,7 +311,7 @@ describe("PhaseDispatcher: despacho de punta a punta", () => {
   });
 });
 
-describe("PhaseDispatcher: retomar un despacho a medias", () => {
+describe("PhaseDispatcher: resuming a half-done dispatch", () => {
   function claimOnly(ctx: ReturnType<typeof setup>, task: { id: string; projectId: string }) {
     const res = claimRun(ctx.db, {
       decision: refine(task),
@@ -323,7 +323,7 @@ describe("PhaseDispatcher: retomar un despacho a medias", () => {
     return res.run;
   }
 
-  it("recover lanza los Runs reclamados que no llegaron a lanzar, una sola vez", async () => {
+  it("recover launches the claimed Runs that never launched, once", async () => {
     const ctx = setup();
     const task = insertTask(ctx.db, ctx.project.id);
     const run = claimOnly(ctx, task);
@@ -341,16 +341,16 @@ describe("PhaseDispatcher: retomar un despacho a medias", () => {
     expect(ctx.runs.get(run.id)?.launchedAt).toBeInstanceOf(Date);
   });
 
-  it("si el proceso cayó con el agente ya arrancado, lo reutiliza en vez de abrir otro", async () => {
+  it("if the process crashed with the agent already started, it reuses it instead of opening another", async () => {
     const ctx = setup();
     const task = insertTask(ctx.db, ctx.project.id);
-    // Primer proceso: se cuelga justo después de arrancar el agente.
+    // First process: hangs right after starting the agent.
     vi.spyOn(ctx.herdr, "reportMetadata").mockImplementationOnce(() => new Promise(() => {}));
     await ctx.dispatcher.dispatch(refine(task));
     await vi.waitFor(async () => expect((await ctx.herdr.snapshot()).agents).toHaveLength(1));
     const panes = (await ctx.herdr.snapshot()).panes.length;
 
-    // Segundo proceso (reinicio): retoma el mismo Run.
+    // Second process (restart): resumes the same Run.
     const restarted = ctx.make();
     await restarted.recover();
     await restarted.idle();
@@ -365,7 +365,7 @@ describe("PhaseDispatcher: retomar un despacho a medias", () => {
     );
   });
 
-  it("si la inicialización de un proveedor quedó interrumpida, continúa con el siguiente", async () => {
+  it("if a provider's initialization was interrupted, it continues with the next one", async () => {
     const ctx = setup();
     const task = insertTask(ctx.db, ctx.project.id);
     vi.spyOn(ctx.herdr, "startAgent").mockImplementationOnce(() => new Promise(() => {}));
@@ -386,12 +386,12 @@ describe("PhaseDispatcher: retomar un despacho a medias", () => {
     expect(ctx.runs.forTask(task.id)[0]?.agentKind).toBe("copilot");
   });
 
-  it("si cayó después del prompt, no lo repite: el agente ya no está idle", async () => {
+  it("if it crashed after the prompt, it does not repeat it: the agent is no longer idle", async () => {
     const herdr = new FakeHerdr({ promptDurationMs: 60_000 });
     const ctx = setup({ herdr });
     const task = insertTask(ctx.db, ctx.project.id);
     const original = herdr.promptAgent.bind(herdr);
-    // Primer proceso: el prompt llega al agente y el proceso cae antes de marcar el lanzamiento.
+    // First process: the prompt reaches the agent and the process crashes before marking the launch.
     vi.spyOn(herdr, "promptAgent").mockImplementationOnce(async (input) => {
       await original(input);
       return new Promise(() => {});
@@ -413,8 +413,8 @@ describe("PhaseDispatcher: retomar un despacho a medias", () => {
   });
 });
 
-describe("PhaseDispatcher: confianza de carpeta", () => {
-  it("acepta el diálogo con down enter y sigue con el prompt", async () => {
+describe("PhaseDispatcher: folder trust", () => {
+  it("accepts the dialog with down enter and continues with the prompt", async () => {
     const herdr = new FakeHerdr({ startStatus: "blocked" });
     const { db, project, dispatcher, runs, errors } = setup({ herdr });
     const task = insertTask(db, project.id);
@@ -428,7 +428,7 @@ describe("PhaseDispatcher: confianza de carpeta", () => {
     expect(await herdr.readAgent({ name })).toBe(phasePrompt("refine", task.id));
   });
 
-  it("acepta el diálogo de confianza de Copilot sin activar fallback a Claude", async () => {
+  it("accepts Copilot's trust dialog without activating fallback to Claude", async () => {
     const herdr = new FakeHerdr({ startStatus: "blocked" });
     const { db, project, dispatcher, runs, errors } = setup({
       herdr,
@@ -447,7 +447,7 @@ describe("PhaseDispatcher: confianza de carpeta", () => {
     expect(await herdr.readAgent({ name })).toBe(phasePrompt("refine", task.id));
   });
 
-  it("un bloqueo que no es el diálogo de confianza falla el Run sin mandar teclas", async () => {
+  it("a blockage that is not the trust dialog fails the Run without sending keys", async () => {
     const herdr = new FakeHerdr({ startStatus: "blocked" });
     const { db, project, dispatcher, runs, errors, taskRow } = setup({ herdr });
     vi.spyOn(herdr, "readAgent").mockResolvedValue("Allow this command? (y/n)");
@@ -465,8 +465,8 @@ describe("PhaseDispatcher: confianza de carpeta", () => {
   });
 });
 
-describe("PhaseDispatcher: proveedores habilitados", () => {
-  it("con claude deshabilitado solo intenta copilot y no registra intento para claude", async () => {
+describe("PhaseDispatcher: enabled providers", () => {
+  it("with claude disabled it only tries copilot and does not record an attempt for claude", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();
     const task = insertTask(db, project.id);
     new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
@@ -488,7 +488,7 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     ]);
   });
 
-  it("si el único habilitado falla al arrancar, no cae a un proveedor deshabilitado", async () => {
+  it("if the only enabled one fails to start, it does not fall back to a disabled provider", async () => {
     const { db, project, herdr, dispatcher, runs, taskRow } = setup();
     const task = insertTask(db, project.id);
     new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
@@ -508,7 +508,7 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     expect(taskRow(task.id)).toMatchObject({ state: "needs_human" });
   });
 
-  it("si claude se deshabilita mientras se prepara el lanzamiento, no lo arranca y cae a copilot", async () => {
+  it("if claude is disabled while the launch is being prepared, it does not start it, but falls back to copilot", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();
     const task = insertTask(db, project.id);
     const kinds: string[] = [];
@@ -523,7 +523,7 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
       closed.push(paneId);
       return close(paneId);
     });
-    // El humano apaga claude después del claim, mientras el dispatcher prepara el pane.
+    // The human turns claude off after the claim, while the dispatcher prepares the pane.
     const split = herdr.splitPane.bind(herdr);
     let disabled = false;
     vi.spyOn(herdr, "splitPane").mockImplementation(async (input) => {
@@ -543,14 +543,14 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     expect(runs.providerAttempts(run?.id ?? "")).toEqual([
       { provider: "copilot", status: "started" },
     ]);
-    // El pane preparado para claude no queda huérfano: se cierra y solo el de copilot sigue abierto.
+    // The pane prepared for claude is not left orphaned: it is closed and only copilot's stays open.
     expect(closed).toHaveLength(1);
     const { panes } = await herdr.snapshot();
     expect(panes.some((p) => p.paneId === closed[0])).toBe(false);
     expect(panes.some((p) => p.paneId === run?.herdrPane)).toBe(true);
   });
 
-  it("si todos se deshabilitan mientras se prepara el lanzamiento, no arranca nada y la tarea vuelve a queued", async () => {
+  it("if all are disabled while the launch is being prepared, nothing starts and the task goes back to queued", async () => {
     const { db, project, herdr, dispatcher, runs, taskRow } = setup();
     const task = insertTask(db, project.id);
     const startAgent = vi.spyOn(herdr, "startAgent");
@@ -568,23 +568,23 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     await dispatcher.idle();
 
     expect(startAgent).not.toHaveBeenCalled();
-    // Es una pausa, no un fallo: la tarea espera en queued y el Run no cuenta como fallido.
+    // It is a pause, not a failure: the task waits in queued and the Run does not count as failed.
     expect(taskRow(task.id)).toMatchObject({ state: "draft", subState: "queued" });
     const [run] = runs.forTask(task.id);
     expect(run).toMatchObject({ result: "cancelled" });
-    expect(run?.failureReason).toContain("deshabilitados");
+    expect(run?.failureReason).toContain("disabled");
     expect(runs.consecutiveFailures(task.id, "refine")).toBe(0);
     const { panes } = await herdr.snapshot();
     expect(panes.some((p) => p.paneId === run?.herdrPane)).toBe(false);
 
-    // Al habilitar uno, la tarea se despacha con normalidad.
+    // When one is enabled, the task is dispatched normally.
     new SettingsRepository(db).saveProviders({ copilot: true });
     await dispatcher.dispatch(refine(task));
     await dispatcher.idle();
     expect(runs.forTask(task.id).at(-1)).toMatchObject({ agentKind: "copilot", endedAt: null });
   });
 
-  it("rechaza el claim si todos los proveedores se deshabilitaron tras planear y la tarea sigue en queued", async () => {
+  it("rejects the claim if all providers were disabled after planning and the task stays in queued", async () => {
     const { db, project, dispatcher, runs, taskRow } = setup();
     const task = insertTask(db, project.id);
     const decision = refine(task);
@@ -598,9 +598,9 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     expect(runs.forTask(task.id)).toEqual([]);
   });
 
-  it("deshabilitar claude no interrumpe a un agente vivo, conserva su slot y la tarea nueva va al habilitado", async () => {
-    // Con un slot por tipo, si el agente vivo dejara de contar al apagar claude, o el claim lo
-    // siguiera contando en el proveedor del perfil, la tarea nueva no cabría o pisaría el slot.
+  it("disabling claude does not interrupt a live agent, keeps its slot and the new task goes to the enabled one", async () => {
+    // With one slot per kind, if the live agent stopped counting when claude is turned off, or the claim
+    // kept counting it on the profile's provider, the new task would not fit or would step on the slot.
     const { db, project, herdr, dispatcher, runs, taskRow } = setup({
       config: { agentKindConcurrency: { claude: 1, copilot: 1 } },
     });
@@ -617,8 +617,8 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
     });
 
     new SettingsRepository(db).saveProviders({ claude: false });
-    // La reconciliación corre tras el cambio: no debe tratar al agente de un proveedor apagado
-    // como huérfano ni reiniciarlo.
+    // Reconciliation runs after the change: it must not treat the agent of a turned-off provider
+    // as an orphan nor restart it.
     await dispatcher.recover();
     await dispatcher.idle();
     const nueva = insertTask(db, project.id);
@@ -634,8 +634,8 @@ describe("PhaseDispatcher: proveedores habilitados", () => {
   });
 });
 
-describe("PhaseDispatcher: fallos al lanzar", () => {
-  it("cambia al siguiente proveedor cuando el CLI primario no inicia", async () => {
+describe("PhaseDispatcher: launch failures", () => {
+  it("switches to the next provider when the primary CLI does not start", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();
     const task = insertTask(db, project.id);
     const kinds: string[] = [];
@@ -663,12 +663,12 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
     ]);
   });
 
-  it("no pasa a un fallback cuyo límite de concurrencia ya está lleno y cuenta el fallo del primario", async () => {
+  it("does not move to a fallback whose concurrency limit is already full and counts the primary's failure", async () => {
     const { db, project, herdr, dispatcher, runs, taskRow } = setup({
       config: { agentKindConcurrency: { copilot: 1 } },
     });
     const settings = new SettingsRepository(db);
-    // Un agente vivo de copilot llena su único slot (claude estaba apagado al despacharlo).
+    // A live copilot agent fills its only slot (claude was off when it was dispatched).
     settings.saveProviders({ claude: false, copilot: true });
     const live = insertTask(db, project.id);
     await dispatcher.dispatch(refine(live));
@@ -689,16 +689,16 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
     const [run] = runs.forTask(task.id);
     expect(kinds).toEqual(["claude"]);
     expect(run?.agentKind).toBe("claude");
-    // El fallo real de claude se cuenta: pausar lo ocultaría y el scheduler volvería a despachar
-    // al proveedor roto sin backoff. El diagnóstico conserva ambos motivos.
+    // Claude's real failure is counted: pausing would hide it and the scheduler would dispatch again
+    // to the broken provider without backoff. The diagnosis keeps both reasons.
     expect(run).toMatchObject({ result: "failure" });
     expect(run?.failureReason).toContain("claude: claude executable not found");
-    expect(run?.failureReason).toContain("copilot: sin slot de concurrencia");
+    expect(run?.failureReason).toContain("copilot: no concurrency slot");
     expect(taskRow(task.id)).not.toMatchObject({ subState: "queued" });
     expect(runs.forTask(live.id)[0]?.agentKind).toBe("copilot");
   });
 
-  it("aplica fallback simétrico cuando Copilot es el proveedor primario", async () => {
+  it("applies a symmetric fallback when Copilot is the primary provider", async () => {
     const { db, project, herdr, runs, make } = setup({
       agentProfiles: { refine: { kind: "copilot", args: [] } },
     });
@@ -724,7 +724,7 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
     expect(run?.launchedAt).toBeInstanceOf(Date);
   });
 
-  it("pasa a needs_human y conserva ambos diagnósticos si ningún CLI responde", async () => {
+  it("goes to needs_human and keeps both diagnoses if no CLI responds", async () => {
     const { db, project, herdr, dispatcher, runs, taskRow } = setup();
     const task = insertTask(db, project.id);
     vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
@@ -738,7 +738,7 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
     expect(run).toMatchObject({
       result: "failure",
       failureReason: expect.stringContaining(
-        "ningún proveedor respondió al arrancar: claude: claude service unavailable; copilot: copilot service unavailable",
+        "no provider responded on start: claude: claude service unavailable; copilot: copilot service unavailable",
       ),
     });
     expect(taskRow(task.id)).toMatchObject({ state: "needs_human", subState: null });
@@ -747,7 +747,7 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
     ).toHaveLength(2);
   });
 
-  it("un bootstrap que falla cierra el Run como failure y devuelve la tarea a queued", async () => {
+  it("a failing bootstrap closes the Run as failure and returns the task to queued", async () => {
     const { db, project, processes, dispatcher, runs, errors, taskRow, herdr } = setup();
     processes.respond((c) => (c.command === "pnpm install" ? { exitCode: 1, stderr: "boom" } : {}));
     const task = insertTask(db, project.id);
@@ -763,7 +763,7 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
     expect((await herdr.snapshot()).agents).toEqual([]);
   });
 
-  it("un nombre de agente tomado por otro Run falla en vez de adoptarlo", async () => {
+  it("an agent name taken by another Run fails instead of adopting it", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();
     const task = insertTask(db, project.id);
     const { rootPaneId } = await herdr.ensureWorkspace({ cwd: "/otro", label: "otro" });
@@ -784,7 +784,7 @@ describe("PhaseDispatcher: fallos al lanzar", () => {
   });
 });
 
-describe("PhaseDispatcher: cierre de fase", () => {
+describe("PhaseDispatcher: phase close", () => {
   async function launched() {
     const ctx = setup();
     const task = insertTask(ctx.db, ctx.project.id);
@@ -795,7 +795,7 @@ describe("PhaseDispatcher: cierre de fase", () => {
     return { ...ctx, task, run };
   }
 
-  it("closeRun guarda resultado, handoff y sesión, y cierra el pane", async () => {
+  it("closeRun stores result, handoff and session, and closes the pane", async () => {
     const { dispatcher, herdr, run, runs } = await launched();
 
     const res = await dispatcher.closeRun(run.id, { result: "success", handoff: { a: 1 } });
@@ -811,7 +811,7 @@ describe("PhaseDispatcher: cierre de fase", () => {
     expect((await herdr.snapshot()).panes.some((p) => p.paneId === run.herdrPane)).toBe(false);
   });
 
-  it("closeRun sobre un Run que ya cerró el MCP solo limpia el pane", async () => {
+  it("closeRun on a Run the MCP already closed only cleans the pane", async () => {
     const { db, dispatcher, herdr, run, runs } = await launched();
     closeRun(db, run.id, { result: "success", handoff: { spec: 1 } });
 
@@ -822,7 +822,7 @@ describe("PhaseDispatcher: cierre de fase", () => {
     expect(await herdr.getAgent(run.herdrName ?? "")).toBeUndefined();
   });
 
-  it("closeRun es idempotente", async () => {
+  it("closeRun is idempotent", async () => {
     const { dispatcher, run, runs } = await launched();
     await dispatcher.closeRun(run.id, { result: "success" });
     const again = await dispatcher.closeRun(run.id, { result: "failure" });
@@ -830,7 +830,7 @@ describe("PhaseDispatcher: cierre de fase", () => {
     expect(runs.get(run.id)?.result).toBe("success");
   });
 
-  it("closeRun usa la sesión de herdr si el Run no tiene una nativa", async () => {
+  it("closeRun uses the herdr session if the Run has no native one", async () => {
     const { db, dispatcher, herdr, run, runs } = await launched();
     db.$client
       .prepare("update runs set agent_session = null, agent_session_source = null where id = ?")
@@ -846,7 +846,7 @@ describe("PhaseDispatcher: cierre de fase", () => {
     expect(runs.get(run.id)).toMatchObject({ agentSession: "h-9", agentSessionSource: "herdr" });
   });
 
-  it("failRun cierra el pane y devuelve la tarea a queued", async () => {
+  it("failRun closes the pane and returns the task to queued", async () => {
     const { dispatcher, herdr, run, task, taskRow } = await launched();
     const res = await dispatcher.failRun(run.id, "el agente salió");
     expect(res).toMatchObject({ closed: true, transitioned: true });
@@ -854,7 +854,7 @@ describe("PhaseDispatcher: cierre de fase", () => {
     expect(await herdr.getAgent(run.herdrName ?? "")).toBeUndefined();
   });
 
-  it("el observador ve el Run al lanzarse y lo suelta al cerrarse", async () => {
+  it("the observer sees the Run on launch and drops it on close", async () => {
     const watched: string[] = [];
     const released: string[] = [];
     const ctx = setup({
@@ -875,7 +875,7 @@ describe("PhaseDispatcher: cierre de fase", () => {
   });
 });
 
-describe("PhaseDispatcher: archivo de evidencia al cerrar el Run (UW-24)", () => {
+describe("PhaseDispatcher: evidence file on closing the Run (UW-24)", () => {
   async function withEvidence(recordRun?: (runId: string) => Promise<unknown>) {
     const calls: { runId: string; endedAt: Date | null; paneOpen: boolean }[] = [];
     const ctx = setup();
@@ -901,7 +901,7 @@ describe("PhaseDispatcher: archivo de evidencia al cerrar el Run (UW-24)", () =>
     return { ...ctx, dispatcher, calls, task, run };
   }
 
-  it("closeRun registra el Run ya cerrado y con el pane ya cerrado, para un transcript completo", async () => {
+  it("closeRun records the Run already closed and with the pane already closed, for a complete transcript", async () => {
     const { dispatcher, calls, run } = await withEvidence();
     await dispatcher.closeRun(run.id, { result: "success", handoff: { a: 1 } });
     expect(calls).toHaveLength(1);
@@ -909,14 +909,14 @@ describe("PhaseDispatcher: archivo de evidencia al cerrar el Run (UW-24)", () =>
     expect(calls[0]?.endedAt).toBeInstanceOf(Date);
   });
 
-  it("closeRun sobre un Run que ya cerró el MCP también lo registra", async () => {
+  it("closeRun on a Run the MCP already closed also records it", async () => {
     const { db, dispatcher, calls, run } = await withEvidence();
     closeRun(db, run.id, { result: "success", handoff: { spec: 1 } });
     await dispatcher.closeRun(run.id, { result: "failure" });
     expect(calls.map((c) => c.runId)).toEqual([run.id]);
   });
 
-  it("releaseRun registra el Run que cerró una tool de salida del MCP", async () => {
+  it("releaseRun records the Run that an MCP exit tool closed", async () => {
     const { db, dispatcher, calls, run } = await withEvidence();
     await dispatcher.releaseRun(run.id);
     expect(calls).toHaveLength(0);
@@ -925,14 +925,14 @@ describe("PhaseDispatcher: archivo de evidencia al cerrar el Run (UW-24)", () =>
     expect(calls.map((c) => c.runId)).toEqual([run.id]);
   });
 
-  it("failRun registra el Run fallido", async () => {
+  it("failRun records the failed Run", async () => {
     const { dispatcher, calls, run } = await withEvidence();
     await dispatcher.failRun(run.id, "el agente salió");
     expect(calls).toHaveLength(1);
     expect(calls[0]?.endedAt).toBeInstanceOf(Date);
   });
 
-  it("un Run que falla al lanzar queda registrado", async () => {
+  it("a Run that fails on launch is recorded", async () => {
     const calls: string[] = [];
     const ctx = setup({
       dispatcher: { evidence: { recordRun: async (id) => void calls.push(id) } },
@@ -948,7 +948,7 @@ describe("PhaseDispatcher: archivo de evidencia al cerrar el Run (UW-24)", () =>
     expect(calls).toEqual([run?.id]);
   });
 
-  it("un fallo al escribir la evidencia se reporta y no impide cerrar el pane ni el Run", async () => {
+  it("a failure writing the evidence is reported and does not prevent closing the pane or the Run", async () => {
     const { dispatcher, herdr, errors, run, runs } = await withEvidence(async () => {
       throw new Error("disco lleno");
     });
@@ -960,8 +960,8 @@ describe("PhaseDispatcher: archivo de evidencia al cerrar el Run (UW-24)", () =>
   });
 });
 
-describe("PhaseDispatcher: hallazgos de la revisión", () => {
-  it("cerrar el Run durante el bootstrap detiene el lanzamiento sin dejar agente ni pane", async () => {
+describe("PhaseDispatcher: review findings", () => {
+  it("closing the Run during the bootstrap stops the launch without leaving an agent or pane", async () => {
     const watched: string[] = [];
     const ctx = setup({
       dispatcher: { observer: { watch: (r) => watched.push(r.id), unwatch: () => {} } },
@@ -994,7 +994,7 @@ describe("PhaseDispatcher: hallazgos de la revisión", () => {
     expect(ctx.errors).toEqual([]);
   });
 
-  it("un agente recién arrancado que aún carga se espera y recibe el prompt", async () => {
+  it("a freshly started agent that is still loading is waited for and receives the prompt", async () => {
     const ctx = setup();
     const original = ctx.herdr.startAgent.bind(ctx.herdr);
     vi.spyOn(ctx.herdr, "startAgent").mockImplementationOnce(async (input) => {
@@ -1012,7 +1012,7 @@ describe("PhaseDispatcher: hallazgos de la revisión", () => {
     );
   });
 
-  it("un agente reutilizado bloqueado por un permiso no se mata al retomar", async () => {
+  it("a reused agent blocked by a permission is not killed on resuming", async () => {
     const herdr = new FakeHerdr({ promptDurationMs: 60_000 });
     const ctx = setup({ herdr });
     const task = insertTask(ctx.db, ctx.project.id);
@@ -1037,7 +1037,7 @@ describe("PhaseDispatcher: hallazgos de la revisión", () => {
     expect(await herdr.getAgent(name)).toBeDefined();
   });
 
-  it("un pane guardado que ya no es del worktree no se reutiliza ni se cierra", async () => {
+  it("a saved pane that is no longer the worktree's is neither reused nor closed", async () => {
     const ctx = setup();
     const task = insertTask(ctx.db, ctx.project.id);
     const res = claimRun(ctx.db, {
@@ -1047,7 +1047,7 @@ describe("PhaseDispatcher: hallazgos de la revisión", () => {
       sessionId: "s",
     });
     if (!res.ok) throw new Error(res.error.message);
-    // Tras un reinicio de herdr el id guardado nombra un pane ajeno.
+    // After a herdr restart the saved id names a foreign pane.
     const { rootPaneId } = await ctx.herdr.ensureWorkspace({ cwd: "/ajeno", label: "ajeno" });
     const foreign = await ctx.herdr.splitPane({ paneId: rootPaneId });
     ctx.runs.recordPane(res.run.id, { workspaceId: foreign.workspaceId, paneId: foreign.paneId });
@@ -1060,7 +1060,7 @@ describe("PhaseDispatcher: hallazgos de la revisión", () => {
     expect((await ctx.herdr.snapshot()).panes.map((p) => p.paneId)).toContain(foreign.paneId);
   });
 
-  it("si failRun falla al lanzar, se reportan los dos errores", async () => {
+  it("if failRun fails on launch, both errors are reported", async () => {
     const ctx = setup();
     ctx.processes.respond((c) => (c.command === "pnpm install" ? { exitCode: 1 } : {}));
     const fail = vi.spyOn(RunRepository.prototype, "fail").mockImplementationOnce(() => {
@@ -1076,8 +1076,8 @@ describe("PhaseDispatcher: hallazgos de la revisión", () => {
   });
 });
 
-describe("PhaseDispatcher con el Scheduler", () => {
-  it("una pasada despacha hasta el límite global y la siguiente no duplica", async () => {
+describe("PhaseDispatcher with the Scheduler", () => {
+  it("one pass dispatches up to the global limit and the next does not duplicate", async () => {
     const { db, project, herdr, dispatcher } = setup({ config: { globalConcurrency: 1 } });
     insertTask(db, project.id, { priority: 100 });
     insertTask(db, project.id, { priority: 900 });

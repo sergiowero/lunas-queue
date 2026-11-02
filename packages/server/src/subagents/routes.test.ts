@@ -31,7 +31,7 @@ const hook = (event: "SubagentStart" | "SubagentStop", agentId = "a1") => ({
 });
 
 describe("POST /hooks/subagent", () => {
-  it("registra inicio y fin del subagente en el Run del token y responde {}", async () => {
+  it("records the subagent's start and end in the token's Run and answers {}", async () => {
     const { post, recorded } = setup();
     const res = await post(hook("SubagentStart"));
     expect(res.status).toBe(200);
@@ -48,7 +48,7 @@ describe("POST /hooks/subagent", () => {
     ]);
   });
 
-  it("repetir el hook no duplica la ejecución", async () => {
+  it("repeating the hook does not duplicate the execution", async () => {
     const { post, recorded } = setup();
     await post(hook("SubagentStart"));
     await post(hook("SubagentStart"));
@@ -56,23 +56,23 @@ describe("POST /hooks/subagent", () => {
   });
 
   it.each([
-    ["sin token", null],
-    ["con un token desconocido", "no-es-un-token"],
-  ])("%s no registra nada y no bloquea al agente", async (_, token) => {
+    ["without a token", null],
+    ["with an unknown token", "no-es-un-token"],
+  ])("%s records nothing and does not block the agent", async (_, token) => {
     const { post, recorded } = setup();
     const res = await post(hook("SubagentStart"), token);
     expect(res.status).toBe(200);
     expect(recorded()).toEqual([]);
   });
 
-  it("el token de un Run cerrado ya no registra", async () => {
+  it("a closed Run's token no longer records", async () => {
     const { db, task, post } = setup();
     const closed = insertRun(db, task.id, { phase: "verify", endedAt: new Date() });
     await post(hook("SubagentStart"), closed.runToken);
     expect(new RunSubagentRepository(db).forRun(closed.id)).toEqual([]);
   });
 
-  it("un input que no es de SubagentStart o SubagentStop responde 400 sin efectos", async () => {
+  it("an input that is not SubagentStart or SubagentStop answers 400 without effects", async () => {
     const { post, recorded } = setup();
     const bad = await post({ ...hook("SubagentStart"), hook_event_name: "PreToolUse" });
     expect(bad.status).toBe(400);
@@ -81,14 +81,14 @@ describe("POST /hooks/subagent", () => {
     expect(recorded()).toEqual([]);
   });
 
-  it("sin un token activo ni siquiera valida el input: responde {} sin detalles", async () => {
+  it("without an active token it does not even validate the input: answers {} without details", async () => {
     const { post } = setup();
     const res = await post("{no es json", "no-es-un-token");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({});
   });
 
-  it("con el session id nativo del Run fijado, ignora hooks de otra sesión con el mismo token", async () => {
+  it("with the Run's native session id fixed, it ignores hooks from another session with the same token", async () => {
     const { db, task } = setup();
     const run = insertRun(db, insertTask(db, task.projectId).id, {
       phase: "verify",
@@ -107,7 +107,7 @@ describe("POST /hooks/subagent", () => {
     expect(new RunSubagentRepository(db).forRun(run.id).map((r) => r.agentId)).toEqual(["a2"]);
   });
 
-  it("registra los 4 revisores de una verificación, uno por agente", async () => {
+  it("records the 4 reviewers of a verification, one per agent", async () => {
     const { post, recorded } = setup();
     for (const [i, name] of REVIEWER_NAMES.entries()) {
       await post({ ...hook("SubagentStart", `r${i}`), agent_type: name });

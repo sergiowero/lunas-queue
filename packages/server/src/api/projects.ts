@@ -1,5 +1,5 @@
-// Rutas de proyectos (UW-05). La validación vive en los esquemas de @lunasq/schemas; aquí solo se
-// traducen sus errores y los del repositorio a códigos HTTP.
+// Project routes (UW-05). Validation lives in the @lunasq/schemas schemas; here only
+// their errors and the repository's are translated into HTTP codes.
 import { type ProjectRepository, ProjectRepositoryError } from "@lunasq/db";
 import { ProjectCreate, ProjectUpdate } from "@lunasq/schemas";
 import { type Context, Hono } from "hono";

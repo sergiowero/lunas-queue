@@ -1,9 +1,9 @@
-// Escalamientos que se notifican desde el outbox (docs/design.md §Señales y §Human-in-the-loop,
-// ADR uw-17-reconciliacion): reintentos agotados y loop de verificación agotado. Llegan por la
-// transición a needs_human, venga de un crash (dispatcher), de `report_failure` o de
-// `submit_verdict` (LunasQ MCP), así hay un solo lugar que avisa. El timeout de fase lo notifica
-// el watcher directamente. El id sale del evento: el outbox entrega al menos una vez y la
-// deduplicación del servicio de notificaciones absorbe la repetición (ADR 0009).
+// Escalations notified from the outbox (docs/design.md §Signals and §Human-in-the-loop,
+// ADR uw-17-reconciliacion): exhausted retries and exhausted verification loop. They arrive through the
+// transition to needs_human, whether it comes from a crash (dispatcher), `report_failure` or
+// `submit_verdict` (LunasQ MCP), so there is a single place that notifies. The phase timeout is notified by
+// the watcher directly. The id comes from the event: the outbox delivers at least once and the
+// notification service's deduplication absorbs the repetition (ADR 0009).
 import {
   type Notification,
   type OutboxMessage,
@@ -12,7 +12,7 @@ import {
   taskLabel,
 } from "@lunasq/schemas";
 
-/** `taskNumber` es el número de la tarea del mensaje: el título la identifica con #N. */
+/** `taskNumber` is the task number of the message: the title identifies it with #N. */
 export function escalationNotification(
   taskNumber: number,
   message: OutboxMessage,
@@ -28,16 +28,16 @@ export function escalationNotification(
         ...base,
         id: `retries:${message.taskId}:${message.eventId}`,
         kind: "retries_exhausted",
-        title: `Reintentos agotados en ${short}`,
-        body: `La fase de ${payload.data.from.state} falló en todos sus reintentos. Revisa el último Run y reanuda o cancela la tarea.`,
+        title: `Retries exhausted in ${short}`,
+        body: `The ${payload.data.from.state} phase failed on all its retries. Check the last Run and resume or cancel the task.`,
       };
     case "iterations_exhausted":
       return {
         ...base,
         id: `iterations:${message.taskId}:${message.eventId}`,
         kind: "verification_exhausted",
-        title: `Loop de verificación agotado en ${short}`,
-        body: `La tarea llegó a ${payload.data.verificationIteration} iteraciones de rework sin pasar la verificación.`,
+        title: `Verification loop exhausted in ${short}`,
+        body: `The task reached ${payload.data.verificationIteration} rework iterations without passing verification.`,
       };
     default:
       return null;

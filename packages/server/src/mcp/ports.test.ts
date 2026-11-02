@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { HookService } from "../hooks/service.ts";
 import { GitCommitVerifier, type PhaseHooks, tailOf } from "./ports.ts";
 
-// HookService es lo que la composición del servidor pasa como PhaseHooks: si deja de cumplir el
-// puerto, el typecheck falla aquí y no recién en UW-29.
+// HookService is what the server composition passes as PhaseHooks: if it stops meeting the
+// port, the typecheck fails here and not only in UW-29.
 const _hookServiceIsPhaseHooks = (service: HookService): PhaseHooks => service;
 void _hookServiceIsPhaseHooks;
 
@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe("tailOf", () => {
-  it("conserva el final de un texto largo y deja intacto uno corto", () => {
+  it("keeps the end of a long text and leaves a short one intact", () => {
     expect(tailOf("abcdef", 3)).toBe("def");
     expect(tailOf("ab", 3)).toBe("ab");
   });
@@ -47,7 +47,7 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     return { dir, base, work };
   }
 
-  it("acepta commits del branch y rechaza los de la base o desconocidos", async () => {
+  it("accepts commits from the branch and rejects those of the base or unknown ones", async () => {
     const { dir, base, work } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     const unknown = "0".repeat(40);
@@ -63,9 +63,9 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     ).toEqual([base, unknown]);
   });
 
-  it("rechaza un commit que ya está en origin/<base> aunque la base local vaya atrasada", async () => {
+  it("rejects a commit already in origin/<base> even if the local base is behind", async () => {
     const { dir, base } = repo();
-    // El worktree sale de origin/main (ADR 0012); la main local se quedó en `base`.
+    // The worktree comes from origin/main (ADR 0012); the local main stayed at `base`.
     git(dir, "reset", "-q", "--hard", base);
     git(dir, "init", "-q", "--bare", join(dir, ".git", "origin.git"));
     git(dir, "remote", "add", "origin", join(dir, ".git", "origin.git"));
@@ -85,7 +85,7 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     ).toEqual([upstream]);
   });
 
-  it("una rama base inexistente no da los commits por buenos", async () => {
+  it("a nonexistent base branch does not vouch for the commits", async () => {
     const { dir, work } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     expect(
@@ -93,16 +93,16 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     ).toEqual([work]);
   });
 
-  it("branchHasCommits distingue un branch con commits de uno que está en la base", async () => {
+  it("branchHasCommits tells a branch with commits from one that is in the base", async () => {
     const { dir, base } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     expect(await verifier.branchHasCommits({ worktreePath: dir, baseBranch: "main" })).toBe(true);
-    // Sin commits propios: el branch apunta a la base.
+    // Without own commits: the branch points at the base.
     git(dir, "reset", "-q", "--hard", base);
     expect(await verifier.branchHasCommits({ worktreePath: dir, baseBranch: "main" })).toBe(false);
   });
 
-  it("branchHasCommits no cuenta lo que ya está en origin/<base> aunque la base local vaya atrasada", async () => {
+  it("branchHasCommits does not count what is already in origin/<base> even if the local base is behind", async () => {
     const { dir, base } = repo();
     git(dir, "reset", "-q", "--hard", base);
     git(dir, "init", "-q", "--bare", join(dir, ".git", "origin.git"));
@@ -112,13 +112,13 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     git(dir, "commit", "-q", "-m", "upstream");
     git(dir, "push", "-q", "origin", "HEAD:main");
     git(dir, "fetch", "-q", "origin");
-    // HEAD es origin/main; la main local se quedó en `base`.
+    // HEAD is origin/main; the local main stayed at `base`.
     git(dir, "branch", "-f", "main", base);
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     expect(await verifier.branchHasCommits({ worktreePath: dir, baseBranch: "main" })).toBe(false);
   });
 
-  it("branchHasCommits con una base que no existe asume que hay commits", async () => {
+  it("branchHasCommits with a base that does not exist assumes there are commits", async () => {
     const { dir } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     expect(await verifier.branchHasCommits({ worktreePath: dir, baseBranch: "no-existe" })).toBe(
@@ -126,7 +126,7 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     );
   });
 
-  it("uncommitted lista cambios y archivos sin seguimiento; vacío con el worktree limpio", async () => {
+  it("uncommitted lists changes and untracked files; empty with a clean worktree", async () => {
     const { dir } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     expect(await verifier.uncommitted(dir)).toEqual([]);
@@ -135,7 +135,7 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     expect((await verifier.uncommitted(dir)).sort()).toEqual(["nuevo.txt", "work.txt"]);
   });
 
-  it("uncommitted ignora el archivo de evidencia de lunasq/tasks/", async () => {
+  it("uncommitted ignores the evidence file of lunasq/tasks/", async () => {
     const { dir } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     mkdirSync(join(dir, "lunasq/tasks"), { recursive: true });
@@ -145,7 +145,7 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     expect(await verifier.uncommitted(dir)).toEqual(["work.txt"]);
   });
 
-  it("onlyEvidenceBetween acepta commits que solo tocan lunasq/tasks/", async () => {
+  it("onlyEvidenceBetween accepts commits that only touch lunasq/tasks/", async () => {
     const { dir, work } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     expect(await verifier.onlyEvidenceBetween({ worktreePath: dir, from: work, to: work })).toBe(
@@ -169,7 +169,7 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     );
   });
 
-  it("onlyEvidenceBetween rechaza un HEAD que no desciende del commit del gate", async () => {
+  it("onlyEvidenceBetween rejects a HEAD that does not descend from the gate's commit", async () => {
     const { dir, base, work } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     expect(await verifier.onlyEvidenceBetween({ worktreePath: dir, from: work, to: base })).toBe(
@@ -177,7 +177,7 @@ describe("GitCommitVerifier contra un repo real", { timeout: 30_000 }, () => {
     );
   });
 
-  it("una rama base con forma de opción no se interpreta como opción de git", async () => {
+  it("a base branch shaped like an option is not interpreted as an option", async () => {
     const { dir, work } = repo();
     const verifier = new GitCommitVerifier(new ShellProcessRunner());
     expect(

@@ -13,7 +13,7 @@ export function notification(patch: Partial<Notification> = {}): Notification {
   };
 }
 
-/** Lee eventos SSE (`event`/`id`/`data`) de un stream hasta juntar `count`. */
+/** Reads SSE events (`event`/`id`/`data`) from a stream until it gathers `count`. */
 export async function readSseEvents(
   body: ReadableStream<Uint8Array>,
   count: number,

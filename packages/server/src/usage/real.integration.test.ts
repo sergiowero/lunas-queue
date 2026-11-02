@@ -1,8 +1,8 @@
-// El usage de una tarea contra Claude Code real (criterio de UW-20). No corre en `pnpm test`:
+// A task's usage against real Claude Code (UW-20 criterion). Does not run in `pnpm test`:
 //   pnpm --filter @lunasq/server test:usage
-// Levanta la app en un puerto local y abre `claude -p --output-format json` con el entorno de
-// telemetría de un pane (`telemetryEnv` + `telemetryRunEnv`). Después compara el usage que LunasQ
-// guardó con el `usage` y el `total_cost_usd` que Claude Code reporta en su resultado.
+// Starts the app on a local port and opens `claude -p --output-format json` with a pane's
+// telemetry environment (`telemetryEnv` + `telemetryRunEnv`). Then it compares the usage LunasQ
+// stored with the `usage` and `total_cost_usd` Claude Code reports in its result.
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import type { Server } from "node:http";
@@ -32,7 +32,7 @@ describe.skipIf(!enabled)("usage contra Claude Code real", { timeout: 300_000 },
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("el usage de la tarea coincide con los tokens y el costo que reporta Claude Code", async () => {
+  it("the task's usage matches the tokens and cost Claude Code reports", async () => {
     const db = migratedDatabase();
     const sessionId = randomUUID();
     const task = insertTask(db, insertProject(db).id);
@@ -48,7 +48,7 @@ describe.skipIf(!enabled)("usage contra Claude Code real", { timeout: 300_000 },
       dir,
       [
         "-p",
-        "Responde solo con la palabra ok.",
+        "Reply only with the word ok.",
         "--model",
         "haiku",
         "--output-format",
@@ -77,7 +77,7 @@ describe.skipIf(!enabled)("usage contra Claude Code real", { timeout: 300_000 },
       };
     };
 
-    // Claude Code vacía su buffer de logs al salir; el lote puede llegar unos segundos después.
+    // Claude Code flushes its log buffer on exit; the batch may arrive a few seconds later.
     const views = new TaskViewRepository(db);
     await vi.waitFor(() => expect(views.usage(task.id)?.total.outputTokens).toBeGreaterThan(0), {
       timeout: 30_000,

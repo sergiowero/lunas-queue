@@ -1,5 +1,5 @@
-// Proceso que confirma una transición y muere con SIGKILL antes de publicar nada: simula una
-// caída entre el commit y la publicación (criterio de UW-08).
+// Process that confirms a transition and dies with SIGKILL before publishing anything: it simulates a
+// crash between the commit and the publication (UW-08 criterion).
 import { openDatabase, transitionTask } from "@lunasq/db";
 
 const [file, taskId] = process.argv.slice(2);

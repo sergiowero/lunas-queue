@@ -18,7 +18,7 @@ function tmp() {
 const URL_ = "http://127.0.0.1:4518/hooks/subagent";
 
 describe("hookSettings", () => {
-  it("manda SubagentStart y SubagentStop al endpoint con el token expandido del entorno", () => {
+  it("sends SubagentStart and SubagentStop to the endpoint with the token expanded from the environment", () => {
     const hook = {
       type: "http",
       url: URL_,
@@ -34,13 +34,13 @@ describe("hookSettings", () => {
     });
   });
 
-  it("nunca lleva un token literal", () => {
+  it("never carries a literal token", () => {
     expect(JSON.stringify(hookSettings(URL_))).not.toMatch(/[0-9a-f]{64}/);
   });
 });
 
 describe("ensureHookSettings", () => {
-  it("crea el archivo y sus carpetas; repetirlo no lo reescribe", async () => {
+  it("creates the file and its folders; repeating it does not rewrite it", async () => {
     const path = join(tmp(), "nested", "settings.json");
     expect(await ensureHookSettings(path, URL_)).toEqual({ written: true });
     const mtime = statSync(path).mtimeMs;
@@ -49,7 +49,7 @@ describe("ensureHookSettings", () => {
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(hookSettings(URL_));
   });
 
-  it("lo reescribe si cambió la URL", async () => {
+  it("rewrites it if the URL changed", async () => {
     const path = join(tmp(), "settings.json");
     await ensureHookSettings(path, URL_);
     expect(await ensureHookSettings(path, "http://127.0.0.1:9/hooks/subagent")).toEqual({

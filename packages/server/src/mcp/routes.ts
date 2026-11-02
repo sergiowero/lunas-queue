@@ -1,7 +1,7 @@
-// Endpoint del LunasQ MCP: Streamable HTTP stateless sobre Hono (ADR 0001). Cada request crea su
-// servidor y su transporte, y el run token se lee del header en cada llamada (ADR 0002). Un token
-// inválido no corta el handshake: cada tools/call lo rechaza con isError, así el cliente no
-// interpreta un 401 como pedido de OAuth.
+// LunasQ MCP endpoint: stateless Streamable HTTP on Hono (ADR 0001). Each request creates its
+// server and its transport, and the run token is read from the header on each call (ADR 0002). An
+// invalid token does not cut the handshake: each tools/call rejects it with isError, so the client does not
+// interpret a 401 as an OAuth request.
 import type { RunRow } from "@lunasq/db";
 import {
   AskHumanInput,
@@ -32,7 +32,7 @@ function toResult(outcome: Outcome<unknown>): ToolResult {
 }
 
 const HANDOFF_HINT =
-  "El handoff es JSON con el esquema versionado de packages/schemas/json-schema (schemaVersion 1); si no cumple, la llamada se rechaza con los errores por ruta y puedes corregir y reintentar.";
+  "The handoff is JSON with the versioned schema in packages/schemas/json-schema (schemaVersion 1); if it does not comply, the call is rejected with the errors by path and you can fix it and retry.";
 
 function buildServer(service: LunasqMcpService, token: string | undefined): McpServer {
   const server = new McpServer(SERVER_INFO);
@@ -49,7 +49,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
     "get_task_context",
     {
       description:
-        "Intent, spec aprobada, handoffs previos, Questions, checklist y convenciones del proyecto. Obligatoria antes de cualquier otra tool del Run.",
+        "Intent, approved spec, previous handoffs, Questions, checklist and project conventions. Mandatory before any other tool of the Run.",
       inputSchema: GetTaskContextInput,
     },
     () => guarded("get_task_context", (run) => service.getTaskContext(run)),
@@ -57,7 +57,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
   server.registerTool(
     "submit_spec",
     {
-      description: `Refinamiento: entrega el handoff de refinamiento (modelo de dominio, requerimientos, criterios, task list y supuestos) como nueva versión de Spec y cierra el Run. ${HANDOFF_HINT}`,
+      description: `Refinement: delivers the refinement handoff (domain model, requirements, criteria, task list and assumptions) as a new Spec version and closes the Run. ${HANDOFF_HINT}`,
       inputSchema: HandoffInput,
     },
     ({ handoff }) => guarded("submit_spec", (run) => service.submitSpec(run, handoff)),
@@ -66,7 +66,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
     "ask_human",
     {
       description:
-        "Registra una pregunta para el humano y regresa de inmediato; termina tu turno y la respuesta llegará como un prompt nuevo. Cuando la respuesta sea una decisión entre alternativas concretas, manda options (2 a 6, cada una con label corto y único y, si ayuda, description): el humano elige una o escribe otra respuesta, y te llega el label elegido o su free text. Sin options la pregunta es abierta y se responde con free text.",
+        "Records a question for the human and returns immediately; end your turn and the answer will arrive as a new prompt. When the answer is a decision between concrete alternatives, send options (2 to 6, each with a short, unique label and, if it helps, a description): the human picks one or writes another answer, and you receive the chosen label or their free text. Without options the question is open and is answered with free text.",
       inputSchema: AskHumanInput,
     },
     (input) => guarded("ask_human", (run) => service.askHuman(run, input)),
@@ -75,7 +75,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
     "update_checklist",
     {
       description:
-        "Implementación: marca items (T-<n>) de la task list de la spec aprobada; devuelve el checklist completo.",
+        "Implementation: marks items (T-<n>) of the approved spec's task list; returns the full checklist.",
       inputSchema: UpdateChecklistInput,
     },
     (input) => guarded("update_checklist", (run) => service.updateChecklist(run, input)),
@@ -83,7 +83,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
   server.registerTool(
     "submit_for_verification",
     {
-      description: `Implementación: declara el fin con el handoff de implementación (mapa criterio → tests, commits del branch). LunasQ corre el gate de tests en el worktree; si está en rojo, se rechaza con la salida. ${HANDOFF_HINT}`,
+      description: `Implementation: declares the end with the implementation handoff (criterion → tests map, branch commits). LunasQ runs the test gate in the worktree; if it is red, the call is rejected with the output. ${HANDOFF_HINT}`,
       inputSchema: HandoffInput,
     },
     ({ handoff }) =>
@@ -92,7 +92,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
   server.registerTool(
     "submit_result",
     {
-      description: `Refinamiento o implementación de una tarea sin código (investigación, pedido ya implementado o sin resolución): entrega el Resultado en Markdown con su tipo (research, already_implemented, not_resolvable) y completa la tarea sin verificación ni PR. En implementación se rechaza si el branch tiene commits sobre la rama base. ${HANDOFF_HINT}`,
+      description: `Refinement or implementation of a task without code (research, request already implemented or unresolvable): delivers the Result in Markdown with its type (research, already_implemented, not_resolvable) and completes the task without verification or PR. In implementation it is rejected if the branch has commits on top of the base branch. ${HANDOFF_HINT}`,
       inputSchema: HandoffInput,
     },
     ({ handoff }) => guarded("submit_result", (run) => service.submitResult(run, handoff)),
@@ -101,7 +101,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
     "run_reviewer",
     {
       description:
-        "Copilot CLI en verificación: lanza de verdad el revisor especializado indicado, guarda su prompt y respuesta como evidencia y devuelve el reporte. Incluye la spec, el diff y los criterios relevantes en instructions.",
+        "Copilot CLI in verification: actually launches the specified specialized reviewer, stores its prompt and answer as evidence and returns the report. Include the spec, the diff and the relevant criteria in instructions.",
       inputSchema: RunReviewerInput,
     },
     (input) => guarded("run_reviewer", (run) => service.runReviewer(run, input)),
@@ -109,7 +109,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
   server.registerTool(
     "submit_verdict",
     {
-      description: `Verificación: entrega el veredicto pass o reject con veredicto por criterio, reporte de los 4 revisores, must-fix, hallazgos refutados y etiqueta de riesgo. ${HANDOFF_HINT}`,
+      description: `Verification: delivers the pass or reject verdict with a verdict per criterion, the report of the 4 reviewers, must-fix, refuted findings and risk label. ${HANDOFF_HINT}`,
       inputSchema: HandoffInput,
     },
     ({ handoff }) => guarded("submit_verdict", (run) => service.submitVerdict(run, handoff)),
@@ -117,7 +117,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
   server.registerTool(
     "report_failure",
     {
-      description: "Declara que no puedes continuar y por qué; cierra el Run como fallido.",
+      description: "Declares that you cannot continue and why; closes the Run as failed.",
       inputSchema: ReportFailureInput,
     },
     (input) => guarded("report_failure", (run) => service.reportFailure(run, input)),
@@ -125,7 +125,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
   return server;
 }
 
-/** App de Hono con validación de Host y Origin para localhost; se monta en /mcp. */
+/** Hono app with Host and Origin validation for localhost; mounted at /mcp. */
 export function mcpRoutes(service: LunasqMcpService): Hono {
   const app = createMcpHonoApp();
   app.all("/", async (c) => {
@@ -135,7 +135,7 @@ export function mcpRoutes(service: LunasqMcpService): Hono {
     });
     await server.connect(transport);
     return transport.handleRequest(c.req.raw, {
-      // createMcpHonoApp deja el cuerpo JSON ya leído; su Hono no tipa la variable.
+      // createMcpHonoApp leaves the JSON body already read; its Hono does not type the variable.
       parsedBody: c.get("parsedBody" as never),
     });
   });

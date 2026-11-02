@@ -1,6 +1,6 @@
-// Timeout de fase con pausa (docs/design.md §Timeout de fase): corre mientras el Run está en
-// running y se pausa en `blocked` o `waiting_human`, porque ese tiempo depende del humano. En
-// memoria: tras un reinicio se arma de nuevo con el presupuesto completo (ADR
+// Phase timeout with pause (docs/design.md §Phase timeout): it runs while the Run is in
+// running and pauses in `blocked` or `waiting_human`, because that time depends on the human. In
+// memory: after a restart it is set up again with the full budget (ADR
 // uw-17-reconciliacion).
 
 export type PauseReason = "blocked" | "waiting_human";
@@ -11,7 +11,7 @@ export class PhaseClock {
   private readonly paused = new Set<PauseReason>();
   private started = false;
   private stopped = false;
-  /** Desde cuándo corre el tramo actual; null en pausa o sin arrancar. */
+  /** Since when the current stretch runs; null when paused or not started. */
   private since: number | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -46,7 +46,7 @@ export class PhaseClock {
     return this.since === null ? this.remaining : this.remaining - (Date.now() - this.since);
   }
 
-  /** Arranca el tramo si nada lo impide. */
+  /** Starts the stretch if nothing prevents it. */
   private schedule(): void {
     if (!this.started || this.stopped || this.paused.size > 0 || this.since !== null) return;
     this.since = Date.now();
@@ -62,7 +62,7 @@ export class PhaseClock {
     );
   }
 
-  /** Cierra el tramo en curso y descuenta lo corrido. */
+  /** Closes the current stretch and deducts what ran. */
   private halt(): void {
     if (this.since === null) return;
     this.remaining -= Date.now() - this.since;

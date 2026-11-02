@@ -1,12 +1,12 @@
-// Rutas de Settings (docs/decisions/settings-proveedores.md): qué proveedores de agente puede usar
-// el dispatcher y el límite global de agentes concurrentes. La validación vive en
-// AgentProviderPatch y ConcurrencySettings; guardar publica settings.updated.
+// Settings routes (docs/decisions/settings-proveedores.md): which agent providers the dispatcher may use
+// and the global limit of concurrent agents. Validation lives in
+// AgentProviderPatch and ConcurrencySettings; saving publishes settings.updated.
 import type { SettingsRepository } from "@lunasq/db";
 import { AgentProviderPatch, ConcurrencySettings } from "@lunasq/schemas";
 import { Hono } from "hono";
 import { invalidInput, localOriginOnly, readJson } from "./http.ts";
 
-/** `defaultConcurrency` rige mientras Settings no guarde un límite (el de SchedulerConfig). */
+/** `defaultConcurrency` applies while Settings has not saved a limit (the SchedulerConfig one). */
 export function settingsRoutes(settings: SettingsRepository, defaultConcurrency: number): Hono {
   return new Hono()
     .use(localOriginOnly)

@@ -45,7 +45,7 @@ export class CopilotCliReviewerExecutor implements CopilotReviewerExecutor {
     const profilePath = join(this.#agentsPath, `${profileName}.agent.md`);
     const profile = await lstat(profilePath).catch(() => null);
     if (!profile?.isFile() || profile.isSymbolicLink()) {
-      throw new Error(`falta el perfil Copilot del revisor ${input.reviewer}: ${profilePath}`);
+      throw new Error(`missing Copilot profile for reviewer ${input.reviewer}: ${profilePath}`);
     }
     await access(profilePath);
     await ensurePrivateDirectory(this.#evidencePath);
@@ -80,12 +80,12 @@ export class CopilotCliReviewerExecutor implements CopilotReviewerExecutor {
     }
     if (result.timedOut || result.exitCode !== 0) {
       throw new Error(
-        `Copilot ${input.reviewer} terminó ${result.timedOut ? "por timeout" : `con exit code ${result.exitCode}`}: ${result.stderr || result.stdout}`.trim(),
+        `Copilot ${input.reviewer} finished ${result.timedOut ? "by timeout" : `with exit code ${result.exitCode}`}: ${result.stderr || result.stdout}`.trim(),
       );
     }
 
     const output = result.stdout.trim();
-    if (!output) throw new Error(`Copilot ${input.reviewer} terminó sin reporte`);
+    if (!output) throw new Error(`Copilot ${input.reviewer} finished without a report`);
 
     const transcriptPath = join(runDir, `${agentId}.jsonl`);
     const timestamp = new Date().toISOString();
@@ -112,7 +112,7 @@ async function ensurePrivateDirectory(path: string): Promise<void> {
   await mkdir(path, { recursive: true, mode: 0o700 });
   const info = await lstat(path);
   if (info.isSymbolicLink() || !info.isDirectory()) {
-    throw new Error(`el directorio de evidencia de Copilot no es seguro: ${path}`);
+    throw new Error(`the Copilot evidence directory is not safe: ${path}`);
   }
   await chmod(path, 0o700);
 }

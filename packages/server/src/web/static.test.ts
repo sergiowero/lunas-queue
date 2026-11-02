@@ -19,8 +19,8 @@ function setup() {
   return createApp({ db: migratedDatabase(), webRoot: root });
 }
 
-describe("estáticos del front end", () => {
-  it("sirve index.html en la raíz y los assets con su tipo", async () => {
+describe("front end statics", () => {
+  it("serves index.html at the root and the assets with their type", async () => {
     const app = setup();
     const index = await app.request("/");
     expect(index.status).toBe(200);
@@ -29,13 +29,13 @@ describe("estáticos del front end", () => {
     expect(asset.headers.get("content-type")).toMatch(/javascript/);
   });
 
-  it("responde index.html en rutas del cliente (fallback SPA)", async () => {
+  it("answers index.html on client routes (SPA fallback)", async () => {
     const res = await setup().request("/tasks/abc");
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toMatch(/text\/html/);
   });
 
-  it("no tapa los 404 de la API ni de un asset faltante", async () => {
+  it("does not mask the 404s of the API or of a missing asset", async () => {
     const app = setup();
     const api = await app.request("/api/nada");
     expect(api.status).toBe(404);
@@ -45,12 +45,12 @@ describe("estáticos del front end", () => {
     expect((await app.request("/favicon.ico")).status).toBe(404);
   });
 
-  it("no responde index.html a métodos que no son GET", async () => {
+  it("does not answer index.html to methods other than GET", async () => {
     const res = await setup().request("/tasks/abc", { method: "POST" });
     expect(res.status).toBe(404);
   });
 
-  it("sin webRoot no sirve nada", async () => {
+  it("without webRoot it serves nothing", async () => {
     const app = createApp({ db: migratedDatabase() });
     expect((await app.request("/")).status).toBe(404);
   });

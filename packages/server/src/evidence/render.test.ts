@@ -49,12 +49,12 @@ const gate = (over: Partial<TestGateExecutedPayload> = {}): TestGateExecutedPayl
 });
 
 describe("renderRunSection", () => {
-  it("abre y cierra con marcadores del Run y lleva los metadatos", () => {
+  it("opens and closes with Run markers and carries the metadata", () => {
     const md = renderRunSection(data());
     const { start, end } = runMarkers("run-1");
     expect(md.startsWith(start)).toBe(true);
     expect(md.trimEnd().endsWith(end)).toBe(true);
-    expect(md).toContain("## Run run-1 · implement · iteración 0");
+    expect(md).toContain("## Run run-1 · implement · iteration 0");
     expect(md).toContain("claude");
     expect(md).toContain("opus");
     expect(md).toContain("2026-10-29T10:00:00.000Z");
@@ -63,7 +63,7 @@ describe("renderRunSection", () => {
     expect(md).toContain("sess-1");
   });
 
-  it("incluye el failure_reason de un Run fallido", () => {
+  it("includes the failure_reason of a failed Run", () => {
     const md = renderRunSection(
       data({ run: { ...baseRun, result: "failure", failureReason: "test_gate_failed: 3 rojos" } }),
     );
@@ -71,13 +71,13 @@ describe("renderRunSection", () => {
     expect(md).toContain("test_gate_failed: 3 rojos");
   });
 
-  it("marca el Run sin handoff y sin cierre", () => {
+  it("marks the Run without handoff and without close", () => {
     const md = renderRunSection(data({ run: { ...baseRun, endedAt: null, result: null } }));
-    expect(md).toContain("sin cerrar");
+    expect(md).toContain("not closed");
     expect(md).not.toContain("### Handoff");
   });
 
-  it("incluye el handoff como bloque JSON", () => {
+  it("includes the handoff as a JSON block", () => {
     const handoff = { schemaVersion: 1, phase: "implementation", body: { commits: [sha] } };
     const md = renderRunSection(data({ run: { ...baseRun, handoff } }));
     expect(md).toContain("### Handoff");
@@ -85,7 +85,7 @@ describe("renderRunSection", () => {
     expect(md).toContain(JSON.stringify(handoff, null, 2));
   });
 
-  it("renderiza la salida del gate de tests con su resultado", () => {
+  it("renders the test gate output with its result", () => {
     const md = renderRunSection(
       data({
         gates: [
@@ -94,17 +94,17 @@ describe("renderRunSection", () => {
         ],
       }),
     );
-    expect(md).toContain("### Gate de tests");
+    expect(md).toContain("### Test gate");
     expect(md).toContain("submit_for_verification");
     expect(md).toContain("pnpm test");
-    expect(md).toContain("rojo");
-    expect(md).toContain("verde");
+    expect(md).toContain("red");
+    expect(md).toContain("green");
     expect(md).toContain("1 failed: boom");
     expect(md).toContain("12 passed");
     expect(md).toContain(sha);
   });
 
-  it("explica un gate que no corrió", () => {
+  it("explains a gate that did not run", () => {
     const md = renderRunSection(
       data({
         gates: [
@@ -114,16 +114,16 @@ describe("renderRunSection", () => {
             exitCode: null,
             durationMs: 0,
             output: "",
-            error: "el proyecto no tiene comando de tests configurado",
+            error: "the project has no test command configured",
           }),
         ],
       }),
     );
-    expect(md).toContain("no corrió");
-    expect(md).toContain("el proyecto no tiene comando de tests configurado");
+    expect(md).toContain("did not run");
+    expect(md).toContain("the project has no test command configured");
   });
 
-  it("renderiza hooks y el resultado de cada punto", () => {
+  it("renders hooks and the result of each point", () => {
     const executed: HookExecutedPayload = {
       point: "after_implementation",
       script: "10-bump-version",
@@ -162,7 +162,7 @@ describe("renderRunSection", () => {
     expect(md).toContain("blocked");
   });
 
-  it("renderiza el veredicto completo de la verificación", () => {
+  it("renders the full verification verdict", () => {
     const finding = {
       severity: "major",
       file: "src/a.ts",
@@ -206,30 +206,30 @@ describe("renderRunSection", () => {
     const md = renderRunSection(
       data({ run: { ...baseRun, phase: "verify", handoff } as unknown as RunRow }),
     );
-    expect(md).toContain("### Veredicto");
+    expect(md).toContain("### Verdict");
     expect(md).toContain("reject");
     expect(md).toContain("AC-1");
     expect(md).toContain("el test no ejercita la rama");
     expect(md).toContain("lunasq-security-reviewer");
-    expect(md).toContain("SIN HALLAZGOS");
+    expect(md).toContain("NO FINDINGS");
     expect(md).toContain("no hay UI");
     expect(md).toContain("src/a.ts:7");
     expect(md).toContain("no valida la entrada");
     expect(md).toContain("Must-fix");
-    expect(md).toContain("Hallazgos refutados");
+    expect(md).toContain("Refuted findings");
     expect(md).toContain("es una convención del repo");
   });
 
-  it("cae al JSON del handoff si el veredicto no valida", () => {
+  it("falls back to the handoff JSON if the verdict does not validate", () => {
     const handoff = { schemaVersion: 1, phase: "verification", body: { verdict: "pass" } };
     const md = renderRunSection(
       data({ run: { ...baseRun, phase: "verify", handoff } as unknown as RunRow }),
     );
-    expect(md).not.toContain("### Veredicto");
+    expect(md).not.toContain("### Verdict");
     expect(md).toContain("### Handoff");
   });
 
-  it("pone cada transcript en un bloque plegable", () => {
+  it("puts each transcript in a collapsible block", () => {
     const md = renderRunSection(
       data({
         transcripts: [
@@ -245,7 +245,7 @@ describe("renderRunSection", () => {
     expect(md).toContain("no se encontró");
   });
 
-  it("redacta secretos en toda la sección", () => {
+  it("redacts secrets across the whole section", () => {
     const token = `ghp_${"a1B2c3D4e5".repeat(4)}`;
     const md = renderRunSection(
       data({
@@ -259,7 +259,7 @@ describe("renderRunSection", () => {
     expect(md).toContain("[REDACTED");
   });
 
-  it("neutraliza marcadores de LunasQ que vengan en contenido del agente", () => {
+  it("neutralizes LunasQ markers that come in the agent's content", () => {
     const { end } = runMarkers("run-1");
     const md = renderRunSection(
       data({
@@ -270,7 +270,7 @@ describe("renderRunSection", () => {
     expect(md).not.toContain("<!-- lunasq:run:start x -->");
   });
 
-  it("no rompe la cerca de código con backticks en la salida", () => {
+  it("does not break the code fence with backticks in the output", () => {
     const md = renderRunSection(data({ gates: [gate({ output: "```\nsalida\n```" })] }));
     expect(md).toContain("````\n```\nsalida\n```\n````");
   });

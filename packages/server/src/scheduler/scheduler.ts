@@ -1,8 +1,8 @@
-// Scheduler en proceso (docs/design.md §Scheduler, ADR 0014). Cada pasada lee un snapshot de la
-// base, calcula el plan con @lunasq/domain, escala a los dependientes de dependencias que ya no
-// se entregarán y entrega las decisiones al dispatcher una por una. Corre ante cada mensaje del
-// outbox y en un tick periódico; como recalcula todo desde la base, repetir una pasada no
-// duplica efectos.
+// In-process scheduler (docs/design.md §Scheduler, ADR 0014). Each pass reads a snapshot of the
+// database, computes the plan with @lunasq/domain, escalates the dependents of dependencies that will no
+// longer be delivered and hands the decisions to the dispatcher one by one. It runs on each outbox
+// message and on a periodic tick; since it recomputes everything from the database, repeating a pass does not
+// duplicate effects.
 import {
   type ConcurrencySettingsReader,
   type LunasqDatabase,
@@ -23,15 +23,15 @@ import { SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
 import type { OutboxPublisher } from "../outbox/publisher.ts";
 
 /**
- * Puerto hacia el dispatcher (UW-16). `dispatch` resuelve cuando el claim quedó confirmado (la
- * tarea ya está en running) o rechaza si no se pudo; así la pasada siguiente ve el slot ocupado.
- * El claim debe volver a validar los límites: el plan se calculó antes.
+ * Port toward the dispatcher (UW-16). `dispatch` resolves when the claim was confirmed (the
+ * task is already in running) or rejects if it could not be; this way the next pass sees the slot taken.
+ * The claim must validate the limits again: the plan was computed earlier.
  */
 export interface Dispatcher {
   dispatch(decision: DispatchDecision): Promise<void>;
 }
 
-/** `failed` es la decisión o el escalamiento que falló, o null si falló la lectura. */
+/** `failed` is the decision or escalation that failed, or null if the read failed. */
 export type SchedulerErrorHandler = (
   error: Error,
   failed: DispatchDecision | DependencyEscalation | null,
@@ -41,13 +41,13 @@ export interface SchedulerOptions {
   db: LunasqDatabase;
   dispatcher: Dispatcher;
   config?: SchedulerConfigInput;
-  /** Se suscribe a todos sus topics y se despierta después de escalar. */
+  /** Subscribes to all its topics and is woken after escalating. */
   publisher?: OutboxPublisher;
   state?: SchedulerStateReader;
   projects?: ProjectConfigReader;
   /**
-   * Proveedores habilitados y límite global de concurrencia; se leen en cada pasada. Por defecto,
-   * los de la base.
+   * Enabled providers and global concurrency limit; read on each pass. By default,
+   * those of the database.
    */
   settings?: ProviderSettingsReader & ConcurrencySettingsReader;
   now?: () => Date;
@@ -67,7 +67,7 @@ export class Scheduler {
   private readonly now: () => Date;
   private readonly onError: SchedulerErrorHandler;
   private running: Promise<SchedulerPassResult> | undefined;
-  // Pedido de otra pasada mientras corre una: lo que cambió después de su lectura.
+  // Request for another pass while one runs: what changed after its read.
   private rerun = false;
   private stopped = false;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -85,7 +85,7 @@ export class Scheduler {
     this.onError = opts.onError ?? defaultError;
   }
 
-  /** Una pasada (o se une a la que corre y pide otra). Devuelve lo que hizo la última. */
+  /** One pass (or joins the one running and asks for another). Returns what the last one did. */
   run(): Promise<SchedulerPassResult> {
     if (this.running) {
       this.rerun = true;
@@ -95,27 +95,27 @@ export class Scheduler {
       .then(() => this.loop())
       .finally(() => {
         this.running = undefined;
-        // Un pedido que llegó después del último chequeo de rerun (o un start tras stop).
+        // A request that arrived after the last rerun check (or a start after stop).
         if (this.rerun && !this.stopped) this.wake();
       });
     return this.running;
   }
 
-  /** Pide una pasada sin esperarla. */
+  /** Requests a pass without waiting for it. */
   wake(): void {
     this.run().catch((error: unknown) => this.report(toError(error), null));
   }
 
-  /** Se suscribe al outbox, arranca el tick y hace una primera pasada. */
+  /** Subscribes to the outbox, starts the tick and does a first pass. */
   async start(): Promise<void> {
     this.stopped = false;
-    // El handler no espera la pasada: no frena al publicador y la pasada lee la base de todos modos.
+    // The handler does not wait for the pass: it does not hold back the publisher and the pass reads the database anyway.
     this.unsubscribe ??= this.publisher?.subscribe("*", () => this.wake());
     this.timer ??= setInterval(() => this.wake(), this.config.tickIntervalMs);
     await this.run().catch((error: unknown) => this.report(toError(error), null));
   }
 
-  /** Detiene el tick y la suscripción y espera la pasada en curso, que no despacha más. */
+  /** Stops the tick and the subscription and waits for the pass in progress, which dispatches no more. */
   async stop(): Promise<void> {
     this.stopped = true;
     clearInterval(this.timer);
@@ -136,7 +136,7 @@ export class Scheduler {
   }
 
   private async pass(): Promise<SchedulerPassResult> {
-    // La configuración se lee en cada pasada: un cambio en Settings aplica a la siguiente.
+    // The configuration is read on each pass: a change in Settings applies to the next pass.
     const plan = schedule(
       this.state.snapshot(),
       this.projects,
@@ -158,7 +158,7 @@ export class Scheduler {
         await this.dispatcher.dispatch(decision);
         dispatched.push(decision.taskId);
       } catch (error) {
-        // Un claim perdido no detiene la pasada: las demás decisiones siguen siendo válidas.
+        // A lost claim does not stop the pass: the other decisions are still valid.
         this.report(toError(error), decision);
       }
     }
@@ -166,7 +166,7 @@ export class Scheduler {
   }
 
   private escalate(escalation: DependencyEscalation): boolean {
-    // Un fallo (p. ej. de la base) se reporta con su escalamiento y no salta los despachos.
+    // A failure (e.g. of the database) is reported with its escalation and does not skip the dispatches.
     let result: ReturnType<typeof transitionTask>;
     try {
       result = transitionTask(this.db, {
@@ -175,7 +175,7 @@ export class Scheduler {
         command: {
           type: "escalate",
           reason: "dependency_pr_closed",
-          note: `la dependencia ${escalation.dependsOnId} ya no se entregará`,
+          note: `dependency ${escalation.dependsOnId} will no longer be delivered`,
         },
         expected: escalation.expected,
       });
@@ -184,7 +184,7 @@ export class Scheduler {
       return false;
     }
     if (result.ok) return true;
-    // stale_state: la tarea se movió después de la lectura; la siguiente pasada la reevalúa.
+    // stale_state: the task moved after the read; the next pass re-evaluates it.
     if (result.error.code !== "stale_state") {
       this.report(new Error(`${result.error.code}: ${result.error.message}`), escalation);
     }
@@ -195,7 +195,7 @@ export class Scheduler {
     try {
       this.onError(error, failed);
     } catch {
-      // Un onError roto no detiene al scheduler.
+      // A broken onError does not stop the scheduler.
     }
   }
 }
@@ -205,6 +205,6 @@ function toError(error: unknown): Error {
 }
 
 function defaultError(error: Error, failed: DispatchDecision | DependencyEscalation | null): void {
-  const where = failed ? `tarea ${failed.taskId}` : "lectura";
+  const where = failed ? `task ${failed.taskId}` : "read";
   console.error(`[scheduler] fallo en ${where}: ${error.message}`);
 }

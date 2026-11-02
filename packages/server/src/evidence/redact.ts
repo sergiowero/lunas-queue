@@ -1,13 +1,13 @@
-// Redacción de secretos del archivo de evidencia (docs/design.md §Auditoría, ADR
-// uw-24-archivo-evidencia). Patrones al estilo gitleaks: formatos de token conocidos, llaves
-// privadas, credenciales en URLs y asignaciones de variables con nombre de secreto. Se prefiere
-// redactar de más: el archivo viaja en el PR y queda en el historial de git.
+// Secret redaction for the evidence file (docs/design.md §Audit, ADR
+// uw-24-archivo-evidencia). gitleaks-style patterns: known token formats, private
+// keys, credentials in URLs and variable assignments with a secret name. It prefers
+// to over-redact: the file travels in the PR and stays in git history.
 
 type Rule = { id: string; pattern: RegExp; replace?: (...groups: string[]) => string };
 
 const redacted = (id: string) => `[REDACTED:${id}]`;
 
-/** Las comillas con las que abre (o cierra) un valor, para conservarlas al redactarlo. */
+/** The quotes a value opens (or closes) with, to keep them when redacting it. */
 function quoteOf(value: string, closing = false): string {
   const m = /^(\\?["'])/.exec(value);
   if (!m?.[1]) return "";
@@ -18,12 +18,12 @@ function quoteOf(value: string, closing = false): string {
 const RULES: readonly Rule[] = [
   {
     id: "private-key",
-    // Con o sin cierre: un transcript recortado puede dejar el bloque a medias.
+    // With or without closing: a trimmed transcript can leave the block half done.
     pattern:
       /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----|(?=\n\s*\n)|$)/g,
   },
   {
-    // Cuerpo de una llave cuyo BEGIN quedó fuera (recorte): líneas base64 y el END.
+    // Body of a key whose BEGIN was left out (trimming): base64 lines and the END.
     id: "private-key",
     pattern:
       /(?:^|\n)(?:[A-Za-z0-9+/=]{16,}[ \t]*\n)+[ \t]*-----END [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/g,
@@ -52,7 +52,7 @@ const RULES: readonly Rule[] = [
     replace: (_a, p) => `${p}${redacted("basic-auth")}`,
   },
   {
-    // El run token de LunasQ (ADR 0002): en el header del MCP y en el entorno del pane.
+    // LunasQ's run token (ADR 0002): in the MCP header and in the pane's environment.
     id: "run-token",
     pattern: /\b(X-LunasQ-Run-Token|LUNASQ_RUN_TOKEN)(\s*[:=]\s*)["']?[^\s"']+["']?/gi,
     replace: (_all, name, sep) => `${name}${sep}${redacted("run-token")}`,
@@ -63,12 +63,12 @@ const RULES: readonly Rule[] = [
     replace: (_all, head, at) => `${head}${redacted("url-credentials")}${at}`,
   },
   {
-    // `NOMBRE_SECRETO = valor`, `"password": "valor"`, `-pvalor`. Conserva el nombre. El valor entre
-    // comillas se redacta completo (con espacios); las comillas pueden venir escapadas (`\\"`, JSON
-    // dentro de JSON). Sin comillas, hasta el primer espacio o delimitador.
+    // `SECRET_NAME = value`, `"password": "value"`, `-pvalue`. Keeps the name. The quoted
+    // value is redacted whole (with spaces); the quotes may come escaped (`\\"`, JSON
+    // inside JSON). Without quotes, up to the first space or delimiter.
     id: "assignment",
-    // Sin prefijo de nombre: `DB_` queda fuera del match y se conserva, y el cuantificador acotado
-    // evita el backtracking cuadrático en textos largos.
+    // Without a name prefix: `DB_` stays out of the match and is kept, and the bounded quantifier
+    // avoids quadratic backtracking in long texts.
     pattern:
       /((?:secret|token|passw(?:or)?d|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)[A-Za-z0-9_.-]{0,64}(?:\\?["'])?\s*[:=]\s*)(?!\[REDACTED)(\\?"(?:[^"\\\n]|\\.){4,}?\\?"|'[^'\n]{4,}'|\\?["']?[^\s"'`,;)}\]\\]{8,})/gi,
     replace: (_all, head, value) => `${head}${quoteOf(value)}[REDACTED]${quoteOf(value, true)}`,
@@ -80,11 +80,11 @@ const RULES: readonly Rule[] = [
   },
 ];
 
-/** Un valor conocido más corto que esto destrozaría el texto al reemplazarlo en todas partes. */
+/** A known value shorter than this would wreck the text if replaced everywhere. */
 const MIN_KNOWN_LENGTH = 8;
 
 export type RedactOptions = {
-  /** Secretos exactos que se conocen (p. ej. el run token del Run): se reemplazan donde estén. */
+  /** Exact known secrets (e.g. the Run's run token): they are replaced wherever they are. */
   known?: readonly string[];
 };
 

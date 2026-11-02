@@ -1,11 +1,11 @@
-// Archivo de settings estable con los hooks SubagentStart y SubagentStop (docs/design.md
-// §Verificación con subagentes, ADR uw-19-revisores). Son hooks `http` hacia el endpoint de
-// LunasQ; el run token va en el header como `$LUNASQ_RUN_TOKEN`, que Claude Code expande del
-// entorno del pane solo porque está en `allowedEnvVars`. El token nunca toca disco (ADR 0002).
+// Stable settings file with the SubagentStart and SubagentStop hooks (docs/design.md
+// §Verification with subagents, ADR uw-19-revisores). They are `http` hooks to LunasQ's
+// endpoint; the run token goes in the header as `$LUNASQ_RUN_TOKEN`, which Claude Code expands from the
+// pane's environment only because it is in `allowedEnvVars`. The token never touches disk (ADR 0002).
 import { RUN_ENV, RUN_TOKEN_HEADER } from "@lunasq/schemas";
 import { ensureJsonFile } from "./stable-file.ts";
 
-/** Segundos que Claude Code espera la respuesta del hook; el endpoint solo escribe una fila. */
+/** Seconds Claude Code waits for the hook's response; the endpoint only writes one row. */
 const HOOK_TIMEOUT_SECONDS = 10;
 
 export function hookSettings(url: string) {
@@ -24,7 +24,7 @@ export function hookSettings(url: string) {
   };
 }
 
-/** Escribe el archivo solo si falta o cambió; idempotente. */
+/** Writes the file only if missing or changed; idempotent. */
 export function ensureHookSettings(path: string, url: string): Promise<{ written: boolean }> {
   return ensureJsonFile(path, hookSettings(url));
 }

@@ -1,8 +1,8 @@
-// Composición de scheduler, dispatcher, observación y reconciliación en el proceso del servidor
-// (ADR 0014, ADR uw-16-dispatcher, ADR uw-17-reconciliacion): el dispatcher implementa el puerto
-// del scheduler y ambos comparten límites; el watcher observa los Runs lanzados y el reconciliador
-// compara la base con herdr. El publicador del outbox lo arranca quien lo crea; aquí solo se le
-// suscriben los consumidores.
+// Composition of scheduler, dispatcher, observation and reconciliation in the server process
+// (ADR 0014, ADR uw-16-dispatcher, ADR uw-17-reconciliacion): the dispatcher implements the scheduler's
+// port and both share limits; the watcher observes the launched Runs and the reconciler
+// compares the database with herdr. The outbox publisher is started by whoever creates it; here only the
+// consumers are subscribed to it.
 import type { HerdrAdapter, ProcessRunner } from "@lunasq/adapters";
 import {
   type LunasqDatabase,
@@ -42,20 +42,20 @@ export interface OrchestratorOptions {
   db: LunasqDatabase;
   herdr: HerdrAdapter;
   processes: ProcessRunner;
-  /** Archivo MCP estable y URL del LunasQ MCP que escribe al arrancar (ADR 0002). */
+  /** Stable MCP file and LunasQ MCP URL it writes on start (ADR 0002). */
   mcp: { configPath: string; url: string };
-  /** Settings estable y URL del endpoint de hooks de subagentes (ADR uw-19-revisores). */
+  /** Stable settings and URL of the subagent hooks endpoint (ADR uw-19-revisores). */
   hooks: { settingsPath: string; url: string };
   config?: SchedulerConfigInput;
   publisher?: OutboxPublisher;
   paneEnv?: Record<string, string>;
-  /** Reemplaza al `RunWatcher` (tests). */
+  /** Replaces the `RunWatcher` (tests). */
   observer?: RunObserver;
-  /** Archivo de evidencia (UW-24): se actualiza al cerrar cada Run, también los que cierra el MCP. */
+  /** Evidence file (UW-24): updated when each Run closes, also those the MCP closes. */
   evidence?: RunEvidenceSink;
   /**
-   * Avisos al humano: blocked, timeout, reintentos y loop agotados. Sin esto se arma el módulo de
-   * notificaciones con herdr como canal (`notifications` lo expone para montar el SSE).
+   * Notices to the human: blocked, timeout, exhausted retries and loops. Without this, the notifications
+   * module is built with herdr as the channel (`notifications` exposes it to mount the SSE).
    */
   notifications?: { notify(n: Notification): unknown; escalator: Escalator };
   reconcile?: {
@@ -75,9 +75,9 @@ export class Orchestrator {
   readonly scheduler: Scheduler;
   readonly watcher: RunWatcher;
   readonly reconciler: Reconciler;
-  /** Responde las Questions (ADR uw-22-preguntas): se pasa a `createApp({ questions })`. */
+  /** Answers the Questions (ADR uw-22-preguntas): passed to `createApp({ questions })`. */
   readonly questions: QuestionService;
-  /** El módulo de notificaciones que se armó por defecto, si no se pasó uno. */
+  /** The notifications module built by default, if one was not passed. */
   readonly notifications: ReturnType<typeof createNotifications> | undefined;
   private readonly notify: (n: Notification) => unknown;
   private readonly mcp: { configPath: string; url: string };
@@ -159,7 +159,7 @@ export class Orchestrator {
       herdr: opts.herdr,
       dispatcher: this.dispatcher,
       escalator: notifications.escalator,
-      // El Run viejo ya está cerrado: el scheduler puede despachar el nuevo sin esperar al tick.
+      // The old Run is already closed: the scheduler can dispatch the new one without waiting for the tick.
       onAnswered: () => this.scheduler.wake(),
       ...(opts.onReconcileError && { onError: (error) => opts.onReconcileError?.(error, null) }),
     });
@@ -174,8 +174,8 @@ export class Orchestrator {
   }
 
   /**
-   * Escribe los archivos MCP y de hooks, retoma los despachos a medias, reconcilia con herdr
-   * (vuelve a observar los Runs vivos) y arranca el scheduler.
+   * Writes the MCP and hooks files, resumes half-done dispatches, reconciles with herdr
+   * (observes the live Runs again) and starts the scheduler.
    */
   async start(): Promise<void> {
     await ensureMcpConfig(this.mcp.configPath, this.mcp.url);
@@ -202,8 +202,8 @@ export class Orchestrator {
   }
 
   /**
-   * La tarea salió de running: si su último Run ya está cerrado (lo cerró una tool del MCP), se
-   * limpia su pane. Idempotente, como pide el outbox (entrega al menos una vez).
+   * The task left running: if its last Run is already closed (an MCP tool closed it), its
+   * pane is cleaned. Idempotent, as the outbox requires (at-least-once delivery).
    */
   async onTransition(message: OutboxMessage): Promise<void> {
     const payload = TaskTransitionedPayload.safeParse(message.payload);
@@ -214,7 +214,7 @@ export class Orchestrator {
     if (run?.endedAt) await this.dispatcher.releaseRun(run.id);
   }
 
-  /** Detiene scheduler y reconciliación, espera los lanzamientos en curso y deja de observar. */
+  /** Stops scheduler and reconciliation, waits for launches in progress and stops observing. */
   async stop(): Promise<void> {
     for (const unsubscribe of this.unsubscribes.splice(0)) unsubscribe();
     await this.reconciler.stop();

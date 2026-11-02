@@ -17,7 +17,7 @@ function setup(focus?: (name: string) => Promise<unknown>) {
 }
 
 describe("POST /api/runs/:runId/focus", () => {
-  it("enfoca en herdr el agente del Run y responde 204", async () => {
+  it("focuses the Run's agent in herdr and answers 204", async () => {
     const focus = vi.fn(async () => undefined);
     const { post, withPane } = setup(focus);
     const res = await post(withPane.id);
@@ -25,7 +25,7 @@ describe("POST /api/runs/:runId/focus", () => {
     expect(focus).toHaveBeenCalledExactlyOnceWith("t1-implement-1");
   });
 
-  it("un Run que no existe responde 404 not_found sin tocar herdr", async () => {
+  it("a Run that does not exist answers 404 not_found without touching herdr", async () => {
     const focus = vi.fn(async () => undefined);
     const { post } = setup(focus);
     const res = await post(missing);
@@ -37,7 +37,7 @@ describe("POST /api/runs/:runId/focus", () => {
   it.each([
     ["sin herdrPane", { herdrPane: null, herdrName: "t1-implement-1" }],
     ["sin herdrName", { herdrPane: "w1:p2", herdrName: null }],
-  ])("un Run %s responde 409 no_pane sin tocar herdr", async (_, overrides) => {
+  ])("a Run %s answers 409 no_pane without touching herdr", async (_, overrides) => {
     const focus = vi.fn(async () => undefined);
     const { post, db, project } = setup(focus);
     const run = insertRun(db, insertTask(db, project.id).id, overrides);
@@ -47,7 +47,7 @@ describe("POST /api/runs/:runId/focus", () => {
     expect(focus).not.toHaveBeenCalled();
   });
 
-  it("si herdr ya no tiene el agente responde 409 agent_gone y nombra al agente", async () => {
+  it("if herdr no longer has the agent it answers 409 agent_gone and names the agent", async () => {
     const { post, withPane } = setup(async () => {
       throw new HerdrError("agent_not_found", "agent target t1-implement-1 not found");
     });
@@ -58,26 +58,26 @@ describe("POST /api/runs/:runId/focus", () => {
     expect(body.message).toContain("t1-implement-1");
   });
 
-  it("otro error de herdr responde 502 herdr_error con el mensaje", async () => {
+  it("another herdr error answers 502 herdr_error with the message", async () => {
     const { post, withPane } = setup(async () => {
-      throw new HerdrError("server_unavailable", "herdr no responde");
+      throw new HerdrError("server_unavailable", "herdr is not responding");
     });
     const res = await post(withPane.id);
     expect(res.status).toBe(502);
     expect(await res.json()).toMatchObject({
       error: "herdr_error",
-      message: expect.stringContaining("herdr no responde"),
+      message: expect.stringContaining("herdr is not responding"),
     });
   });
 
-  it("sin herdr en el servidor responde 503 focus_unavailable", async () => {
+  it("without herdr on the server it answers 503 focus_unavailable", async () => {
     const { post, withPane } = setup();
     const res = await post(withPane.id);
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({ error: "focus_unavailable" });
   });
 
-  it("enfocar no modifica el Run", async () => {
+  it("focusing does not modify the Run", async () => {
     const { post, withPane, db } = setup(async () => undefined);
     const before = new RunRepository(db).get(withPane.id);
     await post(withPane.id);

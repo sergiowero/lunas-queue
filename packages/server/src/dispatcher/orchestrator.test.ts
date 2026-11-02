@@ -37,7 +37,7 @@ function setup(
   const db = opts.db ?? migratedDatabase();
   const dir = mkdtempSync(join(tmpdir(), "lunasq-orch-"));
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
-  // Los prompts no terminan solos: sin nudges en medio de los escenarios.
+  // Prompts do not end on their own: no nudges in the middle of the scenarios.
   const herdr = opts.herdr ?? new FakeHerdr({ promptDurationMs: 2 ** 31 - 1 });
   const publisher = new OutboxPublisher({ db, pollIntervalMs: 10 });
   const notifications: Notification[] = [];
@@ -71,7 +71,7 @@ function setup(
 }
 
 describe("Orchestrator", () => {
-  it("al arrancar escribe el archivo MCP y despacha lo que está listo", async () => {
+  it("on start it writes the MCP file and dispatches what is ready", async () => {
     const { db, dir, herdr, orchestrator, project } = setup();
     const task = insertTask(db, project.id);
 
@@ -85,7 +85,7 @@ describe("Orchestrator", () => {
     expect((await herdr.snapshot()).agents.map((a) => a.name)).toEqual([run?.herdrName]);
   });
 
-  it("al arrancar retoma un Run reclamado antes de la caída", async () => {
+  it("on start it resumes a Run claimed before the crash", async () => {
     const { db, herdr, orchestrator, project } = setup();
     const task = insertTask(db, project.id);
     const claim = claimRun(db, {
@@ -107,14 +107,14 @@ describe("Orchestrator", () => {
     expect((await herdr.snapshot()).agents.map((a) => a.name)).toEqual([claim.run.herdrName]);
   });
 
-  it("una tarea nueva que entra por el outbox se despacha", async () => {
+  it("a new task that enters through the outbox is dispatched", async () => {
     const { db, herdr, orchestrator, publisher, project } = setup();
     await orchestrator.start();
     await publisher.start();
     cleanups.push(() => publisher.stop());
 
     const task = insertTask(db, project.id);
-    // Cualquier transición escribe outbox; aquí basta con despertar al scheduler por el tick.
+    // Any transition writes outbox; here it is enough to wake the scheduler by the tick.
     await orchestrator.scheduler.run();
     await orchestrator.dispatcher.idle();
 
@@ -122,7 +122,7 @@ describe("Orchestrator", () => {
     expect((await herdr.snapshot()).agents.map((a) => a.name)).toEqual([run?.herdrName]);
   });
 
-  it("cuando una tool del MCP cierra el Run y la tarea sale de running, limpia el pane", async () => {
+  it("when an MCP tool closes the Run and the task leaves running, it cleans the pane", async () => {
     const { db, herdr, orchestrator, publisher, project } = setup();
     const task = insertTask(db, project.id);
     await orchestrator.start();
@@ -131,7 +131,7 @@ describe("Orchestrator", () => {
     if (!run?.herdrName) throw new Error("sin Run");
     expect(await herdr.getAgent(run.herdrName)).toBeDefined();
 
-    // Como la tool de salida: cierra el Run y transiciona en la misma transacción.
+    // Like the exit tool: it closes the Run and transitions in the same transaction.
     db.transaction((tx) => {
       closeRun(tx, run.id, { result: "failure", failureReason: "x" });
     });
@@ -146,7 +146,7 @@ describe("Orchestrator", () => {
     await vi.waitFor(async () => expect(await herdr.getAgent(run.herdrName ?? "")).toBeUndefined());
   });
 
-  it("registra la evidencia del Run que cerró una tool del MCP al salir la tarea de running", async () => {
+  it("records the evidence of the Run that an MCP tool closed when the task leaves running", async () => {
     const recorded: string[] = [];
     const { db, herdr, orchestrator, publisher, project } = setup({
       evidence: { recordRun: async (id) => void recorded.push(id) },
@@ -170,7 +170,7 @@ describe("Orchestrator", () => {
     expect(recorded).toEqual([run.id]);
   });
 
-  it("un Run abierto no se limpia aunque llegue la transición", async () => {
+  it("an open Run is not cleaned even if the transition arrives", async () => {
     const { db, herdr, orchestrator, project } = setup();
     const task = insertTask(db, project.id);
     await orchestrator.start();
@@ -181,7 +181,7 @@ describe("Orchestrator", () => {
   });
 });
 
-describe("Orchestrator: escenarios de fallo", () => {
+describe("Orchestrator: failure scenarios", () => {
   const taskState = (db: ReturnType<typeof migratedDatabase>, id: string) =>
     db.$client.prepare("select state, sub_state as subState from tasks where id = ?").get(id) as {
       state: string;
@@ -194,7 +194,7 @@ describe("Orchestrator: escenarios de fallo", () => {
     cleanups.push(() => ctx.publisher.stop());
   }
 
-  it("cada crash reintenta tras el backoff y, agotados los 3 reintentos, needs_human con aviso", async () => {
+  it("each crash retries after the backoff and, with the 3 retries exhausted, needs_human with a notice", async () => {
     const ctx = setup({ config: { retryBackoffMs: 0 } });
     const { db, herdr, orchestrator, project, notifications } = ctx;
     const task = insertTask(db, project.id);
@@ -213,7 +213,7 @@ describe("Orchestrator: escenarios de fallo", () => {
       );
       const crashed = runs.latestForTask(task.id);
       herdr.exitAgent(crashed?.herdrName ?? "");
-      // Con backoff 0 el reintento se despacha enseguida: se mira el Run que cayó.
+      // With backoff 0 the retry is dispatched right away: the Run that crashed is looked at.
       await vi.waitFor(() => expect(runs.get(crashed?.id ?? "")?.result).toBe("failure"));
     }
 
@@ -223,7 +223,7 @@ describe("Orchestrator: escenarios de fallo", () => {
         expect.objectContaining({
           kind: "retries_exhausted",
           taskId: task.id,
-          title: `Reintentos agotados en #${task.number}`,
+          title: `Retries exhausted in #${task.number}`,
         }),
       ]),
     );
@@ -235,7 +235,7 @@ describe("Orchestrator: escenarios de fallo", () => {
     ]);
   });
 
-  it("agotado el loop de verificación, needs_human con aviso que identifica la tarea con su #N", async () => {
+  it("when the verification loop is exhausted, needs_human with a notice that identifies the task by its #N", async () => {
     const ctx = setup();
     const { db, project, notifications } = ctx;
     insertTask(db, project.id);
@@ -257,14 +257,14 @@ describe("Orchestrator: escenarios de fallo", () => {
         expect.objectContaining({
           kind: "verification_exhausted",
           taskId: task.id,
-          title: `Loop de verificación agotado en #${task.number}`,
+          title: `Verification loop exhausted in #${task.number}`,
         }),
       ]),
     );
     expect(task.number).toBe(2);
   });
 
-  it("durante el backoff la tarea no se vuelve a despachar", async () => {
+  it("during the backoff the task is not dispatched again", async () => {
     const ctx = setup({ config: { retryBackoffMs: 60 * 60_000 } });
     const { db, herdr, orchestrator, project } = ctx;
     const task = insertTask(db, project.id);
@@ -278,7 +278,7 @@ describe("Orchestrator: escenarios de fallo", () => {
     expect(runs.forTask(task.id)).toHaveLength(1);
   });
 
-  it("vencido el backoff, la tarea se vuelve a despachar", async () => {
+  it("once the backoff has passed, the task is dispatched again", async () => {
     const ctx = setup({ config: { retryBackoffMs: 300 } });
     const { db, herdr, orchestrator, project } = ctx;
     const task = insertTask(db, project.id);
@@ -296,7 +296,7 @@ describe("Orchestrator: escenarios de fallo", () => {
     expect(taskState(db, task.id).subState).toBe("running");
   });
 
-  it("al reanudar tras un timeout, el Run viejo se cierra y la fase se redespacha sola", async () => {
+  it("on resuming after a timeout, the old Run is closed and the phase is redispatched by itself", async () => {
     const ctx = setup();
     const { db, orchestrator, project } = ctx;
     const task = insertTask(db, project.id);
@@ -311,24 +311,24 @@ describe("Orchestrator: escenarios de fallo", () => {
     });
     transitionTask(db, { taskId: task.id, actor: "human", command: { type: "resume" } });
 
-    // Sin llamar al scheduler: el tick es de 60 s, así que lo despierta la reconciliación.
+    // Without calling the scheduler: the tick is 60 s, so reconciliation wakes it.
     await vi.waitFor(() => {
       expect(runs.get(first?.id ?? "")?.result).toBe("cancelled");
       expect(runs.forTask(task.id)).toHaveLength(2);
     });
   });
 
-  it("si se pierden eventos de herdr, la reconciliación detecta el agente caído", async () => {
+  it("if herdr events are lost, reconciliation detects the fallen agent", async () => {
     const ctx = setup({ config: { retryBackoffMs: 60 * 60_000 } });
     const { db, herdr, orchestrator, project } = ctx;
     const task = insertTask(db, project.id);
     await startAll(ctx);
     await orchestrator.dispatcher.idle();
     const run = new RunRepository(db).latestForTask(task.id);
-    // El evento del crash se perdió: nadie observaba cuando el agente salió.
+    // The crash event was lost: nobody was watching when the agent left.
     orchestrator.watcher.unwatch(run?.id ?? "");
     herdr.exitAgent(run?.herdrName ?? "");
-    // El stream de ciclo de vida se corta: herdr no dice qué se perdió.
+    // The lifecycle stream is cut: herdr does not say what was lost.
     herdr.dropStreams();
 
     await vi.waitFor(() =>
@@ -337,7 +337,7 @@ describe("Orchestrator: escenarios de fallo", () => {
     expect(taskState(db, task.id)).toEqual({ state: "draft", subState: "queued" });
   });
 
-  it("al reiniciar el proceso vuelve a observar los Runs vivos", async () => {
+  it("on restarting the process it observes the live Runs again", async () => {
     const first = setup();
     const task = insertTask(first.db, first.project.id);
     await first.orchestrator.start();
@@ -350,7 +350,7 @@ describe("Orchestrator: escenarios de fallo", () => {
     expect(second.orchestrator.watcher.watching()).toEqual([run?.id]);
   });
 
-  it("una tarea cancelada detiene su agente y remueve su worktree", async () => {
+  it("a canceled task stops its agent and removes its worktree", async () => {
     const ctx = setup();
     const { db, herdr, orchestrator, project } = ctx;
     const task = insertTask(db, project.id);
@@ -371,7 +371,7 @@ describe("Orchestrator: escenarios de fallo", () => {
   });
 });
 
-describe("Orchestrator: preguntas", () => {
+describe("Orchestrator: questions", () => {
   const taskState = (db: ReturnType<typeof migratedDatabase>, id: string) =>
     db.$client.prepare("select state, sub_state as subState from tasks where id = ?").get(id) as {
       state: string;
@@ -384,7 +384,7 @@ describe("Orchestrator: preguntas", () => {
     cleanups.push(() => ctx.publisher.stop());
   }
 
-  /** Despacha la tarea y hace lo que ask_human: waiting_human y la Question, en una transacción. */
+  /** Dispatches the task and does what ask_human does: waiting_human and the Question, in a transaction. */
   async function asked(ctx: ReturnType<typeof setup>) {
     const task = insertTask(ctx.db, ctx.project.id);
     await startAll(ctx);
@@ -403,7 +403,7 @@ describe("Orchestrator: preguntas", () => {
     return { task, run, name: run.herdrName, question };
   }
 
-  it("una pregunta que sigue abierta pasado el plazo se notifica una sola vez", async () => {
+  it("a question still open after the deadline is notified only once", async () => {
     const ctx = setup({ escalationDelayMs: 100 });
     const { question } = await asked(ctx);
 
@@ -414,10 +414,10 @@ describe("Orchestrator: preguntas", () => {
     expect(ctx.notifications.filter((n) => n.kind === "question_open")).toHaveLength(1);
   });
 
-  it("responderla a tiempo no notifica y la respuesta llega al pane vivo", async () => {
+  it("answering it in time does not notify and the answer reaches the live pane", async () => {
     const ctx = setup({ escalationDelayMs: 400 });
     const { task, name, question } = await asked(ctx);
-    // El outbox arma el aviso al ver la transición.
+    // The outbox builds the notice when it sees the transition.
     await vi.waitFor(() => expect(ctx.escalator.pending()).toEqual([`question:${question.id}`]));
 
     const result = await ctx.orchestrator.questions.answer(question.id, { answer: "Sí, bórrala" });
@@ -429,7 +429,7 @@ describe("Orchestrator: preguntas", () => {
     expect(ctx.notifications).toEqual([]);
   });
 
-  it("con el agente muerto, la respuesta redespacha la fase en un Run nuevo", async () => {
+  it("with the agent dead, the answer redispatches the phase in a new Run", async () => {
     const ctx = setup();
     const { db, orchestrator, herdr } = ctx;
     const { task, run, name, question } = await asked(ctx);
@@ -452,7 +452,7 @@ describe("Orchestrator: preguntas", () => {
     });
   });
 
-  it("cancelar la tarea con la pregunta abierta cancela la pregunta y su aviso", async () => {
+  it("canceling the task with the open question cancels the question and its notice", async () => {
     const ctx = setup({ escalationDelayMs: 400 });
     const { db } = ctx;
     const { task, question } = await asked(ctx);
@@ -469,7 +469,7 @@ describe("Orchestrator: preguntas", () => {
     );
   });
 
-  it("al reiniciar re-arma el aviso de las preguntas abiertas", async () => {
+  it("on restart it re-arms the notice of the open questions", async () => {
     const first = setup();
     const { question } = await asked(first);
     await first.orchestrator.stop();

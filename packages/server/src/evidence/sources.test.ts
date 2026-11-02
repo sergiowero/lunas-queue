@@ -14,7 +14,7 @@ let claudeDir: string;
 const worktree = "/Users/yo/work space/lunas.queue-uw-07";
 
 beforeEach(() => {
-  // tmpdir() es un symlink en macOS (/var → /private/var): la ruta resuelta es la que usa Claude Code.
+  // tmpdir() is a symlink on macOS (/var → /private/var): the resolved path is the one Claude Code uses.
   root = realpathSync(mkdtempSync(join(tmpdir(), "lunasq-transcripts-")));
   claudeDir = join(root, ".claude");
 });
@@ -43,7 +43,7 @@ function writeSession(cwd: string, session: string, content: string) {
 }
 
 describe("projectDirName", () => {
-  it("reemplaza todo lo que no es alfanumérico por guiones, como Claude Code", () => {
+  it("replaces everything that is not alphanumeric with hyphens, like Claude Code", () => {
     expect(projectDirName("/Users/yo/work space/lunas.queue-uw-07")).toBe(
       "-Users-yo-work-space-lunas-queue-uw-07",
     );
@@ -51,15 +51,15 @@ describe("projectDirName", () => {
 });
 
 describe("ClaudeTranscriptSource", () => {
-  it("lee el transcript de la sesión del Run desde el directorio del proyecto", async () => {
+  it("reads the Run session's transcript from the project directory", async () => {
     writeSession(worktree, "sess-1", '{"type":"user"}\n');
     const source = new ClaudeTranscriptSource({ claudeDir });
     const [main] = await source.forRun({ run: run(), worktreePath: worktree, subagents: [] });
-    expect(main).toEqual({ title: "Sesión del agente", jsonl: '{"type":"user"}\n' });
+    expect(main).toEqual({ title: "Agent session", jsonl: '{"type":"user"}\n' });
   });
 
   describe("CopilotReviewerTranscriptSource", () => {
-    it("lee el transcript real que LunasQ guardó para una ejecución completada", async () => {
+    it("reads the real transcript LunasQ stored for a completed execution", async () => {
       const evidencePath = join(root, "copilot-reviewers");
       const runDir = join(evidencePath, "run-1");
       mkdirSync(runDir, { recursive: true });
@@ -67,7 +67,7 @@ describe("ClaudeTranscriptSource", () => {
       const transcript = join(runDir, `${agentId}.jsonl`);
       writeFileSync(
         transcript,
-        `${JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "SIN HALLAZGOS" }] } })}\n`,
+        `${JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "NO FINDINGS" }] } })}\n`,
       );
       const source = new CopilotReviewerTranscriptSource({
         claude: new ClaudeTranscriptSource({ claudeDir }),
@@ -87,11 +87,11 @@ describe("ClaudeTranscriptSource", () => {
 
       expect(out[1]).toMatchObject({
         title: `Subagente lunasq-code-reviewer (${agentId})`,
-        jsonl: expect.stringContaining("SIN HALLAZGOS"),
+        jsonl: expect.stringContaining("NO FINDINGS"),
       });
     });
 
-    it("no lee un transcript Copilot que sale del directorio privado del Run", async () => {
+    it("does not read a Copilot transcript that leaves the Run's private directory", async () => {
       const evidencePath = join(root, "copilot-reviewers");
       mkdirSync(evidencePath);
       const secret = join(root, "secret.jsonl");
@@ -113,28 +113,28 @@ describe("ClaudeTranscriptSource", () => {
       });
 
       expect(out[1]?.jsonl).toBeNull();
-      expect(out[1]?.note).toMatch(/fuera del directorio privado/);
+      expect(out[1]?.note).toMatch(/outside the Run.s private directory/);
     });
   });
 
-  it("avisa si no encuentra el transcript de la sesión", async () => {
+  it("warns if it does not find the session's transcript", async () => {
     const source = new ClaudeTranscriptSource({ claudeDir });
     const [main] = await source.forRun({ run: run(), worktreePath: worktree, subagents: [] });
     expect(main?.jsonl).toBeNull();
-    expect(main?.note).toMatch(/no se encontró/);
+    expect(main?.note).toMatch(/not found/);
   });
 
-  it("avisa si el Run no tiene sesión", async () => {
+  it("warns if the Run has no session", async () => {
     const source = new ClaudeTranscriptSource({ claudeDir });
     const [main] = await source.forRun({
       run: run({ agentSession: null }),
       worktreePath: worktree,
       subagents: [],
     });
-    expect(main?.note).toMatch(/sin sesión/);
+    expect(main?.note).toMatch(/without an agent session/);
   });
 
-  it("resuelve el worktree por su ruta real si Claude Code guardó la ruta resuelta", async () => {
+  it("resolves the worktree by its real path if Claude Code stored the resolved path", async () => {
     const real = join(root, "real");
     mkdirSync(real);
     const link = join(root, "link");
@@ -145,7 +145,7 @@ describe("ClaudeTranscriptSource", () => {
     expect(main?.jsonl).toBe("real\n");
   });
 
-  it("lee los transcripts de los subagentes que están bajo ~/.claude/projects", async () => {
+  it("reads the subagents' transcripts that are under ~/.claude/projects", async () => {
     writeSession(worktree, "sess-1", "main\n");
     const path = writeSession(worktree, "agent-ag-1", "sub\n");
     const source = new ClaudeTranscriptSource({ claudeDir });
@@ -160,7 +160,7 @@ describe("ClaudeTranscriptSource", () => {
     });
   });
 
-  it("no lee un transcript de subagente fuera de ~/.claude/projects", async () => {
+  it("does not read a subagent transcript outside ~/.claude/projects", async () => {
     const secret = join(root, "id_rsa");
     writeFileSync(secret, "-----BEGIN OPENSSH PRIVATE KEY-----");
     const source = new ClaudeTranscriptSource({ claudeDir });
@@ -170,10 +170,10 @@ describe("ClaudeTranscriptSource", () => {
       subagents: [subagent({ transcriptPath: secret })],
     });
     expect(out[1]?.jsonl).toBeNull();
-    expect(out[1]?.note).toMatch(/fuera de/);
+    expect(out[1]?.note).toMatch(/outside/);
   });
 
-  it("no lee el transcript de otro proyecto ni un archivo que no es .jsonl", async () => {
+  it("does not read another project's transcript or a file that is not .jsonl", async () => {
     const other = writeSession("/Users/yo/otro-proyecto", "agent-x", "ajeno\n");
     const ownDir = join(claudeDir, "projects", projectDirName(worktree));
     mkdirSync(ownDir, { recursive: true });
@@ -189,11 +189,11 @@ describe("ClaudeTranscriptSource", () => {
       ],
     });
     expect(out[1]?.jsonl).toBeNull();
-    expect(out[1]?.note).toMatch(/otro proyecto/);
+    expect(out[1]?.note).toMatch(/another project/);
     expect(out[2]?.jsonl).toBeNull();
   });
 
-  it("no sigue un symlink que apunta fuera de ~/.claude/projects", async () => {
+  it("does not follow a symlink that points outside ~/.claude/projects", async () => {
     const secret = join(root, "id_rsa");
     writeFileSync(secret, "secreto");
     const dir = join(claudeDir, "projects", "x");
@@ -208,7 +208,7 @@ describe("ClaudeTranscriptSource", () => {
     expect(out[1]?.jsonl).toBeNull();
   });
 
-  it("avisa de un subagente sin transcript o con un archivo que ya no existe", async () => {
+  it("warns of a subagent without a transcript or with a file that no longer exists", async () => {
     const source = new ClaudeTranscriptSource({ claudeDir });
     const out = await source.forRun({
       run: run(),
@@ -218,15 +218,15 @@ describe("ClaudeTranscriptSource", () => {
         subagent({ agentId: "b", transcriptPath: join(claudeDir, "projects", "x", "no.jsonl") }),
       ],
     });
-    expect(out[1]?.note).toMatch(/sin transcript/);
-    expect(out[2]?.note).toMatch(/no se encontró/);
+    expect(out[1]?.note).toMatch(/no transcript/);
+    expect(out[2]?.note).toMatch(/not found/);
   });
 
-  it("no lee archivos más grandes que el máximo", async () => {
+  it("does not read files larger than the maximum", async () => {
     writeSession(worktree, "sess-1", "x".repeat(100));
     const source = new ClaudeTranscriptSource({ claudeDir, maxBytes: 10 });
     const [main] = await source.forRun({ run: run(), worktreePath: worktree, subagents: [] });
     expect(main?.jsonl).toBeNull();
-    expect(main?.note).toMatch(/demasiado grande/);
+    expect(main?.note).toMatch(/too large/);
   });
 });

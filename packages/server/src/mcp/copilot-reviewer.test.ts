@@ -40,7 +40,7 @@ function setup() {
 }
 
 describe("CopilotCliReviewerExecutor", () => {
-  it("usa el perfil personal sin pasar instrucciones en argv y guarda un transcript privado", async () => {
+  it("uses the personal profile without passing instructions in argv and stores a private transcript", async () => {
     const { root, worktreePath, processes, executor, run } = setup();
     const instructions = `Revisa este diff: ${"línea\n".repeat(100)}`;
     const result = await executor.run({
@@ -79,7 +79,7 @@ describe("CopilotCliReviewerExecutor", () => {
     expect(result.output).toContain("[major]");
   });
 
-  it("rechaza perfiles ausentes y no intenta una sesión sin configuración", async () => {
+  it("rejects missing profiles and does not attempt a session without configuration", async () => {
     const { executor, run, worktreePath, processes } = setup();
     await expect(
       executor.run({
@@ -89,11 +89,11 @@ describe("CopilotCliReviewerExecutor", () => {
         reviewer: "lunasq-ui-reviewer",
         instructions: "Revisa",
       }),
-    ).rejects.toThrow("falta el perfil Copilot");
+    ).rejects.toThrow("missing Copilot profile");
     expect(processes.calls).toEqual([]);
   });
 
-  it("no archiva como completada una ejecución con error del CLI", async () => {
+  it("does not archive as completed an execution with a CLI error", async () => {
     const { executor, run, worktreePath, processes, root } = setup();
     processes.respond(() => ({ exitCode: 1, stderr: "auth required" }));
     await expect(

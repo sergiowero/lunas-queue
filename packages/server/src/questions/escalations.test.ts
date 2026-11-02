@@ -56,10 +56,10 @@ const running = { state: "in_progress", subState: "running" };
 const waiting = { state: "in_progress", subState: "waiting_human" };
 
 describe("QuestionEscalations", () => {
-  it("avisa si la pregunta sigue abierta a 1 minuto y no antes", async () => {
+  it("notifies if the question is still open at 1 minute and not before", async () => {
     const s = setup();
     const question = s.ask();
-    // La base fecha con el reloj real: se alinea el reloj de prueba con la creación.
+    // The database timestamps with the real clock: the test clock is aligned with the creation.
     vi.setSystemTime(question.createdAt);
     s.escalations.onTransition(transitioned(s.task.id, running, waiting));
 
@@ -73,13 +73,13 @@ describe("QuestionEscalations", () => {
         kind: "question_open",
         taskId: s.task.id,
         runId: s.run.id,
-        title: `Pregunta abierta en #${s.task.number}`,
+        title: `Open question in #${s.task.number}`,
         body: expect.stringContaining("¿Borro la tabla?"),
       }),
     ]);
   });
 
-  it("repetir la transición del outbox no duplica el aviso", async () => {
+  it("repeating the outbox transition does not duplicate the notice", async () => {
     const s = setup();
     s.ask();
     const message = transitioned(s.task.id, running, waiting);
@@ -89,7 +89,7 @@ describe("QuestionEscalations", () => {
     expect(s.notifications).toHaveLength(1);
   });
 
-  it("responderla antes del minuto cancela el aviso", async () => {
+  it("answering it before the minute cancels the notice", async () => {
     const s = setup();
     const question = s.ask();
     s.escalations.onTransition(transitioned(s.task.id, running, waiting));
@@ -101,7 +101,7 @@ describe("QuestionEscalations", () => {
     expect(s.escalator.pending()).toEqual([]);
   });
 
-  it("cancelar la tarea cancela la pregunta y su aviso", async () => {
+  it("canceling the task cancels the question and its notice", async () => {
     const s = setup();
     const question = s.ask();
     s.escalations.onTransition(transitioned(s.task.id, running, waiting));
@@ -114,7 +114,7 @@ describe("QuestionEscalations", () => {
     expect(s.questions.get(question.id)?.status).toBe("cancelled");
   });
 
-  it("si la tarea sale de waiting_human por otra vía, la pregunta se cancela", () => {
+  it("if the task leaves waiting_human by another route, the question is canceled", () => {
     const s = setup();
     const question = s.ask();
     s.escalations.onTransition(
@@ -123,7 +123,7 @@ describe("QuestionEscalations", () => {
     expect(s.questions.get(question.id)?.status).toBe("cancelled");
   });
 
-  it("pausar la tarea con una pregunta abierta la cancela y apaga su aviso", async () => {
+  it("pausing the task with an open question cancels it and turns off its notice", async () => {
     const s = setup();
     const question = s.ask();
     s.escalations.onTransition(transitioned(s.task.id, running, waiting));
@@ -142,7 +142,7 @@ describe("QuestionEscalations", () => {
     expect(s.questions.get(question.id)?.status).toBe("cancelled");
   });
 
-  it("otras transiciones y otros topics no hacen nada", async () => {
+  it("other transitions and other topics do nothing", async () => {
     const s = setup();
     s.ask();
     s.escalations.onTransition(transitioned(s.task.id, running, running));
@@ -158,11 +158,11 @@ describe("QuestionEscalations", () => {
     expect(s.notifications).toEqual([]);
   });
 
-  describe("rearm tras un reinicio", () => {
-    it("re-arma el plazo desde que se creó la pregunta", async () => {
+  describe("rearm after a restart", () => {
+    it("re-arms the deadline from when the question was created", async () => {
       const s = setup();
       const question = s.ask();
-      // La base fecha con el reloj real: se alinea el reloj de prueba con la creación.
+      // The database timestamps with the real clock: the test clock is aligned with the creation.
       vi.setSystemTime(question.createdAt);
       await vi.advanceTimersByTimeAsync(40_000);
       s.escalations.rearm();
@@ -173,7 +173,7 @@ describe("QuestionEscalations", () => {
       expect(s.notifications).toHaveLength(1);
     });
 
-    it("una pregunta abierta hace rato avisa de inmediato", async () => {
+    it("a question opened a while ago notifies immediately", async () => {
       const s = setup();
       s.ask();
       await vi.advanceTimersByTimeAsync(10 * MIN);
@@ -182,7 +182,7 @@ describe("QuestionEscalations", () => {
       expect(s.notifications).toHaveLength(1);
     });
 
-    it("cancela las abiertas cuyo tarea ya no espera al humano", () => {
+    it("cancels the open ones whose task no longer waits for the human", () => {
       const s = setup();
       const question = s.ask();
       s.db.$client.prepare("update tasks set sub_state = 'running' where id = ?").run(s.task.id);

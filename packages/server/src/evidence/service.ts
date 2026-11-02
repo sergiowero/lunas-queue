@@ -1,9 +1,9 @@
-// Servicio del archivo de evidencia (docs/design.md §Archivo de evidencia, ADR
-// uw-24-archivo-evidencia). Al cerrar un Run reúne lo que el sistema ya guarda (Run, Event log,
-// subagentes, transcripts), lo convierte a markdown, redacta secretos y reemplaza la sección de ese
-// Run en `lunasq/tasks/{id}.md` del worktree. El archivo queda sin commitear durante el loop, para no
-// mover el HEAD que compara el pass de la verificación ni ensuciar el chequeo de worktree limpio; la
-// entrega lo commitea con `commit`.
+// Evidence file service (docs/design.md §Evidence file, ADR
+// uw-24-archivo-evidencia). When a Run closes it gathers what the system already stores (Run, Event log,
+// subagents, transcripts), converts it to markdown, redacts secrets and replaces that Run's section in
+// the worktree's `lunasq/tasks/{id}.md`. The file is left uncommitted during the loop, so as not to
+// move the HEAD the verification pass compares nor dirty the clean-worktree check; the
+// delivery commits it with `commit`.
 
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -42,7 +42,7 @@ export type RecordRunResult =
 export interface EvidenceServiceDeps {
   db: LunasqDatabase;
   git: Pick<GitAdapter, "commitPaths">;
-  /** Sin él, las secciones no llevan transcripts. */
+  /** Without it, the sections carry no transcripts. */
   transcripts?: TranscriptSource;
 }
 
@@ -54,7 +54,7 @@ export class EvidenceService {
   readonly #db: LunasqDatabase;
   readonly #git: Pick<GitAdapter, "commitPaths">;
   readonly #transcripts: TranscriptSource;
-  /** Un archivo por tarea: las escrituras de una misma tarea van en orden. */
+  /** One file per task: writes of the same task go in order. */
   readonly #locks = new KeyedLock();
 
   constructor(deps: EvidenceServiceDeps) {
@@ -68,8 +68,8 @@ export class EvidenceService {
   }
 
   /**
-   * Reescribe la sección del Run cerrado en el archivo de su tarea. Idempotente: repetirlo con
-   * los mismos datos no cambia el archivo.
+   * Rewrites the closed Run's section in its task's file. Idempotent: repeating it with
+   * the same data does not change the file.
    */
   async recordRun(runId: string): Promise<RecordRunResult> {
     const first = this.#runs.get(runId);
@@ -103,9 +103,9 @@ export class EvidenceService {
   }
 
   /**
-   * Commitea el archivo de evidencia con los trailers de la tarea y su último Run, para que viaje
-   * en el branch y en el PR. Lo demás del worktree no se toca. Devuelve el sha, o null si no hay
-   * archivo o no cambió desde el último commit.
+   * Commits the evidence file with the task trailers and its last Run, so it travels
+   * in the branch and in the PR. The rest of the worktree is not touched. Returns the sha, or null if there is no
+   * file or it did not change since the last commit.
    */
   async commit(taskId: string): Promise<string | null> {
     return this.#locks.run(taskId, async () => {
@@ -117,7 +117,7 @@ export class EvidenceService {
       return this.#git.commitPaths({
         cwd: worktreePath,
         paths: [path],
-        message: "chore(lunasq): archivo de evidencia",
+        message: "chore(lunasq): evidence file",
         trailers: {
           [COMMIT_TRAILER_TASK]: taskId,
           ...(last && { [COMMIT_TRAILER_RUN]: last.id }),
@@ -131,7 +131,7 @@ export class EvidenceService {
     return path && existsSync(path) ? path : null;
   }
 
-  /** Gate y hooks del Run, en el orden del Event log. */
+  /** Gate and hooks of the Run, in Event log order. */
   #logOf(taskId: string, runId: string) {
     const gates: TestGateExecutedPayload[] = [];
     const hooks: HookLogEntry[] = [];
@@ -161,26 +161,26 @@ function toSectionTranscript(raw: RawTranscript): SectionTranscript {
   }
   const markdown = transcriptToMarkdown(raw.jsonl);
   return markdown === ""
-    ? { title: raw.title, markdown: null, note: "transcript vacío" }
+    ? { title: raw.title, markdown: null, note: "empty transcript" }
     : { title: raw.title, markdown };
 }
 
 /**
- * Escribe a un temporal y renombra: un corte no deja el archivo a medias. El worktree es del
- * agente, así que ni `lunasq/`, ni `lunasq/tasks/` ni el temporal pueden ser symlinks: seguirlos
- * escribiría fuera del worktree.
+ * Writes to a temp file and renames: a cut does not leave the file half written. The worktree belongs to the
+ * agent, so neither `lunasq/`, nor `lunasq/tasks/` nor the temp file can be symlinks: following them
+ * would write outside the worktree.
  */
 async function writeAtomic(worktreePath: string, path: string, content: string): Promise<void> {
   const dir = dirname(path);
   for (const part of [join(worktreePath, "lunasq"), dir]) {
     const info = await lstat(part).catch(() => null);
-    if (info?.isSymbolicLink()) throw new Error(`${part} es un symlink: no se escribe evidencia`);
-    if (info && !info.isDirectory()) throw new Error(`${part} no es un directorio`);
+    if (info?.isSymbolicLink()) throw new Error(`${part} is a symlink: evidence is not written`);
+    if (info && !info.isDirectory()) throw new Error(`${part} is not a directory`);
   }
   await mkdir(dir, { recursive: true });
   const temp = join(dir, `.${randomBytes(8).toString("hex")}.tmp`);
   try {
-    // wx: falla si el nombre ya existe, en vez de escribir a través de un symlink plantado.
+    // wx: fails if the name already exists, instead of writing through a planted symlink.
     await writeFile(temp, content, { encoding: "utf8", flag: "wx" });
     await rename(temp, path);
   } catch (error) {

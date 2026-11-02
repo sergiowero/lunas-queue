@@ -7,7 +7,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe("PhaseClock", () => {
-  it("vence al agotar el presupuesto corriendo", () => {
+  it("expires when the budget runs out while running", () => {
     const expired = vi.fn();
     new PhaseClock(30 * MIN, expired).start();
     vi.advanceTimersByTime(30 * MIN - 1);
@@ -16,7 +16,7 @@ describe("PhaseClock", () => {
     expect(expired).toHaveBeenCalledOnce();
   });
 
-  it("no corre en pausa y retoma con lo que quedaba", () => {
+  it("does not run while paused and resumes with what was left", () => {
     const expired = vi.fn();
     const clock = new PhaseClock(30 * MIN, expired);
     clock.start();
@@ -30,7 +30,7 @@ describe("PhaseClock", () => {
     expect(expired).toHaveBeenCalledOnce();
   });
 
-  it("solo corre cuando no queda ninguna razón de pausa", () => {
+  it("only runs when no pause reason remains", () => {
     const expired = vi.fn();
     const clock = new PhaseClock(MIN, expired);
     clock.start();
@@ -44,7 +44,7 @@ describe("PhaseClock", () => {
     expect(expired).toHaveBeenCalledOnce();
   });
 
-  it("pausar o reanudar dos veces no cambia nada", () => {
+  it("pausing or resuming twice changes nothing", () => {
     const expired = vi.fn();
     const clock = new PhaseClock(MIN, expired);
     clock.start();
@@ -57,7 +57,7 @@ describe("PhaseClock", () => {
     expect(expired).toHaveBeenCalledOnce();
   });
 
-  it("detenido no vence", () => {
+  it("a stopped one does not expire", () => {
     const expired = vi.fn();
     const clock = new PhaseClock(MIN, expired);
     clock.start();
@@ -67,7 +67,7 @@ describe("PhaseClock", () => {
     expect(expired).not.toHaveBeenCalled();
   });
 
-  it("una pausa antes de arrancar se respeta al arrancar", () => {
+  it("a pause before starting is respected on start", () => {
     const expired = vi.fn();
     const clock = new PhaseClock(MIN, expired);
     clock.pause("blocked");

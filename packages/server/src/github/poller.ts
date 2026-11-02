@@ -1,10 +1,10 @@
-// Detección de merges por polling (docs/design.md §Decisiones: polling con `gh` en v1;
+// Merge detection by polling (docs/design.md §Decisions: polling with `gh` in v1;
 // ADR uw-14-adapter-github).
-// Cada pasada consulta en GitHub los PR abiertos que la base conoce y registra los que se
-// mergearon o cerraron. El registro deja su evento en el outbox; el scheduler lo recibe y libera
-// a los dependientes o los escala (ADR 0014). Un PR abierto que GitHub marca en conflicto con la
-// base (otro PR se mergeó antes) regresa su tarea a in_progress para que el implementador integre
-// la base (ADR pr-en-conflicto). Repetir una pasada no duplica efectos.
+// Each pass queries GitHub for the open PRs the database knows and records those that were
+// merged or closed. The record leaves its event in the outbox; the scheduler receives it and releases
+// the dependents or escalates them (ADR 0014). An open PR that GitHub marks as in conflict with the
+// base (another PR was merged first) sends its task back to in_progress so the implementer integrates
+// the base (ADR pr-en-conflicto). Repeating a pass does not duplicate effects.
 import type { GitHubAdapter } from "@lunasq/adapters";
 import { type LunasqDatabase, TaskPrRepository } from "@lunasq/db";
 import type { PrTrackingStore, TrackedPr } from "@lunasq/domain";
@@ -17,12 +17,12 @@ export const MIN_PR_POLL_INTERVAL_MS = 1_000;
 export interface PrPollerOptions {
   github: GitHubAdapter;
   db?: LunasqDatabase;
-  /** Por defecto, TaskPrRepository sobre `db`. */
+  /** By default, TaskPrRepository over `db`. */
   store?: PrTrackingStore;
-  /** Se despierta después de registrar cambios, para que el scheduler los vea sin esperar. */
+  /** Woken after recording changes, so the scheduler sees them without waiting. */
   publisher?: OutboxPublisher;
   intervalMs?: number;
-  /** `pr` es el PR que falló, o null si falló la lectura de la base. */
+  /** `pr` is the PR that failed, or null if reading the database failed. */
   onError?: (error: Error, pr: TrackedPr | null) => void;
 }
 
@@ -49,7 +49,7 @@ export class PrPoller {
     if (!store) throw new Error("PrPoller necesita store o db");
     const intervalMs = opts.intervalMs ?? DEFAULT_PR_POLL_INTERVAL_MS;
     if (!Number.isInteger(intervalMs) || intervalMs < MIN_PR_POLL_INTERVAL_MS) {
-      throw new Error(`intervalMs debe ser un entero >= ${MIN_PR_POLL_INTERVAL_MS}`);
+      throw new Error(`intervalMs must be an integer >= ${MIN_PR_POLL_INTERVAL_MS}`);
     }
     this.github = opts.github;
     this.store = store;
@@ -58,7 +58,7 @@ export class PrPoller {
     this.onError = opts.onError ?? defaultError;
   }
 
-  /** Una pasada (o se une a la que corre y pide otra). Devuelve lo que hizo la última. */
+  /** One pass (or joins the one running and asks for another). Returns what the last one did. */
   poll(): Promise<PrPollResult> {
     if (this.running) {
       this.rerun = true;
@@ -73,19 +73,19 @@ export class PrPoller {
     return this.running;
   }
 
-  /** Pide una pasada sin esperarla. */
+  /** Asks for a pass without waiting for it. */
   wake(): void {
     this.poll().catch((error: unknown) => this.report(toError(error), null));
   }
 
-  /** Arranca el polling periódico con una primera pasada. */
+  /** Starts periodic polling with a first pass. */
   async start(): Promise<void> {
     this.stopped = false;
     this.timer ??= setInterval(() => this.wake(), this.intervalMs);
     await this.poll().catch((error: unknown) => this.report(toError(error), null));
   }
 
-  /** Detiene el polling y espera la pasada en curso, que no consulta más PRs. */
+  /** Stops polling and waits for the pass in progress, which queries no more PRs. */
   async stop(): Promise<void> {
     this.stopped = true;
     clearInterval(this.timer);
@@ -108,7 +108,7 @@ export class PrPoller {
     for (const tracked of this.store.listOpen()) {
       if (this.stopped) break;
       try {
-        // Un PR que falla (red, rate limit, PR borrado) no detiene la pasada.
+        // A PR that fails (network, rate limit, deleted PR) does not stop the pass.
         const pr = await this.github.getPr(tracked.url);
         const at = pr.state === "merged" ? pr.mergedAt : pr.closedAt;
         const changed = this.store.recordPrState(tracked.taskId, {
@@ -130,7 +130,7 @@ export class PrPoller {
               .filter((check) => check.status === "failure")
               .map((check) => (check.url ? `${check.name}: ${check.url}` : check.name))
               .join("\n")
-              .slice(0, DELIVERY_OUTPUT_LIMIT) || "GitHub reportó checks fallidos sin detalles";
+              .slice(0, DELIVERY_OUTPUT_LIMIT) || "GitHub reported failed checks without details";
           if (this.store.recordPrCiFailure(tracked.taskId, tracked.url, output)) {
             result.ciFailed.push(tracked.taskId);
           }
@@ -155,7 +155,7 @@ export class PrPoller {
     try {
       this.onError(error, pr);
     } catch {
-      // Un onError roto no detiene al poller.
+      // A broken onError does not stop the poller.
     }
   }
 }
@@ -165,6 +165,6 @@ function toError(error: unknown): Error {
 }
 
 function defaultError(error: Error, pr: TrackedPr | null): void {
-  const where = pr ? `tarea ${pr.taskId} (${pr.url})` : "lectura";
+  const where = pr ? `task ${pr.taskId} (${pr.url})` : "read";
   console.error(`[pr-poller] fallo en ${where}: ${error.message}`);
 }

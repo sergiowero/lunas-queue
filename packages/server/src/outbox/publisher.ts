@@ -1,7 +1,7 @@
-// Publicador en proceso del outbox (docs/design.md §Componentes, ADR 0011). Lee los pendientes
-// en orden de escritura, los entrega a los suscriptores (scheduler, dispatcher) y los marca.
-// Entrega al menos una vez: si el proceso cae entre entregar y marcar, el mensaje se repite al
-// arrancar, así que los suscriptores deben ser idempotentes.
+// In-process outbox publisher (docs/design.md §Components, ADR 0011). It reads the pending ones
+// in write order, delivers them to the subscribers (scheduler, dispatcher) and marks them.
+// At-least-once delivery: if the process crashes between delivering and marking, the message repeats on
+// start, so subscribers must be idempotent.
 import {
   type LunasqDatabase,
   listPendingOutbox,
@@ -15,7 +15,7 @@ export const DEFAULT_POLL_INTERVAL_MS = 1000;
 
 export type OutboxHandler = (message: OutboxMessage) => void | Promise<void>;
 
-/** `failed` es el mensaje cuya entrega falló, o null si falló la lectura de la cola. */
+/** `failed` is the message whose delivery failed, or null if reading the queue failed. */
 export type OutboxErrorHandler = (error: Error, failed: PendingOutboxEntry | null) => void;
 
 export interface OutboxPublisherOptions {
@@ -32,7 +32,7 @@ export class OutboxPublisher {
   private readonly batchSize: number;
   private readonly handlers = new Map<string, Set<OutboxHandler>>();
   private running: Promise<number> | undefined;
-  // Pedido de otra pasada mientras corre un drain: lo confirmado después de su lectura.
+  // Request for another pass while a drain runs: what was confirmed after its read.
   private rerun = false;
   private stopped = false;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -45,8 +45,8 @@ export class OutboxPublisher {
   }
 
   /**
-   * `topic` es el tipo del evento o `*` para todos. Con al menos un suscriptor registrado, un
-   * mensaje cuyo topic no tiene destinatarios se marca publicado; sin ninguno, no se publica nada.
+   * `topic` is the event type or `*` for all. With at least one registered subscriber, a
+   * message whose topic has no recipients is marked published; with none, nothing is published.
    */
   subscribe(topic: string, handler: OutboxHandler): () => void {
     const set = this.handlers.get(topic) ?? new Set();
@@ -57,36 +57,36 @@ export class OutboxPublisher {
     };
   }
 
-  /** Entrega lo pendiente y devuelve cuántos mensajes publicó. Una sola pasada a la vez. */
+  /** Delivers what is pending and returns how many messages it published. One pass at a time. */
   drain(): Promise<number> {
     if (this.running) {
       this.rerun = true;
       return this.running;
     }
-    // Arranca en una microtarea: un handler que llama wake ya ve `running` asignado.
+    // Starts in a microtask: a handler that calls wake already sees `running` assigned.
     this.running = Promise.resolve()
       .then(() => this.loop())
       .finally(() => {
         this.running = undefined;
-        // Un wake que llegó después de la última lectura de la cola (o un start tras stop).
+        // A wake that arrived after the queue's last read (or a start after stop).
         if (this.rerun && !this.stopped) this.wake();
       });
     return this.running;
   }
 
-  /** Pide un drain sin esperarlo; para llamar después de confirmar una transición. */
+  /** Requests a drain without waiting for it; to call after confirming a transition. */
   wake(): void {
     this.drain().catch((error: unknown) => this.report(toError(error), null));
   }
 
-  /** Entrega lo que quedó pendiente (p. ej. de una caída) y arranca el poll periódico. */
+  /** Delivers what was left pending (e.g. from a crash) and starts the periodic poll. */
   async start(): Promise<void> {
     this.stopped = false;
     if (!this.timer) this.timer = setInterval(() => this.wake(), this.pollIntervalMs);
     await this.drain().catch((error: unknown) => this.report(toError(error), null));
   }
 
-  /** Detiene el poll y espera al drain en curso, que termina después del mensaje actual. */
+  /** Stops the poll and waits for the drain in progress, which ends after the current message. */
   async stop(): Promise<void> {
     this.stopped = true;
     clearInterval(this.timer);
@@ -96,7 +96,7 @@ export class OutboxPublisher {
 
   private async loop(): Promise<number> {
     let published = 0;
-    // Sin ningún suscriptor no se marca nada: lo pendiente espera a que alguien se suscriba.
+    // Without any subscriber nothing is marked: what is pending waits for someone to subscribe.
     if ([...this.handlers.values()].every((set) => set.size === 0)) {
       this.rerun = false;
       return published;
@@ -107,9 +107,9 @@ export class OutboxPublisher {
         if (this.stopped) return published;
         const batch = listPendingOutbox(this.db, { limit: this.batchSize });
         for (const entry of batch) {
-          // Ante un fallo se detiene para no entregar fuera de orden; el siguiente drain reintenta.
+          // On a failure it stops so as not to deliver out of order; the next drain retries.
           if (!(await this.deliver(entry))) {
-            // Sin pasada extra: el reintento espera al siguiente wake o poll, no entra en bucle.
+            // No extra pass: the retry waits for the next wake or poll, it does not loop.
             this.rerun = false;
             return published;
           }
@@ -143,7 +143,7 @@ export class OutboxPublisher {
     try {
       this.onError(error, failed);
     } catch {
-      // Un onError roto no detiene al publicador.
+      // A broken onError does not stop the publisher.
     }
   }
 }
@@ -153,6 +153,6 @@ function toError(error: unknown): Error {
 }
 
 function defaultError(error: Error, failed: PendingOutboxEntry | null): void {
-  const where = failed ? `mensaje ${failed.message.id} (intento ${failed.attempts})` : "lectura";
-  console.error(`[outbox] fallo en ${where}: ${error.message}`);
+  const where = failed ? `message ${failed.message.id} (attempt ${failed.attempts})` : "read";
+  console.error(`[outbox] failure in ${where}: ${error.message}`);
 }

@@ -1,9 +1,9 @@
-// Lógica de las tools del LunasQ MCP, sin transporte (docs/design.md §MCPs y skills, ADR
-// uw-15-mcp-tools). Cada llamada pasa por el mismo orden de guardas: run token de un Run activo,
-// tool permitida en la fase del Run y get_task_context ya leído. Las tools de salida escriben el
-// handoff, el cierre del Run y la transición de la tarea en una sola transacción IMMEDIATE. La
-// fase de verificación (ADR uw-23-verificacion) agrega los hooks de fase, la evidencia de los
-// revisores, el tope de iteraciones del proyecto y la etiqueta de riesgo.
+// Logic of the LunasQ MCP tools, without transport (docs/design.md §MCPs and skills, ADR
+// uw-15-mcp-tools). Each call goes through the same order of guards: run token of an active Run,
+// tool allowed in the Run's phase and get_task_context already read. The exit tools write the
+// handoff, the Run close and the task transition in a single IMMEDIATE transaction. The
+// verification phase (ADR uw-23-verificacion) adds the phase hooks, the reviewers'
+// evidence, the project's iteration cap and the risk label.
 
 import { randomUUID } from "node:crypto";
 import {
@@ -72,29 +72,29 @@ export type ToolName = (typeof TOOL_NAMES)[number];
 const ALL_PHASES: readonly Phase[] = ["refine", "implement", "verify", "deliver"];
 
 /**
- * Rechazos del pass que el implementador puede corregir (worktree sucio, HEAD movido). En vez de
- * dejar al verificador sin salida, el pass se convierte en reject con un must-fix que vuelve la
- * tarea a implementación, donde el agente commitea, ignora o reconstruye su HEAD.
+ * Rejections of the pass the implementer can fix (dirty worktree, moved HEAD). Instead of
+ * leaving the verifier with no way out, the pass becomes a reject with a must-fix that sends the
+ * task back to implementation, where the agent commits, ignores or rebuilds its HEAD.
  */
 const GIT_REWORK_CODES: ReadonlySet<McpErrorCode> = new Set(["dirty_worktree", "head_changed"]);
 
-/** Reject con un must-fix de git que reemplaza un pass refusado por el estado del worktree. */
+/** Reject with a git must-fix that replaces a pass refused because of the worktree state. */
 function gitReworkHandoff(handoff: VerificationHandoff, error: McpError): VerificationHandoff {
   const paths = (error.issues ?? []).map((issue) => issue.path);
   const finding: MustFixFinding = {
     severity: "major",
     file: paths[0] ?? ".",
     evidence: [
-      `LunasQ no aceptó el pass: ${error.message}.`,
-      ...(paths.length > 0 ? [`Archivos: ${paths.join(", ")}.`] : []),
-      "Corrige el estado de git: commitea lo que sea del cambio, ignora lo generado por herramientas y no toques archivos ajenos. Luego vuelve a submit_for_verification.",
+      `LunasQ did not accept the pass: ${error.message}.`,
+      ...(paths.length > 0 ? [`Files: ${paths.join(", ")}.`] : []),
+      "Fix the git state: commit whatever is part of the change, ignore what tools generate and do not touch files that are not yours. Then call submit_for_verification again.",
     ].join(" "),
     source: "approver",
   };
   return { ...handoff, body: { ...handoff.body, verdict: "reject", mustFix: [finding] } };
 }
 
-/** Fases del Run en las que cada tool se acepta. */
+/** Phases of the Run in which each tool is accepted. */
 export const TOOL_PHASES: Readonly<Record<ToolName, readonly Phase[]>> = {
   get_task_context: ALL_PHASES,
   ask_human: ALL_PHASES,
@@ -108,35 +108,35 @@ export const TOOL_PHASES: Readonly<Record<ToolName, readonly Phase[]>> = {
 };
 
 export type McpErrorCode =
-  // Sin run token, desconocido o de un Run ya cerrado.
+  // Without run token, unknown or from an already closed Run.
   | "invalid_run_token"
   | "tool_not_allowed"
   | "context_required"
   | "invalid_handoff"
-  // Handoff con taskId, runId o fase que no son los del Run.
+  // Handoff with a taskId, runId or phase that are not the Run's.
   | "handoff_mismatch"
   | "no_approved_spec"
-  // Criterios o tareas del handoff que no coinciden con la spec aprobada.
+  // Handoff criteria or tasks that do not match the approved spec.
   | "spec_mismatch"
   | "commits_missing"
-  // submit_result en implementación con un branch que ya tiene commits sobre la base.
+  // submit_result in implementation with a branch that already has commits on top of the base.
   | "branch_has_commits"
   | "dirty_worktree"
-  // Ya corre un gate de tests para este Run.
+  // A test gate is already running for this Run.
   | "gate_in_progress"
   | "test_gate_failed"
-  // Un pass sobre un HEAD distinto del que pasó el gate de submit_for_verification.
+  // A pass on a HEAD different from the one that passed the submit_for_verification gate.
   | "head_changed"
   | "verdict_already_recorded"
-  // Un revisor reportado que no aparece en los hooks del Run, u omitido que sí corrió.
+  // A reported reviewer that does not appear in the Run's hooks, or an omitted one that did run.
   | "reviewer_evidence_mismatch"
   | "reviewer_execution_unavailable"
   | "reviewer_execution_failed"
   | "reviewer_already_running"
-  // Un hook de fase con política block falló: la tarea pasó a needs_human.
+  // A phase hook with block policy failed: the task went to needs_human.
   | "hook_blocked"
   | "no_worktree"
-  // La máquina de estados rechazó la transición (estado de la tarea, guard o actor).
+  // The state machine rejected the transition (task state, guard or actor).
   | "transition_rejected";
 
 export type McpError = {
@@ -160,7 +160,7 @@ const HANDOFF_PHASE: Readonly<Record<Phase, HandoffPhase | null>> = {
   deliver: null,
 };
 
-// Revierte la transacción de una escritura rechazada y lleva el rechazo a quien llama.
+// Rolls back the transaction of a rejected write and carries the rejection to the caller.
 class Rejected extends Error {
   readonly failure: { ok: false; error: McpError };
 
@@ -190,7 +190,7 @@ export class LunasqMcpService {
   readonly #subagents: RunSubagentRepository;
   readonly #copilotReviewers: CopilotReviewerExecutor | undefined;
   readonly #reviewersInFlight = new Set<string>();
-  // Runs con un gate de tests en curso: un reintento no lanza una segunda suite en paralelo.
+  // Runs with a test gate in progress: a retry does not launch a second suite in parallel.
   readonly #gating = new Set<string>();
 
   constructor(deps: McpServiceDeps) {
@@ -206,24 +206,27 @@ export class LunasqMcpService {
     this.#copilotReviewers = deps.copilotReviewers;
   }
 
-  /** Guardas comunes: Run activo, tool de su fase y contexto leído (salvo get_task_context). */
+  /** Common guards: active Run, tool of its phase and context read (except get_task_context). */
   authorize(token: string | undefined, tool: ToolName): Outcome<RunRow> {
     const run = token ? this.#runs.activeByToken(token) : null;
     if (!run) {
       return fail(
         "invalid_run_token",
-        "run token ausente, desconocido o de un Run cerrado: esta sesión ya no puede mover la tarea",
+        "run token missing, unknown or from a closed Run: this session can no longer move the task",
       );
     }
     if (!TOOL_PHASES[tool].includes(run.phase)) {
-      return fail("tool_not_allowed", `${tool} no se acepta en la fase ${run.phase}`);
+      return fail("tool_not_allowed", `${tool} is not accepted in phase ${run.phase}`);
     }
     if (tool !== "get_task_context" && !run.contextReadAt) {
-      return fail("context_required", `llama get_task_context antes de ${tool}`);
+      return fail("context_required", `call get_task_context before ${tool}`);
     }
-    // Tras un pass el Run sigue abierto solo para la entrega: el verificador ya no mueve la tarea.
+    // After a pass the Run stays open only for the delivery: the verifier no longer moves the task.
     if (run.phase === "verify" && run.handoff !== null && !AFTER_VERDICT.includes(tool)) {
-      return fail("tool_not_allowed", `el Run ya registró su veredicto; ${tool} no se acepta`);
+      return fail(
+        "tool_not_allowed",
+        `the Run already recorded its verdict; ${tool} is not accepted`,
+      );
     }
     return { ok: true, data: run };
   }
@@ -266,7 +269,7 @@ export class LunasqMcpService {
           : null,
       implementation:
         this.#storedHandoffs(task.id, "implement").filter(isImplementation).at(-1) ?? null,
-      // El implementador recibe solo los must-fix del último reject; el historial es del verificador.
+      // The implementer receives only the last reject's must-fix; the history is the verifier's.
       verificationHistory:
         run.phase === "verify"
           ? this.#storedHandoffs(task.id, "verify").filter(isVerification)
@@ -325,14 +328,14 @@ export class LunasqMcpService {
     input: UpdateChecklistInput,
   ): Outcome<{ checklist: ChecklistItem[] }> {
     const spec = this.#specs.approved(run.taskId);
-    if (!spec) return fail("no_approved_spec", "la tarea no tiene spec aprobada");
+    if (!spec) return fail("no_approved_spec", "the task has no approved spec");
     const known = new Set(spec.content.taskList.map((t) => t.id));
     const unknown = input.items.filter((i) => !known.has(i.taskId));
     if (unknown.length > 0) {
-      return fail("spec_mismatch", "items que no están en la task list de la spec aprobada", {
+      return fail("spec_mismatch", "items that are not in the approved spec's task list", {
         issues: unknown.map((i) => ({
           path: `items[${input.items.indexOf(i)}].taskId`,
-          message: `la spec aprobada no tiene la tarea ${i.taskId}`,
+          message: `the approved spec has no task ${i.taskId}`,
         })),
       });
     }
@@ -346,7 +349,7 @@ export class LunasqMcpService {
         title: t.title,
         done: done.get(t.id) ?? false,
       }));
-      // Repetir la misma marca no agrega otro evento.
+      // Repeating the same mark does not add another event.
       if (JSON.stringify(checklist) !== JSON.stringify(current)) {
         appendChecklist(tx, run.taskId, run.id, checklist);
       }
@@ -358,15 +361,15 @@ export class LunasqMcpService {
     if (run.agentKind !== "copilot" || !this.#copilotReviewers) {
       return fail(
         "reviewer_execution_unavailable",
-        "run_reviewer solo está disponible cuando Copilot CLI es el proveedor de verificación",
+        "run_reviewer is only available when Copilot CLI is the verification provider",
       );
     }
     const key = `${run.id}:${input.reviewer}`;
     if (this.#reviewersInFlight.has(key)) {
-      return fail("reviewer_already_running", `${input.reviewer} ya está ejecutándose en este Run`);
+      return fail("reviewer_already_running", `${input.reviewer} is already running in this Run`);
     }
     const task = this.#tasks.get(run.taskId);
-    if (!task?.worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
+    if (!task?.worktreePath) return fail("no_worktree", "the task has no registered worktree");
 
     this.#reviewersInFlight.add(key);
     const agentId = `copilot-${randomUUID()}`;
@@ -403,18 +406,18 @@ export class LunasqMcpService {
     if (!parsed.ok) return parsed;
     const handoff = parsed.data;
     const spec = this.#specs.approved(run.taskId);
-    if (!spec) return fail("no_approved_spec", "la tarea no tiene spec aprobada");
+    if (!spec) return fail("no_approved_spec", "the task has no approved spec");
     const coverage = checkCriteria(
       spec,
       handoff.body.criterionTests.map((c) => c.criterionId),
       "body.criterionTests",
-      "no tiene tests en criterionTests",
+      "has no tests in criterionTests",
     );
     if (!coverage.ok) return coverage;
 
     const { task, project } = this.#taskAndProject(run);
-    if (!task.worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
-    // Tras un hook bloqueado la tarea ya escaló: un reintento no vuelve a correr hooks ni gate.
+    if (!task.worktreePath) return fail("no_worktree", "the task has no registered worktree");
+    // After a blocked hook the task already escalated: a retry does not run hooks or the gate again.
     const moved = notRunning(task, "in_progress");
     if (moved) return moved;
 
@@ -434,7 +437,7 @@ export class LunasqMcpService {
           everyCriterionHasTest: true,
           hasCommits: true,
         },
-        // Los tests corrieron fuera de la transacción: la tarea no debe haberse movido.
+        // The tests ran outside the transaction: the task must not have moved.
         expected: { state: "in_progress", subState: "running" },
       });
       return { ok: true, data: { state: "verification" } };
@@ -442,31 +445,33 @@ export class LunasqMcpService {
   }
 
   /**
-   * Tarea sin código (ADR 0007): el Resultado reemplaza a la spec o al diff. Completa la tarea sin
-   * verificación, entrega ni PR. En implementación solo si el branch no tiene commits sobre la
-   * base: con código, la salida es submit_for_verification.
+   * Code-less task (ADR 0007): the Result replaces the spec or the diff. It completes the task without
+   * verification, delivery or PR. In implementation only if the branch has no commits on top of the
+   * base: with code, the exit is submit_for_verification.
    */
   async submitResult(run: RunRow, input: unknown): Promise<Outcome<{ state: "completed" }>> {
     const parsed = parseResultHandoff(input);
     if (!parsed.success) {
-      return fail("invalid_handoff", "el handoff no cumple el esquema", { issues: parsed.errors });
+      return fail("invalid_handoff", "the handoff does not meet the schema", {
+        issues: parsed.errors,
+      });
     }
     const handoff = parsed.data;
     const issues: HandoffError[] = [];
     if (handoff.phase !== HANDOFF_PHASE[run.phase]) {
       issues.push({
         path: "phase",
-        message: `se esperaba ${HANDOFF_PHASE[run.phase]} y llegó ${handoff.phase}`,
+        message: `expected ${HANDOFF_PHASE[run.phase]} but got ${handoff.phase}`,
       });
     }
     if (handoff.taskId !== run.taskId) {
-      issues.push({ path: "taskId", message: `el Run es de la tarea ${run.taskId}` });
+      issues.push({ path: "taskId", message: `the Run belongs to task ${run.taskId}` });
     }
     if (handoff.runId !== run.id) {
-      issues.push({ path: "runId", message: `el Run activo es ${run.id}` });
+      issues.push({ path: "runId", message: `the active Run is ${run.id}` });
     }
     if (issues.length > 0) {
-      return fail("handoff_mismatch", "el handoff no corresponde a este Run", { issues });
+      return fail("handoff_mismatch", "the handoff does not match this Run", { issues });
     }
 
     const { task, project } = this.#taskAndProject(run);
@@ -474,7 +479,7 @@ export class LunasqMcpService {
     const moved = notRunning(task, origin);
     if (moved) return moved;
     if (run.phase === "implement") {
-      if (!task.worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
+      if (!task.worktreePath) return fail("no_worktree", "the task has no registered worktree");
       if (
         await this.#commits.branchHasCommits({
           worktreePath: task.worktreePath,
@@ -483,7 +488,7 @@ export class LunasqMcpService {
       ) {
         return fail(
           "branch_has_commits",
-          `el branch de la tarea tiene commits sobre ${project.baseBranch}: entrega con submit_for_verification`,
+          `the task's branch has commits on top of ${project.baseBranch}: deliver with submit_for_verification`,
         );
       }
     }
@@ -495,7 +500,7 @@ export class LunasqMcpService {
         resultKind: handoff.resultKind,
         result: handoff.result,
         title: handoff.title,
-        // El commit check corrió fuera de la transacción: la tarea no debe haberse movido.
+        // The commit check ran outside the transaction: the task must not have moved.
         expected: { state: origin, subState: "running" },
       });
       if (!result.ok) {
@@ -515,34 +520,34 @@ export class LunasqMcpService {
     if (!parsed.ok) return parsed;
     let handoff = parsed.data;
     const spec = this.#specs.approved(run.taskId);
-    if (!spec) return fail("no_approved_spec", "la tarea no tiene spec aprobada");
+    if (!spec) return fail("no_approved_spec", "the task has no approved spec");
     const coverage = checkCriteria(
       spec,
       handoff.body.criteriaVerdicts.map((c) => c.criterionId),
       "body.criteriaVerdicts",
-      "no tiene veredicto",
+      "has no verdict",
     );
     if (!coverage.ok) return coverage;
 
-    // Si el Run ya registró un veredicto, la transacción decide (idempotente o
-    // verdict_already_recorded) sin volver a comprobar evidencia, correr la suite ni los hooks.
+    // If the Run already recorded a verdict, the transaction decides (idempotent or
+    // verdict_already_recorded) without checking evidence again, running the suite or the hooks.
     if (this.#runs.get(run.id)?.handoff === null) {
-      // Tras un hook bloqueado la tarea ya escaló: un reintento no vuelve a correr hooks ni gate.
+      // After a blocked hook the task already escalated: a retry does not run hooks or the gate again.
       const moved = notRunning(this.#taskAndProject(run).task, "verification");
       if (moved) return moved;
       const issues = checkReviewerEvidence(handoff.body, this.#subagents.forRun(run.id));
       if (issues.length > 0) {
         return fail(
           "reviewer_evidence_mismatch",
-          "los revisores del veredicto no coinciden con los registrados por los hooks del Run",
+          "the verdict's reviewers do not match those recorded by the Run's hooks",
           { issues },
         );
       }
       const rejected = await this.#gated(run, async () => {
-        // Antes de aceptar un pass, LunasQ vuelve a correr la suite.
+        // Before accepting a pass, LunasQ runs the suite again.
         const pass = handoff.body.verdict === "pass" ? await this.#checkPass(run) : null;
         if (pass && GIT_REWORK_CODES.has(pass.error.code)) {
-          // El estado de git lo arregla el implementador: el Run cierra como reject con must-fix.
+          // The git state is fixed by the implementer: the Run closes as reject with a must-fix.
           handoff = gitReworkHandoff(handoff, pass.error);
         } else if (pass) {
           return pass;
@@ -553,7 +558,7 @@ export class LunasqMcpService {
     }
 
     return this.#write((tx) => {
-      // Un Run registra un solo veredicto: repetir el mismo no cambia nada.
+      // A Run records a single verdict: repeating the same one changes nothing.
       const current = this.#runs.get(run.id);
       if (!current || current.endedAt) throw new Rejected(staleRun());
       if (current.handoff !== null) {
@@ -561,7 +566,7 @@ export class LunasqMcpService {
           return { ok: true, data: { verdict: handoff.body.verdict } };
         }
         throw new Rejected(
-          fail("verdict_already_recorded", "este Run ya registró un veredicto distinto"),
+          fail("verdict_already_recorded", "this Run already recorded a different verdict"),
         );
       }
       const { body } = handoff;
@@ -577,7 +582,7 @@ export class LunasqMcpService {
       if (body.verdict === "reject") {
         const { project } = this.#taskAndProject(run);
         this.#close(tx, run, { result: "success", handoff });
-        // Con el tope del proyecto alcanzado, la máquina de estados manda la tarea a needs_human.
+        // With the project cap reached, the state machine sends the task to needs_human.
         this.#transition(tx, {
           taskId: run.taskId,
           actor: "agent",
@@ -587,11 +592,11 @@ export class LunasqMcpService {
         recordVerdict(tx, run.taskId, summary);
         return { ok: true, data: { verdict: "reject" } };
       }
-      // Pass: el Run sigue abierto y la entrega (UW-26) emite verdict_pass tras crear el PR; la
-      // arranca el evento verification.verdict_recorded.
+      // Pass: the Run stays open and the delivery (UW-26) emits verdict_pass after creating the PR; the
+      // verification.verdict_recorded event starts it.
       const task = this.#tasks.get(run.taskId);
       if (task?.state !== "verification" || task.subState !== "running") {
-        throw new Rejected(fail("transition_rejected", "la tarea no está en verification/running"));
+        throw new Rejected(fail("transition_rejected", "the task is not in verification/running"));
       }
       this.#runs.recordHandoff(run.id, handoff);
       recordVerdict(tx, run.taskId, summary);
@@ -603,7 +608,7 @@ export class LunasqMcpService {
     return this.#write((tx) => {
       const attempt = consecutiveFailures(tx, run.taskId, run.phase) + 1;
       this.#close(tx, run, { result: "failure", failureReason: input.reason });
-      // El agente declara el fallo; quien lo registra en la máquina de estados es el sistema.
+      // The agent declares the failure; whoever records it in the state machine is the system.
       this.#transition(tx, {
         taskId: run.taskId,
         actor: "system",
@@ -620,28 +625,30 @@ export class LunasqMcpService {
   ): Outcome<Extract<Handoff, { phase: P }>> {
     const parsed = parseHandoff(input);
     if (!parsed.success) {
-      return fail("invalid_handoff", "el handoff no cumple el esquema", { issues: parsed.errors });
+      return fail("invalid_handoff", "the handoff does not meet the schema", {
+        issues: parsed.errors,
+      });
     }
     const handoff = parsed.data;
     const issues: HandoffError[] = [];
     if (handoff.phase !== phase || HANDOFF_PHASE[run.phase] !== phase) {
-      issues.push({ path: "phase", message: `se esperaba ${phase} y llegó ${handoff.phase}` });
+      issues.push({ path: "phase", message: `expected ${phase} but got ${handoff.phase}` });
     }
     if (handoff.taskId !== run.taskId) {
-      issues.push({ path: "taskId", message: `el Run es de la tarea ${run.taskId}` });
+      issues.push({ path: "taskId", message: `the Run belongs to task ${run.taskId}` });
     }
     if (handoff.runId !== run.id) {
-      issues.push({ path: "runId", message: `el Run activo es ${run.id}` });
+      issues.push({ path: "runId", message: `the active Run is ${run.id}` });
     }
     if (issues.length > 0) {
-      return fail("handoff_mismatch", "el handoff no corresponde a este Run", { issues });
+      return fail("handoff_mismatch", "the handoff does not match this Run", { issues });
     }
     return { ok: true, data: handoff as Extract<Handoff, { phase: P }> };
   }
 
   /**
-   * Corre `check` con el candado del Run: mientras corre un gate, otra llamada del mismo Run no
-   * lanza una segunda suite.
+   * Runs `check` with the Run's lock: while a gate runs, another call of the same Run does not
+   * launch a second suite.
    */
   async #gated(
     run: RunRow,
@@ -650,7 +657,7 @@ export class LunasqMcpService {
     if (this.#gating.has(run.id)) {
       return fail(
         "gate_in_progress",
-        "ya corre un gate de tests para este Run; espera su resultado",
+        "a test gate is already running for this Run; wait for its result",
       );
     }
     this.#gating.add(run.id);
@@ -662,27 +669,27 @@ export class LunasqMcpService {
   }
 
   /**
-   * Antes de aceptar un pass: worktree limpio, HEAD en el commit que pasó el gate de
-   * `submit_for_verification` y gate en verde otra vez; null si todo pasa. Así el verificador no
-   * puede aprobar un commit propio que, por ejemplo, borre los tests en rojo.
+   * Before accepting a pass: clean worktree, HEAD at the commit that passed the
+   * `submit_for_verification` gate and green gate again; null if everything passes. This way the verifier cannot
+   * approve its own commit that, for example, deletes the red tests.
    */
   async #checkPass(run: RunRow): Promise<Extract<Outcome<never>, { ok: false }> | null> {
     const { task, project } = this.#taskAndProject(run);
     const worktreePath = task.worktreePath;
-    if (!worktreePath) return fail("no_worktree", "la tarea no tiene worktree registrado");
+    if (!worktreePath) return fail("no_worktree", "the task has no registered worktree");
     const expected = this.#gatedHead(run.taskId);
-    // La prueba de reversión del verificador toca el código: el gate corre sobre lo commiteado.
+    // The verifier's reversion test touches the code: the gate runs on what is committed.
     const unchanged = async () =>
       (await this.#dirty(worktreePath)) ?? (await this.#sameHead(worktreePath, expected));
     const before = await unchanged();
     if (before) return before;
     const gate = await this.#runGate(run, worktreePath, project, "verdict_pass");
     if (gate) return gate;
-    // La suite puede tardar minutos: el worktree no debe haberse movido mientras corría.
+    // The suite can take minutes: the worktree must not have moved while it ran.
     return unchanged();
   }
 
-  /** Sha que probó el último gate en verde de `submit_for_verification` de la tarea. */
+  /** Sha that the last green `submit_for_verification` gate of the task tested. */
   #gatedHead(taskId: string): string | null {
     let head: string | null = null;
     for (const event of listEvents(this.#db, taskId)) {
@@ -701,9 +708,9 @@ export class LunasqMcpService {
     const head = await this.#commits.head(worktreePath);
     if (expected !== null) {
       if (head === expected) return null;
-      // Cerrar un Run escribe y a veces commitea la evidencia después del gate del implementador.
-      // Si los commits intermedios solo tocan `lunasq/tasks/` no cambian el código, y el gate del
-      // pass corre sobre el HEAD actual: el veredicto sigue juzgando exactamente lo que se prueba.
+      // Closing a Run writes and sometimes commits the evidence after the implementer's gate.
+      // If the intermediate commits only touch `lunasq/tasks/` they do not change the code, and the pass
+      // gate runs on the current HEAD: the verdict keeps judging exactly what is tested.
       if (
         head !== null &&
         (await this.#commits.onlyEvidenceBetween({
@@ -718,16 +725,16 @@ export class LunasqMcpService {
     return fail(
       "head_changed",
       expected === null
-        ? "no hay un gate en verde de submit_for_verification con el que comparar el HEAD"
-        : `el HEAD del worktree (${head ?? "ilegible"}) no es el commit que pasó el gate de submit_for_verification (${expected})`,
+        ? "there is no green submit_for_verification gate to compare the HEAD against"
+        : `the worktree HEAD (${head ?? "unreadable"}) is not the commit that passed the submit_for_verification gate (${expected})`,
     );
   }
 
   async #dirty(worktreePath: string): Promise<Extract<Outcome<never>, { ok: false }> | null> {
     const dirty = await this.#commits.uncommitted(worktreePath);
     if (dirty.length === 0) return null;
-    return fail("dirty_worktree", "el worktree tiene cambios sin commitear", {
-      issues: dirty.map((file) => ({ path: file, message: "cambio sin commitear" })),
+    return fail("dirty_worktree", "the worktree has uncommitted changes", {
+      issues: dirty.map((file) => ({ path: file, message: "uncommitted change" })),
     });
   }
 
@@ -737,7 +744,7 @@ export class LunasqMcpService {
     project: { testCommand?: string | null },
     trigger: TestGateTrigger,
   ): Promise<Extract<Outcome<never>, { ok: false }> | null> {
-    // El gate lo corre LunasQ sobre lo commiteado: lo que el agente diga de sus tests no cuenta.
+    // The gate is run by LunasQ on what is committed: what the agent says about its tests does not count.
     const gate = await this.#testGate.run({
       taskId: run.taskId,
       runId: run.id,
@@ -746,12 +753,12 @@ export class LunasqMcpService {
       trigger,
     });
     if (!gate.passed) {
-      return fail("test_gate_failed", "el gate de tests está en rojo", { output: gate.output });
+      return fail("test_gate_failed", "the test gate is red", { output: gate.output });
     }
     return null;
   }
 
-  /** Commits del branch, worktree limpio y gate de tests en verde; null si todo pasa. */
+  /** Commits of the branch, clean worktree and green test gate; null if everything passes. */
   async #checkWorktree(
     run: RunRow,
     handoff: ImplementationHandoff,
@@ -766,15 +773,15 @@ export class LunasqMcpService {
       commits: handoff.body.commits,
     });
     if (missing.length > 0) {
-      return fail("commits_missing", "commits que no están en el branch de la tarea", {
+      return fail("commits_missing", "commits that are not in the task's branch", {
         issues: missing.map((sha) => ({
           path: `body.commits[${handoff.body.commits.indexOf(sha)}]`,
-          message: `${sha} no está en el branch de la tarea o ya está en ${project.baseBranch}`,
+          message: `${sha} is not in the task's branch or is already in ${project.baseBranch}`,
         })),
       });
     }
-    // Los hooks corren antes del gate: así la suite prueba el HEAD con lo que commiteen y el
-    // verificador se despacha cuando ya terminaron.
+    // Hooks run before the gate: this way the suite tests the HEAD with what they commit and the
+    // verifier is dispatched when they have already finished.
     for (const point of ["after_implementation", "before_verification"] as const) {
       const blocked = await this.#runHooks(run, point);
       if (blocked) return blocked;
@@ -782,7 +789,7 @@ export class LunasqMcpService {
     return this.#runGate(run, worktreePath, project, "submit_for_verification");
   }
 
-  /** Hooks del punto; null si no bloqueó. Un punto bloqueado ya escaló la tarea (HookService). */
+  /** Hooks of the point; null if it did not block. A blocked point already escalated the task (HookService). */
   async #runHooks(
     run: RunRow,
     point: HookPoint,
@@ -795,15 +802,15 @@ export class LunasqMcpService {
       ...(phaseResult === undefined ? {} : { phaseResult }),
     });
     if (result.outcome !== "blocked") return null;
-    const where = result.failedScript ? ` en ${result.failedScript}` : "";
+    const where = result.failedScript ? ` in ${result.failedScript}` : "";
     return fail(
       "hook_blocked",
-      `el punto ${point} bloqueó${where}${result.escalated ? ": la tarea pasó a needs_human" : ""}`,
+      `point ${point} blocked${where}${result.escalated ? ": the task went to needs_human" : ""}`,
       result.error ? { output: result.error } : {},
     );
   }
 
-  /** Must-fix del último veredicto si fue reject; null si no hay o si el último fue pass. */
+  /** Must-fix of the last verdict if it was reject; null if there is none or if the last was pass. */
   #rework(taskId: string): TaskContext["rework"] {
     const latest = this.#runs.latestHandoff(taskId, "verify");
     const handoff = latest ? storedHandoff(latest.handoff) : undefined;
@@ -813,7 +820,7 @@ export class LunasqMcpService {
     return { runId: latest.runId, iteration: latest.iteration, mustFix: handoff.body.mustFix };
   }
 
-  /** El conflicto de entrega más reciente, mientras no haya un veredicto posterior (ADR uw-26-entrega). */
+  /** The most recent delivery conflict, while there is no later verdict (ADR uw-26-entrega). */
   #deliveryConflict(taskId: string): TaskContext["deliveryConflict"] {
     let conflict: TaskContext["deliveryConflict"] = null;
     for (const event of listEvents(this.#db, taskId)) {
@@ -830,7 +837,7 @@ export class LunasqMcpService {
     const task = this.#tasks.get(run.taskId);
     const project = task ? this.#projects.get(task.projectId) : null;
     if (!task || !project) {
-      throw new Error(`el Run ${run.id} apunta a una tarea o proyecto inexistente`);
+      throw new Error(`Run ${run.id} points to a nonexistent task or project`);
     }
     return { task, project };
   }
@@ -868,15 +875,15 @@ export class LunasqMcpService {
 const staleRun = () =>
   fail(
     "invalid_run_token",
-    "el Run se cerró mientras corría la llamada: esta sesión ya no es la activa",
+    "the Run was closed while the call was running: this session is no longer the active one",
   );
 
-/** Rechazo sin efectos si la tarea ya no está en `<state>/running` (p. ej. escaló a needs_human). */
+/** Rejection without effects if the task is no longer in `<state>/running` (e.g. it escalated to needs_human). */
 function notRunning(task: { state: string; subState: string | null }, state: string) {
   if (task.state === state && task.subState === "running") return null;
   return fail(
     "transition_rejected",
-    `la tarea está en ${task.state}${task.subState ? `/${task.subState}` : ""}, no en ${state}/running`,
+    `the task is in ${task.state}${task.subState ? `/${task.subState}` : ""}, not in ${state}/running`,
   );
 }
 
@@ -891,7 +898,7 @@ type VerificationHandoff = Extract<Handoff, { phase: "verification" }>;
 const isImplementation = (h: Handoff): h is ImplementationHandoff => h.phase === "implementation";
 const isVerification = (h: Handoff): h is VerificationHandoff => h.phase === "verification";
 
-/** Los ids del handoff deben ser exactamente los criterios de la spec aprobada. */
+/** The handoff ids must be exactly the approved spec's criteria. */
 function checkCriteria(
   spec: Spec,
   ids: string[],
@@ -904,17 +911,21 @@ function checkCriteria(
     if (!expected.has(id)) {
       issues.push({
         path: `${path}[${i}]`,
-        message: `la spec aprobada no tiene el criterio ${id}`,
+        message: `the approved spec has no criterion ${id}`,
       });
     }
   });
   for (const id of expected) {
-    if (!ids.includes(id)) issues.push({ path, message: `el criterio ${id} ${missingMessage}` });
+    if (!ids.includes(id)) issues.push({ path, message: `criterion ${id} ${missingMessage}` });
   }
   if (issues.length > 0) {
-    return fail("spec_mismatch", `el handoff no cubre los criterios de la spec v${spec.version}`, {
-      issues,
-    });
+    return fail(
+      "spec_mismatch",
+      `the handoff does not cover the criteria of spec v${spec.version}`,
+      {
+        issues,
+      },
+    );
   }
   return { ok: true, data: null };
 }

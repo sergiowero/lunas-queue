@@ -1,7 +1,7 @@
-// Stream SSE de cambios para la UI (UW-21, ADR uw-21-front-end). Cada cambio de una tarea deja un
-// evento en el Event log, así que el stream sigue el id del último evento: con eventos nuevos manda
-// `change` con las tareas afectadas y el front end invalida esas consultas. El id del mensaje es
-// el del evento, así una reconexión con Last-Event-ID recupera lo que se perdió.
+// SSE change stream for the UI (UW-21, ADR uw-21-front-end). Each task change leaves an
+// event in the Event log, so the stream follows the id of the last event: with new events it sends
+// `change` with the affected tasks and the front end invalidates those queries. The message id is
+// the event's, so a reconnection with Last-Event-ID recovers what was lost.
 import type { TaskViewRepository } from "@lunasq/db";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -23,7 +23,7 @@ export function changeStreamRoutes(views: TaskViewRepository, intervalMs: number
           await stream.writeSSE({
             event: "change",
             id: String(lastId),
-            // `settings` solo viaja cuando cambió la configuración global (settings.updated).
+            // `settings` only travels when the global configuration changed (settings.updated).
             data: JSON.stringify(settingsChanged ? { taskIds, settings: true } : { taskIds }),
           });
         }

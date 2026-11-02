@@ -52,39 +52,39 @@ const executed = (script: string, over: Record<string, unknown> = {}) => ({
 });
 
 describe("GET /api/projects/:id/hooks", () => {
-  it("devuelve los hooks de la rama base del proyecto", async () => {
+  it("returns the hooks of the project's base branch", async () => {
     const { project, get } = setup({ listHooks: async () => listing });
     expect(await get(`/api/projects/${project.id}/hooks`)).toEqual({ status: 200, body: listing });
   });
 
-  it("responde 404 si el proyecto no existe", async () => {
+  it("answers 404 if the project does not exist", async () => {
     const { get } = setup({
       listHooks: async (id) => {
-        throw new HookError("project_not_found", `proyecto ${id} no existe`);
+        throw new HookError("project_not_found", `project ${id} does not exist`);
       },
     });
     expect((await get(`/api/projects/${missing}/hooks`)).status).toBe(404);
   });
 
-  it("responde 502 si no se pudo leer la rama base", async () => {
+  it("answers 502 if the base branch could not be read", async () => {
     const { project, get } = setup({
       listHooks: async () => {
-        throw new Error("fetch falló");
+        throw new Error("fetch failed");
       },
     });
     const res = await get(`/api/projects/${project.id}/hooks`);
     expect(res.status).toBe(502);
-    expect(res.body).toEqual({ error: "hooks_unavailable", message: "fetch falló" });
+    expect(res.body).toEqual({ error: "hooks_unavailable", message: "fetch failed" });
   });
 
-  it("responde 503 sin servicio de hooks", async () => {
+  it("answers 503 without a hooks service", async () => {
     const { project, get } = setup();
     expect((await get(`/api/projects/${project.id}/hooks`)).status).toBe(503);
   });
 });
 
 describe("GET /api/projects/:id/hooks/executions", () => {
-  it("lista las últimas ejecuciones del proyecto con su tarea y respeta el límite por hook", async () => {
+  it("lists the project's latest executions with their task and respects the per-hook limit", async () => {
     const { db, project, get } = setup();
     const task = insertTask(db, project.id, { intent: "Subir versión" });
     const second = insertTask(db, project.id, { intent: "Segunda" });
@@ -102,14 +102,14 @@ describe("GET /api/projects/:id/hooks/executions", () => {
     }
     const res = await get(`/api/projects/${project.id}/hooks/executions?limit=1`);
     expect(res.status).toBe(200);
-    // Una tarea por script: la más reciente de 10-a es "Segunda".
+    // One task per script: the most recent of 10-a is "Segunda".
     expect(res.body).toMatchObject([
       { taskId: task.id, taskIntent: "Subir versión", script: "20-b", exitCode: 2, passed: false },
       { taskId: second.id, script: "10-a", output: "listo", durationMs: 40 },
     ]);
   });
 
-  it("no mezcla ejecuciones de otros proyectos", async () => {
+  it("does not mix executions of other projects", async () => {
     const { db, project, get } = setup();
     const foreign = insertTask(db, insertProject(db).id);
     appendEvent(db, {
@@ -121,7 +121,7 @@ describe("GET /api/projects/:id/hooks/executions", () => {
     expect((await get(`/api/projects/${project.id}/hooks/executions`)).body).toEqual([]);
   });
 
-  it("responde 404 si el proyecto no existe y 400 con un límite inválido", async () => {
+  it("answers 404 if the project does not exist and 400 with an invalid limit", async () => {
     const { project, get } = setup();
     expect((await get(`/api/projects/${missing}/hooks/executions`)).status).toBe(404);
     expect((await get(`/api/projects/${project.id}/hooks/executions?limit=0`)).status).toBe(400);

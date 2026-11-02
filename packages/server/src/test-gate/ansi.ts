@@ -1,5 +1,5 @@
-// Quita las secuencias de escape ANSI (colores, negritas, enlaces OSC) de la salida de una suite.
-// Sin esto, el Event log guarda `\u001b[2m…\u001b[22m` tal cual y la salida no se puede leer.
+// Strips ANSI escape sequences (colors, bold, OSC links) from a suite's output.
+// Without this, the Event log stores `\u001b[2m…\u001b[22m` as is and the output cannot be read.
 
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(

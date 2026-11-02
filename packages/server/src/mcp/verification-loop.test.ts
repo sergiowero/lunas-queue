@@ -1,6 +1,6 @@
-// Loop implementación ↔ verificación de punta a punta (UW-23): scheduler, dispatcher contra herdr
-// fake, LunasQ MCP por el cliente oficial y hooks de subagentes por HTTP. Los agentes son el test:
-// con el run token de cada Run llaman las tools como lo haría Claude Code en el pane.
+// End-to-end implementation ↔ verification loop (UW-23): scheduler, dispatcher against fake herdr,
+// LunasQ MCP through the official client and subagent hooks over HTTP. The agents are the test:
+// with each Run's run token they call the tools as Claude Code would in the pane.
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -39,7 +39,7 @@ afterEach(async () => {
 
 const HEAD = "a".repeat(40);
 
-/** Gate en verde que deja su `test_gate.executed`, como PaneTestGate. */
+/** Green gate that leaves its `test_gate.executed`, like PaneTestGate. */
 class RecordingGate implements TestGate {
   readonly #db: LunasqDatabase;
   readonly #order: string[];
@@ -94,7 +94,7 @@ async function loop() {
     publisher,
     config: { tickIntervalMs: 60_000 },
   });
-  // Orden de hooks de fase y gates a lo largo del loop.
+  // Order of phase hooks and gates throughout the loop.
   const order: string[] = [];
   const phaseHooks = new FakePhaseHooks();
   phaseHooks.onRun = (input) => order.push(input.point);
@@ -111,7 +111,7 @@ async function loop() {
   const submitted = specs.submit(task.id, specContentExample());
   if (!submitted.ok) throw new Error(submitted.error.message);
   specs.approve(task.id, submitted.spec.version);
-  // Spec aprobada: la tarea entra a implementación.
+  // Approved spec: the task enters implementation.
   setTaskPosition(db, task.id, { state: "in_progress", subState: "queued" });
 
   await orchestrator.start();
@@ -122,7 +122,7 @@ async function loop() {
   const runs = new RunRepository(db);
   const tasks = new TaskRepository(db);
 
-  /** Espera el n-ésimo Run lanzado de la fase y devuelve sus tools. */
+  /** Waits for the n-th launched Run of the phase and returns its tools. */
   async function agent(phase: "implement" | "verify", n: number) {
     let run: RunRow | undefined;
     await vi.waitFor(
@@ -130,7 +130,7 @@ async function loop() {
         run = runs.forTask(task.id).filter((r) => r.phase === phase)[n - 1];
         expect(run?.launchedAt).toBeInstanceOf(Date);
       },
-      // Cada despacho pasa por outbox, scheduler y dispatcher reales: holgura para CI cargado.
+      // Each dispatch goes through the real outbox, scheduler and dispatcher: slack for a loaded CI.
       { timeout: 15_000 },
     );
     if (!run) throw new Error("sin Run");
@@ -157,7 +157,7 @@ async function loop() {
     return { run: active, call, context: context.body };
   }
 
-  /** SubagentStart y SubagentStop de cada revisor, como los manda Claude Code. */
+  /** SubagentStart and SubagentStop of each reviewer, as Claude Code sends them. */
   async function launchReviewers(run: RunRow, names: readonly string[]) {
     for (const name of names) {
       for (const hook_event_name of ["SubagentStart", "SubagentStop"]) {
@@ -206,8 +206,8 @@ async function loop() {
   return { db, task, runs, tasks, implement, verify, agent, verdicts, order };
 }
 
-describe("loop implementación ↔ verificación", { timeout: 60_000 }, () => {
-  it("caso pass: implementación, verificación en Sonnet con 4 revisores y veredicto pass", async () => {
+describe("implementation ↔ verification loop", { timeout: 60_000 }, () => {
+  it("pass case: implementation, verification on Sonnet with 4 reviewers and a pass verdict", async () => {
     const l = await loop();
     await l.implement(1);
     const { run } = await l.verify(1, "pass");
@@ -219,7 +219,7 @@ describe("loop implementación ↔ verificación", { timeout: 60_000 }, () => {
       verificationIteration: 0,
       riskLabel: "low",
     });
-    // El Run del approver sigue abierto para la entrega (UW-26), que arranca con este evento.
+    // The approver's Run stays open for the delivery (UW-26), which starts with this event.
     expect(l.runs.get(run.id)).toMatchObject({ endedAt: null });
     expect(l.verdicts()).toEqual([expect.objectContaining({ verdict: "pass", iteration: 0 })]);
     expect(l.order).toEqual([
@@ -231,12 +231,12 @@ describe("loop implementación ↔ verificación", { timeout: 60_000 }, () => {
     ]);
   });
 
-  it("caso reject: vuelve a implementación con los must-fix y el segundo ciclo pasa", async () => {
+  it("reject case: goes back to implementation with the must-fix and the second cycle passes", async () => {
     const l = await loop();
     await l.implement(1);
     const rejected = await l.verify(1, "reject");
 
-    // Rework: un implementador nuevo recibe solo los must-fix del reject.
+    // Rework: a new implementer receives only the reject's must-fix.
     const second = await l.agent("implement", 2);
     expect(second.run.iteration).toBe(1);
     expect(second.context).toMatchObject({
@@ -248,7 +248,7 @@ describe("loop implementación ↔ verificación", { timeout: 60_000 }, () => {
     });
     expect(result.isError).toBe(false);
 
-    // El segundo verificador ve el historial completo y aprueba.
+    // The second verifier sees the full history and approves.
     const passed = await l.verify(2, "pass");
     expect(passed.context).toMatchObject({
       verificationHistory: [{ runId: rejected.run.id, body: { verdict: "reject" } }],
@@ -264,7 +264,7 @@ describe("loop implementación ↔ verificación", { timeout: 60_000 }, () => {
     ]);
   });
 
-  it("la cuarta verificación que rechaza termina en needs_human", async () => {
+  it("the fourth verification that rejects ends in needs_human", async () => {
     const l = await loop();
     for (let n = 1; n <= 3; n += 1) {
       await l.implement(n);
@@ -286,7 +286,7 @@ describe("loop implementación ↔ verificación", { timeout: 60_000 }, () => {
       to: { state: "needs_human" },
       reason: "iterations_exhausted",
     });
-    // No se despacha un quinto implementador.
+    // A fifth implementer is not dispatched.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(l.runs.forTask(l.task.id).filter((r) => r.phase === "implement")).toHaveLength(4);
   });

@@ -1,4 +1,4 @@
-// Ayudas compartidas por las rutas: lectura del cuerpo y respuestas de error comunes.
+// Helpers shared by the routes: body reading and common error responses.
 import type { Context, MiddlewareHandler } from "hono";
 
 interface ValidationError {
@@ -18,7 +18,7 @@ export async function readJson(c: Context): Promise<{ ok: true; body: unknown } 
   }
 }
 
-/** Como readJson, pero un cuerpo vacío vale `{}`: para acciones con cuerpo opcional. */
+/** Like readJson, but an empty body is `{}`: for actions with an optional body. */
 export async function readOptionalJson(
   c: Context,
 ): Promise<{ ok: true; body: unknown } | { ok: false }> {
@@ -43,7 +43,7 @@ function hostnameOf(value: string): string | null {
   }
 }
 
-/** Dirección del par que abrió la conexión; undefined fuera de un servidor real (app.request). */
+/** Address of the peer that opened the connection; undefined outside a real server (app.request). */
 function peerAddress(c: Context): string | undefined {
   const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
   return env?.incoming?.socket?.remoteAddress;
@@ -54,10 +54,10 @@ function isLoopback(address: string): boolean {
 }
 
 /**
- * Defensa contra DNS rebinding y peticiones cruzadas del navegador: la API local no tiene
- * autenticación, así que rechaza (403 forbidden_origin) cualquier Host u Origin que no sea localhost.
- * Host y Origin los controla el cliente, así que también exige que la conexión venga de loopback:
- * con el servidor ligado a otra interfaz, un cliente remoto no basta con falsificar Host.
+ * Defense against DNS rebinding and cross-origin browser requests: the local API has no
+ * authentication, so it rejects (403 forbidden_origin) any Host or Origin that is not localhost.
+ * Host and Origin are controlled by the client, so it also requires the connection to come from loopback:
+ * with the server bound to another interface, a remote client cannot just forge Host.
  */
 export const localOriginOnly: MiddlewareHandler = async (c, next) => {
   const peer = peerAddress(c);

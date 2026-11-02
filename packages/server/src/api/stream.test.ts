@@ -10,7 +10,7 @@ function setup() {
   return { db, project, app };
 }
 
-/** Lee del stream hasta que aparezca `needle` o se acabe el tiempo. */
+/** Reads from the stream until `needle` shows up or time runs out. */
 async function readUntil(body: ReadableStream<Uint8Array>, needle: string, ms = 2000) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -32,7 +32,7 @@ async function readUntil(body: ReadableStream<Uint8Array>, needle: string, ms = 
 }
 
 describe("GET /api/stream", () => {
-  it("emite un change con las tareas que tuvieron eventos nuevos", async () => {
+  it("emits a change with the tasks that had new events", async () => {
     const { db, project, app } = setup();
     const before = insertTask(db, project.id);
     appendEvent(db, { taskId: before.id, type: "viejo", actor: "human" });
@@ -51,7 +51,7 @@ describe("GET /api/stream", () => {
     expect(text).not.toContain(before.id);
   });
 
-  it("emite un change con settings al cambiar la configuración, aunque ninguna tarea cambie", async () => {
+  it("emits a change with settings when the configuration changes, even if no task changes", async () => {
     const { db, app } = setup();
     const abort = new AbortController();
     const res = await app.request("/api/stream", { signal: abort.signal });
@@ -62,7 +62,7 @@ describe("GET /api/stream", () => {
     expect(text).toContain(JSON.stringify({ taskIds: [], settings: true }));
   });
 
-  it("al reconectar con Last-Event-ID manda lo que se perdió", async () => {
+  it("reconnects with Last-Event-ID and sends what was lost", async () => {
     const { db, project, app } = setup();
     const task = insertTask(db, project.id);
     const seen = appendEvent(db, { taskId: task.id, type: "visto", actor: "human" });

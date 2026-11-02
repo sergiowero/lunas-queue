@@ -46,7 +46,7 @@ function pause(db: ReturnType<typeof setup>["db"], taskId: string) {
 }
 
 describe("Reconciler", () => {
-  it("con todo en orden no hace nada, y repetir la pasada tampoco", async () => {
+  it("with everything in order it does nothing, and repeating the pass does not either", async () => {
     const h = setup();
     await h.launched();
     const empty = { failed: [], closed: [], watched: [], orphanPanes: [], removedWorktrees: [] };
@@ -55,10 +55,10 @@ describe("Reconciler", () => {
     expect(h.reconcileErrors).toEqual([]);
   });
 
-  it("un Run lanzado cuyo agente ya no está en herdr se da por fallido y se reintenta", async () => {
+  it("a launched Run whose agent is no longer in herdr is given as failed and retried", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
-    // Como tras un reinicio: nadie observaba el Run cuando el agente salió.
+    // Like after a restart: nobody was watching the Run when the agent left.
     h.watcher.unwatch(run.id);
     h.herdr.exitAgent(name);
 
@@ -70,7 +70,7 @@ describe("Reconciler", () => {
     expect((await h.reconciler.run()).failed).toEqual([]);
   });
 
-  it("con la tarea en waiting_human no da el Run por fallido aunque falte el agente", async () => {
+  it("with the task in waiting_human it does not give the Run as failed even if the agent is missing", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     transitionTask(h.db, { taskId, actor: "agent", command: { type: "ask_human" } });
@@ -81,7 +81,7 @@ describe("Reconciler", () => {
     expect(h.runs.get(run.id)?.endedAt).toBeNull();
   });
 
-  it("vuelve a observar un Run vivo que nadie observa (reinicio)", async () => {
+  it("watches again a live Run that nobody watches (restart)", async () => {
     const h = setup();
     const { run } = await h.launched();
     h.watcher.unwatch(run.id);
@@ -91,7 +91,7 @@ describe("Reconciler", () => {
     expect((await h.reconciler.run()).watched).toEqual([]);
   });
 
-  it("cierra los panes de agentes de LunasQ sin Run y no toca los ajenos", async () => {
+  it("closes the panes of LunasQ agents without a Run and does not touch foreign ones", async () => {
     const h = setup();
     const { run } = await h.launched();
     const orphanPane = await h.herdr.splitPane({ paneId: run.herdrPane ?? "" });
@@ -108,7 +108,7 @@ describe("Reconciler", () => {
     expect(names).toEqual([run.herdrName, "mio"].sort());
   });
 
-  it("tarea cancelada: cierra el Run como cancelled, detiene el agente y remueve el worktree", async () => {
+  it("canceled task: closes the Run as cancelled, stops the agent and removes the worktree", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     expect(h.taskRow(taskId).worktreePath).not.toBeNull();
@@ -125,7 +125,7 @@ describe("Reconciler", () => {
     expect(await h.reconciler.run()).toMatchObject({ closed: [], removedWorktrees: [] });
   });
 
-  it("tarea completada con Resultado: cierra el Run, detiene el agente y remueve el worktree", async () => {
+  it("task completed with a Result: closes the Run, stops the agent and removes the worktree", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     h.db.$client
@@ -142,7 +142,7 @@ describe("Reconciler", () => {
     expect(h.taskRow(taskId)).toMatchObject({ state: "completed", worktreePath: null });
   });
 
-  it("onMessage pide pasada al entregar un Resultado", async () => {
+  it("onMessage requests a pass on delivering a Result", async () => {
     const h = setup();
     const { taskId, run } = await h.launched();
     h.db.$client
@@ -169,7 +169,7 @@ describe("Reconciler", () => {
     expect(h.runs.get(run.id)?.endedAt).not.toBeNull();
   });
 
-  it("tarea pausada: cierra el Run como cancelled, detiene el agente y conserva el worktree", async () => {
+  it("paused task: closes the Run as cancelled, stops the agent and keeps the worktree", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     const worktreePath = h.taskRow(taskId).worktreePath;
@@ -188,7 +188,7 @@ describe("Reconciler", () => {
     expect(h.reconcileErrors).toEqual([]);
   });
 
-  it("onMessage pide pasada al pausar", async () => {
+  it("onMessage requests a pass on pausing", async () => {
     const h = setup();
     const { taskId, run } = await h.launched();
     pause(h.db, taskId);
@@ -209,7 +209,7 @@ describe("Reconciler", () => {
     await vi.waitFor(() => expect(h.runs.get(run.id)?.result).toBe("cancelled"));
   });
 
-  it("un worktree con cambios no se fuerza y el fallo se reporta una sola vez", async () => {
+  it("a worktree with changes is not forced and the failure is reported only once", async () => {
     const h = setup();
     const { taskId } = await h.launched();
     h.herdr.setWorktreeDirty(h.taskRow(taskId).worktreePath ?? "");
@@ -222,7 +222,7 @@ describe("Reconciler", () => {
     expect(h.reconcileErrors.filter((e) => e.subject === taskId)).toHaveLength(1);
   });
 
-  it("needs_human por timeout conserva el Run y el agente; al reanudar se cierra el Run viejo", async () => {
+  it("needs_human by timeout keeps the Run and the agent; on resuming the old Run is closed", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     transitionTask(h.db, {
@@ -244,7 +244,7 @@ describe("Reconciler", () => {
     expect(h.taskRow(taskId)).toMatchObject({ state: "draft", subState: "queued" });
   });
 
-  it("no toca el Run del verificador con handoff guardado mientras corre la entrega", async () => {
+  it("does not touch the verifier's Run with a saved handoff while the delivery runs", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     h.runs.recordHandoff(run.id, { verdict: "pass" });
@@ -258,7 +258,7 @@ describe("Reconciler", () => {
     expect(h.runs.get(run.id)?.endedAt).toBeNull();
   });
 
-  it("un Run reclamado sin lanzar de una tarea cancelada se cierra y no se lanza", async () => {
+  it("a claimed Run that never launched of a canceled task is closed and not launched", async () => {
     const h = setup();
     const task = insertTask(h.db, h.project.id);
     const claim = claimRun(h.db, {
@@ -281,7 +281,7 @@ describe("Reconciler", () => {
     expect((await h.herdr.snapshot()).agents).toEqual([]);
   });
 
-  it("avisa al cerrar o fallar Runs, para que el scheduler despache ya", async () => {
+  it("notifies on closing or failing Runs, so the scheduler dispatches right away", async () => {
     let woken = 0;
     const h = setup({ onRunsClosed: () => woken++ });
     const { taskId } = await h.launched();
@@ -292,11 +292,11 @@ describe("Reconciler", () => {
     expect(woken).toBe(1);
   });
 
-  it("remueve los worktrees huérfanos de cada proyecto", async () => {
+  it("removes the orphan worktrees of each project", async () => {
     const h = setup({ orphanWorktreesEvery: 1 });
     const { taskId, run } = await h.launched();
     await h.dispatcher.closeRun(run.id, { result: "success" });
-    // La tarea se liberó y olvidó su worktree en la base, pero el checkout sigue en el repo.
+    // The task freed itself and forgot its worktree in the database, but the checkout is still in the repo.
     h.db.$client
       .prepare(
         "update tasks set state = 'cancelled', sub_state = null, worktree_path = null where id = ?",
@@ -310,7 +310,7 @@ describe("Reconciler", () => {
     expect(await h.worktrees.findOrphans(h.project.id)).toEqual([]);
   });
 
-  it("onMessage pide pasada al cancelar o al mergear", async () => {
+  it("onMessage requests a pass on canceling or merging", async () => {
     const h = setup();
     const { taskId, run } = await h.launched();
     cancel(h.db, taskId);

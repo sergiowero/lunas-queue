@@ -24,7 +24,7 @@ function setup(opts: { notificationsEnabled?: boolean } = {}) {
 }
 
 describe("NotificationService", () => {
-  it("entrega una notificación una vez por herdr y una vez por la UI", async () => {
+  it("delivers a notification once through herdr and once through the UI", async () => {
     const { herdr, ui, service } = setup();
     expect(await service.notify(notification())).toEqual({ delivered: true });
     expect(herdr.notifications).toEqual([
@@ -37,7 +37,7 @@ describe("NotificationService", () => {
     expect(ui.map((n) => n.id)).toEqual(["question:q-1"]);
   });
 
-  it("el mismo id dos veces no duplica en ningún canal", async () => {
+  it("the same id twice does not duplicate on any channel", async () => {
     const { herdr, ui, service } = setup();
     await service.notify(notification());
     expect(await service.notify(notification({ title: "otro título" }))).toEqual({
@@ -47,14 +47,14 @@ describe("NotificationService", () => {
     expect(ui).toHaveLength(1);
   });
 
-  it("dos llamadas concurrentes con el mismo id entregan una sola vez", async () => {
+  it("two concurrent calls with the same id deliver only once", async () => {
     const { herdr, ui, service } = setup();
     await Promise.all([service.notify(notification()), service.notify(notification())]);
     expect(herdr.notifications).toHaveLength(1);
     expect(ui).toHaveLength(1);
   });
 
-  it("con el toast de herdr apagado la UI la recibe y se reporta sin error", async () => {
+  it("with herdr's toast off the UI receives it and it is reported without error", async () => {
     const { ui, service, onChannelError } = setup({ notificationsEnabled: false });
     await service.notify(notification());
     expect(ui).toHaveLength(1);
@@ -65,7 +65,7 @@ describe("NotificationService", () => {
     );
   });
 
-  it("si un canal falla los demás reciben igual", async () => {
+  it("if one channel fails the others still receive", async () => {
     const hub = new NotificationHub();
     const ui: Notification[] = [];
     hub.subscribe((n) => ui.push(n));
@@ -87,7 +87,7 @@ describe("NotificationService", () => {
     );
   });
 
-  it("si ningún canal entrega, el mismo id puede reintentarse", async () => {
+  it("if no channel delivers, the same id can be retried", async () => {
     let fail = true;
     const flaky: NotificationChannel = {
       name: "inestable",
@@ -100,7 +100,7 @@ describe("NotificationService", () => {
     expect(await service.notify(notification())).toEqual({ delivered: false });
   });
 
-  it("rechaza una notificación inválida sin entregar nada", async () => {
+  it("rejects an invalid notification without delivering anything", async () => {
     const { herdr, ui, service } = setup();
     await expect(service.notify(notification({ id: "" }))).rejects.toThrow();
     expect(herdr.notifications).toHaveLength(0);

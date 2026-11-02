@@ -19,7 +19,7 @@ function setup() {
 }
 
 describe("GET /api/settings/providers", () => {
-  it("sin configuración guardada devuelve claude y copilot habilitados", async () => {
+  it("without saved configuration it returns claude and copilot enabled", async () => {
     const { send } = setup();
     const res = await send("GET");
     expect(res.status).toBe(200);
@@ -28,7 +28,7 @@ describe("GET /api/settings/providers", () => {
 });
 
 describe("PUT /api/settings/providers", () => {
-  it("guarda la configuración, la devuelve y registra settings.updated en el outbox", async () => {
+  it("saves the configuration, returns it and records settings.updated in the outbox", async () => {
     const { db, send } = setup();
     const res = await send("PUT", { claude: false, copilot: true });
     expect(res.status).toBe(200);
@@ -39,7 +39,7 @@ describe("PUT /api/settings/providers", () => {
     ]);
   });
 
-  it("un PUT parcial cambia solo el proveedor enviado y conserva el otro", async () => {
+  it("a partial PUT changes only the sent provider and keeps the other", async () => {
     const { send } = setup();
     await send("PUT", { claude: false });
     const res = await send("PUT", { copilot: false });
@@ -47,7 +47,7 @@ describe("PUT /api/settings/providers", () => {
     expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: false });
   });
 
-  it("enviar la misma configuración dos veces deja el mismo estado y una sola fila", async () => {
+  it("sending the same configuration twice leaves the same state and a single row", async () => {
     const { db, send } = setup();
     await send("PUT", { claude: false, copilot: false });
     await send("PUT", { claude: false, copilot: false });
@@ -57,21 +57,24 @@ describe("PUT /api/settings/providers", () => {
   });
 
   it.each([
-    ["un kind desconocido", { gemini: false }],
-    ["un valor no booleano", { claude: "no" }],
-    ["un cuerpo que no es objeto", [true]],
-  ])("responde 400 invalid_input con %s y no cambia lo guardado", async (_name, body) => {
-    const { db, send } = setup();
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
-    const before = listPendingOutbox(db).length;
-    const res = await send("PUT", body);
-    expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ error: "invalid_input" });
-    expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: true });
-    expect(listPendingOutbox(db)).toHaveLength(before);
-  });
+    ["an unknown kind", { gemini: false }],
+    ["a non-boolean value", { claude: "no" }],
+    ["a body that is not an object", [true]],
+  ])(
+    "answers 400 invalid_input with %s and does not change what was saved",
+    async (_name, body) => {
+      const { db, send } = setup();
+      new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
+      const before = listPendingOutbox(db).length;
+      const res = await send("PUT", body);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ error: "invalid_input" });
+      expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: true });
+      expect(listPendingOutbox(db)).toHaveLength(before);
+    },
+  );
 
-  it("responde 400 invalid_json si el cuerpo no es JSON", async () => {
+  it("answers 400 invalid_json if the body is not JSON", async () => {
     const { send } = setup();
     const res = await send("PUT", "{no json");
     expect(res.status).toBe(400);
@@ -92,21 +95,21 @@ function concurrencySetup(scheduler?: { globalConcurrency: number }) {
 }
 
 describe("GET /api/settings/concurrency", () => {
-  it("sin configuración guardada devuelve el default de 5", async () => {
+  it("without saved configuration it returns the default of 5", async () => {
     const { send } = concurrencySetup();
     const res = await send("GET");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ globalConcurrency: 5 });
   });
 
-  it("sin configuración guardada devuelve el límite de SchedulerConfig del servidor", async () => {
+  it("without saved configuration it returns the server's SchedulerConfig limit", async () => {
     const { send } = concurrencySetup({ globalConcurrency: 8 });
     expect(await (await send("GET")).json()).toEqual({ globalConcurrency: 8 });
   });
 });
 
 describe("PUT /api/settings/concurrency", () => {
-  it("guarda el límite, lo devuelve y registra settings.updated en el outbox", async () => {
+  it("saves the limit, returns it and records settings.updated in the outbox", async () => {
     const { db, send } = concurrencySetup();
     const res = await send("PUT", { globalConcurrency: 2 });
     expect(res.status).toBe(200);
@@ -117,7 +120,7 @@ describe("PUT /api/settings/concurrency", () => {
     ]);
   });
 
-  it("enviar el límite vigente responde 200 y no registra ningún evento", async () => {
+  it("sending the limit in force answers 200 and records no event", async () => {
     const { db, send } = concurrencySetup();
     await send("PUT", { globalConcurrency: 2 });
     const res = await send("PUT", { globalConcurrency: 2 });
@@ -126,7 +129,7 @@ describe("PUT /api/settings/concurrency", () => {
     expect(listPendingOutbox(db)).toHaveLength(1);
   });
 
-  it("enviar el default sin nada guardado no registra ningún evento", async () => {
+  it("sending the default with nothing saved records no event", async () => {
     const { db, send } = concurrencySetup();
     expect((await send("PUT", { globalConcurrency: 5 })).status).toBe(200);
     expect(listPendingOutbox(db)).toEqual([]);
@@ -134,24 +137,27 @@ describe("PUT /api/settings/concurrency", () => {
 
   it.each([
     ["cero", { globalConcurrency: 0 }],
-    ["más de 50", { globalConcurrency: 51 }],
+    ["more than 50", { globalConcurrency: 51 }],
     ["un decimal", { globalConcurrency: 1.5 }],
-    ["un texto", { globalConcurrency: "4" }],
-    ["un campo desconocido", { globalConcurrency: 2, otro: true }],
-    ["un cuerpo sin el campo", {}],
-    ["un cuerpo que no es objeto", [3]],
-  ])("responde 400 invalid_input con %s y no cambia lo guardado", async (_name, body) => {
-    const { db, send } = concurrencySetup();
-    new SettingsRepository(db).saveConcurrency({ globalConcurrency: 3 });
-    const before = listPendingOutbox(db).length;
-    const res = await send("PUT", body);
-    expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ error: "invalid_input" });
-    expect(await (await send("GET")).json()).toEqual({ globalConcurrency: 3 });
-    expect(listPendingOutbox(db)).toHaveLength(before);
-  });
+    ["a text", { globalConcurrency: "4" }],
+    ["an unknown field", { globalConcurrency: 2, otro: true }],
+    ["a body without the field", {}],
+    ["a body that is not an object", [3]],
+  ])(
+    "answers 400 invalid_input with %s and does not change what was saved",
+    async (_name, body) => {
+      const { db, send } = concurrencySetup();
+      new SettingsRepository(db).saveConcurrency({ globalConcurrency: 3 });
+      const before = listPendingOutbox(db).length;
+      const res = await send("PUT", body);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ error: "invalid_input" });
+      expect(await (await send("GET")).json()).toEqual({ globalConcurrency: 3 });
+      expect(listPendingOutbox(db)).toHaveLength(before);
+    },
+  );
 
-  it("responde 400 invalid_json si el cuerpo no es JSON", async () => {
+  it("answers 400 invalid_json if the body is not JSON", async () => {
     const { db } = concurrencySetup();
     const res = await createApp({ db }).request("/api/settings/concurrency", {
       method: "PUT",
@@ -162,7 +168,7 @@ describe("PUT /api/settings/concurrency", () => {
     expect(await res.json()).toMatchObject({ error: "invalid_json" });
   });
 
-  it("rechaza el PUT con un Host ajeno y no cambia lo guardado", async () => {
+  it("rejects the PUT with a foreign Host and does not change what was saved", async () => {
     const { db, send } = concurrencySetup();
     const res = await send("PUT", { globalConcurrency: 2 }, { host: "evil.example.com" });
     expect(res.status).toBe(403);
@@ -171,11 +177,11 @@ describe("PUT /api/settings/concurrency", () => {
   });
 });
 
-describe("origen de las peticiones a /api/settings", () => {
+describe("request origin for /api/settings", () => {
   it.each([
-    ["un Host que no es localhost (DNS rebinding)", { host: "evil.example.com" }],
-    ["un Origin que no es localhost", { origin: "https://evil.example.com" }],
-  ])("rechaza el PUT con %s y no cambia lo guardado", async (_name, headers) => {
+    ["a Host that is not localhost (DNS rebinding)", { host: "evil.example.com" }],
+    ["an Origin that is not localhost", { origin: "https://evil.example.com" }],
+  ])("rejects the PUT with %s and does not change what was saved", async (_name, headers) => {
     const { db, send } = setup();
     const res = await send("PUT", { claude: false, copilot: false }, headers);
     expect(res.status).toBe(403);
@@ -184,15 +190,15 @@ describe("origen de las peticiones a /api/settings", () => {
     expect(listPendingOutbox(db)).toEqual([]);
   });
 
-  it("rechaza también el GET con un Host ajeno", async () => {
+  it("also rejects the GET with a foreign Host", async () => {
     const { send } = setup();
     expect((await send("GET", undefined, { host: "evil.example.com:8123" })).status).toBe(403);
   });
 
   it.each([
-    ["una IP de la red local", "192.168.1.20"],
-    ["una IPv6 ajena", "2001:db8::1"],
-  ])("rechaza el PUT de %s aunque falsifique Host: localhost", async (_name, remoteAddress) => {
+    ["a local network IP", "192.168.1.20"],
+    ["a foreign IPv6", "2001:db8::1"],
+  ])("rejects the PUT from %s even if it forges Host: localhost", async (_name, remoteAddress) => {
     const { db } = setup();
     const app = createApp({ db });
     const res = await app.request(
@@ -209,7 +215,7 @@ describe("origen de las peticiones a /api/settings", () => {
     expect(listPendingOutbox(db)).toEqual([]);
   });
 
-  it("acepta una conexión loopback con Host de localhost", async () => {
+  it("accepts a loopback connection with a localhost Host", async () => {
     const { db } = setup();
     const app = createApp({ db });
     const res = await app.request(
@@ -220,7 +226,7 @@ describe("origen de las peticiones a /api/settings", () => {
     expect(res.status).toBe(200);
   });
 
-  it("acepta Host y Origin de localhost con puerto", async () => {
+  it("accepts localhost Host and Origin with a port", async () => {
     const { send } = setup();
     const res = await send(
       "PUT",
