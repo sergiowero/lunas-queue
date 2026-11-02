@@ -1,3 +1,4 @@
+import { DEFAULT_MAX_ITERATIONS } from "@lunasq/domain";
 import { TaskTransitionedPayload } from "@lunasq/schemas";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
@@ -221,23 +222,23 @@ describe("transitionTask", () => {
     const t = insertTask(db, insertProject(db).id, {
       state: "verification",
       subState: "running",
-      verificationIteration: 3,
+      verificationIteration: DEFAULT_MAX_ITERATIONS,
     });
     expect(
       apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } }).task.state,
     ).toBe("needs_human");
     // Resuming after exhausted iterations goes back to implementation (there are pending must-fixes), not to
-    // verification. The cumulative iteration is kept and a new cycle of three reworks starts at it.
+    // verification. The cumulative iteration is kept and a new full cycle of reworks starts at it.
     const resumed = apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } });
     expect(resumed.task).toMatchObject({
       state: "in_progress",
       subState: "queued",
-      verificationIteration: 3,
-      verificationCycleStart: 3,
+      verificationIteration: DEFAULT_MAX_ITERATIONS,
+      verificationCycleStart: DEFAULT_MAX_ITERATIONS,
     });
     expect(TaskTransitionedPayload.parse(resumed.event.payload)).toMatchObject({
       command: "resume",
-      verificationIteration: 3,
+      verificationIteration: DEFAULT_MAX_ITERATIONS,
     });
   });
 
@@ -246,7 +247,7 @@ describe("transitionTask", () => {
     const t = insertTask(db, insertProject(db).id, {
       state: "verification",
       subState: "running",
-      verificationIteration: 3,
+      verificationIteration: DEFAULT_MAX_ITERATIONS,
     });
     apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } });
     apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } });
@@ -258,7 +259,7 @@ describe("transitionTask", () => {
       });
     };
     const iterations: number[] = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < DEFAULT_MAX_ITERATIONS; i++) {
       goToVerification();
       const rework = apply(db, {
         taskId: t.id,
@@ -268,14 +269,16 @@ describe("transitionTask", () => {
       expect(rework.task.state).toBe("in_progress");
       iterations.push(rework.task.verificationIteration);
     }
-    expect(iterations).toEqual([4, 5, 6]);
+    expect(iterations).toEqual(
+      Array.from({ length: DEFAULT_MAX_ITERATIONS }, (_, i) => DEFAULT_MAX_ITERATIONS + 1 + i),
+    );
     goToVerification();
     expect(
       apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } }).task,
     ).toMatchObject({
       state: "needs_human",
-      verificationIteration: 6,
-      verificationCycleStart: 3,
+      verificationIteration: DEFAULT_MAX_ITERATIONS * 2,
+      verificationCycleStart: DEFAULT_MAX_ITERATIONS,
     });
   });
 

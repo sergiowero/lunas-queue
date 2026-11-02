@@ -1,6 +1,7 @@
 // LunasQ global configuration (docs/decisions/settings-proveedores.md): which agent
 // providers the dispatcher may use and how many agents may live at once. One row per key;
 // saving is an upsert, so repeating the same configuration leaves the same state.
+import { DEFAULT_MAX_ITERATIONS } from "@lunasq/domain";
 import {
   type Actor,
   AgentKind,
@@ -10,6 +11,7 @@ import {
   DEFAULT_GLOBAL_CONCURRENCY,
   SETTINGS_UPDATED,
   SettingsUpdatedPayload,
+  VerificationSettings,
 } from "@lunasq/schemas";
 import { eq } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
@@ -18,6 +20,7 @@ import { appSettings } from "./schema.ts";
 
 const PROVIDERS_KEY = "providers";
 const CONCURRENCY_KEY = "concurrency";
+const VERIFICATION_KEY = "verification";
 
 /** Read port for the enabled providers; scheduler and claim query it on each pass. */
 export interface ProviderSettingsReader {
@@ -56,7 +59,28 @@ export function readConcurrencySettings(
   return stored.success ? stored.data : { globalConcurrency: fallback };
 }
 
-export class SettingsRepository implements ProviderSettingsReader, ConcurrencySettingsReader {
+/** Read port for the global verification iteration cap. */
+export interface VerificationSettingsReader {
+  verification(): VerificationSettings;
+}
+
+/**
+ * The global cap saved in Settings or, without a row (or with a value that no longer validates),
+ * DEFAULT_MAX_ITERATIONS. Accepts a transaction.
+ */
+export function readVerificationSettings(db: Pick<LunasqDatabase, "select">): VerificationSettings {
+  const row = db
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, VERIFICATION_KEY))
+    .get();
+  const stored = VerificationSettings.safeParse(row?.value);
+  return stored.success ? stored.data : { maxVerificationIterations: DEFAULT_MAX_ITERATIONS };
+}
+
+export class SettingsRepository
+  implements ProviderSettingsReader, ConcurrencySettingsReader, VerificationSettingsReader
+{
   private readonly db: LunasqDatabase;
 
   constructor(db: LunasqDatabase) {
@@ -69,6 +93,40 @@ export class SettingsRepository implements ProviderSettingsReader, ConcurrencySe
 
   concurrency(fallback: number = DEFAULT_GLOBAL_CONCURRENCY): ConcurrencySettings {
     return readConcurrencySettings(this.db, fallback);
+  }
+
+  verification(): VerificationSettings {
+    return readVerificationSettings(this.db);
+  }
+
+  /**
+   * Saves the global iteration cap and publishes settings.updated in the same transaction. Idempotent:
+   * if the value is already in force (the saved one or, without a row, the default) it neither writes
+   * nor publishes. Changing it never touches Runs in progress; it only decides later verdicts.
+   */
+  saveVerification(input: unknown, actor: Actor = "human"): VerificationSettings {
+    const next = VerificationSettings.parse(input);
+    return this.db.transaction((tx) => {
+      const current = readVerificationSettings(tx);
+      if (current.maxVerificationIterations === next.maxVerificationIterations) return current;
+      tx.insert(appSettings)
+        .values({ key: VERIFICATION_KEY, value: next })
+        .onConflictDoUpdate({ target: appSettings.key, set: { value: next } })
+        .run();
+      appendEvent(
+        tx,
+        {
+          taskId: null,
+          type: SETTINGS_UPDATED,
+          actor,
+          payload: SettingsUpdatedPayload.parse({
+            maxVerificationIterations: next.maxVerificationIterations,
+          }),
+        },
+        { publish: true },
+      );
+      return next;
+    });
   }
 
   /**
