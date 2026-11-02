@@ -98,3 +98,18 @@ describe("contraste de las variantes destructivas", () => {
     }
   });
 });
+
+describe("variante success del Badge", () => {
+  it("usa los tokens success, que existen en el tema claro y en el oscuro", () => {
+    const classes = badgeVariants({ variant: "success" });
+    for (const cls of ["bg-success/10", "text-success-text", "ring-success/20"]) {
+      expect(classes).toContain(cls);
+    }
+    const light = tokens(block("@theme"));
+    const dark = tokens(block(".dark"));
+    for (const token of ["--color-success", "--color-success-text"]) {
+      expect(light.has(token), `${token} sin valor claro`).toBe(true);
+      expect(dark.has(token), `${token} sin valor oscuro`).toBe(true);
+    }
+  });
+});
