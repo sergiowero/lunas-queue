@@ -22,6 +22,7 @@ import {
   RunRepository,
   type RunRow,
   RunSubagentRepository,
+  readVerificationSettings,
   recordVerdict,
   SpecRepository,
   TaskRepository,
@@ -595,11 +596,17 @@ export class LunasqMcpService {
       if (body.verdict === "reject") {
         const { project } = this.#taskAndProject(run);
         this.#close(tx, run, { result: "success", handoff });
-        // With the project cap reached, the state machine sends the task to needs_human.
+        // With the effective cap (project, else global) reached, the state machine sends the task to needs_human.
         this.#transition(tx, {
           taskId: run.taskId,
           actor: "agent",
-          command: { type: "verdict_rework", maxIterations: maxVerificationIterations(project) },
+          command: {
+            type: "verdict_rework",
+            maxIterations: maxVerificationIterations(
+              project,
+              readVerificationSettings(tx).maxVerificationIterations,
+            ),
+          },
           expected: { state: "verification", subState: "running" },
         });
         recordVerdict(tx, run.taskId, summary);

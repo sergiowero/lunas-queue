@@ -2,7 +2,9 @@ import { FakeGit } from "@lunasq/adapters";
 import {
   appendEvent,
   listEvents,
+  ProjectRepository,
   RunRepository,
+  SettingsRepository,
   TaskPrRepository,
   TaskRepository,
 } from "@lunasq/db";
@@ -179,6 +181,53 @@ describe("DeliveryService.deliver", () => {
     const h = deliveryHarness();
     await h.agentCommits();
     h.testGate.result = { passed: false, output: "1 failed" };
+    for (let i = 0; i < 4; i++) {
+      appendEvent(h.db, {
+        taskId: h.task.id,
+        type: DELIVERY_CONFLICT,
+        actor: "system",
+        payload: {
+          runId: h.verify.id,
+          reason: "tests_failed",
+          baseBranch: "main",
+          files: [],
+          output: "x",
+        },
+      });
+    }
+    // With 4 previous conflicts and the default cap 5, the fifth still goes back to implementation...
+    expect((await h.service.deliver(h.task.id)).status).toBe("conflict");
+
+    const second = deliveryHarness();
+    await second.agentCommits();
+    second.testGate.result = { passed: false, output: "1 failed" };
+    for (let i = 0; i < 5; i++) {
+      appendEvent(second.db, {
+        taskId: second.task.id,
+        type: DELIVERY_CONFLICT,
+        actor: "system",
+        payload: {
+          runId: second.verify.id,
+          reason: "tests_failed",
+          baseBranch: "main",
+          files: [],
+          output: "x",
+        },
+      });
+    }
+    // ...and the sixth does not.
+    const result = await second.service.deliver(second.task.id);
+    expect(result).toMatchObject({ status: "escalated" });
+    expect(second.taskNow()).toMatchObject({ state: "needs_human" });
+    const escalation = eventsOf(second, TASK_TRANSITIONED).at(-1)?.payload;
+    expect(escalation).toMatchObject({ command: "escalate", reason: "delivery_failed" });
+  });
+
+  it("the global cap from Settings decides when delivery escalates", async () => {
+    const h = deliveryHarness();
+    await h.agentCommits();
+    h.testGate.result = { passed: false, output: "1 failed" };
+    new SettingsRepository(h.db).saveVerification({ maxVerificationIterations: 2 });
     for (let i = 0; i < 2; i++) {
       appendEvent(h.db, {
         taskId: h.task.id,
@@ -193,19 +242,28 @@ describe("DeliveryService.deliver", () => {
         },
       });
     }
-    // With 2 previous conflicts and cap 3, the third still goes back to implementation...
-    expect((await h.service.deliver(h.task.id)).status).toBe("conflict");
+    const result = await h.service.deliver(h.task.id);
+    expect(result).toMatchObject({ status: "escalated" });
+    expect(h.taskNow()).toMatchObject({ state: "needs_human" });
+    const escalation = eventsOf(h, TASK_TRANSITIONED).at(-1)?.payload;
+    expect(escalation).toMatchObject({ command: "escalate", reason: "delivery_failed" });
+  });
 
-    const second = deliveryHarness();
-    await second.agentCommits();
-    second.testGate.result = { passed: false, output: "1 failed" };
-    for (let i = 0; i < 3; i++) {
-      appendEvent(second.db, {
-        taskId: second.task.id,
+  it("the project cap overrides the global cap in delivery", async () => {
+    const h = deliveryHarness();
+    await h.agentCommits();
+    h.testGate.result = { passed: false, output: "1 failed" };
+    new SettingsRepository(h.db).saveVerification({ maxVerificationIterations: 2 });
+    new ProjectRepository(h.db).update(h.project.id, {
+      limits: { maxVerificationIterations: 4 },
+    });
+    for (let i = 0; i < 2; i++) {
+      appendEvent(h.db, {
+        taskId: h.task.id,
         type: DELIVERY_CONFLICT,
         actor: "system",
         payload: {
-          runId: second.verify.id,
+          runId: h.verify.id,
           reason: "tests_failed",
           baseBranch: "main",
           files: [],
@@ -213,12 +271,7 @@ describe("DeliveryService.deliver", () => {
         },
       });
     }
-    // ...and the fourth does not.
-    const result = await second.service.deliver(second.task.id);
-    expect(result).toMatchObject({ status: "escalated" });
-    expect(second.taskNow()).toMatchObject({ state: "needs_human" });
-    const escalation = eventsOf(second, TASK_TRANSITIONED).at(-1)?.payload;
-    expect(escalation).toMatchObject({ command: "escalate", reason: "delivery_failed" });
+    expect((await h.service.deliver(h.task.id)).status).toBe("conflict");
   });
 
   it("a delivered PR that ends up in conflict is delivered again on the same PR, with the conflict count from zero", async () => {

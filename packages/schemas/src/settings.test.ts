@@ -124,7 +124,9 @@ describe("settings.updated event", () => {
     expect(SettingsUpdatedPayload.parse({ maxVerificationIterations: 8 })).toEqual({
       maxVerificationIterations: 8,
     });
-    expect(SettingsUpdatedPayload.parse({ globalConcurrency: 3 })).toEqual({ globalConcurrency: 3 });
+    expect(SettingsUpdatedPayload.parse({ globalConcurrency: 3 })).toEqual({
+      globalConcurrency: 3,
+    });
     expect(() => SettingsUpdatedPayload.parse({ maxVerificationIterations: 21 })).toThrow();
     expect(() => SettingsUpdatedPayload.parse({})).toThrow();
   });
