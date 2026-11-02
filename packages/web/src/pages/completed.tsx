@@ -6,6 +6,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { ExternalLinkIcon } from "../components/external-link-icon.tsx";
+import { Pagination } from "../components/pagination.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
@@ -20,25 +21,33 @@ const column = createColumnHelper<Row>();
 // Valor del selector para las tareas completadas sin PR (prState null).
 const NO_PR = "none";
 
+// Filas del resto que se muestran a la vez dentro de la sección colapsable.
+const REST_PAGE_SIZE = 20;
+
 export function CompletedPage() {
   const [projectId, setProjectId] = useState("");
   const [prFilter, setPrFilter] = useState("");
+  const [restPage, setRestPage] = useState(0);
   const projects = useQuery(queries.projects());
   const tasks = useQuery(queries.tasks(projectId || undefined));
   const names = useMemo(
     () => new Map((projects.data ?? []).map((project) => [project.id, project.name])),
     [projects.data],
   );
-  const completed = useMemo(
-    () =>
-      tasks.data?.filter(
-        (task) =>
-          task.state === "completed" &&
-          (prFilter === "" ||
-            (prFilter === NO_PR ? task.prState === null : task.prState === prFilter)),
-      ),
-    [tasks.data, prFilter],
-  );
+  // Toda tarea completada que pasa los filtros cae en exactamente una de las dos listas.
+  const lists = useMemo(() => {
+    if (!tasks.data) return undefined;
+    const completed = tasks.data.filter(
+      (task) =>
+        task.state === "completed" &&
+        (prFilter === "" ||
+          (prFilter === NO_PR ? task.prState === null : task.prState === prFilter)),
+    );
+    return {
+      open: completed.filter((task) => task.prState === "open"),
+      rest: completed.filter((task) => task.prState !== "open"),
+    };
+  }, [tasks.data, prFilter]);
 
   const columns = useMemo(
     () => [
@@ -93,7 +102,11 @@ export function CompletedPage() {
 
   const error = projects.error ?? tasks.error;
   if (error) return <QueryError error={error} />;
-  if (!projects.data || !completed) return <Loading />;
+  if (!projects.data || !lists) return <Loading />;
+
+  const pageCount = Math.ceil(lists.rest.length / REST_PAGE_SIZE);
+  const page = Math.min(restPage, Math.max(pageCount - 1, 0));
+  const restRows = lists.rest.slice(page * REST_PAGE_SIZE, (page + 1) * REST_PAGE_SIZE);
 
   return (
     <div className="flex flex-col gap-4">
@@ -105,7 +118,10 @@ export function CompletedPage() {
             <Select
               id="completed-project"
               value={projectId}
-              onChange={(event) => setProjectId(event.target.value)}
+              onChange={(event) => {
+                setProjectId(event.target.value);
+                setRestPage(0);
+              }}
             >
               <option value="">Todos</option>
               {(projects.data ?? []).map((project) => (
@@ -120,7 +136,10 @@ export function CompletedPage() {
             <Select
               id="completed-pr-state"
               value={prFilter}
-              onChange={(event) => setPrFilter(event.target.value)}
+              onChange={(event) => {
+                setPrFilter(event.target.value);
+                setRestPage(0);
+              }}
             >
               <option value="">Todos</option>
               {PrState.options.map((state) => (
@@ -133,12 +152,31 @@ export function CompletedPage() {
           </div>
         </div>
       </div>
-      <DataTable
-        columns={columns}
-        data={completed}
-        getRowId={(task) => task.id}
-        empty="No hay tareas completadas."
-      />
+      <section aria-labelledby="completed-open-heading" className="flex flex-col gap-2">
+        <h2 id="completed-open-heading" className="text-base font-semibold">
+          Con PR abierto
+        </h2>
+        <DataTable
+          columns={columns}
+          data={lists.open}
+          getRowId={(task) => task.id}
+          empty="No hay tareas completadas con PR abierto."
+        />
+      </section>
+      <details data-testid="completed-rest" className="rounded-md border border-border px-3 py-2">
+        <summary className="cursor-pointer text-base font-semibold">
+          Resto ({lists.rest.length})
+        </summary>
+        <div className="mt-3 flex flex-col gap-3">
+          <DataTable
+            columns={columns}
+            data={restRows}
+            getRowId={(task) => task.id}
+            empty="No hay otras tareas completadas."
+          />
+          <Pagination page={page} pageCount={pageCount} onPageChange={setRestPage} />
+        </div>
+      </details>
     </div>
   );
 }
