@@ -98,3 +98,44 @@ describe("contraste de las variantes destructivas", () => {
     }
   });
 });
+
+// Mezcla `fg` con opacidad `alpha` sobre `bg` (ambos `#rrggbb`), como pinta `bg-success/10`.
+function over(fg: string, alpha: number, bg: string): string {
+  const ch = (hex: string, i: number) => Number.parseInt(hex.slice(1 + 2 * i, 3 + 2 * i), 16);
+  const mixed = [0, 1, 2].map((i) =>
+    Math.round(ch(fg, i) * alpha + ch(bg, i) * (1 - alpha))
+      .toString(16)
+      .padStart(2, "0"),
+  );
+  return `#${mixed.join("")}`;
+}
+
+describe("contraste de la variante success del Badge", () => {
+  it.each([
+    ["claro", "@theme"],
+    ["oscuro", ".dark"],
+  ])("en tema %s, el texto success sobre su fondo cumple el 4.5:1 de AA", (_, selector) => {
+    const t = tokens(block(selector));
+    const text = t.get("--color-success-text") ?? "";
+    const fill = t.get("--color-success") ?? "";
+    for (const surface of ["--color-surface", "--color-canvas", "--color-surface-secondary"]) {
+      const bg = over(fill, 0.1, t.get(surface) ?? "");
+      expect(contrast(text, bg), `success-text sobre ${surface}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+describe("variante success del Badge", () => {
+  it("usa los tokens success, que existen en el tema claro y en el oscuro", () => {
+    const classes = badgeVariants({ variant: "success" });
+    for (const cls of ["bg-success/10", "text-success-text", "ring-success/20"]) {
+      expect(classes).toContain(cls);
+    }
+    const light = tokens(block("@theme"));
+    const dark = tokens(block(".dark"));
+    for (const token of ["--color-success", "--color-success-text"]) {
+      expect(light.has(token), `${token} sin valor claro`).toBe(true);
+      expect(dark.has(token), `${token} sin valor oscuro`).toBe(true);
+    }
+  });
+});

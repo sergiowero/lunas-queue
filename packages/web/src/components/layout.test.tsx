@@ -120,3 +120,92 @@ describe("contador del enlace En curso", () => {
     expect(screen.getByRole("link", { name: "En curso, 3 tareas" })).toBeTruthy();
   });
 });
+
+type Pr = "open" | "merged" | "closed" | null;
+
+function completed(fake: FakeApi, projectId: string, prState: Pr) {
+  return fake.addTask(projectId, {
+    state: "completed",
+    subState: null,
+    prState,
+    prUrl: prState ? "https://github.com/o/r/pull/1" : null,
+  });
+}
+
+const menu = async () => within(await screen.findByRole("navigation"));
+
+describe("contador de PR abiertos en la pestaña Completed", () => {
+  it("cuenta solo las tareas completed con el PR abierto", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "uno" });
+    for (const pr of ["open", "open", "open", "merged", "closed", null] as Pr[]) {
+      completed(fake, project.id, pr);
+    }
+    fake.addTask(project.id, { state: "in_progress", subState: "running", prState: "open" });
+    renderApp("/queue", fake);
+
+    const nav = await menu();
+    const link = await nav.findByRole("link", { name: "Completed, 3 PR abiertos" });
+    expect(within(link).getByText("3")).toBeTruthy();
+  });
+
+  it("sin PR abiertos no muestra número y el nombre accesible es solo Completed", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "uno" });
+    completed(fake, project.id, "merged");
+    completed(fake, project.id, null);
+    renderApp("/queue", fake);
+
+    const nav = await menu();
+    const link = await nav.findByRole("link", { name: "Completed" });
+    expect(link.querySelector("[data-variant]")).toBeNull();
+    expect(link.textContent).toBe("Completed");
+  });
+
+  it("suma los PR abiertos de todos los proyectos", async () => {
+    const fake = new FakeApi();
+    const one = fake.addProject({ name: "uno" });
+    const two = fake.addProject({ name: "dos" });
+    completed(fake, one.id, "open");
+    completed(fake, two.id, "open");
+    completed(fake, two.id, "open");
+    renderApp("/queue", fake);
+
+    expect(
+      await (await menu()).findByRole("link", { name: "Completed, 3 PR abiertos" }),
+    ).toBeTruthy();
+  });
+
+  it("el badge es verde (success) y el de la Bandeja sigue siendo destructive", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "uno" });
+    completed(fake, project.id, "open");
+    const refined = fake.addTask(project.id, { intent: "Spec" });
+    fake.addSpec(refined.id);
+    fake.transition(refined.id, "refined", null);
+    renderApp("/queue", fake);
+
+    const nav = await menu();
+    const prs = await nav.findByRole("link", { name: "Completed, 1 PR abiertos" });
+    expect(prs.querySelector("[data-variant]")?.getAttribute("data-variant")).toBe("success");
+    const inbox = await nav.findByRole("link", { name: "Bandeja, 1 pendientes" });
+    expect(inbox.querySelector("[data-variant]")?.getAttribute("data-variant")).toBe("destructive");
+  });
+
+  it("baja de 2 a 1 cuando un PR pasa a merged y llega la actualización", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "uno" });
+    const first = completed(fake, project.id, "open");
+    completed(fake, project.id, "open");
+    const { refresh } = renderApp("/queue", fake);
+    const nav = await menu();
+    expect(await nav.findByRole("link", { name: "Completed, 2 PR abiertos" })).toBeTruthy();
+
+    first.prState = "merged";
+    await refresh();
+
+    await waitFor(() =>
+      expect(nav.getByRole("link", { name: "Completed, 1 PR abiertos" })).toBeTruthy(),
+    );
+  });
+});
