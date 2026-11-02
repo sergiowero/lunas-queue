@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The cleanup guards in tooling/cleanup.test.ts diff against the base branch.
+          fetch-depth: 0
       # Uses the packageManager version in package.json (pnpm 11).
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
@@ -26,6 +29,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The cleanup guards in tooling/cleanup.test.ts diff against the base branch.
+          fetch-depth: 0
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
