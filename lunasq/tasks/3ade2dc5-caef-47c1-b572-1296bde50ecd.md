@@ -890,3 +890,769 @@ Resultado
 
 </details>
 <!-- lunasq:run:end 8b1e4a40-9fdc-4590-ae37-500f60bf2c7e -->
+
+<!-- lunasq:run:start 3d1a24dd-6564-4ce0-b231-08b76f5fdda7 -->
+## Run 3d1a24dd-6564-4ce0-b231-08b76f5fdda7 · verify · iteración 1
+
+| Campo | Valor |
+| --- | --- |
+| Fase | verify |
+| Agente | claude |
+| Modelo | haiku |
+| Iteración | 1 |
+| Inicio | 2026-11-02T18:34:38.063Z |
+| Fin | 2026-11-02T18:37:05.595Z |
+| Resultado | success |
+| failure_reason | — |
+| Sesión | fdf705b0-e47d-405f-b549-52e8dc64354a |
+
+### Veredicto
+
+- Veredicto: **pass**
+- Riesgo: low
+
+#### Criterios
+
+- AC-1 · pass · La tabla tiene las filas 1-13 con arranque, modo autónomo, MCP con token, skills refine/implement/verify, subagentes, hooks y evidencia, sesión, modelo/effort, usage, confianza de carpeta, AGENTS.md, instalación y doctor; la fila 14 es el límite de uso.
+- AC-2 · pass · Las 14 filas tienen Claude, Copilot, Codex, veredicto y fuente. La fila 11 ahora tiene el mecanismo de Copilot (--no-custom-instructions, C9). La fila 14 es sin confirmar con «—», permitido por el criterio. Comprobado: codex-cli 0.147.0 y el flag --no-custom-instructions en copilot --help.
+- AC-3 · pass · Conclusión «Paridad total con Claude Code y Copilot CLI: no». El recuento es 7 compatibles, 6 parciales, 1 sin confirmar y 0 incompatibles, coherente con la tabla. Recomendación: integrar con limitaciones.
+- AC-4 · pass · Brechas B1-B7 cubren los puntos 5, 6, 7, 9, 10, 12 y 14 con workaround y archivos de packages/schemas, adapters/agents/providers.ts, dispatcher, cli install/doctor/paths y evidence.
+- AC-5 · pass · Encabezado con fecha 2026-11-02, codex-cli 0.147.0 y tabla de fuentes con F1 = https://learn.chatgpt.com/docs/developer-commands?surface=cli.
+- AC-6 · pass · git diff --name-only merge-base(origin/main)...HEAD lista solo AGENTS.md y docs/research/codex-compatibilidad.md. pnpm lint=0, pnpm typecheck=0, pnpm test: 165 archivos pasan, 2392 tests pasan, 0 fallos.
+
+#### Revisores
+
+- `lunasq-security-reviewer` · omitido · El diff solo cambia documentación: no agrega ni cambia entradas externas, procesos, autenticación, secretos, permisos, rutas ni dependencias
+- `lunasq-ux-reviewer` · omitido · El diff no toca front end ni flujos de usuario; solo documentación
+- `lunasq-ui-reviewer` · omitido · El diff no cambia componentes, markup, estilos ni layout; solo documentación
+- `lunasq-code-reviewer` · omitido · El diff solo cambia documentación (docs/research/codex-compatibilidad.md y una fila de AGENTS.md): sin código de producción ni tests
+
+#### Must-fix
+
+Ninguno.
+
+#### Hallazgos refutados
+
+Ninguno.
+
+### Gate de tests
+
+#### verdict_pass · verde
+
+- Comando: `pnpm test`
+- Commit probado: 68e63f7b7c8473596211212a84d6384c5ec15562
+- Exit code: 0
+- Duración: 36 s
+
+```
+ prioridad y dependencias y abre su detalle
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000003`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/pages/completed.test.tsx (26 tests) 917ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/components/layout.test.tsx (10 tests) 430ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+stderr | src/pages/new-task.test.tsx > alta de tareas > envía dependsOn con las elegidas en el orden en que se agregaron
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000020`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/pages/board.test.tsx (5 tests) 269ms
+Not implemented: Window's scrollTo() method
+stderr | src/pages/new-task.test.tsx > alta de tareas > permite depender de tareas de otro proyecto y las marca
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000024`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/pages/new-task.test.tsx (13 tests) 943ms
+Not implemented: Window's scrollTo() method
+stderr | test/flow.test.tsx > flujo de punta a punta desde la UI > crea una tarea, aprueba su spec y la sigue hasta el PR
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+stderr | test/flow.test.tsx > flujo de punta a punta desde la UI > crea una tarea, aprueba su spec y la sigue hasta el PR
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+stderr | test/flow.test.tsx > flujo de punta a punta desde la UI > crea una tarea, aprueba su spec y la sigue hasta el PR
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+stderr | test/flow.test.tsx > flujo de punta a punta desde la UI > crea una tarea, aprueba su spec y la sigue hasta el PR
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  test/flow.test.tsx (1 test) 376ms
+   ✓ flujo de punta a punta desde la UI (1)
+     ✓ crea una tarea, aprueba su spec y la sigue hasta el PR 376ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  @lunasq/server  src/evidence/service.test.ts (19 tests) 9995ms
+   ✓ EvidenceService.recordRun (13)
+     ✓ escribe lunasq/tasks/{id}.md con la sección del Run al cerrarse 406ms
+     ✓ agrega una sección por cada Run, en orden de cierre 352ms
+     ✓ repetir el cierre del mismo Run deja el archivo igual 352ms
+     ✓ registra failure_reason, handoff, salida del gate y hooks del Run 545ms
+     ✓ no mezcla los eventos de otros Runs ni de otras tareas 340ms
+     ✓ convierte a markdown el transcript de la sesión y de los subagentes 336ms
+     ✓ redacta secretos antes de escribir 402ms
+     ✓ no deja archivos temporales junto al de evidencia 426ms
+     ✓ no escribe nada para un Run que sigue abierto 352ms
+     ✓ no escribe si el Run no existe o la tarea ya no tiene worktree 524ms
+     ✓ no escribe a través de un symlink en lunasq/ ni en lunasq/tasks 422ms
+     ✓ cierres concurrentes de varios Runs no pierden secciones 476ms
+     ✓ deja el archivo sin commitear y el worktree limpio para los chequeos de UW-15/23 404ms
+   ✓ EvidenceService.commit (5)
+     ✓ commitea solo el archivo de evidencia, con los trailers de la tarea y el último Run 1064ms
+     ✓ viaja en el branch: el archivo queda en el árbol de HEAD 861ms
+     ✓ una sección nueva después del commit se commitea como cambio aparte 1099ms
+     ✓ es null si no hay archivo ni worktree 375ms
+     ✓ funciona también si el proyecto ignora lunasq/tasks/ en su .gitignore 869ms
+   ✓ RunRepository sin cambios (1)
+     ✓ el servicio solo lee: no modifica el Run 391ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/components/theme-toggle.test.tsx (11 tests) 300ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/components/new-task-button.test.tsx (12 tests) 265ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/components/settings-button.test.tsx (13 tests) 272ms
+Not implemented: Window's scrollTo() method
+ ✓  web  src/pages/queue.test.tsx (7 tests) 372ms
+Not implemented: Window's scrollTo() method
+stderr | src/lib/live.test.tsx > actualización en vivo por SSE > un change de la tarea refresca su detalle sin esperar el intervalo
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+stderr | src/lib/live.test.tsx > actualización en vivo por SSE > un change de la tarea refresca su detalle sin esperar el intervalo
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  e2e  harness/fixture.test.ts (3 tests) 5097ms
+   ✓ fixture del piloto (3)
+     ✓ deja main en el origin con los hooks por fase y una suite que corre 1527ms
+     ✓ mergeIntoMain avanza main del origin hasta la rama de la tarea 1686ms
+     ✓ mergeIntoMain rechaza una rama que no descende de main 1882ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/lib/live.test.tsx (6 tests) 377ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/components/pane-focus-button.test.tsx (10 tests) 281ms
+stderr | src/pages/task-number.test.tsx > número de tarea en las vistas > detalle: la cabecera y las dependencias muestran el #N
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000022`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+stderr | src/pages/task-number.test.tsx > número de tarea en las vistas > detalle: el selector para agregar dependencia muestra el #N de cada candidata
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000025`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+ ✓  web  src/pages/task-number.test.tsx (8 tests) 347ms
+ ✓  web  src/components/task-actions.test.tsx (9 tests) 191ms
+ ✓  web  src/components/status.test.tsx (2 tests) 28ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/lib/api.test.ts (8 tests) 6ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/pages/hooks.test.tsx (8 tests) 260ms
+ ✓  web  src/theme-tokens.test.ts (8 tests) 9ms
+ ✓  web  src/lib/mentions.test.ts (4 tests) 2ms
+ ✓  web  src/lib/theme.test.ts (14 tests) 7ms
+ ✓  web  src/lib/format.test.ts (6 tests) 3ms
+ ✓  web  src/lib/in-progress.test.ts (1 test) 2ms
+ ✓  web  test/index-html.test.ts (5 tests) 3ms
+ ✓  @lunasq/server  src/hooks/service.git.test.ts (4 tests) 12237ms
+   ✓ HookService con git real (4)
+     ✓ los hooks corren en orden y lo que dejan se commitea con los trailers 3116ms
+     ✓ un hook modificado o agregado en el branch de la tarea nunca se ejecuta 2975ms
+     ✓ un cambio de hook entra en vigor cuando llega a la rama base 3913ms
+     ✓ after_merge corre en el commit mergeado aunque el checkout del proyecto esté atrasado 2232ms
+ ✓  @lunasq/server  src/mcp/ports.test.ts (12 tests) 12713ms
+   ✓ GitCommitVerifier contra un repo real (11)
+     ✓ acepta commits del branch y rechaza los de la base o desconocidos 1234ms
+     ✓ rechaza un commit que ya está en origin/<base> aunque la base local vaya atrasada 2548ms
+     ✓ una rama base inexistente no da los commits por buenos 942ms
+     ✓ branchHasCommits distingue un branch con commits de uno que está en la base 1167ms
+     ✓ branchHasCommits no cuenta lo que ya está en origin/<base> aunque la base local vaya atrasada 2215ms
+     ✓ branchHasCommits con una base que no existe asume que hay commits 866ms
+     ✓ uncommitted lista cambios y archivos sin seguimiento; vacío con el worktree limpio 935ms
+     ✓ uncommitted ignora el archivo de evidencia de lunasq/tasks/ 798ms
+     ✓ onlyEvidenceBetween acepta commits que solo tocan lunasq/tasks/ 1130ms
+     ✓ onlyEvidenceBetween rechaza un HEAD que no desciende del commit del gate 480ms
+     ✓ una rama base con forma de opción no se interpreta como opción de git 393ms
+ ✓  @lunasq/adapters  src/git/real.test.ts (27 tests) 33932ms
+   ✓ contrato del adapter de git: git real (19)
+     ✓ rama base (5)
+       ✓ fetch trae el commit nuevo del remoto y resolveCommit da su sha 1173ms
+       ✓ fetch de un branch inexistente y resolveCommit de un ref inexistente fallan 665ms
+       ✓ listFiles da los archivos directos del directorio con su bit de ejecución 644ms
+       ✓ readFile lee el commit; undefined si no existe o es un directorio 791ms
+       ✓ los cambios del working tree no se ven en el commit 725ms
+     ✓ worktrees temporales (1)
+       ✓ addDetachedWorktree abre el commit en otra ruta y removeWorktree lo borra 1396ms
+     ✓ commit de cambios (3)
+       ✓ isDirty ve archivos nuevos y modificados 1375ms
+       ✓ commitAll commitea todo con los trailers y no crea commits vacíos 1912ms
+       ✓ isDirty y commitAll ignoran lunasq/tasks/, que es de LunasQ 1970ms
+     ✓ integración con la rama base (8)
+       ✓ rebase sin novedades en la base no toca la rama 1806ms
+       ✓ rebase pone los commits de la rama sobre la base nueva 2995ms
+       ✓ rebase con un conflicto lo aborta y deja el worktree como estaba 1495ms
+       ✓ rebase con el worktree sucio falla sin tocar nada 1256ms
+       ✓ listCommits da los commits de base..HEAD del más viejo al más nuevo 1106ms
+       ✓ addTrailers reescribe los commits indicados y repetirlo no cambia nada 1641ms
+       ✓ push publica el HEAD en la rama del remoto y se repite tras reescribir la historia 1797ms
+       ✓ push a un remoto que no existe falla con git_failed 919ms
+     ✓ commitPaths (2)
+       ✓ commitea solo esas rutas con los trailers y no crea commits vacíos 1040ms
+       ✓ commitea una nueva versión del archivo ya rastreado 944ms
+   ✓ RealGit (8)
+     ✓ listFiles no cuenta symlinks: podrían apuntar al worktree de la tarea 1430ms
+     ✓ git replace desde un worktree no cambia lo que se lee de la base 1313ms
+     ✓ fetch devuelve el sha del remoto aunque otro checkout mueva el ref local 956ms
+     ✓ fetch repite cuando otro fetch del mismo ref le gana la carrera 1068ms
+     ✓ fetch no repite un fallo que no es la carrera 847ms
+     ✓ commitAll no corre los hooks de git del repo y, si el commit falla, deja el índice limpio 1510ms
+     ✓ un ref con forma de opción no se interpreta como opción 816ms
+
+ Test Files  165 passed | 6 skipped (171)
+      Tests  2392 passed | 39 skipped (2431)
+   Start at  12:35:46
+   Duration  34.16s (tests 73%, import 18%, environment 6%, transform 2%, setup 1%)
+
+    Isolate  171 workers spawned · ~174ms startup each (spawn + environment, per file)
+             at least ~2.53s faster with isolate: false — reuses workers across files instead of one per file
+```
+
+#### delivery · verde
+
+- Comando: `pnpm test`
+- Commit probado: e5dd4ed3315ab975912b53c6fbf01b4b514ea623
+- Exit code: 0
+- Duración: 35 s
+
+```
+ndow's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/pages/projects.test.tsx (13 tests) 1924ms
+   ✓ alta de proyectos (7)
+     ✓ envía comandos, límites y perfiles por fase, sin los campos vacíos 442ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+stderr | src/lib/live.test.tsx > actualización en vivo por SSE > un change de la tarea refresca su detalle sin esperar el intervalo
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+stderr | src/lib/live.test.tsx > actualización en vivo por SSE > un change de la tarea refresca su detalle sin esperar el intervalo
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/components/layout.test.tsx (10 tests) 443ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/lib/live.test.tsx (6 tests) 257ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/pages/in-progress.test.tsx (23 tests) 952ms
+ ✓  web  src/pages/completed.test.tsx (26 tests) 1020ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+stderr | test/flow.test.tsx > flujo de punta a punta desde la UI > crea una tarea, aprueba su spec y la sigue hasta el PR
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+stderr | test/flow.test.tsx > flujo de punta a punta desde la UI > crea una tarea, aprueba su spec y la sigue hasta el PR
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+stderr | test/flow.test.tsx > flujo de punta a punta desde la UI > crea una tarea, aprueba su spec y la sigue hasta el PR
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+stderr | test/flow.test.tsx > flujo de punta a punta desde la UI > crea una tarea, aprueba su spec y la sigue hasta el PR
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000002`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  test/flow.test.tsx (1 test) 439ms
+   ✓ flujo de punta a punta desde la UI (1)
+     ✓ crea una tarea, aprueba su spec y la sigue hasta el PR 438ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/pages/queue.test.tsx (7 tests) 366ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+stderr | src/pages/task-number.test.tsx > número de tarea en las vistas > detalle: la cabecera y las dependencias muestran el #N
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000022`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+stderr | src/pages/task-number.test.tsx > número de tarea en las vistas > detalle: el selector para agregar dependencia muestra el #N de cada candidata
+Encountered two children with the same key, `00000000-0000-4000-8000-000000000025`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+ ✓  @lunasq/server  src/evidence/service.test.ts (19 tests) 9626ms
+   ✓ EvidenceService.recordRun (13)
+     ✓ escribe lunasq/tasks/{id}.md con la sección del Run al cerrarse 494ms
+     ✓ repetir el cierre del mismo Run deja el archivo igual 351ms
+     ✓ registra failure_reason, handoff, salida del gate y hooks del Run 564ms
+     ✓ no mezcla los eventos de otros Runs ni de otras tareas 409ms
+     ✓ convierte a markdown el transcript de la sesión y de los subagentes 305ms
+     ✓ redacta secretos antes de escribir 420ms
+     ✓ no deja archivos temporales junto al de evidencia 407ms
+     ✓ no escribe nada para un Run que sigue abierto 346ms
+     ✓ no escribe si el Run no existe o la tarea ya no tiene worktree 487ms
+     ✓ no escribe a través de un symlink en lunasq/ ni en lunasq/tasks 317ms
+     ✓ cierres concurrentes de varios Runs no pierden secciones 370ms
+     ✓ deja el archivo sin commitear y el worktree limpio para los chequeos de UW-15/23 440ms
+   ✓ EvidenceService.commit (5)
+     ✓ commitea solo el archivo de evidencia, con los trailers de la tarea y el último Run 901ms
+     ✓ viaja en el branch: el archivo queda en el árbol de HEAD 909ms
+     ✓ una sección nueva después del commit se commitea como cambio aparte 998ms
+     ✓ es null si no hay archivo ni worktree 365ms
+     ✓ funciona también si el proyecto ignora lunasq/tasks/ en su .gitignore 838ms
+   ✓ RunRepository sin cambios (1)
+     ✓ el servicio solo lee: no modifica el Run 439ms
+ ✓  web  src/components/pane-focus-button.test.tsx (10 tests) 175ms
+ ✓  web  src/pages/task-number.test.tsx (8 tests) 267ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/components/theme-toggle.test.tsx (11 tests) 232ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/components/settings-button.test.tsx (13 tests) 360ms
+ ✓  e2e  harness/fixture.test.ts (3 tests) 4908ms
+   ✓ fixture del piloto (3)
+     ✓ deja main en el origin con los hooks por fase y una suite que corre 1365ms
+     ✓ mergeIntoMain avanza main del origin hasta la rama de la tarea 1557ms
+     ✓ mergeIntoMain rechaza una rama que no descende de main 1985ms
+Not implemented: Window's scrollTo() method
+ ✓  web  src/components/status.test.tsx (2 tests) 28ms
+Not implemented: Window's scrollTo() method
+ ✓  web  src/theme-tokens.test.ts (8 tests) 5ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/pages/board.test.tsx (5 tests) 259ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/components/new-task-button.test.tsx (12 tests) 388ms
+ ✓  web  src/components/task-actions.test.tsx (9 tests) 259ms
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+Not implemented: Window's scrollTo() method
+ ✓  web  src/lib/api.test.ts (8 tests) 6ms
+Not implemented: Window's scrollTo() method
+ ✓  web  src/pages/hooks.test.tsx (8 tests) 269ms
+ ✓  web  src/lib/format.test.ts (6 tests) 3ms
+ ✓  web  src/lib/theme.test.ts (14 tests) 6ms
+ ✓  web  src/lib/mentions.test.ts (4 tests) 3ms
+ ✓  web  test/index-html.test.ts (5 tests) 3ms
+ ✓  web  src/lib/in-progress.test.ts (1 test) 2ms
+ ✓  @lunasq/server  src/hooks/service.git.test.ts (4 tests) 11845ms
+   ✓ HookService con git real (4)
+     ✓ los hooks corren en orden y lo que dejan se commitea con los trailers 3337ms
+     ✓ un hook modificado o agregado en el branch de la tarea nunca se ejecuta 2871ms
+     ✓ un cambio de hook entra en vigor cuando llega a la rama base 3555ms
+     ✓ after_merge corre en el commit mergeado aunque el checkout del proyecto esté atrasado 2082ms
+ ✓  @lunasq/server  src/mcp/ports.test.ts (12 tests) 12217ms
+   ✓ GitCommitVerifier contra un repo real (11)
+     ✓ acepta commits del branch y rechaza los de la base o desconocidos 1233ms
+     ✓ rechaza un commit que ya está en origin/<base> aunque la base local vaya atrasada 2503ms
+     ✓ una rama base inexistente no da los commits por buenos 919ms
+     ✓ branchHasCommits distingue un branch con commits de uno que está en la base 969ms
+     ✓ branchHasCommits no cuenta lo que ya está en origin/<base> aunque la base local vaya atrasada 2186ms
+     ✓ branchHasCommits con una base que no existe asume que hay commits 845ms
+     ✓ uncommitted lista cambios y archivos sin seguimiento; vacío con el worktree limpio 837ms
+     ✓ uncommitted ignora el archivo de evidencia de lunasq/tasks/ 820ms
+     ✓ onlyEvidenceBetween acepta commits que solo tocan lunasq/tasks/ 1030ms
+     ✓ onlyEvidenceBetween rechaza un HEAD que no desciende del commit del gate 426ms
+     ✓ una rama base con forma de opción no se interpreta como opción de git 447ms
+ ✓  @lunasq/adapters  src/git/real.test.ts (27 tests) 33841ms
+   ✓ contrato del adapter de git: git real (19)
+     ✓ rama base (5)
+       ✓ fetch trae el commit nuevo del remoto y resolveCommit da su sha 1289ms
+       ✓ fetch de un branch inexistente y resolveCommit de un ref inexistente fallan 666ms
+       ✓ listFiles da los archivos directos del directorio con su bit de ejecución 634ms
+       ✓ readFile lee el commit; undefined si no existe o es un directorio 725ms
+       ✓ los cambios del working tree no se ven en el commit 715ms
+     ✓ worktrees temporales (1)
+       ✓ addDetachedWorktree abre el commit en otra ruta y removeWorktree lo borra 1550ms
+     ✓ commit de cambios (3)
+       ✓ isDirty ve archivos nuevos y modificados 1290ms
+       ✓ commitAll commitea todo con los trailers y no crea commits vacíos 1937ms
+       ✓ isDirty y commitAll ignoran lunasq/tasks/, que es de LunasQ 1871ms
+     ✓ integración con la rama base (8)
+       ✓ rebase sin novedades en la base no toca la rama 1661ms
+       ✓ rebase pone los commits de la rama sobre la base nueva 2714ms
+       ✓ rebase con un conflicto lo aborta y deja el worktree como estaba 1351ms
+       ✓ rebase con el worktree sucio falla sin tocar nada 1408ms
+       ✓ listCommits da los commits de base..HEAD del más viejo al más nuevo 1297ms
+       ✓ addTrailers reescribe los commits indicados y repetirlo no cambia nada 1858ms
+       ✓ push publica el HEAD en la rama del remoto y se repite tras reescribir la historia 1891ms
+       ✓ push a un remoto que no existe falla con git_failed 822ms
+     ✓ commitPaths (2)
+       ✓ commitea solo esas rutas con los trailers y no crea commits vacíos 1173ms
+       ✓ commitea una nueva versión del archivo ya rastreado 1147ms
+   ✓ RealGit (8)
+     ✓ listFiles no cuenta symlinks: podrían apuntar al worktree de la tarea 1213ms
+     ✓ git replace desde un worktree no cambia lo que se lee de la base 1141ms
+     ✓ fetch devuelve el sha del remoto aunque otro checkout mueva el ref local 914ms
+     ✓ fetch repite cuando otro fetch del mismo ref le gana la carrera 1116ms
+     ✓ fetch no repite un fallo que no es la carrera 890ms
+     ✓ commitAll no corre los hooks de git del repo y, si el commit falla, deja el índice limpio 1410ms
+     ✓ un ref con forma de opción no se interpreta como opción 798ms
+
+ Test Files  165 passed | 6 skipped (171)
+      Tests  2392 passed | 39 skipped (2431)
+   Start at  12:36:31
+   Duration  34.07s (tests 74%, import 16%, environment 6%, transform 2%, setup 1%)
+
+    Isolate  171 workers spawned · ~167ms startup each (spawn + environment, per file)
+             at least ~2.43s faster with isolate: false — reuses workers across files instead of one per file
+```
+
+### Transcripts
+
+<details>
+<summary>Sesión del agente</summary>
+
+**Usuario** · 18:34:42
+
+Usa la skill verify-task para la tarea 3ade2dc5-caef-47c1-b572-1296bde50ecd de LunasQ. Empieza llamando get_task_context del MCP lunasq y termina con su tool de salida.
+
+**Agente** · 18:34:44
+
+`ToolSearch`
+```
+{"query":"select:mcp__lunasq__get_task_context","max_results":1}
+```
+
+**Usuario** · 18:34:44
+
+Resultado
+```
+
+```
+
+**Agente** · 18:34:45
+
+`Skill`
+```
+{"skill":"verify-task"}
+```
+
+**Usuario** · 18:34:45
+
+Resultado
+```
+Launching skill: verify-task
+```
+
+**Agente** · 18:34:45
+
+`mcp__lunasq__get_task_context`
+```
+{}
+```
+
+**Usuario** · 18:34:46
+
+Resultado
+```
+{"task":{"id":"3ade2dc5-caef-47c1-b572-1296bde50ecd","number":29,"intent":"Analisis de Codex,\n\nla salida de esta tarea es una investigacion, para saber si codex es 100% compatible con lunasQ , similar a claude y copilot.\n\ninvestiga en las web principalmente pero no exlucivo aqui https://learn.chatgpt.com/docs/developer-commands?surface=cli","title":"Investigar compatibilidad de Codex CLI como proveedor de LunasQ","tags":["integration"],"state":"verification","subState":"running","verificationIteration":1,"branch":"lunasq/3ade2dc5-caef-47c1-b572-1296bde50ecd","worktreePath":"/Users/sergio.sanchez/.herdr/worktrees/lunas-queue/lunasq-3ade2dc5-caef-47c1-b572-1296bde50ecd"},"run":{"id":"3d1a24dd-6564-4ce0-b231-08b76f5fdda7","phase":"verify",
+… 12893 caracteres omitidos …
+ilot CLI dice «No verificado en esta investigación». AC-2 exige el mecanismo en Copilot para cada fila.","criterionId":"AC-2","source":"approver"}],"refuted":[],"riskLabel":"low"}}},"questions":[],"checklist":[{"taskId":"T-1","title":"Inventariar puntos de integración desde el código y ADRs de Claude y Copilot","done":true},{"taskId":"T-2","title":"Investigar Codex CLI en fuentes oficiales y, si está instalado, probar flags localmente","done":true},{"taskId":"T-3","title":"Redactar tabla comparativa con veredictos y fuentes","done":true},{"taskId":"T-4","title":"Redactar brechas, conclusión de paridad y recomendación","done":true},{"taskId":"T-5","title":"Enlazar el informe en la documentación y correr lint, typecheck y test","done":true}]}
+```
+
+**Agente** · 18:34:50
+
+`Bash`
+```
+git rev-parse HEAD && git status --porcelain && git fetch origin main --quiet && BASE=$(git merge-base origin/main HEAD) && echo "BASE=$BASE" && git diff --name-only $BASE...HEAD && git log --oneline $BASE..HEAD
+```
+
+**Usuario** · 18:34:51
+
+Resultado
+```
+68e63f7b7c8473596211212a84d6384c5ec15562
+BASE=716f046015eb2be77b8c4247f27dbbac25c99f05
+AGENTS.md
+docs/research/codex-compatibilidad.md
+68e63f7 docs(research): fila 11 del informe Codex con mecanismo de Copilot para AGENTS.md
+0209361 docs(research): compatibilidad de Codex CLI como proveedor de LunasQ
+```
+
+**Agente** · 18:34:53
+
+`Read`
+```
+{"file_path":"/Users/sergio.sanchez/.herdr/worktrees/lunas-queue/lunasq-3ade2dc5-caef-47c1-b572-1296bde50ecd/docs/research/codex-compatibilidad.md"}
+```
+
+**Usuario** · 18:34:53
+
+Resultado
+```
+1	# Compatibilidad de Codex CLI como proveedor de LunasQ
+2	
+3	- **Fecha:** 2026-11-02
+4	- **Versión de Codex CLI probada:** `codex-cli 0.147.0` (`codex --version`, macOS arm64). Documentación consultada en esa misma fecha.
+5	- **Otras versiones del entorno:** herdr 0.9.5 (`herdr --version`); referencia de LunasQ: Claude Code ≥ 2.1.312 y Copilot CLI ≥ 1.0.0 (`packages/cli/src/doctor.ts`).
+6	- **Tarea:** LunasQ #29 (`3ade2dc5-caef-47c1-b572-1296bde50ecd`).
+7	- **Pregunta:** ¿Codex es 100 % compatible con LunasQ, como lo son Claude Code y Copilot CLI?
+8	
+9	## Resumen
+10	
+11	**No.** Codex cubre el arranque, el modo autónomo, el MCP con token por Run, las skills, el modelo/effort, `AGENTS.md` y el doctor sin trabajo de fondo. Quedan **seis punto
+… 20288 caracteres omitidos …
+inar, implementar y entregar.
+143	2. Verificación con revisores: B1 reutiliza el mecanismo de Copilot, por lo que la verificación con Codex tendría la misma garantía que la de Copilot, que el ADR 0016 ya declara no paritaria con Claude.
+144	3. Usage (B4) y límite de uso (B7) pueden salir después: Codex quedaría marcado como «sin métricas» como Copilot.
+145	4. Antes de empezar: ejecutar una fase real de Codex en un worktree nuevo para cerrar el punto 10 y el 14, y capturar un lote de OTel de 0.147.0.
+146	
+147	Riesgos a vigilar: la interfaz de Codex cambia rápido (la documentación de mcp-server y los niveles de effort ya difieren entre fuentes y la versión local), por lo que `doctor` debe fijar una versión mínima y una prueba de contrato.
+148
+```
+
+**Agente** · 18:34:53
+
+`Bash`
+```
+git diff 716f046015eb2be77b8c4247f27dbbac25c99f05...HEAD -- AGENTS.md
+```
+
+**Usuario** · 18:34:53
+
+Resultado
+```
+diff --git a/AGENTS.md b/AGENTS.md
+index e26bb37..b2b472e 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -11,6 +11,7 @@ Este archivo dice cómo trabajar en el repo. El detalle vive en `docs/`; léelo
+ | `docs/design.md` | Diseño completo: modelo de dominio, máquina de estados, dispatcher, MCP, verificación, hooks, auditoría | Antes de cambiar algo que toque lo que describe |
+ | `docs/tech-stack.md` | Stack, paquetes del monorepo y sus fronteras, integraciones externas, tooling | Antes de agregar dependencias o crear archivos en un paquete |
+ | `docs/decisions/` | ADRs cortos con decisiones tomadas durante la implementación | Antes de contradecir algo de los docs anteriores |
++| `docs/research/codex-compatibilidad.md` | Informe de compatibilidad de Codex CLI como proveedor (veredictos por punto de integración, brechas y recomendación) | Antes de agregar Codex como `AgentKind` |
+ | `docs/archive/` | Backlog histórico de unidades de trabajo (ya no se usa) | Solo como referencia histórica |
+ 
+ El repo es la fuente de verdad. Si una decisión cambia mientras implementas, actualiza el `.md` correspondiente en el mismo PR que el código. Un ADR nuevo va en `docs/decisions/<tema>.md`.
+```
+
+**Agente** · 18:35:00
+
+`Bash`
+```
+(pnpm lint >/tmp/x 2>&1; echo "lint=$?"; pnpm typecheck >/dev/null 2>&1; echo "typecheck=$?"; pnpm test 2>&1 | tail -n 8; echo "test=${PIPESTATUS[0]}"); echo "---"; codex --version 2>&1; copilot --help 2>&1 | grep -i "no-custom-instructions" ; git status --porcelain; git rev-parse HEAD
+```
+
+**Usuario** · 18:35:37
+
+Resultado
+```
+lint=0
+typecheck=0
+ Test Files  165 passed | 6 skipped (171)
+      Tests  2392 passed | 39 skipped (2431)
+   Start at  12:35:02
+   Duration  34.13s (tests 74%, import 17%, environment 6%, transform 2%, setup 1%)
+
+    Isolate  171 workers spawned · ~166ms startup each (spawn + environment, per file)
+             at least ~2.41s faster with isolate: false — reuses workers across files instead of one per file
+
+test=
+---
+codex-cli 0.147.0
+      --no-custom-instructions
+68e63f7b7c8473596211212a84d6384c5ec15562
+```
+
+**Agente** · 18:35:44
+
+`mcp__lunasq__submit_verdict`
+```
+{"handoff":{"schemaVersion":1,"taskId":"3ade2dc5-caef-47c1-b572-1296bde50ecd","runId":"3d1a24dd-6564-4ce0-b231-08b76f5fdda7","phase":"verification","result":"completed","summary":"Pass: el informe cum
+… 2562 caracteres omitidos …
+documentación"},"lunasq-ui-reviewer":{"status":"skipped","justification":"El diff no cambia componentes, markup, estilos ni layout; solo documentación"}},"mustFix":[],"refuted":[],"riskLabel":"low"}}}
+```
+
+**Usuario** · 18:36:23
+
+Resultado
+```
+{"verdict":"pass"}
+```
+
+**Agente** · 18:36:26
+
+Veredicto **pass** registrado con `submit_verdict` para la tarea #29 (3ade2dc5…), run `3d1a24dd…`.
+
+- **Must-fix anterior resuelto:** la fila 11 de la tabla ya tiene el mecanismo de Copilot (`--no-custom-instructions`, fuente C9).
+- **Criterios AC-1 a AC-6:** todos verificados leyendo el informe. Recuento de la tabla: 7 compatibles, 6 parciales, 1 sin confirmar, 0 incompatibles. Conclusión: paridad total no; recomendación: integrar con limitaciones.
+- **Gates:** `pnpm lint` y `pnpm typecheck` pasan; `pnpm test` pasa con 165 archivos y 2392 tests, sin fallos.
+- **Revisores:** ninguno lanzado; el diff solo toca docs. Los cuatro quedaron como `skipped` con justificación.
+- **Riesgo:** `low`.
+
+La prueba de reversión no aplicó porque no hay código de producción. Los criterios se comprobaron leyendo el documento, y lo dejé anotado en `knownRisks` del handoff. El worktree quedó limpio y el `HEAD` sigue en `68e63f7`.
+
+</details>
+<!-- lunasq:run:end 3d1a24dd-6564-4ce0-b231-08b76f5fdda7 -->
