@@ -14,6 +14,7 @@ import { Badge } from "../components/ui/badge.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
 import { canPause, formatAgent, SUB_STATE_LABEL, taskLabel } from "../lib/format.ts";
+import { isInProgress } from "../lib/in-progress.ts";
 import { queries } from "../lib/queries.ts";
 
 type Row = Json<Task>;
@@ -59,10 +60,7 @@ export function InProgressPage() {
     () => new Map((projects.data ?? []).map((p) => [p.id, p.name])),
     [projects.data],
   );
-  const inProgress = useMemo(
-    () => tasks.data?.filter((t) => t.state === "in_progress" || t.subState === "running"),
-    [tasks.data],
-  );
+  const inProgress = useMemo(() => tasks.data?.filter(isInProgress), [tasks.data]);
   // Un query por tarea, con la misma clave que el panel de Runs: el stream en vivo la invalida
   // junto con ["task", id], así que las columnas de Run se refrescan solas.
   // Distingue cargando, error de la consulta y «sin Runs» (`null`): un fallo no se muestra como vacío.
