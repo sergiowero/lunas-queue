@@ -205,6 +205,23 @@ describe("Questions y checklist", () => {
     });
   });
 
+  it("createQuestion guarda las opciones en orden y sin ellas deja options nulo", () => {
+    const { db, task } = mcpSetup();
+    const run = insertRun(db, task.id);
+    const plain = createQuestion(db, { taskId: task.id, runId: run.id, question: "¿Abierta?" });
+    expect(plain.options).toBeNull();
+    const options = [{ label: "A", description: "primera" }, { label: "B" }, { label: "C" }];
+    const withOptions = createQuestion(db, {
+      taskId: task.id,
+      runId: run.id,
+      question: "¿Cuál?",
+      options,
+    });
+    expect(withOptions.options).toEqual(options);
+    const listed = listQuestions(db, task.id).find((q) => q.id === withOptions.id);
+    expect(listed?.options).toEqual(options);
+  });
+
   it("latestChecklist es el último snapshot de la tarea", () => {
     const { db, task } = mcpSetup();
     const run = insertRun(db, task.id);

@@ -180,7 +180,7 @@ Un pass que falla por `dirty_worktree` o `head_changed` que no puedes arreglar t
 
 ## Preguntas y fallos
 
-- `ask_human` con `{ "question": "...", "context": "..." }` registra la pregunta y regresa de inmediato. Termina tu turno después de llamarla: la respuesta llega como un prompt nuevo o, si el Run se cerró, en `questions` del siguiente `get_task_context`. Úsala solo si un criterio es ambiguo; una duda sobre el código se resuelve leyéndolo.
+- `ask_human` con `{ "question": "...", "context": "...", "options": [...] }` (`context` y `options` son opcionales) registra la pregunta y regresa de inmediato. Termina tu turno después de llamarla: la respuesta llega como un prompt nuevo o, si el Run se cerró, en `questions` del siguiente `get_task_context`. Si la pregunta es elegir entre alternativas concretas, agrega `options`: de 2 a 6 objetos `{ "label": "...", "description": "..." }` (`description` es opcional), con labels cortos y únicos (sin distinguir mayúsculas ni espacios extremos). El humano elige una o escribe «Otra respuesta», así que no incluyas una opción comodín; la respuesta llega como el label elegido o su texto libre. Sin alternativas claras, omite `options` y la pregunta es abierta. Úsala solo si un criterio es ambiguo; una duda sobre el código se resuelve leyéndolo.
 - `report_failure` con `{ "reason": "..." }` cuando no puedes verificar (no hay worktree, la suite no arranca por algo ajeno al diff). Cierra el Run como fallido; un código que no cumple es un reject, no un fallo.
 
 ## Memoria con engram (opcional)

@@ -284,6 +284,7 @@ export class LunasqMcpService {
         id: q.id,
         question: q.question,
         context: q.context,
+        options: q.options,
         status: q.status,
         answer: q.answer,
       })),
@@ -313,6 +314,7 @@ export class LunasqMcpService {
         runId: run.id,
         question: input.question,
         ...(input.context === undefined ? {} : { context: input.context }),
+        ...(input.options === undefined ? {} : { options: input.options }),
       });
       return { ok: true, data: { questionId: question.id } };
     });

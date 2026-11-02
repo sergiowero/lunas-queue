@@ -22,12 +22,44 @@ export const QuestionListQuery = z.strictObject({
 });
 export type QuestionListQuery = z.infer<typeof QuestionListQuery>;
 
+export const QUESTION_OPTIONS_MIN = 2;
+export const QUESTION_OPTIONS_MAX = 6;
+
+/** Alternativa estructurada que el agente propone: el label es lo que llega de vuelta como respuesta. */
+export const QuestionOption = z.strictObject({
+  label: z.string().trim().min(1).max(100),
+  description: z.string().trim().min(1).max(500).optional(),
+});
+export type QuestionOption = z.infer<typeof QuestionOption>;
+
+/** De 2 a 6 opciones con labels únicos sin distinguir mayúsculas ni espacios extremos. */
+export const QuestionOptions = z
+  .array(QuestionOption)
+  .min(QUESTION_OPTIONS_MIN)
+  .max(QUESTION_OPTIONS_MAX)
+  .superRefine((options, ctx) => {
+    const seen = new Set<string>();
+    options.forEach((option, index) => {
+      const key = option.label.toLowerCase();
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "label"],
+          message: `label de opción repetido: ${option.label}`,
+        });
+      }
+      seen.add(key);
+    });
+  });
+export type QuestionOptions = z.infer<typeof QuestionOptions>;
+
 export const Question = z.strictObject({
   id: z.uuid(),
   taskId: z.uuid(),
   runId: z.uuid().nullable(),
   question: Text,
   context: Text.nullable(),
+  options: QuestionOptions.nullable(),
   status: QuestionStatus,
   answer: Text.nullable(),
   answeredBy: ShortText.nullable(),

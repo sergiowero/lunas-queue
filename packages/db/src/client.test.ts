@@ -5,6 +5,7 @@ import { join, relative } from "node:path";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { describe, expect, it } from "vitest";
 import { migrateDatabase, migrationsFolder, openDatabase } from "./client.ts";
+import { QuestionRepository } from "./questions.ts";
 import { freshDatabase } from "./test-helpers.ts";
 
 const TABLES = [
@@ -106,6 +107,43 @@ describe("migraciones", () => {
       { event_id: 1, topic: "task.created", published_at: 5 },
     ]);
     expect(sqlite.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("la migración de opciones deja las preguntas existentes con options nulo y respondibles", () => {
+    const { db } = freshDatabase();
+    // Base anterior a la migración 0012: el journal se recorta a las doce primeras.
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-migrations-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8")) as { entries: unknown[] };
+      journal.entries = journal.entries.slice(0, 12);
+      writeFileSync(journalFile, JSON.stringify(journal));
+      migrate(db, { migrationsFolder: previous });
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
+    const sqlite = db.$client;
+    sqlite
+      .prepare(
+        "insert into projects (id, name, repo, base_branch, local_path) values ('p', 'p', 'o/p', 'main', '/tmp/p')",
+      )
+      .run();
+    sqlite
+      .prepare(
+        "insert into tasks (id, project_id, number, intent, state, sub_state, priority) values ('t', 'p', 1, 'i', 'in_progress', 'waiting_human', 0)",
+      )
+      .run();
+    sqlite
+      .prepare("insert into questions (id, task_id, question) values ('q', 't', '¿Sigo?')")
+      .run();
+
+    migrateDatabase(db);
+
+    expect(sqlite.prepare("select options from questions where id = 'q'").pluck().get()).toBeNull();
+    expect(
+      new QuestionRepository(db).answer("q", { answer: "Sí", agentAlive: true }),
+    ).toMatchObject({ ok: true, question: { options: null, answer: "Sí" } });
   });
 
   it("están sincronizadas con el esquema de Drizzle", () => {

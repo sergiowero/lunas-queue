@@ -44,6 +44,7 @@ describe("Question", () => {
     runId: id,
     question: "¿Borro la tabla?",
     context: null,
+    options: null,
     status: "open",
     answer: null,
     answeredBy: null,

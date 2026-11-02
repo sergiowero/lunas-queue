@@ -20,6 +20,7 @@ import {
   type Phase,
   QUESTION_CREATED,
   QuestionCreatedPayload,
+  type QuestionOptions,
   type RunResult,
   SchedulablePhase,
   type SchedulerConfig,
@@ -643,6 +644,7 @@ export type CreateQuestionInput = {
   runId: string;
   question: string;
   context?: string;
+  options?: QuestionOptions;
 };
 
 export function createQuestion(db: Writer, input: CreateQuestionInput): QuestionRow {
@@ -654,6 +656,7 @@ export function createQuestion(db: Writer, input: CreateQuestionInput): Question
         runId: input.runId,
         question: input.question,
         context: input.context ?? null,
+        options: input.options ?? null,
       })
       .returning()
       .all();

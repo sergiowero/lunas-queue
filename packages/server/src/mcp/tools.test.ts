@@ -507,11 +507,45 @@ describe("ask_human", () => {
         id: result.body.questionId,
         question: "¿Migro los datos?",
         context: "hay 2M",
+        options: null,
         status: "open",
         answer: null,
       },
     ]);
     expect(runOf(h, run.id)?.endedAt).toBeNull();
+  });
+
+  it("con opciones las guarda en orden y get_task_context las devuelve", async () => {
+    const h = mcpHarness();
+    const { task, call } = await h.ready("implement", implementing);
+    const options = [
+      { label: "Postgres", description: "ya está en el stack" },
+      { label: "SQLite" },
+      { label: "Archivo plano" },
+    ];
+    const result = await call("ask_human", { question: "¿Qué motor uso?", options });
+    expect(result.isError).toBe(false);
+    expect(h.taskOf(task.id)).toMatchObject({ state: "in_progress", subState: "waiting_human" });
+    const { body } = await call("get_task_context");
+    expect(body.questions).toEqual([
+      expect.objectContaining({ id: result.body.questionId, options, status: "open" }),
+    ]);
+  });
+
+  it.each([
+    ["una sola opción", [{ label: "A" }]],
+    ["siete opciones", Array.from({ length: 7 }, (_, i) => ({ label: `O${i}` }))],
+    ["un label vacío", [{ label: "" }, { label: "B" }]],
+    ["labels que solo difieren en mayúsculas", [{ label: "Sí" }, { label: "sí" }]],
+    ["labels que solo difieren en espacios", [{ label: "Sí" }, { label: " Sí  " }]],
+  ])("rechaza %s sin crear la Question ni mover la tarea", async (_name, options) => {
+    const h = mcpHarness();
+    const { task, call } = await h.ready("implement", implementing);
+    const result = await call("ask_human", { question: "¿Cuál?", options });
+    expect(result.isError).toBe(true);
+    expect(h.taskOf(task.id)).toMatchObject({ state: "in_progress", subState: "running" });
+    expect((await call("get_task_context")).body.questions).toEqual([]);
+    expect(listEvents(h.db, task.id).filter((e) => e.type === "question.created")).toHaveLength(0);
   });
 
   it("con la tarea ya esperando al humano se rechaza sin crear otra Question", async () => {

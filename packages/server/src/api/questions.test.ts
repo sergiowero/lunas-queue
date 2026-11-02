@@ -44,9 +44,29 @@ describe("GET /api/questions", () => {
         runId: run.id,
         status: "open",
         context: "hay dos",
+        options: null,
         answer: null,
       }),
     ]);
+  });
+
+  it("expone las opciones de una pregunta de opción múltiple en la lista y en el detalle", async () => {
+    const { send, db, task, run } = setup();
+    const options = [{ label: "Sí", description: "borra la tabla" }, { label: "No" }];
+    const withOptions = createQuestion(db, {
+      taskId: task.id,
+      runId: run.id,
+      question: "¿Seguro?",
+      options,
+    });
+    const list = (await (await send("GET", "/api/questions")).json()) as unknown[];
+    expect(
+      list.map((q) => Question.parse(q)).find((q) => q.id === withOptions.id)?.options,
+    ).toEqual(options);
+    const detail = Question.parse(
+      await (await send("GET", `/api/questions/${withOptions.id}`)).json(),
+    );
+    expect(detail.options).toEqual(options);
   });
 
   it("filtra por estado, tarea y proyecto", async () => {
@@ -85,6 +105,7 @@ describe("POST /api/questions/:id/answer", () => {
         runId: null,
         question: "¿Borro la tabla?",
         context: null,
+        options: null,
         status: "answered" as const,
         answer: "Sí",
         answeredBy: "human",

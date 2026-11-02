@@ -162,6 +162,83 @@ describe("bandeja", () => {
     );
   });
 
+  describe("pregunta de opción múltiple", () => {
+    const OPTIONS = [
+      { label: "Postgres", description: "ya está en el stack" },
+      { label: "SQLite" },
+      { label: "Archivo plano", description: "sin dependencias" },
+    ];
+    function asked(options: typeof OPTIONS | null = OPTIONS) {
+      const { fake, project } = seeded();
+      const task = fake.addTask(project.id, { intent: "Elegir motor" });
+      fake.transition(task.id, "in_progress", "running");
+      fake.ask(task.id, "¿Qué motor uso?", null, options);
+      return renderApp("/inbox", fake);
+    }
+
+    it("AC-4: muestra un grupo de radios con label y descripción, más «Otra respuesta», sin elegir", async () => {
+      asked();
+      const question = await item("Preguntas abiertas", "Elegir motor");
+      const group = within(await question.findByRole("group", { name: "Respuesta" }));
+      const radios = group.getAllByRole("radio") as HTMLInputElement[];
+      expect(radios.map((r) => r.labels?.[0]?.textContent)).toEqual([
+        "Postgresya está en el stack",
+        "SQLite",
+        "Archivo planosin dependencias",
+        "Otra respuesta",
+      ]);
+      expect(radios.some((r) => r.checked)).toBe(false);
+      expect(group.getByText("ya está en el stack")).toBeTruthy();
+      expect(question.queryByRole("textbox")).toBeNull();
+      const send = question.getByRole("button", { name: "Responder" }) as HTMLButtonElement;
+      expect(send.disabled).toBe(true);
+    });
+
+    it("AC-5: elegir una opción y responder envía su label", async () => {
+      const { fake, user } = asked();
+      const question = await item("Preguntas abiertas", "Elegir motor");
+      await user.click(question.getByRole("radio", { name: /^SQLite/ }));
+      await user.click(question.getByRole("button", { name: "Responder" }));
+      await waitFor(() => expect(fake.questions[0]).toMatchObject({ status: "answered" }));
+      expect(fake.questions[0]?.answer).toBe("SQLite");
+    });
+
+    it("AC-6: «Otra respuesta» abre un campo de texto y exige texto no vacío; envía el texto recortado", async () => {
+      const { fake, user } = asked();
+      const question = await item("Preguntas abiertas", "Elegir motor");
+      await user.click(question.getByRole("radio", { name: "Otra respuesta" }));
+      const text = question.getByRole("textbox", { name: "Otra respuesta" });
+      const send = question.getByRole("button", { name: "Responder" }) as HTMLButtonElement;
+      expect(send.disabled).toBe(true);
+      await user.type(text, "   ");
+      expect(send.disabled).toBe(true);
+      await user.type(text, "  DuckDB  ");
+      expect(send.disabled).toBe(false);
+      await user.click(send);
+      await waitFor(() => expect(fake.questions[0]).toMatchObject({ status: "answered" }));
+      expect(fake.questions[0]?.answer).toBe("DuckDB");
+    });
+
+    it("AC-7: si cambia de «Otra respuesta» a una opción se envía el label, no el texto", async () => {
+      const { fake, user } = asked();
+      const question = await item("Preguntas abiertas", "Elegir motor");
+      await user.click(question.getByRole("radio", { name: "Otra respuesta" }));
+      await user.type(question.getByRole("textbox", { name: "Otra respuesta" }), "DuckDB");
+      await user.click(question.getByRole("radio", { name: /^Postgres/ }));
+      await user.click(question.getByRole("button", { name: "Responder" }));
+      await waitFor(() => expect(fake.questions[0]).toMatchObject({ status: "answered" }));
+      expect(fake.questions[0]?.answer).toBe("Postgres");
+    });
+
+    it("AC-8: sin opciones solo hay el campo de texto Respuesta, sin radios", async () => {
+      asked(null);
+      const question = await item("Preguntas abiertas", "Elegir motor");
+      expect(question.getByLabelText("Respuesta")).toBeTruthy();
+      expect(question.queryAllByRole("radio")).toEqual([]);
+      expect(question.queryByRole("group", { name: "Respuesta" })).toBeNull();
+    });
+  });
+
   it("si la pregunta ya no está abierta muestra el error del servidor", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { intent: "Migrar usuarios" });

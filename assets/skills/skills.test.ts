@@ -146,6 +146,14 @@ describe("@lunasq/assets-skills", () => {
       expect(body).toMatch(/termina tu turno/i);
     });
 
+    it("explica cuándo y cómo mandar options en ask_human", () => {
+      const { body } = parsed();
+      expect(body).toContain("options");
+      expect(body).toMatch(/2 a 6/);
+      expect(body).toMatch(/label/);
+      expect(body).toMatch(/otra respuesta/i);
+    });
+
     it("pide usar engram solo si está disponible, en cada momento del diseño", () => {
       const { body } = parsed();
       expect(body).toContain("## Memoria con engram (opcional)");
