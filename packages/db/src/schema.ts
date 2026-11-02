@@ -8,6 +8,7 @@ import {
   Phase,
   PrState,
   QuestionStatus,
+  ResultKind,
   RiskLabel,
   RunResult,
   SessionSource,
@@ -112,6 +113,9 @@ export const tasks = sqliteTable(
     prUrl: text("pr_url"),
     prState: text("pr_state", { enum: values(PrState) }),
     riskLabel: text("risk_label", { enum: values(RiskLabel) }),
+    // Resultado de una tarea completada sin código (submit_result, ADR 0007); sin PR.
+    resultKind: text("result_kind", { enum: values(ResultKind) }),
+    result: text("result"),
     causedBy: text("caused_by").references((): AnySQLiteColumn => tasks.id, {
       onDelete: "set null",
     }),
@@ -129,6 +133,7 @@ export const tasks = sqliteTable(
     inEnum("tasks_sub_state_enum", t.subState, values(SubState)),
     inEnum("tasks_pr_state_enum", t.prState, values(PrState)),
     inEnum("tasks_risk_label_enum", t.riskLabel, values(RiskLabel)),
+    inEnum("tasks_result_kind_enum", t.resultKind, values(ResultKind)),
     check(
       "tasks_number_positive",
       sql`${t.number} is null or (${isInteger(t.number)} and ${t.number} > 0)`,

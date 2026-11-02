@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RESULT_MAX_CHARS, ResultHandoff, parseResultHandoff } from "./result.ts";
+import { parseResultHandoff, RESULT_MAX_CHARS, ResultHandoff } from "./result.ts";
 
 const valid = {
   schemaVersion: 1,

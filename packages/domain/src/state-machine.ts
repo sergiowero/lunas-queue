@@ -4,6 +4,7 @@
 import {
   type Actor,
   type EscalationReason,
+  type ResultKind,
   type SubState,
   TASK_TRANSITIONED,
   type TaskCommand,
@@ -31,6 +32,8 @@ export type CommandInput =
       everyCriterionHasTest: boolean;
       hasCommits: boolean;
     }
+  // Tarea sin código: el Resultado reemplaza a la verificación y al PR (ADR 0007).
+  | { type: "submit_result"; resultKind: ResultKind }
   | { type: "verdict_rework"; maxIterations?: number }
   | {
       type: "verdict_pass";
@@ -66,6 +69,7 @@ export const COMMAND_ACTORS: Readonly<Record<TaskCommand, readonly Actor[]>> = {
   request_changes: ["human"],
   approve: ["human"],
   submit_for_verification: ["agent"],
+  submit_result: ["agent"],
   verdict_rework: ["agent"],
   // El verificador registra su veredicto en el handoff; la entrega emite el pass tras el PR.
   verdict_pass: ["system"],
@@ -163,6 +167,12 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
           hasCommits: command.hasCommits,
         }),
         outcome: () => ({ to: "verification" }),
+      };
+    case "submit_result":
+      return {
+        // Desde el primer refinamiento o desde la implementación, con el agente vivo.
+        from: (t) => at("draft", "running")(t) || at("in_progress", "running")(t),
+        outcome: () => ({ to: "completed" }),
       };
     case "verdict_rework": {
       const max = command.maxIterations ?? DEFAULT_MAX_ITERATIONS;
@@ -298,6 +308,8 @@ export function transition(
   };
   if (outcome.reason) payload.reason = outcome.reason;
   if ("note" in command && command.note !== undefined) payload.note = command.note;
+  // El tipo de Resultado viaja en la nota del evento.
+  if (command.type === "submit_result") payload.note = command.resultKind;
   // Valida el evento contra su esquema: lo que entra al log debe poder leerse después.
   const event = TaskTransitionedEvent.safeParse({ type: TASK_TRANSITIONED, actor, payload });
   if (!event.success) {

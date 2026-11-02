@@ -128,6 +128,28 @@ describe("ready set", () => {
     expect(dispatched(result)).toEqual(["d"]);
   });
 
+  it("una dependencia completed con Resultado y sin PR satisface y despacha a su dependiente", () => {
+    const result = plan(
+      [
+        task("a", { state: "completed", subState: null, resultKind: "research" }),
+        task("b", { state: "completed", subState: null, prState: "open" }),
+        task("c"),
+        task("d"),
+      ],
+      [edge("c", "a"), edge("d", "b")],
+    );
+    expect(dispatched(result)).toEqual(["c"]);
+    expect(result.escalate).toEqual([]);
+  });
+
+  it("un Resultado solo satisface si la tarea está completed", () => {
+    const result = plan(
+      [task("a", { state: "in_progress", subState: "running", resultKind: "research" }), task("x")],
+      [edge("x", "a")],
+    );
+    expect(dispatched(result)).toEqual([]);
+  });
+
   it("una dependencia completed sin PR o en curso no satisface", () => {
     const result = plan(
       [
@@ -695,6 +717,7 @@ schedulerStateReaderContract("en memoria", (seeds, edges) => {
       subState: seed.subState ?? null,
       priority: seed.priority ?? 100,
       prState: seed.prState ?? null,
+      resultKind: seed.resultKind ?? null,
     }),
   );
   return { reader: new InMemorySchedulerStateReader(tasks, edges), idOf: (name) => name };

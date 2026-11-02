@@ -1,6 +1,6 @@
 // Reglas del ciclo de vida del worktree de una tarea (docs/design.md §Ciclo de vida del worktree,
 // docs/decisions/0012-ciclo-de-vida-worktrees.md): nombre del branch y cuándo sobra un worktree.
-import type { PrState, TaskState } from "@lunasq/schemas";
+import type { PrState, ResultKind, TaskState } from "@lunasq/schemas";
 
 export const TASK_BRANCH_PREFIX = "lunasq/";
 
@@ -22,14 +22,20 @@ export function taskIdFromBranch(branch: string): string | undefined {
   return SAFE_SEGMENT.test(id) ? id : undefined;
 }
 
-export type WorktreeTaskView = { state: TaskState; prState: PrState | null };
+export type WorktreeTaskView = {
+  state: TaskState;
+  prState: PrState | null;
+  /** Tarea completada con un Resultado (submit_result): no tiene PR que esperar. */
+  resultKind?: ResultKind | null;
+};
 
 /**
- * La tarea ya no necesita su worktree: se canceló o su PR se mergeó. completed llega con el PR
- * abierto y la tarea puede volver a in progress, así que no basta.
+ * La tarea ya no necesita su worktree: se canceló, su PR se mergeó o se completó con un Resultado.
+ * completed llega con el PR abierto y la tarea puede volver a in progress, así que no basta.
  */
 export function worktreeReleased(task: WorktreeTaskView): boolean {
-  return task.state === "cancelled" || (task.state === "completed" && task.prState === "merged");
+  if (task.state === "cancelled") return true;
+  return task.state === "completed" && (task.prState === "merged" || Boolean(task.resultKind));
 }
 
 export type OrphanReason = "task_not_found" | "task_released";

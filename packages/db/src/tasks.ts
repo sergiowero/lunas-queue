@@ -9,6 +9,8 @@ import {
 } from "@lunasq/domain";
 import {
   type DependencyLink,
+  type ResultKind,
+  type StatePosition,
   TASK_CREATED,
   TASK_DEPENDENCY_ADDED,
   TASK_DEPENDENCY_REMOVED,
@@ -29,7 +31,7 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { appendEvent } from "./event-log.ts";
 import { projects, taskDependencies, tasks } from "./schema.ts";
-import { type TransitionTaskResult, transitionTask } from "./task-transitions.ts";
+import { applyTransition, type TransitionTaskResult, transitionTask } from "./task-transitions.ts";
 
 export type TaskRepositoryErrorCode =
   | "project_not_found"
@@ -377,6 +379,43 @@ export function applyTaskTitle(tx: Tx, taskId: string, title: string): boolean {
   const payload: TaskTitledPayload = { title: parsed };
   appendEvent(tx, { taskId, type: TASK_TITLED, actor: "agent", payload });
   return true;
+}
+
+export type CompleteWithResultInput = {
+  taskId: string;
+  resultKind: ResultKind;
+  result: string;
+  /** Título del handoff: solo se fija si la tarea aún no tiene (primer refinamiento). */
+  title: string;
+  /** Posición que quien llama vio; si ya cambió, se rechaza con stale_state. */
+  expected?: StatePosition;
+};
+
+/**
+ * Completa la tarea con un Resultado en vez de un PR (submit_result, ADR 0007), dentro de la
+ * transacción IMMEDIATE de quien llama: aplica el comando, guarda el tipo y el texto y fija el
+ * título si falta. Un rechazo de la máquina de estados no escribe nada.
+ */
+export function completeTaskWithResult(
+  tx: Tx,
+  input: CompleteWithResultInput,
+): TransitionTaskResult {
+  const moved = applyTransition(tx, {
+    taskId: input.taskId,
+    actor: "agent",
+    command: { type: "submit_result", resultKind: input.resultKind },
+    ...(input.expected && { expected: input.expected }),
+  });
+  if (!moved.ok) return moved;
+  const [task] = tx
+    .update(tasks)
+    .set({ resultKind: input.resultKind, result: input.result })
+    .where(eq(tasks.id, input.taskId))
+    .returning()
+    .all();
+  if (!task) throw new Error(`la tarea ${input.taskId} desapareció al guardar su Resultado`);
+  applyTaskTitle(tx, input.taskId, input.title);
+  return { ...moved, task: findRow(tx, input.taskId) ?? task };
 }
 
 /**

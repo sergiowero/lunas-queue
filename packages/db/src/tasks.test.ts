@@ -16,7 +16,12 @@ import { migrateDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
 import * as schema from "./schema.ts";
 import { taskDependencies, tasks } from "./schema.ts";
-import { applyTaskTitle, TaskRepository, TaskRepositoryError } from "./tasks.ts";
+import {
+  applyTaskTitle,
+  completeTaskWithResult,
+  TaskRepository,
+  TaskRepositoryError,
+} from "./tasks.ts";
 import { freshDatabase, insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
 
 const missing = "00000000-0000-4000-8000-000000000999";
@@ -379,6 +384,100 @@ describe("applyTaskTitle", () => {
     const task = create();
     expect(() => db.transaction((tx) => applyTaskTitle(tx, task.id, "  "))).toThrow();
     expect(() => db.transaction((tx) => applyTaskTitle(tx, task.id, "x".repeat(73)))).toThrow();
+  });
+});
+
+describe("completeTaskWithResult", () => {
+  const input = (
+    taskId: string,
+    extra: Partial<Parameters<typeof completeTaskWithResult>[1]> = {},
+  ) => ({
+    taskId,
+    resultKind: "research" as const,
+    result: "# Hallazgos",
+    title: "Investigar la cola",
+    expected: { state: "draft", subState: "running" } as const,
+    ...extra,
+  });
+
+  it("completa la tarea con Resultado, fija el título y deja los eventos, sin PR", () => {
+    const { db, repo, create } = repository();
+    const task = create();
+    db.update(tasks).set({ subState: "running" }).where(eq(tasks.id, task.id)).run();
+
+    const result = db.transaction((tx) => completeTaskWithResult(tx, input(task.id)), {
+      behavior: "immediate",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(repo.get(task.id)).toMatchObject({
+      state: "completed",
+      subState: null,
+      resultKind: "research",
+      result: "# Hallazgos",
+      title: "Investigar la cola",
+      prUrl: null,
+      prState: null,
+    });
+    const events = listEvents(db, task.id);
+    expect(events.filter((e) => e.type === TASK_TITLED)).toHaveLength(1);
+    const moved = events.filter((e) => e.type === TASK_TRANSITIONED).at(-1);
+    expect(moved).toMatchObject({
+      actor: "agent",
+      payload: {
+        command: "submit_result",
+        from: { state: "draft", subState: "running" },
+        to: { state: "completed", subState: null },
+        note: "research",
+      },
+    });
+  });
+
+  it("no cambia el título que la tarea ya tiene", () => {
+    const { db, repo, create } = repository();
+    const task = create();
+    db.update(tasks)
+      .set({ state: "in_progress", subState: "running", title: "Título previo" })
+      .where(eq(tasks.id, task.id))
+      .run();
+
+    const result = db.transaction(
+      (tx) =>
+        completeTaskWithResult(
+          tx,
+          input(task.id, {
+            resultKind: "already_implemented",
+            expected: { state: "in_progress", subState: "running" },
+          }),
+        ),
+      { behavior: "immediate" },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(repo.get(task.id)).toMatchObject({
+      state: "completed",
+      title: "Título previo",
+      resultKind: "already_implemented",
+    });
+    expect(listEvents(db, task.id).filter((e) => e.type === TASK_TITLED)).toHaveLength(0);
+  });
+
+  it("si la máquina de estados rechaza, no escribe Resultado ni título", () => {
+    const { db, repo, create } = repository();
+    const task = create(); // draft/queued: submit_result solo aplica desde running
+
+    const { expected: _, ...withoutExpected } = input(task.id);
+    const result = db.transaction((tx) => completeTaskWithResult(tx, withoutExpected), {
+      behavior: "immediate",
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "invalid_transition" } });
+    expect(repo.get(task.id)).toMatchObject({
+      state: "draft",
+      title: null,
+      resultKind: null,
+      result: null,
+    });
   });
 });
 
