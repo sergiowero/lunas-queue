@@ -84,13 +84,24 @@ function ConcurrencySection() {
   // null: el campo sigue al valor leído; un texto: lo que el humano está escribiendo.
   const [draft, setDraft] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
+  // Límite que el PUT guardó cuando la relectura posterior falló: el servidor ya lo tiene, pero la
+  // caché sigue con el valor anterior.
+  const [savedUnread, setSavedUnread] = useState<number | null>(null);
   const update = useMutation({
     mutationFn: (input: ConcurrencySettings) => api.updateConcurrencySettings(input),
     // Se vuelve a leer en vez de pisar la caché con la respuesta del PUT, y el campo solo vuelve a
     // seguir al servidor cuando llegó la lectura: así muestra el valor guardado y no uno viejo.
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queries.concurrencySettings().queryKey });
-      setDraft(null);
+    // invalidateQueries no lanza si la lectura falla: en ese caso el campo conserva el valor que el
+    // PUT confirmó y el aviso dice que se guardó, en vez de mostrar el valor anterior.
+    onSuccess: async (saved) => {
+      const queryKey = queries.concurrencySettings().queryKey;
+      await queryClient.invalidateQueries({ queryKey });
+      if (queryClient.getQueryState(queryKey)?.status === "error") {
+        setDraft(String(saved.globalConcurrency));
+        setSavedUnread(saved.globalConcurrency);
+      } else {
+        setDraft(null);
+      }
     },
   });
 
@@ -106,6 +117,7 @@ function ConcurrencySection() {
       return;
     }
     setInvalid(false);
+    setSavedUnread(null);
     update.mutate(parsed.data);
   }
 
@@ -155,7 +167,9 @@ function ConcurrencySection() {
         {settings.error && (
           <p role="alert" className="text-sm text-destructive">
             {settings.data
-              ? "No se pudo actualizar el límite; se muestra el último valor leído: "
+              ? savedUnread === null
+                ? "No se pudo actualizar el límite; se muestra el último valor leído: "
+                : `El límite se guardó (${savedUnread}), pero no se pudo volver a leer: `
               : "No se pudo leer el límite de concurrencia: "}
             {settings.error.message}
           </p>

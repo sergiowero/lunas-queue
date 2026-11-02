@@ -266,6 +266,26 @@ describe("sección Concurrencia", () => {
     expect(fake.providers).toEqual({ claude: false, copilot: true });
   });
 
+  it("si el PUT se guarda pero la relectura falla, el campo muestra el valor guardado y el aviso dice que se guardó", async () => {
+    const fake = new FakeApi();
+    const { user } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "3");
+    fake.concurrencyReadFails = true;
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    const alert = await screen.findByText(/El límite se guardó/, {}, { timeout: 5000 });
+    expect(alert.textContent).toContain("3");
+    expect(alert.textContent).not.toMatch(/No se pudo (guardar|actualizar)/);
+    expect(fake.concurrency).toEqual({ globalConcurrency: 3 });
+    expect(((await field()) as HTMLInputElement).value).toBe("3");
+    expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  }, 15000);
+
   it("si falla la lectura muestra un aviso y la sección de proveedores sigue funcionando", async () => {
     const fake = new FakeApi();
     fake.concurrencyReadFails = true;
