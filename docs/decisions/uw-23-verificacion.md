@@ -28,10 +28,10 @@ ADR uw-10-hooks leaves the `after_implementation`, `before_verification` and `af
   - The error is `reviewer_evidence_mismatch` with issues by path, without effects: the Run stays open to correct.
   - The check runs before the pass's gate. If the Run already recorded a verdict, it is not repeated: the transaction decides (idempotent or `verdict_already_recorded`).
 - **Approver on Sonnet.** `phaseProfile(config, "verify")` returns `model: "sonnet"` (`DEFAULT_VERIFY_MODEL`) if the profile does not set a model. The value is resolved on read, like the phase timeout (ADR 0008): it reaches `--model` and `runs.model` without migrating projects. An explicit model in the profile prevails.
-- **Configurable cap.** `limits.maxVerificationIterations` (integer from 1 to 20, optional; default `DEFAULT_MAX_ITERATIONS`, 3) reaches `verdict_rework` as `maxIterations`. ADR 0007's semantics do not change:
-  - With the default, three reworks fit. The iteration is 0‑based: the first verification has iteration 0, and that is how `verification.verdict_recorded.iteration` and `rework.iteration` report it.
-  - The rejects of verifications 1 to 3 go back to implementation.
-  - The fourth's reject takes the task to `needs_human` with `iterations_exhausted`.
+- **Configurable cap.** The effective cap is `limits.maxVerificationIterations` (integer from 1 to 20, optional) if the project defines it, otherwise the global cap saved in Settings (`maxVerificationIterations`, integer from 1 to 20), otherwise `DEFAULT_MAX_ITERATIONS` (5); `maxVerificationIterations(project, globalCap)` resolves it and it reaches `verdict_rework` as `maxIterations`. ADR 0007's semantics do not change:
+  - With the default, five reworks fit. The iteration is 0‑based: the first verification has iteration 0, and that is how `verification.verdict_recorded.iteration` and `rework.iteration` report it.
+  - The rejects of verifications 1 to 5 go back to implementation.
+  - The sixth's reject takes the task to `needs_human` with `iterations_exhausted`.
 - **Risk and event.** In the transaction that stores the verdict (pass or reject), `recordVerdict`:
   - sets `tasks.risk_label`;
   - appends `verification.verdict_recorded` (actor `agent`, published in the outbox) with Run, verdict, the Run's iteration, risk, count of must-fix and refuted findings, and skipped reviewers.
