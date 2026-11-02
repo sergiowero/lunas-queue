@@ -1,12 +1,12 @@
-// Runner real: `sh -c` en su propio grupo de procesos, para que el timeout mate también a los hijos.
+// Real runner: `sh -c` in its own process group, so the timeout also kills the children.
 import { spawn } from "node:child_process";
 import { constants } from "node:os";
 import type { ProcessInput, ProcessResult, ProcessRunner } from "./types.ts";
 
-/** Tras salir el shell, cuánto se espera a que los hijos suelten stdout/stderr antes de matarlos. */
+/** After the shell exits, how long to wait for the children to release stdout/stderr before killing them. */
 export const EXIT_GRACE_MS = 200;
 
-/** Tope por stream: de una salida más larga se conserva el final, que es donde está el error. */
+/** Cap per stream: from a longer output the end is kept, which is where the error is. */
 export const OUTPUT_LIMIT_BYTES = 256 * 1024;
 
 export type ProcessErrorCode = "spawn_failed";
@@ -25,7 +25,7 @@ export function isProcessError(err: unknown, code?: ProcessErrorCode): err is Pr
   return err instanceof ProcessError && (code === undefined || err.code === code);
 }
 
-/** Acumula un stream y conserva sus últimos `limit` bytes. */
+/** Accumulates a stream and keeps its last `limit` bytes. */
 class Tail {
   private chunks: Buffer[] = [];
   private size = 0;
@@ -95,9 +95,9 @@ export class ShellProcessRunner implements ProcessRunner {
           new ProcessError("spawn_failed", `${input.command}: ${err.message}`, { cause: err }),
         );
       });
-      // `close` espera a todo el que tenga los pipes abiertos: un hijo en background (daemon,
-      // watcher) lo colgaría. Al salir el shell se le da un margen y luego se mata lo que quede
-      // de su grupo; un hijo que se fue a otra sesión (setsid) pierde los pipes, no cuelga.
+      // `close` waits for everything that has the pipes open: a background child (daemon,
+      // watcher) would hang it. When the shell exits it is given a margin and then whatever is left
+      // of its group is killed; a child that went to another session (setsid) loses the pipes, it does not hang.
       child.on("exit", (code, signal) => {
         grace = setTimeout(() => {
           killGroup(child.pid);
@@ -114,7 +114,7 @@ export class ShellProcessRunner implements ProcessRunner {
   }
 }
 
-/** El env del proceso, o solo las variables de la allowlist si la hay. */
+/** The process env, or only the allowlist variables if there is one. */
 function inheritedEnv(allowlist: string[] | undefined): NodeJS.ProcessEnv {
   if (allowlist === undefined) return process.env;
   return Object.fromEntries(
@@ -127,6 +127,6 @@ function killGroup(pid: number | undefined) {
   try {
     process.kill(-pid, "SIGKILL");
   } catch {
-    // El grupo ya terminó.
+    // The group already finished.
   }
 }

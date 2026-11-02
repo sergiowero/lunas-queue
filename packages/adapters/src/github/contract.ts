@@ -1,4 +1,4 @@
-// Suite de contrato del adapter de GitHub: la misma corre contra el fake (pnpm test) y contra
+// Contract suite of the GitHub adapter: the same one runs against the fake (pnpm test) and against
 // GitHub real en un repo sandbox (pnpm --filter @lunasq/adapters test:gh).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isGitHubError } from "./errors.ts";
@@ -6,12 +6,12 @@ import type { GitHubAdapter } from "./types.ts";
 
 export interface GitHubContractHarness {
   adapter: GitHubAdapter;
-  /** Un branch nuevo ya publicado con un commit sobre `base`, y el checkout donde vive. */
+  /** A new branch already published with a commit on top of `base`, and the checkout where it lives. */
   newBranch(): Promise<{ cwd: string; head: string; base: string }>;
-  /** Lo que hace el humano en GitHub. */
+  /** What the human does on GitHub. */
   merge(url: string): Promise<void>;
   close(url: string): Promise<void>;
-  /** URL de un PR que no existe en el repo. */
+  /** URL of a PR that does not exist in the repo. */
   missingUrl: string;
   cleanup(): Promise<void>;
 }
@@ -23,7 +23,7 @@ export function gitHubContract(
 ): void {
   const timeout = opts.timeoutMs ?? 5_000;
 
-  describe(`contrato del adapter de GitHub: ${name}`, { timeout }, () => {
+  describe(`GitHub adapter contract: ${name}`, { timeout }, () => {
     let h: GitHubContractHarness;
     let gh: GitHubAdapter;
 
@@ -42,7 +42,7 @@ export function gitHubContract(
       return { branch, pr, created };
     }
 
-    it("createPr abre un PR y repetirlo devuelve el mismo", async () => {
+    it("createPr opens a PR and repeating it returns the same one", async () => {
       const { branch, pr, created } = await openPr();
       expect(created).toBe(true);
       expect(pr).toMatchObject({
@@ -57,7 +57,7 @@ export function gitHubContract(
       expect((await gh.getPr(pr.url)).url).toBe(pr.url);
     });
 
-    it("addLabels pone las etiquetas, también las que el repo no tenía, y repetirlo no duplica", async () => {
+    it("addLabels sets the labels, also those the repo did not have, and repeating it does not duplicate", async () => {
       const { branch, pr } = await openPr();
       const label = { name: "lunasq:risk-low", color: "0e8a16", description: "Riesgo bajo" };
       const labeled = await gh.addLabels({ cwd: branch.cwd, url: pr.url, labels: [label] });
@@ -67,12 +67,12 @@ export function gitHubContract(
       expect((await gh.getPr(pr.url)).labels).toEqual(["lunasq:risk-low"]);
     });
 
-    it("findOpenPr da null para un branch sin PR", async () => {
+    it("findOpenPr gives null for a branch without a PR", async () => {
       const branch = await h.newBranch();
       expect(await gh.findOpenPr(branch)).toBeNull();
     });
 
-    it("getPr ve el merge con su hora", async () => {
+    it("getPr sees the merge with its time", async () => {
       const { pr } = await openPr();
       await h.merge(pr.url);
       const merged = await gh.getPr(pr.url);
@@ -80,7 +80,7 @@ export function gitHubContract(
       expect(merged.mergedAt).toBeInstanceOf(Date);
     });
 
-    it("un PR cerrado sin merge no cuenta como abierto: createPr abre otro", async () => {
+    it("a PR closed without merge does not count as open: createPr opens another", async () => {
       const { branch, pr } = await openPr();
       await h.close(pr.url);
       const closed = await gh.getPr(pr.url);
@@ -93,7 +93,7 @@ export function gitHubContract(
       await h.close(next.pr.url);
     });
 
-    it("getPr de un PR que no existe es not_found", async () => {
+    it("getPr of a PR that does not exist is not_found", async () => {
       const err = await gh.getPr(h.missingUrl).catch((e: unknown) => e);
       expect(isGitHubError(err, "not_found")).toBe(true);
     });

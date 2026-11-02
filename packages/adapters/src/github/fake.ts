@@ -1,5 +1,5 @@
-// Fake en memoria del adapter de GitHub. Cumple la suite de contrato y agrega controles para que
-// los tests (poller, entrega) provoquen lo que en GitHub hace un humano: merge, cierre, CI, reviews.
+// In-memory fake of the GitHub adapter. It passes the contract suite and adds controls so
+// the tests (poller, delivery) cause what a human does on GitHub: merge, close, CI, reviews.
 import { GitHubError } from "./errors.ts";
 import type {
   CreatePrInput,
@@ -14,13 +14,13 @@ import type {
 import { summarizeChecks } from "./wire.ts";
 
 export interface FakeGitHubOptions {
-  /** `owner/repo` de las URLs (por defecto `lunasq/fake`). */
+  /** `owner/repo` of the URLs (by default `lunasq/fake`). */
   repo?: string;
   now?: () => Date;
 }
 
 export class FakeGitHub implements GitHubAdapter {
-  /** Llamadas a createPr que abrieron un PR. */
+  /** Calls to createPr that opened a PR. */
   readonly created: CreatePrInput[] = [];
 
   private readonly repo: string;
@@ -92,12 +92,12 @@ export class FakeGitHub implements GitHubAdapter {
 
   reopen(url: string): void {
     const pr = this.#get(url);
-    if (pr.state !== "closed") throw new Error(`el PR ${url} no está cerrado`);
+    if (pr.state !== "closed") throw new Error(`PR ${url} is not closed`);
     pr.state = "open";
     pr.closedAt = null;
   }
 
-  /** Lo que GitHub calcula cuando la base avanza: conflicting si otro merge chocó con el PR. */
+  /** What GitHub computes when the base advances: conflicting if another merge clashed with the PR. */
   setMergeable(url: string, mergeable: Mergeable): void {
     this.#get(url).mergeable = mergeable;
   }
@@ -112,7 +112,7 @@ export class FakeGitHub implements GitHubAdapter {
     if (decision !== undefined) pr.reviewDecision = decision;
   }
 
-  /** getPr de esa URL lanza `error` hasta que se llame con null. */
+  /** getPr of that URL throws `error` until it is called with null. */
   failGetPr(url: string, error: Error | null): void {
     if (error) this.failures.set(url, error);
     else this.failures.delete(url);
@@ -126,13 +126,13 @@ export class FakeGitHub implements GitHubAdapter {
 
   #get(url: string): PullRequest {
     const pr = this.prs.get(url);
-    if (!pr) throw new GitHubError("not_found", `no existe el PR ${url}`);
+    if (!pr) throw new GitHubError("not_found", `PR ${url} does not exist`);
     return pr;
   }
 
   #open(url: string): PullRequest {
     const pr = this.#get(url);
-    if (pr.state !== "open") throw new Error(`el PR ${url} no está abierto`);
+    if (pr.state !== "open") throw new Error(`PR ${url} is not open`);
     return pr;
   }
 }

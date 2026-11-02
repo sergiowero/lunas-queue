@@ -1,5 +1,5 @@
-// Salida `--json` de `gh pr view` / `gh pr list` (gh 2.100) y su traducción a PullRequest.
-// Los esquemas no son estrictos: gh agrega campos entre versiones y solo se leen los que se usan.
+// `--json` output of `gh pr view` / `gh pr list` (gh 2.100) and its translation to PullRequest.
+// The schemas are not strict: gh adds fields between versions and only the ones used are read.
 import { z } from "zod";
 import { GitHubError } from "./errors.ts";
 import type {
@@ -13,7 +13,7 @@ import type {
   ReviewState,
 } from "./types.ts";
 
-/** Campos que se piden a `gh pr view --json` y `gh pr list --json`. */
+/** Fields requested from `gh pr view --json` and `gh pr list --json`. */
 export const PR_FIELDS = [
   "number",
   "url",
@@ -30,7 +30,7 @@ export const PR_FIELDS = [
   "labels",
 ].join(",");
 
-// gh da "" o una fecha cero en lugar de null en algunos campos.
+// gh gives "" or a zero date instead of null in some fields.
 const optionalDate = z
   .string()
   .nullish()
@@ -64,10 +64,10 @@ const GhPr = z.object({
   baseRefName: z.string(),
   mergedAt: optionalDate,
   closedAt: optionalDate,
-  // MERGEABLE, CONFLICTING o UNKNOWN; cualquier otro valor cuenta como unknown.
+  // MERGEABLE, CONFLICTING or UNKNOWN; any other value counts as unknown.
   mergeable: z.string().nullish(),
-  // Checks y reviews se leen entrada por entrada (parseCheck, parseReview): una forma que no se
-  // conoce no debe impedir leer el estado del PR, o el poller nunca vería el merge.
+  // Checks and reviews are read entry by entry (parseCheck, parseReview): a shape that is not
+  // known must not prevent reading the PR's state, or the poller would never see the merge.
   statusCheckRollup: z.array(z.unknown()).nullish(),
   reviewDecision: z.string().nullish(),
   reviews: z.array(z.unknown()).nullish(),
@@ -101,7 +101,7 @@ function statusContextStatus(state: string): CheckStatus {
   return "failure";
 }
 
-/** Resumen de los checks: falla si uno falla; pendiente si uno no terminó. */
+/** Summary of the checks: fails if one fails; pending if one has not finished. */
 export function summarizeChecks(items: readonly PrCheck[]): ChecksStatus {
   if (items.length === 0) return "none";
   if (items.some((c) => c.status === "failure")) return "failure";
@@ -128,10 +128,10 @@ const REVIEW_DECISIONS: Record<string, ReviewDecision> = {
   REVIEW_REQUIRED: "review_required",
 };
 
-/** Un check de forma desconocida cuenta como pendiente: no se puede afirmar que pasó. */
+/** A check of unknown shape counts as pending: it cannot be claimed to have passed. */
 function parseCheck(raw: unknown): PrCheck {
   const c = Check.safeParse(raw);
-  if (!c.success) return { name: "desconocido", status: "pending", url: null };
+  if (!c.success) return { name: "unknown", status: "pending", url: null };
   return c.data.__typename === "CheckRun"
     ? {
         name: c.data.name,
@@ -145,7 +145,7 @@ function parseCheck(raw: unknown): PrCheck {
       };
 }
 
-/** Una review de forma desconocida se descarta. */
+/** A review of unknown shape is discarded. */
 function parseReview(raw: unknown): PrReview[] {
   const r = Review.safeParse(raw);
   if (!r.success) return [];
@@ -189,6 +189,6 @@ export function parsePr(raw: unknown): PullRequest {
 }
 
 export function parsePrList(raw: unknown): PullRequest[] {
-  if (!Array.isArray(raw)) throw new GitHubError("invalid_output", "se esperaba una lista de PRs");
+  if (!Array.isArray(raw)) throw new GitHubError("invalid_output", "a list of PRs was expected");
   return raw.map(parsePr);
 }

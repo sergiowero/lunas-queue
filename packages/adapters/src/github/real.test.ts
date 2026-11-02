@@ -19,14 +19,14 @@ const ghPr = (state = "OPEN") => ({
   labels: [],
 });
 
-/** exec falso que responde por subcomando (`pr list`, `pr create`, `pr view`). */
+/** Fake exec that answers by subcommand (`pr list`, `pr create`, `pr view`). */
 function scripted(responses: Record<string, Partial<GhExecResult>[]>) {
   const calls: { args: string[]; opts: GhExecOptions }[] = [];
   const exec: GhExecFn = async (_file, args, opts) => {
     calls.push({ args, opts });
     const key = args.slice(0, 2).join(" ");
     const next = responses[key]?.shift();
-    if (!next) throw new Error(`sin respuesta para ${key}`);
+    if (!next) throw new Error(`no response for ${key}`);
     return { stdout: "", stderr: "", exitCode: 0, ...next };
   };
   return { exec, calls };
@@ -41,7 +41,7 @@ const input = {
 };
 
 describe("RealGitHub", () => {
-  it("createPr abre el PR con el cuerpo por stdin y lo devuelve leído de GitHub", async () => {
+  it("createPr opens the PR with the body via stdin and returns it read back from GitHub", async () => {
     const { exec, calls } = scripted({
       "pr list": [{ stdout: "[]" }],
       "pr create": [{ stdout: `Creating pull request...\n${url}\n` }],
@@ -75,7 +75,7 @@ describe("RealGitHub", () => {
     expect(calls[1]?.opts).toMatchObject({ cwd: "/wt/t1", input: input.body });
   });
 
-  it("createPr devuelve el PR abierto que ya existe sin crear otro", async () => {
+  it("createPr returns the already open PR without creating another", async () => {
     const { exec, calls } = scripted({ "pr list": [{ stdout: JSON.stringify([ghPr()]) }] });
     const { pr, created } = await new RealGitHub({ exec }).createPr(input);
     expect(created).toBe(false);
@@ -83,7 +83,7 @@ describe("RealGitHub", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("createPr que pierde la carrera contra otro proceso devuelve el PR del otro", async () => {
+  it("createPr that loses the race against another process returns the other's PR", async () => {
     const { exec } = scripted({
       "pr list": [{ stdout: "[]" }, { stdout: JSON.stringify([ghPr()]) }],
       "pr create": [
@@ -99,7 +99,7 @@ describe("RealGitHub", () => {
     });
   });
 
-  it("createPr propaga los demás fallos de gh", async () => {
+  it("createPr propagates the other gh failures", async () => {
     const { exec } = scripted({
       "pr list": [{ stdout: "[]" }],
       "pr create": [{ exitCode: 1, stderr: "pull request create failed: head branch not pushed" }],
@@ -109,7 +109,7 @@ describe("RealGitHub", () => {
     });
   });
 
-  it("getPr lee el PR por URL sin cwd y traduce not_found", async () => {
+  it("getPr reads the PR by URL without cwd and translates not_found", async () => {
     const { exec, calls } = scripted({
       "pr view": [
         { stdout: JSON.stringify(ghPr("MERGED")) },
@@ -127,7 +127,7 @@ describe("RealGitHub", () => {
     });
   });
 
-  it("addLabels crea cada etiqueta, se la pone al PR y devuelve el PR leído", async () => {
+  it("addLabels creates each label, sets it on the PR and returns the PR read back", async () => {
     const { exec, calls } = scripted({
       "label create": [{}, {}],
       "pr edit": [{}],
@@ -160,7 +160,7 @@ describe("RealGitHub", () => {
     expect(calls.slice(0, 3).every((c) => c.opts.cwd === "/wt/t1")).toBe(true);
   });
 
-  it("addLabels rechaza lo que no es la URL de un PR sin llamar a gh", async () => {
+  it("addLabels rejects what is not a PR URL without calling gh", async () => {
     const { exec, calls } = scripted({});
     await expect(
       new RealGitHub({ exec }).addLabels({ cwd: "/wt/t1", url: "12", labels: [{ name: "x" }] }),
@@ -168,7 +168,7 @@ describe("RealGitHub", () => {
     expect(calls).toEqual([]);
   });
 
-  it("createPr sin URL en la salida falla sin llamar a pr view", async () => {
+  it("createPr without a URL in the output fails without calling pr view", async () => {
     const { exec, calls } = scripted({
       "pr list": [{ stdout: "[]" }],
       "pr create": [{ stdout: "\n" }],
@@ -179,7 +179,7 @@ describe("RealGitHub", () => {
     expect(calls.map((c) => c.args.slice(0, 2).join(" "))).toEqual(["pr list", "pr create"]);
   });
 
-  it("getPr rechaza lo que no es la URL de un PR sin llamar a gh", async () => {
+  it("getPr rejects what is not a PR URL without calling gh", async () => {
     const { exec, calls } = scripted({});
     const gh = new RealGitHub({ exec });
     for (const ref of ["", "12", "lunasq/t1"]) {
@@ -188,7 +188,7 @@ describe("RealGitHub", () => {
     expect(calls).toEqual([]);
   });
 
-  it("findOpenPr devuelve null sin PR abierto", async () => {
+  it("findOpenPr returns null without an open PR", async () => {
     const { exec } = scripted({ "pr list": [{ stdout: "[]" }] });
     expect(await new RealGitHub({ exec }).findOpenPr(input)).toBeNull();
   });

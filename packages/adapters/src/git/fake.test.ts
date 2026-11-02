@@ -1,7 +1,7 @@
 import { gitContract } from "./contract.ts";
 import { FakeGit, type FakeTree } from "./fake.ts";
 
-gitContract("fake en memoria", async () => {
+gitContract("in-memory fake", async () => {
   const adapter = new FakeGit();
   let repos = 0;
   return {

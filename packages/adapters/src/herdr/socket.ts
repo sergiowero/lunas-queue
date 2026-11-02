@@ -1,7 +1,7 @@
-// Stream de `events.subscribe` por el socket Unix de herdr (NDJSON). Una conexión por
-// suscripción: herdr cierra la conexión si llega otra request por ella. herdr 0.9.5 cierra el
-// stream sin aviso cuando el consumidor se atrasa (ADR 0004), así que todo cierre no pedido
-// se reporta como `events_lost` y se reconecta con backoff.
+// `events.subscribe` stream over herdr's Unix socket (NDJSON). One connection per
+// subscription: herdr closes the connection if another request arrives on it. herdr 0.9.5 closes the
+// stream without notice when the consumer falls behind (ADR 0004), so every close not requested
+// is reported as `events_lost` and reconnected with backoff.
 import { createConnection, type Socket } from "node:net";
 import type { HerdrEvent, HerdrSubscription } from "./types.ts";
 import { streamErrorWire, streamEventWire, subscriptionStartedWire, toEvent } from "./wire.ts";
@@ -10,7 +10,7 @@ export interface EventStreamOptions {
   socketPath: string;
   subscriptions: Record<string, unknown>[];
   onEvent: (event: HerdrEvent) => void;
-  /** Errores del callback del consumidor; nunca deben tumbar el proceso. */
+  /** Errors from the consumer's callback; they must never bring down the process. */
   onError?: (err: unknown) => void;
   backoff?: { initialMs: number; maxMs: number };
 }
@@ -22,7 +22,7 @@ export class EventStream implements HerdrSubscription {
   private timer: NodeJS.Timeout | undefined;
   private delayMs: number;
   private closed = false;
-  /** Evita repetir `events_lost` mientras los reintentos siguen fallando. */
+  /** Avoids repeating `events_lost` while the retries keep failing. */
   private lossReported = false;
 
   constructor(opts: EventStreamOptions) {
@@ -43,7 +43,7 @@ export class EventStream implements HerdrSubscription {
     });
   }
 
-  /** Corta la conexión actual como si herdr la cerrara. Solo para tests. */
+  /** Cuts the current connection as if herdr closed it. Tests only. */
   drop(): void {
     this.socket?.destroy();
   }
@@ -69,7 +69,7 @@ export class EventStream implements HerdrSubscription {
         if (line) this.handleLine(socket, line);
       }
     });
-    // `close` siempre sigue a `error`; ahí se decide si reconectar.
+    // `close` always follows `error`; that is where it is decided whether to reconnect.
     socket.on("error", () => {});
     socket.on("close", () => this.handleClose(socket));
   }
@@ -89,7 +89,7 @@ export class EventStream implements HerdrSubscription {
     }
     const error = streamErrorWire.safeParse(json);
     if (error.success) {
-      // Rechazo de la suscripción (p. ej. el pane ya no existe): reintentar no lo arregla.
+      // Subscription rejection (e.g. the pane no longer exists): retrying does not fix it.
       const { code, message } = error.data.error;
       this.closed = true;
       if (this.timer) clearTimeout(this.timer);
@@ -103,7 +103,7 @@ export class EventStream implements HerdrSubscription {
     try {
       event = toEvent(parsed.data.event, parsed.data.data);
     } catch {
-      // Evento conocido con un payload inesperado: se ignora; la reconciliación lo cubre.
+      // Known event with an unexpected payload: it is ignored; reconciliation covers it.
       return;
     }
     if (event) this.emit(event);
@@ -126,7 +126,7 @@ export class EventStream implements HerdrSubscription {
     try {
       this.opts.onEvent(event);
     } catch (err) {
-      // Se llama desde los handlers del socket: una excepción aquí sería uncaught.
+      // Called from the socket handlers: an exception here would be uncaught.
       (this.opts.onError ?? console.error)(err);
     }
   }

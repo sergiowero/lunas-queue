@@ -1,7 +1,7 @@
-// Runner que ejecuta comandos de proyecto en un pane de herdr (docs/tech-stack.md: hooks y gate de
-// tests se ven en herdr como cualquier agente). `pane run` no informa el exit code, así que el
-// comando corre dentro de un wrapper que copia la salida a un log y deja el exit code en un
-// archivo; el runner espera ese archivo. Cumple la misma interfaz que ShellProcessRunner.
+// Runner that executes project commands in a herdr pane (docs/tech-stack.md: hooks and test
+// gate show up in herdr like any agent). `pane run` does not report the exit code, so the
+// command runs inside a wrapper that copies the output to a log and leaves the exit code in a
+// file; the runner waits for that file. It meets the same interface as ShellProcessRunner.
 import { existsSync } from "node:fs";
 import { mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,30 +10,30 @@ import type { HerdrAdapter } from "../herdr/types.ts";
 import { OUTPUT_LIMIT_BYTES } from "./real.ts";
 import type { ProcessInput, ProcessResult, ProcessRunner } from "./types.ts";
 
-/** Exit code con que se informa un timeout: el del SIGKILL, como ShellProcessRunner. */
+/** Exit code used to report a timeout: the SIGKILL one, like ShellProcessRunner. */
 export const PANE_TIMEOUT_EXIT_CODE = 137;
-/** Exit code si el pane se cerró (otro proceso o el usuario) antes de que el comando terminara. */
+/** Exit code if the pane was closed (by another process or the user) before the command finished. */
 export const PANE_CLOSED_EXIT_CODE = 129;
 
 export interface HerdrPaneRunnerOptions {
   herdr: HerdrAdapter;
-  /** Pane del que se abre uno nuevo por ejecución, p. ej. el raíz del worktree de la tarea. */
+  /** Pane from which a new one is opened per execution, e.g. the root of the task's worktree. */
   parentPaneId: string;
-  /** Dónde van el wrapper, el log y el exit code de cada ejecución; por defecto, el tmpdir. */
+  /** Where the wrapper, the log and the exit code of each execution go; by default, the tmpdir. */
   stateDir?: string;
   pollMs?: number;
-  /** Cada cuánto se confirma con herdr que el pane sigue abierto. */
+  /** How often it is confirmed with herdr that the pane is still open. */
   paneCheckMs?: number;
 }
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-/** Comilla simple para sh. */
+/** Single quote for sh. */
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
 /**
- * Con allowlist, `cmd.sh` corre con `env -i` y solo las variables de la allowlist que el pane
- * tenga definidas, más las de `env`. Los nombres ya están validados como nombres de shell.
+ * With an allowlist, `cmd.sh` runs with `env -i` and only the allowlist variables the pane
+ * has defined, plus those from `env`. The names are already validated as shell names.
  */
 const launch = (input: ProcessInput) => {
   if (input.envAllowlist === undefined) return `/bin/sh "$d/cmd.sh"`;
@@ -46,10 +46,10 @@ const launch = (input: ProcessInput) => {
 };
 
 /**
- * Corre `cmd.sh` con /bin/sh, muestra su salida en el pane y la copia a `out.log`; el exit code
- * se escribe al final con un rename, así nunca se lee a medias. El cwd y el env se vuelven a fijar
- * aquí porque los rc del shell del pane pueden cambiarlos, y stdin es /dev/null para que un
- * comando que lee la terminal no se quede esperando.
+ * Runs `cmd.sh` with /bin/sh, shows its output in the pane and copies it to `out.log`; the exit code
+ * is written at the end with a rename, so it is never read half-written. The cwd and env are set again
+ * here because the pane shell's rc files may change them, and stdin is /dev/null so a
+ * command that reads the terminal does not hang waiting.
  */
 const wrapper = (dir: string, input: ProcessInput) => `#!/bin/sh
 d=${shellQuote(dir)}
@@ -77,14 +77,14 @@ export class HerdrPaneRunner implements ProcessRunner {
   }
 
   /**
-   * El env se fija en el pane (`pane split --env`), que hereda el del servidor de herdr, no el de
-   * LunasQ. Lanza si herdr no puede abrir el pane.
+   * The env is set on the pane (`pane split --env`), which inherits the herdr server's, not LunasQ's.
+   * Throws if herdr cannot open the pane.
    */
   async run(input: ProcessInput): Promise<ProcessResult> {
     const badName = [...Object.keys(input.env ?? {}), ...(input.envAllowlist ?? [])].find(
       (name) => !ENV_NAME.test(name),
     );
-    if (badName !== undefined) throw new Error(`nombre de variable inválido: ${badName}`);
+    if (badName !== undefined) throw new Error(`invalid variable name: ${badName}`);
     const dir = await mkdtemp(join(this.stateDir, "lunasq-pane-"));
     try {
       await writeFile(join(dir, "cmd.sh"), input.command);
@@ -105,12 +105,12 @@ export class HerdrPaneRunner implements ProcessRunner {
           return { exitCode: PANE_TIMEOUT_EXIT_CODE, stdout: output, stderr: "", timedOut: true };
         }
         if (end === "pane_closed") {
-          const stderr = "el pane se cerró antes de que el comando terminara";
+          const stderr = "the pane was closed before the command finished";
           return { exitCode: PANE_CLOSED_EXIT_CODE, stdout: output, stderr, timedOut: false };
         }
         return { exitCode: end, stdout: output, stderr: "", timedOut: false };
       } finally {
-        // Cerrar el pane mata lo que siga corriendo (timeout o hijos en background).
+        // Closing the pane kills whatever is still running (timeout or background children).
         await this.herdr.closePane(pane.paneId);
       }
     } finally {
@@ -136,7 +136,7 @@ export class HerdrPaneRunner implements ProcessRunner {
       if (now - lastCheck >= this.paneCheckMs) {
         lastCheck = now;
         const { panes } = await this.herdr.snapshot();
-        // Se vuelve a mirar el archivo: el comando pudo terminar justo antes de cerrarse el pane.
+        // The file is looked at again: the command may have finished just before the pane closed.
         if (!panes.some((p) => p.paneId === paneId) && !existsSync(exitFile)) return "pane_closed";
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollMs));
@@ -144,7 +144,7 @@ export class HerdrPaneRunner implements ProcessRunner {
   }
 }
 
-/** Los últimos OUTPUT_LIMIT_BYTES del archivo; vacío si no existe. */
+/** The last OUTPUT_LIMIT_BYTES of the file; empty if it does not exist. */
 async function tail(path: string): Promise<string> {
   let file: Awaited<ReturnType<typeof open>> | undefined;
   try {

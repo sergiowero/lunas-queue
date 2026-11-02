@@ -1,19 +1,19 @@
-// Ejecución de comandos de proyecto: bootstrap del worktree, hooks y gate de tests.
-// El resto del sistema depende solo de esta interfaz; ShellProcessRunner, HerdrPaneRunner (en un
-// pane de herdr) y FakeProcessRunner la cumplen.
+// Execution of project commands: worktree bootstrap, hooks and test gate.
+// The rest of the system depends only on this interface; ShellProcessRunner, HerdrPaneRunner (in a
+// herdr pane) and FakeProcessRunner implement it.
 
 export interface ProcessInput {
-  /** Línea de shell; se corre con `sh -c`. */
+  /** Shell line; it runs with `sh -c`. */
   command: string;
   cwd: string;
-  /** Se suma al env del proceso de LunasQ. */
+  /** Added to the LunasQ process env. */
   env?: Record<string, string>;
   /**
-   * Si viene, el comando no hereda el env completo: solo estas variables (las que estén
-   * definidas) y las de `env`. Así no le llegan credenciales como `GH_TOKEN`.
+   * If present, the command does not inherit the full env: only these variables (those that are
+   * defined) and those from `env`. This way credentials like `GH_TOKEN` do not reach it.
    */
   envAllowlist?: string[];
-  /** Sin límite si se omite. */
+  /** No limit if omitted. */
   timeoutMs?: number;
 }
 
@@ -25,6 +25,6 @@ export interface ProcessResult {
 }
 
 export interface ProcessRunner {
-  /** No lanza por un exit code distinto de 0: quien llama decide qué es un fallo. */
+  /** Does not throw on an exit code other than 0: the caller decides what counts as a failure. */
   run(input: ProcessInput): Promise<ProcessResult>;
 }

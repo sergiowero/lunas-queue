@@ -1,5 +1,5 @@
 export type GitErrorCode =
-  /** `git` no está instalado o el cwd no existe. */
+  /** `git` is not installed or the cwd does not exist. */
   "git_unavailable" | "ref_not_found" | "timeout" | "git_failed";
 
 export class GitError extends Error {

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EventStream } from "./socket.ts";
 import type { HerdrEvent } from "./types.ts";
 
-// Servidor NDJSON mínimo que imita el socket de herdr para `events.subscribe`.
+// Minimal NDJSON server that imitates herdr's socket for `events.subscribe`.
 class FakeSocketServer {
   readonly path: string;
   readonly requests: unknown[] = [];
@@ -46,18 +46,18 @@ class FakeSocketServer {
 
   get last() {
     const client = this.clients.at(-1);
-    if (!client) throw new Error("sin clientes");
+    if (!client) throw new Error("no clients");
     return client;
   }
 }
 
-/** Espera a que `pred` sea true; falla a los 2 s, como `recorder().until`. */
+/** Waits for `pred` to be true; fails after 2 s, like `recorder().until`. */
 function waitUntil(pred: () => boolean): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const started = Date.now();
     const tick = () => {
       if (pred()) resolve();
-      else if (Date.now() - started > 2_000) reject(new Error("waitUntil: tiempo agotado"));
+      else if (Date.now() - started > 2_000) reject(new Error("waitUntil: timed out"));
       else setTimeout(tick, 5);
     };
     tick();
@@ -98,7 +98,7 @@ describe("EventStream", () => {
     await server.close();
   });
 
-  it("se suscribe y traduce eventos partidos entre chunks", async () => {
+  it("subscribes and translates events split across chunks", async () => {
     const r = recorder();
     const subscriptions = [{ type: "pane.agent_status_changed", pane_id: "w1:p2" }];
     const stream = new EventStream({ socketPath: server.path, subscriptions, ...r, backoff });
@@ -120,7 +120,7 @@ describe("EventStream", () => {
     await stream.close();
   });
 
-  it("un cierre del servidor emite events_lost una vez y reconecta", async () => {
+  it("a server close emits events_lost once and reconnects", async () => {
     const r = recorder();
     const stream = new EventStream({ socketPath: server.path, subscriptions: [], ...r, backoff });
     await r.until((e) => e.length === 1);
@@ -132,7 +132,7 @@ describe("EventStream", () => {
     await stream.close();
   });
 
-  it("mientras la re-suscripción falla reporta la pérdida una sola vez", async () => {
+  it("while the re-subscription fails it reports the loss only once", async () => {
     const r = recorder();
     const stream = new EventStream({ socketPath: server.path, subscriptions: [], ...r, backoff });
     await r.until((e) => e.length === 1);
@@ -141,9 +141,9 @@ describe("EventStream", () => {
       rejected++;
       return "";
     };
-    // El servidor acepta pero corta antes de confirmar la suscripción, varias veces. Cada vuelta
-    // espera a que el servidor LEA la suscripción del cliente nuevo (no solo que lo acepte): si
-    // se corta antes, la petición nunca llega y `rejected` no sube.
+    // The server accepts but cuts before confirming the subscription, several times. Each round
+    // waits for the server to READ the new client's subscription (not just accept it): if
+    // it is cut earlier, the request never arrives and `rejected` does not go up.
     for (let i = 0; i < 3; i++) {
       const before = rejected;
       server.last.destroy();
@@ -158,7 +158,7 @@ describe("EventStream", () => {
     await stream.close();
   });
 
-  it("si herdr no está al suscribirse reporta la pérdida y conecta cuando aparece", async () => {
+  it("if herdr is not there at subscription it reports the loss and connects when it appears", async () => {
     const late = new FakeSocketServer();
     const r = recorder();
     const stream = new EventStream({ socketPath: late.path, subscriptions: [], ...r, backoff });
@@ -174,7 +174,7 @@ describe("EventStream", () => {
     }
   });
 
-  it("una excepción del consumidor no tumba el proceso ni corta el stream", async () => {
+  it("a consumer exception does not bring down the process or cut the stream", async () => {
     const errors: unknown[] = [];
     const seen: HerdrEvent[] = [];
     const onEvent = (e: HerdrEvent) => {
@@ -196,7 +196,7 @@ describe("EventStream", () => {
     await stream.close();
   });
 
-  it("un rechazo de herdr es terminal: subscription_failed y sin reintentos", async () => {
+  it("a herdr rejection is terminal: subscription_failed and no retries", async () => {
     server.reply = () =>
       '{"id":"lunasq-events","error":{"code":"pane_not_found","message":"pane w1:p9 not found"}}';
     const r = recorder();
@@ -209,7 +209,7 @@ describe("EventStream", () => {
     expect(server.requests).toHaveLength(1);
   });
 
-  it("close() no emite events_lost ni reconecta", async () => {
+  it("close() neither emits events_lost nor reconnects", async () => {
     const r = recorder();
     const stream = new EventStream({ socketPath: server.path, subscriptions: [], ...r, backoff });
     await r.until((e) => e.length === 1);

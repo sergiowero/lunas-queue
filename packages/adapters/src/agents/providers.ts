@@ -28,18 +28,18 @@ export class AgentProviderRegistry {
   constructor(providers: readonly AgentProvider[]) {
     const entries = providers.map((provider) => [provider.kind, provider] as const);
     if (new Set(entries.map(([kind]) => kind)).size !== entries.length) {
-      throw new AgentProviderError("hay proveedores de agente duplicados");
+      throw new AgentProviderError("there are duplicate agent providers");
     }
     this.#providers = new Map(entries);
   }
 
   get(kind: AgentKind): AgentProvider {
     const provider = this.#providers.get(kind);
-    if (!provider) throw new AgentProviderError(`no hay adapter registrado para ${kind}`);
+    if (!provider) throw new AgentProviderError(`no adapter registered for ${kind}`);
     return provider;
   }
 
-  /** Proveedor primario primero, seguido por los demás en el orden de registro. */
+  /** Primary provider first, followed by the others in registration order. */
   fallbackOrder(primary: AgentKind): AgentProvider[] {
     const first = this.get(primary);
     return [first, ...[...this.#providers.values()].filter((provider) => provider !== first)];
@@ -68,15 +68,15 @@ function assertNoReservedArgs(args: string[], flags: string[]): void {
     flags.some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
   );
   if (clash !== undefined) {
-    throw new AgentProviderError(`el perfil de agente no puede traer ${clash}: lo fija LunasQ`);
+    throw new AgentProviderError(`the agent profile cannot carry ${clash}: LunasQ sets it`);
   }
 }
 
-/** `--` desactiva la interpretación de flags: los fijos de LunasQ pasarían a ser posicionales. */
+/** `--` turns off flag parsing: the fixed LunasQ flags would become positional. */
 function assertNoOptionTerminator(args: string[]): void {
   if (args.includes("--")) {
     throw new AgentProviderError(
-      "el perfil de agente no puede traer --: desactivaría los flags que fija LunasQ",
+      "the agent profile cannot carry --: it would disable the flags LunasQ sets",
     );
   }
 }
@@ -86,7 +86,9 @@ function assertEffortNotDuplicated(profile: AgentProfile): void {
     profile.effort &&
     profile.args.some((arg) => arg === "--effort" || arg.startsWith("--effort="))
   ) {
-    throw new AgentProviderError("el perfil fija effort y también trae --effort en args: deja uno");
+    throw new AgentProviderError(
+      "the profile sets effort and also carries --effort in args: keep one",
+    );
   }
 }
 

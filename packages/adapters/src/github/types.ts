@@ -1,9 +1,9 @@
-// Puerto del adapter de GitHub (ADR uw-14-adapter-github). Solo por el CLI `gh` con la sesión
-// autenticada de la máquina (docs/tech-stack.md). RealGitHub y FakeGitHub lo cumplen y pasan la
+// GitHub adapter port (ADR uw-14-adapter-github). Only through the `gh` CLI with the machine's
+// authenticated session (docs/tech-stack.md). RealGitHub and FakeGitHub implement it and pass the
 // misma suite.
 import type { PrState } from "@lunasq/schemas";
 
-/** Resumen de CI: none sin checks; failure si alguno falló; pending si alguno no terminó. */
+/** CI summary: none without checks; failure if any failed; pending if any has not finished. */
 export type ChecksStatus = "none" | "pending" | "success" | "failure";
 
 export type CheckStatus = "pending" | "success" | "failure" | "skipped";
@@ -23,12 +23,12 @@ export interface PrReview {
 }
 
 /**
- * Si el PR se puede mergear con la base: conflicting si GitHub detecta conflictos; unknown mientras
- * GitHub no lo calculó (lo calcula en segundo plano después de un push a la base o al PR).
+ * Whether the PR can be merged with the base: conflicting if GitHub detects conflicts; unknown while
+ * GitHub has not computed it (it computes it in the background after a push to the base or to the PR).
  */
 export type Mergeable = "mergeable" | "conflicting" | "unknown";
 
-/** null si el repo no exige reviews. */
+/** null if the repo does not require reviews. */
 export type ReviewDecision = "approved" | "changes_requested" | "review_required" | null;
 
 export interface PullRequest {
@@ -44,21 +44,21 @@ export interface PullRequest {
   checks: { status: ChecksStatus; items: PrCheck[] };
   reviewDecision: ReviewDecision;
   reviews: PrReview[];
-  /** Nombres de las etiquetas del PR. */
+  /** Names of the PR's labels. */
   labels: string[];
 }
 
 export interface PrLabel {
   name: string;
-  /** Color hexadecimal sin `#`, para crear la etiqueta si el repo no la tiene. */
+  /** Hex color without `#`, to create the label if the repo does not have it. */
   color?: string;
   description?: string;
 }
 
 export interface CreatePrInput {
-  /** Checkout del repo (el worktree de la tarea); `gh` toma el repo de su remoto. */
+  /** Repo checkout (the task's worktree); `gh` takes the repo from its remote. */
   cwd: string;
-  /** Branch ya publicado en el remoto. */
+  /** Branch already published on the remote. */
   head: string;
   base: string;
   title: string;
@@ -68,17 +68,17 @@ export interface CreatePrInput {
 
 export interface GitHubAdapter {
   /**
-   * Abre el PR de `head` hacia `base`. Idempotente: si ya hay uno abierto, lo devuelve con
-   * `created: false`. Uno cerrado o mergeado no cuenta: se abre otro.
+   * Opens the PR from `head` to `base`. Idempotent: if one is already open, it returns it with
+   * `created: false`. A closed or merged one does not count: another is opened.
    */
   createPr(input: CreatePrInput): Promise<{ pr: PullRequest; created: boolean }>;
-  /** PR abierto de `head` hacia `base`, o null. */
+  /** Open PR from `head` to `base`, or null. */
   findOpenPr(input: { cwd: string; head: string; base: string }): Promise<PullRequest | null>;
   /**
-   * Agrega etiquetas al PR, creándolas en el repo si faltan. Idempotente: repetirlo no duplica.
-   * `cwd` es un checkout del repo, de donde `gh` toma el remoto.
+   * Adds labels to the PR, creating them in the repo if missing. Idempotent: repeating it does not duplicate.
+   * `cwd` is a checkout of the repo, from which `gh` takes the remote.
    */
   addLabels(input: { cwd: string; url: string; labels: PrLabel[] }): Promise<PullRequest>;
-  /** Estado, CI y reviews de un PR por su URL. Lanza GitHubError `not_found` si no existe. */
+  /** State, CI and reviews of a PR by its URL. Throws GitHubError `not_found` if it does not exist. */
   getPr(url: string): Promise<PullRequest>;
 }

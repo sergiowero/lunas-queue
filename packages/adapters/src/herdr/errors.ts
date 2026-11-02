@@ -1,4 +1,4 @@
-/** Error de herdr con su `code` del protocolo (p. ej. `agent_not_found`, `timeout`). */
+/** herdr error with its protocol `code` (e.g. `agent_not_found`, `timeout`). */
 export class HerdrError extends Error {
   readonly code: string;
 

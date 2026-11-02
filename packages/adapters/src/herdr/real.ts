@@ -1,7 +1,7 @@
-// Adapter real de herdr: operaciones por el CLI con salida JSON y eventos por el socket Unix
-// (docs/tech-stack.md). Aplica las diferencias con el diseño de ADR 0004: `worktree list`/`open`
-// antes de `create`, env por `pane split`, suscripción por pane, `seq` monotónico en metadata y
-// cierre de stream tratado como pérdida de eventos.
+// Real herdr adapter: operations through the CLI with JSON output and events through the Unix socket
+// (docs/tech-stack.md). It applies the differences from the ADR 0004 design: `worktree list`/`open`
+// before `create`, env via `pane split`, per-pane subscription, monotonic `seq` in metadata and
+// stream close treated as event loss.
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { HerdrCli, type HerdrCliOptions } from "./cli.ts";
@@ -35,12 +35,12 @@ import {
 
 const SETTLED: AgentStatus[] = ["idle", "done"];
 
-/** Margen sobre el `--timeout` que se le pasa a herdr antes de matar el proceso del CLI. */
+/** Margin over the `--timeout` passed to herdr before killing the CLI process. */
 const CLI_GRACE_MS = 10_000;
-/** Máximo de `agent start --timeout` en herdr; se usa como límite si no se indica otro. */
+/** Maximum `agent start --timeout` in herdr; used as the limit if no other is given. */
 const MAX_START_TIMEOUT_MS = 300_000;
 
-/** `--source` con el que LunasQ publica metadata en los panes. */
+/** `--source` with which LunasQ publishes metadata on the panes. */
 export const METADATA_SOURCE = "lunasq";
 
 const LIFECYCLE_SUBSCRIPTIONS = [
@@ -52,7 +52,7 @@ const LIFECYCLE_SUBSCRIPTIONS = [
 ].map((type) => ({ type }));
 
 export interface RealHerdrOptions extends HerdrCliOptions {
-  /** Socket de la sesión; por defecto el de `~/.config/herdr` para `session`. */
+  /** Session socket; by default the one in `~/.config/herdr` for `session`. */
   socketPath?: string;
   backoff?: { initialMs: number; maxMs: number };
 }
@@ -113,7 +113,7 @@ export class RealHerdr implements HerdrAdapter {
     const label = input.label ? ["--label", input.label] : [];
     const list = worktreeListWire.parse(await this.cli.json(["worktree", "list", ...ws]));
     if (list.worktrees.some((w) => w.branch === input.branch)) {
-      // `open` es idempotente: si ya está abierto devuelve el mismo workspace.
+      // `open` is idempotent: if it is already open it returns the same workspace.
       const args = ["worktree", "open", ...ws, "--branch", input.branch, ...label, "--no-focus"];
       const res = worktreeOpenedWire.parse(await this.cli.json(args));
       return { worktree: toWorktree(res, input.branch), created: false };
@@ -188,8 +188,8 @@ export class RealHerdr implements HerdrAdapter {
         started: true,
       };
     } catch (err) {
-      // `agent_not_ready`: arrancó pero quedó bloqueado (p. ej. diálogo de confianza, ADR 0004).
-      // `agent_name_taken`: otro despacho lo arrancó entre el `get` y el `start`.
+      // `agent_not_ready`: it started but ended up blocked (e.g. trust dialog, ADR 0004).
+      // `agent_name_taken`: another dispatch started it between the `get` and the `start`.
       if (!isHerdrError(err, "agent_not_ready") && !isHerdrError(err, "agent_name_taken"))
         throw err;
       const agent = await this.getAgent(input.name);
@@ -208,7 +208,7 @@ export class RealHerdr implements HerdrAdapter {
     text: string;
     wait?: { timeoutMs: number; until?: AgentStatus[] };
   }) {
-    // El texto va como posicional: herdr lo acepta aunque empiece con `-`, pero no detrás de `--`.
+    // The text goes as a positional: herdr accepts it even if it starts with `-`, but not after `--`.
     const wait = input.wait
       ? [
           "--wait",
@@ -228,7 +228,7 @@ export class RealHerdr implements HerdrAdapter {
       ...["agent", "wait", input.name, ...untilArgs(input.until ?? SETTLED)],
       ...(input.timeoutMs !== undefined ? ["--timeout", String(input.timeoutMs)] : []),
     ];
-    // Sin `timeoutMs` herdr espera indefinidamente, y el CLI también.
+    // Without `timeoutMs` herdr waits indefinitely, and so does the CLI.
     const timeoutMs = input.timeoutMs !== undefined ? input.timeoutMs + CLI_GRACE_MS : 0;
     return toAgent(agentInfoWire.parse(await this.cli.json(args, { timeoutMs })).agent);
   }
@@ -247,8 +247,8 @@ export class RealHerdr implements HerdrAdapter {
   }
 
   async reportMetadata(input: { paneId: string; title?: string; tokens?: Record<string, string> }) {
-    // herdr descarta en silencio un `seq` <= al último visto por `--source` (ADR 0004). Se deriva
-    // del reloj para seguir siendo creciente aunque el proceso reinicie.
+    // herdr silently drops a `seq` <= the last one seen per `--source` (ADR 0004). It is derived
+    // from the clock to keep increasing even if the process restarts.
     this.lastSeq = Math.max(Date.now(), this.lastSeq + 1);
     const args = [
       ...["pane", "report-metadata", input.paneId, "--source", METADATA_SOURCE],
@@ -283,7 +283,7 @@ export class RealHerdr implements HerdrAdapter {
       socketPath: this.socketPath,
       subscriptions,
       onEvent: (event) => {
-        // Un rechazo es terminal: el stream ya no se puede cortar ni reabrir.
+        // A rejection is terminal: the stream can no longer be cut or reopened.
         if (event.type === "subscription_failed") this.streams.delete(stream);
         onEvent(event);
       },
@@ -298,7 +298,7 @@ export class RealHerdr implements HerdrAdapter {
     };
   }
 
-  /** Corta los streams abiertos como si herdr los cerrara. Solo para tests. */
+  /** Cuts the open streams as if herdr closed them. Tests only. */
   dropStreams() {
     for (const stream of this.streams) stream.drop();
   }
@@ -312,7 +312,7 @@ function untilArgs(until: AgentStatus[]) {
   return until.flatMap((s) => ["--until", s]);
 }
 
-/** Resuelve `undefined` si la operación falla con `code` (para operaciones idempotentes). */
+/** Resolves `undefined` if the operation fails with `code` (for idempotent operations). */
 async function ignoring<T>(code: string, op: Promise<T>): Promise<T | undefined> {
   try {
     return await op;

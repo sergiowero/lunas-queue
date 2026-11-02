@@ -1,4 +1,4 @@
-// Fake del runner de procesos: registra las llamadas y responde con un handler; por defecto, éxito.
+// Fake of the process runner: records the calls and answers with a handler; by default, success.
 import type { ProcessInput, ProcessResult, ProcessRunner } from "./types.ts";
 
 export type FakeProcessHandler = (
@@ -14,7 +14,7 @@ export class FakeProcessRunner implements ProcessRunner {
     this.handler = handler;
   }
 
-  /** Cambia la respuesta de las llamadas siguientes. */
+  /** Changes the response of the following calls. */
   respond(handler: FakeProcessHandler) {
     this.handler = handler;
   }
