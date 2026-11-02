@@ -273,8 +273,12 @@ export function ProjectFormDialog({
                 step={1}
                 value={maxIterations}
                 onChange={(e) => setMaxIterations(e.target.value)}
-                placeholder="3"
+                placeholder={t.projectForm.maxIterationsPlaceholder}
+                aria-describedby="project-max-iterations-help"
               />
+              <p id="project-max-iterations-help" className="text-xs text-muted-foreground">
+                {t.projectForm.maxIterationsHelp}
+              </p>
             </div>
           </div>
         </fieldset>

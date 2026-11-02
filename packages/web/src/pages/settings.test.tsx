@@ -348,6 +348,109 @@ describe("Concurrencia section", () => {
   });
 });
 
+describe("Iteraciones de verificación section", () => {
+  const field = () => screen.findByRole("spinbutton", { name: /Iteraciones máximas/ });
+  const save = () => screen.getByRole("button", { name: "Guardar iteraciones" });
+
+  it("shows the current cap (5 by default) in a numeric field with its own save button", async () => {
+    renderApp("/settings");
+    expect((await field()).getAttribute("type")).toBe("number");
+    expect((await field()) as HTMLInputElement).toHaveProperty("value", "5");
+    expect(screen.getByRole("heading", { name: "Iteraciones de verificación" })).toBeTruthy();
+    expect(save()).toBeTruthy();
+  });
+
+  it("typing 8 and saving sends the PUT, shows 8 after re-reading and survives a reload", async () => {
+    const fake = new FakeApi();
+    const { user, unmount } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "8");
+
+    await user.click(save());
+
+    await waitFor(() => expect(fake.verification).toEqual({ maxVerificationIterations: 8 }));
+    expect(fake.requests.filter((r) => r.method === "PUT")).toEqual([
+      { method: "PUT", path: "/api/settings/verification", body: { maxVerificationIterations: 8 } },
+    ]);
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("spinbutton", { name: /Iteraciones máximas/ }) as HTMLInputElement).value,
+      ).toBe("8"),
+    );
+    unmount();
+    renderApp("/settings", fake);
+    expect((await field()) as HTMLInputElement).toHaveProperty("value", "8");
+  });
+
+  it("disables the save button while saving", async () => {
+    const fake = new FakeApi();
+    let release = () => {};
+    fake.holdVerificationPut = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { user } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "6");
+    await user.click(save());
+    await waitFor(() => expect((save() as HTMLButtonElement).disabled).toBe(true));
+    release();
+    await waitFor(() => expect(fake.verification).toEqual({ maxVerificationIterations: 6 }));
+    await waitFor(() => expect((save() as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it.each([
+    ["vacío", ""],
+    ["0", "0"],
+    ["mayor a 20", "21"],
+    ["decimal", "1.5"],
+  ])(
+    "con un valor %s no envía nada y muestra un mensaje asociado al campo",
+    async (_name, typed) => {
+      const fake = new FakeApi();
+      const { user } = renderApp("/settings", fake);
+      const input = (await field()) as HTMLInputElement;
+      await user.clear(input);
+      if (typed) await user.type(input, typed);
+
+      await user.click(save());
+
+      const message = await screen.findByText(/entero entre 1 y 20/);
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(message.id);
+      expect(fake.requests.filter((r) => r.method === "PUT")).toEqual([]);
+      expect(fake.verification).toEqual({ maxVerificationIterations: 5 });
+    },
+  );
+
+  it("shows a role=alert notice if saving fails and keeps the saved value", async () => {
+    const fake = new FakeApi();
+    fake.verificationError = { status: 500, error: "internal", message: "disco lleno" };
+    const { user } = renderApp("/settings", fake);
+    const input = (await field()) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "3");
+
+    await user.click(save());
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("disco lleno");
+    expect(alert.textContent).toContain("sigue vigente 5");
+    expect(fake.verification).toEqual({ maxVerificationIterations: 5 });
+  });
+
+  it("shows a role=alert notice if reading fails and the other sections keep working", async () => {
+    const fake = new FakeApi();
+    fake.verificationReadFails = true;
+    const { user } = renderApp("/settings", fake);
+    const alert = await screen.findByRole("alert", {}, { timeout: 5000 });
+    expect(alert.textContent).toContain("No se pudo leer el máximo de iteraciones");
+    await user.click(await screen.findByRole("switch", { name: "Claude" }));
+    await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
+  });
+});
+
 describe("paused dispatch notice", () => {
   it("does not appear while any provider is enabled", async () => {
     const fake = new FakeApi();
