@@ -204,4 +204,90 @@ describe("global queue", () => {
     renderApp("/queue");
     expect(await screen.findByText("No hay tareas vivas en la cola.")).toBeTruthy();
   });
+
+  describe("filters across navigation", () => {
+    function twoProjects() {
+      const fake = new FakeApi();
+      const one = fake.addProject({ name: "uno" });
+      const two = fake.addProject({ name: "dos" });
+      fake.addTask(one.id, { intent: "De uno" });
+      fake.addTask(two.id, { intent: "De dos" });
+      return { fake, one, two };
+    }
+
+    it("keeps the project when the user goes to another tab and comes back", async () => {
+      const { fake, one } = twoProjects();
+      const { user, router } = renderApp("/queue", fake);
+      await screen.findByText("De dos");
+      await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
+      await waitFor(() => expect(screen.queryByText("De dos")).toBeNull());
+
+      await router.navigate({ to: "/in-progress" });
+      await screen.findByRole("heading", { name: "En curso" });
+      await router.navigate({ to: "/queue" });
+
+      await screen.findByText("De uno");
+      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe(one.id);
+      expect(screen.queryByText("De dos")).toBeNull();
+    });
+
+    it("does not leak the Queue project into In progress and Completed", async () => {
+      const { fake, one } = twoProjects();
+      const { user, router } = renderApp("/queue", fake);
+      await screen.findByText("De dos");
+      await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
+
+      await router.navigate({ to: "/in-progress" });
+      await screen.findByRole("heading", { name: "En curso" });
+      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
+      await router.navigate({ to: "/completed" });
+      await screen.findByRole("heading", { name: "Completed" });
+      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
+
+      await router.navigate({ to: "/queue" });
+      await screen.findByText("De uno");
+      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe(one.id);
+    });
+
+    it("keeps the project after opening a task detail and going back", async () => {
+      const { fake, one } = twoProjects();
+      const { user, router } = renderApp("/queue", fake);
+      await screen.findByText("De dos");
+      await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
+      await user.click(await screen.findByRole("link", { name: "De uno" }));
+      await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/tasks\//));
+
+      router.history.back();
+
+      await screen.findByText("De uno");
+      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe(one.id);
+      expect(screen.queryByText("De dos")).toBeNull();
+    });
+
+    it("starts with every project in a fresh app", async () => {
+      const { fake } = twoProjects();
+      renderApp("/queue", fake);
+      await screen.findByText("De dos");
+      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
+      expect(screen.getByText("De uno")).toBeTruthy();
+    });
+
+    it("falls back to All when the stored project was removed", async () => {
+      const { fake } = twoProjects();
+      const empty = fake.addProject({ name: "vacío" });
+      const { user, router, queryClient } = renderApp("/queue", fake);
+      await screen.findByText("De dos");
+      await user.selectOptions(screen.getByLabelText("Proyecto"), "vacío");
+      await router.navigate({ to: "/in-progress" });
+      await screen.findByRole("heading", { name: "En curso" });
+
+      fake.projects.splice(fake.projects.indexOf(empty), 1);
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await router.navigate({ to: "/queue" });
+
+      await screen.findByText("De dos");
+      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
+      expect(screen.getByText("De uno")).toBeTruthy();
+    });
+  });
 });

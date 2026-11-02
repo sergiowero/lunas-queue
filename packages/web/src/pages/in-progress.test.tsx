@@ -562,4 +562,25 @@ describe("In progress tab", () => {
       expect((await rowOf("De uno")).slice(4)).toEqual(["3", "claude · opus", "p-a"]);
     });
   });
+
+  it("keeps the project when the user goes to another tab and comes back", async () => {
+    const fake = new FakeApi();
+    const one = fake.addProject({ name: "uno" });
+    const two = fake.addProject({ name: "dos" });
+    fake.addTask(one.id, { intent: "De uno", state: "in_progress", subState: "running" });
+    fake.addTask(two.id, { intent: "De dos", state: "in_progress", subState: "queued" });
+    const { user, router } = renderApp("/in-progress", fake);
+    await screen.findByText("De dos");
+    await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
+    await waitFor(() => expect(screen.queryByText("De dos")).toBeNull());
+
+    await router.navigate({ to: "/queue" });
+    await screen.findByRole("heading", { name: "Cola global" });
+    expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe("");
+    await router.navigate({ to: "/in-progress" });
+
+    await screen.findByText("De uno");
+    expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe(one.id);
+    expect(screen.queryByText("De dos")).toBeNull();
+  });
 });

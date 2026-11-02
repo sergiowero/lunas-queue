@@ -4,7 +4,7 @@ import type { RunView, Task } from "@lunasq/schemas";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type CellContext, createColumnHelper } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { PaneFocusButton } from "../components/pane-focus-button.tsx";
 import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
@@ -16,6 +16,7 @@ import { canPause, cappedTaskLabel, formatAgent } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { isInProgress } from "../lib/in-progress.ts";
 import { queries } from "../lib/queries.ts";
+import { useTabFilters, validProjectId } from "../lib/tab-filters.tsx";
 
 type Row = Json<Task>;
 type Run = Json<RunView>;
@@ -58,8 +59,9 @@ function ActionsCell({ row }: CellContext<Row, unknown>) {
 
 export function InProgressPage() {
   const t = useT();
-  const [projectId, setProjectId] = useState("");
+  const [filters, setFilters] = useTabFilters("inProgress");
   const projects = useQuery(queries.projects());
+  const projectId = validProjectId(filters.projectId, projects.data);
   const tasks = useQuery(queries.tasks(projectId || undefined));
   const names = useMemo(
     () => new Map((projects.data ?? []).map((p) => [p.id, p.name])),
@@ -166,7 +168,7 @@ export function InProgressPage() {
           <Select
             id="in-progress-project"
             value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
+            onChange={(e) => setFilters({ projectId: e.target.value })}
           >
             <option value="">{t.allProjects}</option>
             {(projects.data ?? []).map((p) => (
