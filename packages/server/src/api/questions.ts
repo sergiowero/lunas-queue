@@ -30,6 +30,7 @@ export function toQuestion(row: QuestionRow): Question {
     runId: row.runId,
     question: row.question,
     context: row.context,
+    options: row.options,
     status: row.status,
     answer: row.answer,
     answeredBy: row.answeredBy,

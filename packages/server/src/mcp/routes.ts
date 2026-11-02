@@ -66,7 +66,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
     "ask_human",
     {
       description:
-        "Registra una pregunta para el humano y regresa de inmediato; termina tu turno y la respuesta llegará como un prompt nuevo.",
+        "Registra una pregunta para el humano y regresa de inmediato; termina tu turno y la respuesta llegará como un prompt nuevo. Cuando la respuesta sea una decisión entre alternativas concretas, manda options (2 a 6, cada una con label corto y único y, si ayuda, description): el humano elige una o escribe otra respuesta, y te llega el label elegido o su texto libre. Sin options la pregunta es abierta y se responde con texto libre.",
       inputSchema: AskHumanInput,
     },
     (input) => guarded("ask_human", (run) => service.askHuman(run, input)),
