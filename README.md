@@ -2,208 +2,209 @@
 
 # LunasQ
 
-**Una cola de tareas multi‑proyecto que despacha agentes de codificación: tú defines el intent, ellos lo refinan, implementan, verifican y lo entregan como PR.**
+**A multi‑project task queue that dispatches coding agents: you define the intent, they refine, implement and verify it, and deliver it as a PR.**
 
 [![CI](https://github.com/sergiowero/lunas-queue/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2026-5FA04E?logo=node.js&logoColor=white)](.node-version)
 
 </div>
 
-LunasQ es una *AI software factory* **lights‑on**: agentes especializados trabajan solos y tú conservas dos gates humanos, **aprobar la spec** y **mergear cada PR**. Corre en tu máquina, en un solo proceso local, y usa [herdr](https://herdr.dev) para lanzar y observar a los agentes.
+LunasQ is a **lights‑on** *AI software factory*: specialized agents work on their own and you keep two human gates, **approving the spec** and **merging each PR**. It runs on your machine, in a single local process, and uses [herdr](https://herdr.dev) to launch and observe the agents.
 
-## Tabla de contenidos
+## Table of contents
 
-- [Qué es LunasQ](#qué-es-lunasq)
-- [Características](#características)
-- [Arquitectura](#arquitectura)
-- [Requisitos](#requisitos)
-- [Inicio rápido](#inicio-rápido)
-- [Uso](#uso)
-- [Configuración](#configuración)
-- [Estructura del repositorio](#estructura-del-repositorio)
-- [Desarrollo](#desarrollo)
-- [Documentación](#documentación)
-- [Contribución](#contribución)
-- [Estado del proyecto y alcance de v1](#estado-del-proyecto-y-alcance-de-v1)
+- [What is LunasQ](#what-is-lunasq)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Repository structure](#repository-structure)
+- [Development](#development)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [Project status and v1 scope](#project-status-and-v1-scope)
 
-## Qué es LunasQ
+## What is LunasQ
 
-Un humano escribe el *intent* de una tarea («quiero un README profesional»). LunasQ lo convierte en un PR listo para revisar sin que tengas que sentarte con el agente:
+A human writes a task's *intent* («I want a professional README»). LunasQ turns it into a PR ready for review without you having to sit down with the agent:
 
 ```text
-intent → refinamiento → gate de spec (humano) → implementación → verificación → PR → merge (humano)
+intent → refinement → spec gate (human) → implementation → verification → PR → merge (human)
 ```
 
-1. **Refinamiento.** Un agente lee el repo, aclara el intent (si duda, te pregunta en la Bandeja) y escribe una *spec*: modelo de dominio, requerimientos, criterios de aceptación Given / When / Then y una task list.
-2. **Gate de spec.** Tú la apruebas o pides cambios. Sin aprobación no se escribe código.
-3. **Implementación.** Otro agente trabaja con TDD en un worktree propio de la tarea, marca la task list y declara el fin con un handoff estructurado. LunasQ corre el comando de tests del proyecto como gate.
-4. **Verificación.** Una sesión independiente actúa como *approver*: lanza los revisores que aplican (código, seguridad, UI, UX), verifica cada criterio y emite `pass` o `reject` con lo que hay que corregir. Un `reject` regresa la tarea a implementación (máximo 3 iteraciones; después pasa a *Needs human*).
-5. **Entrega.** LunasQ hace rebase sobre la rama base, push y abre el PR con evidencia y una etiqueta de riesgo.
-6. **Merge.** Lo haces tú. LunasQ detecta el merge y libera a las tareas que dependían de esta.
+1. **Refinement.** An agent reads the repo, clarifies the intent (if in doubt, it asks you in the Inbox) and writes a *spec*: domain model, requirements, Given / When / Then acceptance criteria and a task list.
+2. **Spec gate.** You approve it or request changes. Without approval no code is written.
+3. **Implementation.** Another agent works with TDD in the task's own worktree, checks off the task list and declares the end with a structured handoff. LunasQ runs the project's test command as a gate.
+4. **Verification.** An independent session acts as *approver*: it launches the reviewers that apply (code, security, UI, UX), verifies each criterion and issues `pass` or `reject` with what needs fixing. A `reject` sends the task back to implementation (at most 3 iterations; after that it moves to *Needs human*).
+5. **Delivery.** LunasQ rebases onto the base branch, pushes and opens the PR with evidence and a risk label.
+6. **Merge.** You do it. LunasQ detects the merge and releases the tasks that depended on this one.
 
-Sirve para encolar muchas tareas de varios repos, dejarlas avanzar en paralelo y dedicar tu atención solo a decidir: *¿esta spec es lo que quiero?* y *¿este PR se mergea?*
+It is meant for queueing many tasks from several repos, letting them advance in parallel and spending your attention only on deciding: *is this spec what I want?* and *should this PR be merged?*
 
-## Características
+## Features
 
-- **Multi‑proyecto.** Cada proyecto es un repo con su rama base, comando de tests, perfil de agente por fase y límites de concurrencia.
-- **Dependencias como DAG.** Una tarea espera a que los PRs de sus dependencias estén mergeados; se rechazan los ciclos. El scheduler ordena por prioridad, *aging* y boost por desbloqueo.
-- **Un worktree por tarea.** Cada tarea tiene su propio branch (`lunasq/<id>`) y checkout en todas las fases, así varias tareas del mismo repo corren en paralelo sin pisarse.
-- **MCP como canal de salida.** Los agentes reportan spec, checklist y veredictos con tools del LunasQ MCP, validadas con un run token; no se infiere nada leyendo la terminal.
-- **Verificación con revisores.** El approver elige entre cuatro subagentes de solo lectura (código, seguridad, UI, UX) y justifica los que omite.
-- **Hooks por fase.** Scripts del proyecto en `lunasq/hooks/` que LunasQ ejecuta antes y después de cada fase (bump de versión, deploys de prueba, avisos).
-- **Bandeja de preguntas.** Los agentes preguntan de forma asíncrona con `ask_human`; tú respondes en la UI y el agente retoma con tu respuesta.
-- **Proveedores Claude Code y Copilot CLI.** Se elige el agente por fase y proyecto, con fallback al otro si uno no arranca.
-- **Idempotente y reconciliable.** La base de datos es la fuente de verdad; herdr es estado efímero que un loop de reconciliación compara y corrige.
-- **Trazabilidad.** Event log append‑only, trailers `LunasQ-Task` y `LunasQ-Run` en cada commit y archivo de evidencia en `lunasq/tasks/<id>.md`.
-- **Consumo visible.** Tokens y costo por Run vía telemetría OTLP local.
+- **Multi‑project.** Each project is a repo with its base branch, test command, per‑phase agent profile and concurrency limits.
+- **Dependencies as a DAG.** A task waits for its dependencies' PRs to be merged; cycles are rejected. The scheduler orders by priority, *aging* and unblock boost.
+- **One worktree per task.** Each task has its own branch (`lunasq/<id>`) and checkout in all phases, so several tasks of the same repo run in parallel without stepping on each other.
+- **MCP as the output channel.** Agents report spec, checklist and verdicts with tools of the LunasQ MCP, validated with a run token; nothing is inferred by reading the terminal.
+- **Verification with reviewers.** The approver chooses among four read‑only subagents (code, security, UI, UX) and justifies the ones it skips.
+- **Per‑phase hooks.** Project scripts in `lunasq/hooks/` that LunasQ runs before and after each phase (version bump, test deploys, notices).
+- **Question inbox.** Agents ask asynchronously with `ask_human`; you answer in the UI and the agent resumes with your answer.
+- **Claude Code and Copilot CLI providers.** The agent is chosen per phase and project, with a fallback to the other if one fails to start.
+- **Idempotent and reconcilable.** The database is the source of truth; herdr is ephemeral state that a reconciliation loop compares and corrects.
+- **Traceability.** Append‑only Event log, `LunasQ-Task` and `LunasQ-Run` trailers on every commit and an evidence file in `lunasq/tasks/<id>.md`.
+- **Visible consumption.** Tokens and cost per Run via local OTLP telemetry.
+- **Spanish and English UI.** The interface defaults to Spanish; the ES/EN button in the header switches the language and remembers the choice. The repo, the API and the MCP are English only.
 
-## Arquitectura
+## Architecture
 
-Cuatro piezas propias (front end, backend, scheduler, dispatcher) y un MCP propio. herdr y GitHub (por el CLI `gh`) son dependencias externas detrás de adapters; engram (memoria del proyecto) es opcional y solo lo usan los agentes.
+Four own pieces (front end, backend, scheduler, dispatcher) and an own MCP. herdr and GitHub (through the `gh` CLI) are external dependencies behind adapters; engram (project memory) is optional and only the agents use it.
 
-![Arquitectura: control plane, datos, herdr como execution plane, usage collector, GitHub y engram opcional](docs/images/arquitectura.png)
+![Architecture: control plane, data, herdr as execution plane, usage collector, GitHub and optional engram](docs/images/arquitectura.png)
 
-Todo LunasQ es un único proceso Node.js en `localhost`: recibe la UI por HTTP y SSE, a los agentes por MCP y la telemetría por OTLP.
+All of LunasQ is a single Node.js process on `localhost`: it receives the UI over HTTP and SSE, the agents over MCP and the telemetry over OTLP.
 
-![Topología en runtime: un proceso lunasq en Node.js con API, MCP, usage collector, scheduler, dispatcher y adapters](docs/images/topologia-runtime.png)
+![Runtime topology: a lunasq Node.js process with API, MCP, usage collector, scheduler, dispatcher and adapters](docs/images/topologia-runtime.png)
 
-Cada tarea recorre una máquina de estados con un único gate de aprobación y un loop de calidad entre *In progress* y *Verification*. Cada estado con agente tiene un sub‑estado (`queued`, `running`, `waiting_human`).
+Each task goes through a state machine with a single approval gate and a quality loop between *In progress* and *Verification*. Each state with an agent has a sub‑state (`queued`, `running`, `waiting_human`).
 
-![Máquina de estados: Draft, Refined, In progress, Verification y Completed, con los loops de cambios pedidos y rework](docs/images/maquina-de-estados.png)
+![State machine: Draft, Refined, In progress, Verification and Completed, with the requested‑changes and rework loops](docs/images/maquina-de-estados.png)
 
-Principios: la base de datos es la verdad, reconciliación en lugar de disparo único, salidas estructuradas por MCP, aislamiento por tarea, verificador independiente e idempotencia. Detalle completo en [docs/design.md](docs/design.md).
+Principles: the database is the truth, reconciliation instead of fire‑once, structured outputs through MCP, per‑task isolation, independent verifier and idempotency. Full detail in [docs/design.md](docs/design.md).
 
-## Requisitos
+## Requirements
 
-| Herramienta | Versión | Para qué |
+| Tool | Version | What for |
 | --- | --- | --- |
-| Node.js 26 | Fijado en [.node-version](.node-version) | Runtime |
-| pnpm 11 | Fijado en `packageManager` de `package.json` | Gestor del monorepo |
-| [herdr](https://herdr.dev) | ≥ 0.9.5, con su servidor corriendo | Ejecuta y observa a los agentes |
-| [Claude Code](https://claude.com/claude-code) | ≥ 2.1.312 | Agente por defecto |
-| `gh` | Autenticado (`gh auth status`) | PRs y detección de merges |
-| GitHub Copilot CLI | ≥ 1.0.0 (opcional) | Agente alternativo |
+| Node.js 26 | Pinned in [.node-version](.node-version) | Runtime |
+| pnpm 11 | Pinned in `packageManager` of `package.json` | Monorepo manager |
+| [herdr](https://herdr.dev) | ≥ 0.9.5, with its server running | Runs and observes the agents |
+| [Claude Code](https://claude.com/claude-code) | ≥ 2.1.312 | Default agent |
+| `gh` | Authenticated (`gh auth status`) | PRs and merge detection |
+| GitHub Copilot CLI | ≥ 1.0.0 (optional) | Alternative agent |
 
-`pnpm lunasq doctor` comprueba todo esto y te dice qué falta.
+`pnpm lunasq doctor` checks all of this and tells you what is missing.
 
-## Inicio rápido
+## Quick start
 
 ```bash
-# 1. Instalar dependencias
+# 1. Install dependencies
 pnpm install
 
-# 2. Verificar la máquina e instalar skills, revisores y configuración MCP
-pnpm lunasq install            # opcional: --port <n> para cambiar el puerto
+# 2. Check the machine and install skills, reviewers and MCP configuration
+pnpm lunasq install            # optional: --port <n> to change the port
 
-# 3. Comprobar que todo esté en verde
+# 3. Check that everything is green
 pnpm lunasq doctor
 
-# 4. Arrancar LunasQ en localhost (puerto 7360 por defecto)
+# 4. Start LunasQ on localhost (port 7360 by default)
 pnpm lunasq start
 ```
 
-`install` no instala nada si faltan requisitos y lista los que faltan. `start` imprime la URL de la UI.
+`install` installs nothing if requirements are missing and lists the ones that are. `start` prints the UI URL.
 
-### Front end en desarrollo
+### Front end in development
 
-Para trabajar en la UI, levanta Vite apuntando al servidor de LunasQ (el proxy usa por defecto el puerto 4310, así que indica el 7360):
+To work on the UI, start Vite pointing at the LunasQ server (the proxy defaults to port 4310, so pass 7360):
 
 ```bash
 LUNASQ_API=http://localhost:7360 pnpm --filter @lunasq/web dev
 ```
 
-## Uso
+## Usage
 
-1. **Crea un proyecto** con `POST /api/projects`: repo (`owner/nombre`), rama base, ruta local y comando de tests. Opcionalmente, perfil de agente por fase, límites de concurrencia y script de bootstrap del worktree.
-2. **Crea tareas** desde **Nueva tarea**: intent, prioridad (entero, mayor = más prioritaria) y dependencias.
-3. **Responde preguntas** en la **Bandeja** cuando el refinador tenga dudas; el agente retoma con tu respuesta.
-4. **Revisa la spec.** Ábrela desde «Specs por aprobar» de la Bandeja y **aprueba** o usa **Pedir cambios** con comentarios; cada ronda crea una versión nueva.
-5. **Sigue el avance** en el tablero: checklist, Runs, consumo y eventos de cada tarea.
-6. **Mergea el PR** en GitHub cuando estés conforme. LunasQ lo detecta por polling y libera a las tareas dependientes.
+1. **Create a project** with `POST /api/projects`: repo (`owner/name`), base branch, local path and test command. Optionally, per‑phase agent profile, concurrency limits and worktree bootstrap script.
+2. **Create tasks** from **Nueva tarea**: intent, priority (integer, higher = higher priority) and dependencies.
+3. **Answer questions** in the **Bandeja** (Inbox) when the refiner has doubts; the agent resumes with your answer.
+4. **Review the spec.** Open it from «Specs por aprobar» in the Inbox and **approve** or use **Pedir cambios** with comments; each round creates a new version.
+5. **Follow progress** on the board: checklist, Runs, consumption and events of each task.
+6. **Merge the PR** on GitHub when you are satisfied. LunasQ detects it by polling and releases the dependent tasks.
 
-Si un agente se bloquea, agota reintentos o la verificación agota sus iteraciones, la tarea pasa a *Needs human*: revisa el motivo y reanúdala o cancélala. La guía completa, con un guion para probarlo en un proyecto real, está en [docs/pilot.md](docs/pilot.md).
+If an agent gets blocked, runs out of retries or verification runs out of iterations, the task moves to *Needs human*: review the reason and resume or cancel it. The full guide, with a script to try it on a real project, is in [docs/pilot.md](docs/pilot.md).
 
-## Configuración
+## Configuration
 
-LunasQ guarda todo lo suyo en `~/.lunasq/` (cámbialo con `LUNASQ_HOME`):
+LunasQ keeps everything of its own in `~/.lunasq/` (change it with `LUNASQ_HOME`):
 
-| Archivo | Contenido |
+| File | Contents |
 | --- | --- |
-| `config.json` | Puerto (`port`, por defecto 7360) y si se pasa telemetría a los panes (`telemetry`) |
-| `mcp.json` | Configuración estable del LunasQ MCP para Claude Code |
-| `lunasq.db` | Base SQLite (modo WAL) con tareas, specs, Runs y Event log |
-| `claude-settings.json` | Settings con los hooks de los subagentes revisores |
+| `config.json` | Port (`port`, 7360 by default) and whether telemetry is passed to the panes (`telemetry`) |
+| `mcp.json` | Stable LunasQ MCP configuration for Claude Code |
+| `lunasq.db` | SQLite database (WAL mode) with tasks, specs, Runs and Event log |
+| `claude-settings.json` | Settings with the reviewer subagents' hooks |
 
-| Variable | Efecto |
+| Variable | Effect |
 | --- | --- |
-| `LUNASQ_HOME` | Directorio de LunasQ en lugar de `~/.lunasq` |
-| `CLAUDE_CONFIG_DIR` | Directorio de Claude Code donde `install` copia skills y revisores (por defecto `~/.claude`) |
-| `LUNASQ_API` | Destino del proxy `/api` del front end en desarrollo |
+| `LUNASQ_HOME` | LunasQ directory instead of `~/.lunasq` |
+| `CLAUDE_CONFIG_DIR` | Claude Code directory where `install` copies skills and reviewers (`~/.claude` by default) |
+| `LUNASQ_API` | Target of the front end's `/api` proxy in development |
 
-**Hooks por proyecto.** Cada repo gestionado puede definir scripts ejecutables en `lunasq/hooks/<punto>/` (por ejemplo `before_delivery/10-bump-version`), ordenados alfabéticamente, con timeout y política `block` o `warn` en `lunasq/hooks/config`. LunasQ los lee siempre de la rama base, nunca del branch de la tarea. Puntos disponibles: `before_` y `after_` de `refinement`, `implementation`, `verification` y `delivery`, además de `after_merge` y `on_failure`. Detalle en [docs/design.md](docs/design.md) y [ADR uw-10-hooks](docs/decisions/uw-10-hooks.md).
+**Per‑project hooks.** Each managed repo can define executable scripts in `lunasq/hooks/<point>/` (for example `before_delivery/10-bump-version`), sorted alphabetically, with a timeout and a `block` or `warn` policy in `lunasq/hooks/config`. LunasQ always reads them from the base branch, never from the task's branch. Available points: `before_` and `after_` of `refinement`, `implementation`, `verification` and `delivery`, plus `after_merge` and `on_failure`. Detail in [docs/design.md](docs/design.md) and [ADR uw-10-hooks](docs/decisions/uw-10-hooks.md).
 
-## Estructura del repositorio
+## Repository structure
 
-Monolito modular con pnpm workspaces. La regla: `domain` solo depende de `schemas` y nunca se importa «hacia arriba».
+Modular monolith with pnpm workspaces. The rule: `domain` only depends on `schemas` and is never imported «upwards».
 
-| Ruta | Contenido |
+| Path | Contents |
 | --- | --- |
-| `packages/schemas` | Esquemas Zod v4 compartidos (entidades, handoffs, eventos) y generación de JSON Schema |
-| `packages/domain` | Máquina de estados, guards y reglas del scheduler en TypeScript puro |
-| `packages/db` | Esquema Drizzle, migraciones, repositorios y outbox sobre SQLite |
-| `packages/adapters` | Todo lo externo (herdr, `gh`, git, procesos, hooks), cada uno con su fake |
-| `packages/server` | API Hono, SSE, LunasQ MCP, usage collector, scheduler, dispatcher y reconciliación |
-| `packages/web` | Front end React + Vite que consume los tipos de `schemas` |
-| `packages/cli` | Binario `lunasq`: `install`, `doctor` y `start` |
-| `packages/e2e` | Piloto end‑to‑end con Playwright contra el runtime completo con herdr y GitHub falsos |
-| `assets/skills` | Skills de fase: `refine-task`, `implement-task` y `verify-task` |
-| `assets/agents` | Definiciones de los cuatro subagentes revisores |
-| `tooling/` | Pruebas del repo: fronteras de dependencia y este README |
-| `docs/` | Diseño, stack, ADRs e imágenes |
+| `packages/schemas` | Shared Zod v4 schemas (entities, handoffs, events) and JSON Schema generation |
+| `packages/domain` | State machine, guards and scheduler rules in pure TypeScript |
+| `packages/db` | Drizzle schema, migrations, repositories and outbox over SQLite |
+| `packages/adapters` | Everything external (herdr, `gh`, git, processes, hooks), each with its fake |
+| `packages/server` | Hono API, SSE, LunasQ MCP, usage collector, scheduler, dispatcher and reconciliation |
+| `packages/web` | React + Vite front end that consumes the types of `schemas` |
+| `packages/cli` | `lunasq` binary: `install`, `doctor` and `start` |
+| `packages/e2e` | End‑to‑end pilot with Playwright against the full runtime with fake herdr and GitHub |
+| `assets/skills` | Phase skills: `refine-task`, `implement-task` and `verify-task` |
+| `assets/agents` | Definitions of the four reviewer subagents |
+| `tooling/` | Repo tests: dependency boundaries and this README |
+| `docs/` | Design, stack, ADRs and images |
 
-## Desarrollo
+## Development
 
 ```bash
 pnpm install
-pnpm test        # Vitest en todos los proyectos
-pnpm lint        # Biome (lint y formato)
-pnpm format      # aplica el formato
-pnpm typecheck   # tsc -b en modo estricto
-pnpm e2e         # compila el front end y corre Playwright
+pnpm test        # Vitest in all projects
+pnpm lint        # Biome (lint and format)
+pnpm format      # applies the format
+pnpm typecheck   # tsc -b in strict mode
+pnpm e2e         # builds the front end and runs Playwright
 ```
 
-Pruebas que usan herramientas reales (gastan tokens o necesitan tu máquina; corren aparte de la suite):
+Tests that use real tools (they spend tokens or need your machine; they run apart from the suite):
 
 ```bash
-pnpm --filter @lunasq/adapters test:herdr   # contrato del adapter de herdr
-pnpm --filter @lunasq/adapters test:gh      # contrato del adapter de gh
-pnpm --filter @lunasq/server test:herdr     # dispatcher contra herdr real
-pnpm --filter @lunasq/server test:claude    # revisores con Claude Code real
+pnpm --filter @lunasq/adapters test:herdr   # herdr adapter contract
+pnpm --filter @lunasq/adapters test:gh      # gh adapter contract
+pnpm --filter @lunasq/server test:herdr     # dispatcher against real herdr
+pnpm --filter @lunasq/server test:claude    # reviewers with real Claude Code
 pnpm --filter @lunasq/server test:usage     # usage collector
-pnpm --filter @lunasq/server test:skills    # skills con Claude Code real
+pnpm --filter @lunasq/server test:skills    # skills with real Claude Code
 ```
 
-Las reglas de trabajo en el repo (arquitectura, fronteras, idempotencia) están en [AGENTS.md](AGENTS.md).
+The working rules in the repo (architecture, boundaries, idempotency) are in [AGENTS.md](AGENTS.md).
 
-## Documentación
+## Documentation
 
-| Documento | Qué contiene |
+| Document | Contents |
 | --- | --- |
-| [docs/design.md](docs/design.md) | Diseño completo: dominio, máquina de estados, scheduler, dispatcher, hooks, MCP, verificación y auditoría |
-| [docs/tech-stack.md](docs/tech-stack.md) | Stack, paquetes y fronteras, integraciones externas y tooling |
-| [docs/decisions/](docs/decisions/) | ADRs con las decisiones tomadas durante la implementación |
-| [docs/pilot.md](docs/pilot.md) | Guion para probar LunasQ de punta a punta en un proyecto real |
+| [docs/design.md](docs/design.md) | Full design: domain, state machine, scheduler, dispatcher, hooks, MCP, verification and audit |
+| [docs/tech-stack.md](docs/tech-stack.md) | Stack, packages and boundaries, external integrations and tooling |
+| [docs/decisions/](docs/decisions/) | ADRs with the decisions made during implementation |
+| [docs/pilot.md](docs/pilot.md) | Script to try LunasQ end to end on a real project |
 
-## Contribución
+## Contributing
 
-1. Crea un branch desde `main` y haz commits pequeños, con el test junto o antes del código que cubre.
-2. Antes de abrir el PR, ejecuta `pnpm typecheck`, `pnpm lint` y `pnpm test`; si cambias un adapter, corre también sus pruebas reales.
-3. Si una decisión cambia mientras implementas, actualiza el `.md` correspondiente en el mismo PR; una decisión nueva va en un ADR en `docs/decisions/`.
-4. No agregues dependencias que no estén en [docs/tech-stack.md](docs/tech-stack.md) sin justificarlas en el PR o en un ADR.
-5. Abre el PR contra `main`. [CI](.github/workflows/ci.yml) corre dos checks: `check` (typecheck, lint y tests) y `e2e` (Playwright). Ambos deben pasar y el merge es siempre humano.
+1. Create a branch from `main` and make small commits, with the test together with or before the code it covers.
+2. Before opening the PR, run `pnpm typecheck`, `pnpm lint` and `pnpm test`; if you change an adapter, also run its real tests.
+3. If a decision changes while you implement, update the corresponding `.md` in the same PR; a new decision goes in an ADR in `docs/decisions/`.
+4. Do not add dependencies that are not in [docs/tech-stack.md](docs/tech-stack.md) without justifying them in the PR or in an ADR.
+5. Open the PR against `main`. [CI](.github/workflows/ci.yml) runs two checks: `check` (typecheck, lint and tests) and `e2e` (Playwright). Both must pass and the merge is always human.
 
-## Estado del proyecto y alcance de v1
+## Project status and v1 scope
 
-LunasQ está en desarrollo activo. v1 cubre el flujo completo descrito arriba, con Claude Code y GitHub Copilot CLI como agentes, una sola máquina y un solo usuario.
+LunasQ is under active development. v1 covers the complete flow described above, with Claude Code and GitHub Copilot CLI as agents, a single machine and a single user.
 
-**Fuera de alcance en v1:** merge automático, commits directos a `main`, despliegue a producción hecho por LunasQ (se puede configurar con hooks del proyecto), carriles por tamaño de tarea, pruebas de aceptación ocultas al builder, multiusuario con roles e intake automático desde issues de GitHub (planeado para v2). El roadmap completo está en [docs/design.md](docs/design.md).
+**Out of scope in v1:** automatic merge, direct commits to `main`, production deployment done by LunasQ (it can be configured with project hooks), lanes by task size, acceptance tests hidden from the builder, multi‑user with roles and automatic intake from GitHub issues (planned for v2). The full roadmap is in [docs/design.md](docs/design.md).

@@ -52,8 +52,8 @@ const seed = (db: LunasqDatabase, n: number) => {
   );
 };
 
-describe("OutboxPublisher: ninguna pérdida ante caídas", () => {
-  it("un proceso que muere tras el commit sin publicar: el publicador siguiente entrega el evento", () => {
+describe("OutboxPublisher: no loss on crashes", () => {
+  it("a process that dies after the commit without publishing: the next publisher delivers the event", () => {
     const { db, file } = freshDatabase();
     migrateDatabase(db);
     const t = insertTask(db, insertProject(db).id);
@@ -80,7 +80,7 @@ describe("OutboxPublisher: ninguna pérdida ante caídas", () => {
     });
   });
 
-  it("commit sin publicar y reapertura de la base: start entrega lo pendiente", async () => {
+  it("commit without publishing and reopening the database: start delivers what is pending", async () => {
     const { db, file } = freshDatabase();
     migrateDatabase(db);
     const t = insertTask(db, insertProject(db).id);
@@ -101,7 +101,7 @@ describe("OutboxPublisher: ninguna pérdida ante caídas", () => {
     }
   });
 
-  it("caída después de entregar y antes de marcar: el mensaje se reentrega (at-least-once)", async () => {
+  it("crash after delivering and before marking: the message is redelivered (at-least-once)", async () => {
     const { db, file } = freshDatabase();
     migrateDatabase(db);
     const [e] = seed(db, 1);
@@ -123,8 +123,8 @@ describe("OutboxPublisher: ninguna pérdida ante caídas", () => {
   });
 });
 
-describe("OutboxPublisher: entrega", () => {
-  it("entrega en orden de escritura a los suscriptores de su topic y a los de '*'", async () => {
+describe("OutboxPublisher: delivery", () => {
+  it("delivers in write order to the subscribers of its topic and to those of '*'", async () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     appendEvent(db, { taskId: t.id, type: "a", actor: "system" }, { publish: true });
@@ -146,7 +146,7 @@ describe("OutboxPublisher: entrega", () => {
     expect(await p.drain()).toBe(0);
   });
 
-  it("espera a los handlers asíncronos antes de marcar", async () => {
+  it("waits for async handlers before marking", async () => {
     const db = migratedDatabase();
     seed(db, 1);
     let pendingDuringHandler = -1;
@@ -160,7 +160,7 @@ describe("OutboxPublisher: entrega", () => {
     expect(listPendingOutbox(db)).toEqual([]);
   });
 
-  it("un handler que falla detiene el drain, suma intentos, avisa y se reintenta en orden", async () => {
+  it("a handler that fails stops the drain, adds attempts, reports and retries in order", async () => {
     const db = migratedDatabase();
     const [e0, e1] = seed(db, 2);
     const errors: { attempts: number; eventId: number }[] = [];
@@ -189,7 +189,7 @@ describe("OutboxPublisher: entrega", () => {
     expect(received).toEqual([e0?.id, e1?.id]);
   });
 
-  it("drains concurrentes no entregan dos veces", async () => {
+  it("concurrent drains do not deliver twice", async () => {
     const db = migratedDatabase();
     seed(db, 3);
     const received: number[] = [];
@@ -203,7 +203,7 @@ describe("OutboxPublisher: entrega", () => {
     expect(new Set(received).size).toBe(3);
   });
 
-  it("lo encolado durante un drain se entrega en ese mismo drain al llamar wake", async () => {
+  it("what is enqueued during a drain is delivered in that same drain when wake is called", async () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     seed(db, 1);
@@ -220,7 +220,7 @@ describe("OutboxPublisher: entrega", () => {
     expect(received).toEqual(["t.test", "nuevo"]);
   });
 
-  it("procesa lotes hasta vaciar la cola", async () => {
+  it("processes batches until the queue is empty", async () => {
     const db = migratedDatabase();
     seed(db, 5);
     const p = publisher(db, { batchSize: 2 });
@@ -232,7 +232,7 @@ describe("OutboxPublisher: entrega", () => {
     expect(count).toBe(5);
   });
 
-  it("un mensaje cuyo topic no tiene suscriptores se marca publicado", async () => {
+  it("a message whose topic has no subscribers is marked published", async () => {
     const db = migratedDatabase();
     seed(db, 1);
     const p = publisher(db);
@@ -241,7 +241,7 @@ describe("OutboxPublisher: entrega", () => {
     expect(listPendingOutbox(db)).toEqual([]);
   });
 
-  it("sin ningún suscriptor no marca nada: un start temprano no pierde lo pendiente", async () => {
+  it("without any subscriber it marks nothing: an early start does not lose what is pending", async () => {
     const db = migratedDatabase();
     seed(db, 1);
     const p = publisher(db, { pollIntervalMs: 60_000 });
@@ -254,7 +254,7 @@ describe("OutboxPublisher: entrega", () => {
     await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(1));
   });
 
-  it("cancelar la suscripción deja de entregar a ese handler", async () => {
+  it("unsubscribing stops delivery to that handler", async () => {
     const db = migratedDatabase();
     seed(db, 1);
     const handler = vi.fn();
@@ -266,8 +266,8 @@ describe("OutboxPublisher: entrega", () => {
   });
 });
 
-describe("OutboxPublisher: ciclo de vida", () => {
-  it("después de start, wake publica lo recién confirmado", async () => {
+describe("OutboxPublisher: lifecycle", () => {
+  it("after start, wake publishes what was just confirmed", async () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const received: number[] = [];
@@ -281,7 +281,7 @@ describe("OutboxPublisher: ciclo de vida", () => {
     await vi.waitFor(() => expect(received).toEqual([event.id]));
   });
 
-  it("el poll periódico entrega lo que nadie despertó, y stop lo detiene", async () => {
+  it("the periodic poll delivers what nobody woke, and stop halts it", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     const db = migratedDatabase();
     const p = publisher(db, { pollIntervalMs: 1000 });
@@ -299,7 +299,7 @@ describe("OutboxPublisher: ciclo de vida", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it("stop espera al drain en curso", async () => {
+  it("stop waits for the drain in progress", async () => {
     const db = migratedDatabase();
     seed(db, 1);
     let finished = false;
@@ -321,7 +321,7 @@ describe("OutboxPublisher: ciclo de vida", () => {
     await draining;
   });
 
-  it("start justo después de stop, con un drain saliendo, entrega lo pendiente sin esperar al poll", async () => {
+  it("start right after stop, with a drain exiting, delivers what is pending without waiting for the poll", async () => {
     const db = migratedDatabase();
     seed(db, 1);
     let release: () => void = () => {};
@@ -344,7 +344,7 @@ describe("OutboxPublisher: ciclo de vida", () => {
     expect(received).toHaveLength(2);
   });
 
-  it("un error de onError no rompe el publicador", async () => {
+  it("an error in onError does not break the publisher", async () => {
     const db = migratedDatabase();
     seed(db, 1);
     const p = publisher(db, {

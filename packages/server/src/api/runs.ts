@@ -1,6 +1,6 @@
-// Foco desde las tablas de Runs (ADR runs-foco-pane): enfoca en herdr el agente de un Run
-// registrado por LunasQ. Resuelve el nombre del agente desde la base, así la UI no puede mover
-// la vista de herdr a un agente cualquiera. No escribe nada: es repetible.
+// Focus from the Runs tables (ADR runs-foco-pane): focuses in herdr the agent of a Run
+// registered by LunasQ. It resolves the agent's name from the database, so the UI cannot move
+// herdr's view to an arbitrary agent. It writes nothing: it is repeatable.
 import { isHerdrError } from "@lunasq/adapters";
 import type { RunRepository } from "@lunasq/db";
 import { Hono } from "hono";
@@ -12,7 +12,7 @@ export function runRoutes(runs: RunRepository, focus?: AgentFocuser): Hono {
     const run = runs.get(c.req.param("runId"));
     if (!run) return notFound(c);
     if (!run.herdrPane || !run.herdrName) {
-      return c.json({ error: "no_pane", message: "el Run no tiene un pane de herdr" }, 409);
+      return c.json({ error: "no_pane", message: "the Run has no herdr pane" }, 409);
     }
     if (!focus) return c.json({ error: "focus_unavailable" }, 503);
     try {
@@ -20,7 +20,7 @@ export function runRoutes(runs: RunRepository, focus?: AgentFocuser): Hono {
     } catch (error) {
       if (isHerdrError(error, "agent_not_found")) {
         return c.json(
-          { error: "agent_gone", message: `${run.herdrName} ya no está en herdr` },
+          { error: "agent_gone", message: `${run.herdrName} is no longer in herdr` },
           409,
         );
       }

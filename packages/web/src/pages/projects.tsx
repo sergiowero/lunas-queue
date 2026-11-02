@@ -8,9 +8,11 @@ import { Loading, QueryError } from "../components/status.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
 import type { Json } from "../lib/api.ts";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 export function ProjectsPage() {
+  const t = useT();
   const projects = useQuery(queries.projects());
   const [dialog, setDialog] = useState<
     { kind: "create" } | { kind: "edit" | "delete"; project: Json<Project> } | null
@@ -20,11 +22,11 @@ export function ProjectsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Proyectos</h1>
-        <Button onClick={() => setDialog({ kind: "create" })}>Nuevo proyecto</Button>
+        <h1 className="text-xl font-semibold">{t.projectsPage.title}</h1>
+        <Button onClick={() => setDialog({ kind: "create" })}>{t.projectsPage.new}</Button>
       </div>
       {projects.data.length === 0 && (
-        <p className="text-sm text-muted-foreground">Todavía no hay proyectos registrados.</p>
+        <p className="text-sm text-muted-foreground">{t.projectsPage.empty}</p>
       )}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {projects.data.map((project) => (
@@ -42,23 +44,25 @@ export function ProjectsPage() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               <p>{project.repo}</p>
-              <p>rama base: {project.baseBranch}</p>
+              <p>
+                {t.projectsPage.baseBranch} {project.baseBranch}
+              </p>
               <div className="mt-3 flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  aria-label={`Editar ${project.name}`}
+                  aria-label={t.projectsPage.editAria(project.name)}
                   onClick={() => setDialog({ kind: "edit", project })}
                 >
-                  Editar
+                  {t.projectsPage.edit}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  aria-label={`Eliminar ${project.name}`}
+                  aria-label={t.projectsPage.deleteAria(project.name)}
                   onClick={() => setDialog({ kind: "delete", project })}
                 >
-                  Eliminar
+                  {t.projectsPage.delete}
                 </Button>
               </div>
             </CardContent>

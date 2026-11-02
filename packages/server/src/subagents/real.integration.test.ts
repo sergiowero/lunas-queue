@@ -1,10 +1,10 @@
-// Los 4 revisores contra Claude Code real (criterio de UW-19). No corre en `pnpm test`:
+// The 4 reviewers against real Claude Code (UW-19 criterion). Does not run in `pnpm test`:
 //   pnpm --filter @lunasq/server test:claude
-// Levanta la app de Hono en un puerto local, copia los revisores de assets/agents al
-// `.claude/agents/lunasq/` de un repo temporal y abre una sesión `claude -p` con el settings de
-// hooks del dispatcher y el run token en el entorno, como en un pane. Para no gastar Opus, los
-// revisores corren con `LUNASQ_REVIEWER_MODEL` (haiku por defecto); `opus` prueba los archivos tal
-// cual.
+// Starts the Hono app on a local port, copies the reviewers from assets/agents to the
+// `.claude/agents/lunasq/` of a temporary repo and opens a `claude -p` session with the dispatcher's
+// hooks settings and the run token in the environment, as in a pane. To avoid spending Opus, the
+// reviewers run with `LUNASQ_REVIEWER_MODEL` (haiku by default); `opus` tests the files as
+// they are.
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -38,9 +38,9 @@ describe.skipIf(!enabled)("revisores contra Claude Code real", { timeout: 600_00
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("una sesión lanza los 4 revisores y LunasQ registra cada ejecución en su Run", async () => {
+  it("a session launches the 4 reviewers and LunasQ records each execution in its Run", async () => {
     const db = migratedDatabase();
-    // Como el claim del dispatcher: session id nativo, así el endpoint exige esa sesión.
+    // Like the dispatcher's claim: native session id, so the endpoint requires that session.
     const sessionId = randomUUID();
     const run = insertRun(db, insertTask(db, insertProject(db).id).id, {
       phase: "verify",
@@ -67,9 +67,9 @@ describe.skipIf(!enabled)("revisores contra Claude Code real", { timeout: 600_00
     const settings = join(dir, "settings.json");
     await ensureHookSettings(settings, `http://127.0.0.1:${port}${SUBAGENT_HOOK_PATH}`);
     const prompt = [
-      `Lanza en paralelo, con la tool Agent y por nombre, estos 4 subagentes: ${REVIEWER_NAMES.join(", ")}.`,
-      "A cada uno dile: «Spec: AC-1, suma(a, b) devuelve a + b. Revisa solo el diff de `git diff HEAD~1 HEAD`.»",
-      "Espera los 4 reportes y responde con ellos, uno por revisor.",
+      `Launch these 4 subagents in parallel, with the Agent tool and by name: ${REVIEWER_NAMES.join(", ")}.`,
+      "Tell each one: «Spec: AC-1, sum(a, b) returns a + b. Review only the diff of `git diff HEAD~1 HEAD`.»",
+      "Wait for the 4 reports and answer with them, one per reviewer.",
     ].join(" ");
     const output = await runClaude(
       repo,

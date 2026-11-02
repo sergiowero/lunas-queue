@@ -1,5 +1,5 @@
-// git real para el repo del piloto: un origin local (bare), el checkout del proyecto y los
-// worktrees de las tareas. Sin red y sin credenciales.
+// Real git for the pilot repo: a local (bare) origin, the project checkout and the
+// tasks' worktrees. No network and no credentials.
 import { execFileSync } from "node:child_process";
 
 const IDENTITY = {

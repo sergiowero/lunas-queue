@@ -9,7 +9,7 @@ import { insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
 
 const taskRow = (db: LunasqDatabase, id: string) => {
   const row = db.select().from(tasks).where(eq(tasks.id, id)).get();
-  if (!row) throw new Error("tarea no encontrada");
+  if (!row) throw new Error("task not found");
   return row;
 };
 
@@ -20,7 +20,7 @@ const apply = (db: LunasqDatabase, input: TransitionTaskInput) => {
 };
 
 describe("transitionTask", () => {
-  it("una transición actualiza la tarea y deja exactamente un evento con actor y payload", () => {
+  it("a transition updates the task and leaves exactly one event with actor and payload", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
 
@@ -40,7 +40,7 @@ describe("transitionTask", () => {
     });
   });
 
-  it("recorre el ciclo completo con rework: un evento por transición, encadenados", () => {
+  it("goes through the full cycle with rework: one event per transition, chained", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const steps: Omit<TransitionTaskInput, "taskId">[] = [
@@ -97,7 +97,7 @@ describe("transitionTask", () => {
     });
   });
 
-  it("una transición rechazada no cambia la tarea ni escribe eventos", () => {
+  it("a rejected transition changes neither the task nor writes events", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     apply(db, { taskId: t.id, actor: "system", command: { type: "dispatch" } });
@@ -126,7 +126,7 @@ describe("transitionTask", () => {
     expect(listEvents(db, t.id)).toHaveLength(1);
   });
 
-  it("repetir un comando ya aplicado no duplica el efecto", () => {
+  it("repeating an already applied command does not duplicate the effect", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const dispatch = { taskId: t.id, actor: "system", command: { type: "dispatch" } } as const;
@@ -138,7 +138,7 @@ describe("transitionTask", () => {
     expect(listEvents(db, t.id)).toHaveLength(1);
   });
 
-  it("si el evento no se puede escribir, la tarea no cambia", () => {
+  it("if the event cannot be written, the task does not change", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     db.$client.exec(
@@ -153,7 +153,7 @@ describe("transitionTask", () => {
     expect(listEvents(db, t.id)).toEqual([]);
   });
 
-  it("rechaza la transición si el estado esperado ya no es el actual", () => {
+  it("rejects the transition if the expected state is no longer the current one", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     apply(db, { taskId: t.id, actor: "system", command: { type: "dispatch" } });
@@ -178,14 +178,14 @@ describe("transitionTask", () => {
     ).toBe("needs_human");
   });
 
-  it("devuelve task_not_found para una tarea inexistente", () => {
+  it("returns task_not_found for a nonexistent task", () => {
     const db = migratedDatabase();
     expect(
       transitionTask(db, { taskId: "nope", actor: "system", command: { type: "dispatch" } }),
     ).toMatchObject({ ok: false, error: { code: "task_not_found" } });
   });
 
-  it("resume vuelve al estado previo al último escalamiento, con la misma iteración", () => {
+  it("resume goes back to the state prior to the last escalation, with the same iteration", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id, {
       state: "verification",
@@ -215,7 +215,7 @@ describe("transitionTask", () => {
     expect(resumed.task).toMatchObject({ state: "in_progress", subState: "queued" });
   });
 
-  it("resume también vuelve tras escalar por iteraciones agotadas", () => {
+  it("resume also goes back after escalating due to exhausted iterations", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id, {
       state: "verification",
@@ -225,14 +225,14 @@ describe("transitionTask", () => {
     expect(
       apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } }).task.state,
     ).toBe("needs_human");
-    // Reanudar tras iteraciones agotadas vuelve a implementación (hay must-fix pendientes), no a
-    // verificación, y concede un ciclo nuevo de tres reworks.
+    // Resuming after exhausted iterations goes back to implementation (there are pending must-fixes), not to
+    // verification, and grants a new cycle of three reworks.
     expect(
       apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } }).task,
     ).toMatchObject({ state: "in_progress", subState: "queued", verificationIteration: 0 });
   });
 
-  it("un payload fuera de esquema no llega al log y la tarea sigue reanudable", () => {
+  it("a payload outside the schema does not reach the log and the task stays resumable", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id, { state: "in_progress", subState: "running" });
     expect(
@@ -249,7 +249,7 @@ describe("transitionTask", () => {
     ).toBe("in_progress");
   });
 
-  it("pause y resume devuelven la tarea al estado previo con la iteración y dejan dos eventos", () => {
+  it("pause and resume return the task to the previous state with the iteration and leave two events", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id, {
       state: "in_progress",
@@ -283,7 +283,7 @@ describe("transitionTask", () => {
     ).toEqual(["pause", "resume"]);
   });
 
-  it("resume desde paused usa la última pausa, no un escalamiento anterior", () => {
+  it("resume from paused uses the last pause, not an earlier escalation", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id, { state: "refined", subState: null });
     apply(db, { taskId: t.id, actor: "system", command: { type: "escalate", reason: "blocked" } });
@@ -299,7 +299,7 @@ describe("transitionTask", () => {
     ).toMatchObject({ state: "in_progress", subState: "queued" });
   });
 
-  it("pause con la entrega en curso se rechaza con guard_failed y no escribe", () => {
+  it("pause with delivery in progress is rejected with guard_failed and does not write", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id, {
       state: "verification",
@@ -316,7 +316,7 @@ describe("transitionTask", () => {
     expect(listEvents(db, t.id)).toEqual([]);
   });
 
-  it("una tarea paused rechaza escalate y no cambia", () => {
+  it("a paused task rejects escalate and does not change", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id, { state: "paused", subState: null });
     expect(
@@ -330,7 +330,7 @@ describe("transitionTask", () => {
     expect(listEvents(db, t.id)).toEqual([]);
   });
 
-  it("resume sin escalamiento registrado se rechaza", () => {
+  it("resume without a recorded escalation is rejected", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id, { state: "needs_human", subState: null });
     expect(

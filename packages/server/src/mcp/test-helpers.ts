@@ -1,5 +1,5 @@
-// Arnés de los tests de contrato del LunasQ MCP: el cliente oficial de MCP habla con la app de
-// Hono en memoria, con el gate de tests y la comprobación de commits falsos.
+// Harness for the LunasQ MCP contract tests: the official MCP client talks to the in-memory
+// Hono app, with the test gate and the commit check faked.
 import { readFileSync } from "node:fs";
 import {
   appendEvent,
@@ -40,7 +40,7 @@ const examples = new URL("../../../schemas/examples/handoff/v1/valid/", import.m
 
 type Example = "refinement" | "implementation" | "verification-pass" | "verification-reject";
 
-/** Handoff válido de ejemplo con los ids del Run que lo envía. */
+/** Example valid handoff with the ids of the Run that sends it. */
 export function handoffFor(
   example: Example,
   run: { id: string; taskId: string },
@@ -49,7 +49,7 @@ export function handoffFor(
   return { ...handoff, taskId: run.taskId, runId: run.id };
 }
 
-/** Handoff válido de submit_result con los ids del Run que lo envía. */
+/** Valid submit_result handoff with the ids of the Run that sends it. */
 export function resultFor(
   run: { id: string; taskId: string },
   overrides: Record<string, unknown> = {},
@@ -69,7 +69,7 @@ export function resultFor(
 
 export class FakeTestGate implements TestGate {
   readonly calls: TestGateInput[] = [];
-  result: TestGateResult = { passed: true, output: "todo en verde" };
+  result: TestGateResult = { passed: true, output: "all green" };
 
   async run(input: TestGateInput): Promise<TestGateResult> {
     this.calls.push(input);
@@ -77,11 +77,11 @@ export class FakeTestGate implements TestGate {
   }
 }
 
-/** Hooks de fase falsos: registran cada punto y devuelven el resultado configurado por punto. */
+/** Fake phase hooks: they record each point and return the result configured per point. */
 export class FakePhaseHooks implements PhaseHooks {
   readonly calls: PhaseHookInput[] = [];
   results: Partial<Record<PhaseHookInput["point"], PhaseHookResult>> = {};
-  /** Se llama antes de devolver el resultado: simula un hook que commitea o tarda. */
+  /** Called before returning the result: simulates a hook that commits or takes long. */
   onRun: ((input: PhaseHookInput) => void) | null = null;
 
   async run(input: PhaseHookInput): Promise<PhaseHookResult> {
@@ -113,7 +113,7 @@ export class FakeCommitVerifier implements CommitVerifier {
     return this.dirty;
   }
 
-  /** Respuesta de `branchHasCommits`: true simula un branch con commits sobre la base. */
+  /** Answer of `branchHasCommits`: true simulates a branch with commits on top of the base. */
   ahead = false;
   readonly aheadCalls: { worktreePath: string; baseBranch: string }[] = [];
 
@@ -128,7 +128,7 @@ export class FakeCommitVerifier implements CommitVerifier {
     return this.headSha;
   }
 
-  /** Respuesta de `onlyEvidenceBetween`: true simula commits intermedios de solo evidencia. */
+  /** Answer of `onlyEvidenceBetween`: true simulates intermediate commits of evidence only. */
   evidenceOnly = false;
 
   async onlyEvidenceBetween(_input: {
@@ -148,7 +148,7 @@ afterEach(async () => {
 });
 
 export interface McpHarnessOptions {
-  /** Gate real en vez del fake; recibe la base del arnés. */
+  /** Real gate instead of the fake; receives the harness base. */
   testGate?: (db: LunasqDatabase) => TestGate;
   testCommand?: string;
   worktreePath?: string;
@@ -175,7 +175,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
   async function connect(token?: string) {
     const client = new Client({ name: "lunasq-test", version: "0.0.0" });
     const transport = new StreamableHTTPClientTransport(new URL("http://localhost/mcp"), {
-      // Un fetch real manda Host; la validación contra DNS rebinding lo exige.
+      // A real fetch sends Host; the DNS rebinding validation requires it.
       fetch: async (url, init) => {
         const headers = new Headers(init?.headers);
         headers.set("host", new URL(url).host);
@@ -199,7 +199,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
     return { client, call };
   }
 
-  /** Tarea con worktree en el estado pedido; con `approved` su spec de ejemplo queda aprobada. */
+  /** Task with a worktree in the requested state; with `approved` its example spec is left approved. */
   function task(position: Position, opts: { approved?: boolean } = {}) {
     const row = insertTask(db, project.id, {
       state: "draft",
@@ -218,7 +218,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
     return row;
   }
 
-  /** Run activo de la fase con su sesión MCP; `ready` ya llamó get_task_context. */
+  /** Active Run of the phase with its MCP session; `ready` already called get_task_context. */
   async function session(
     phase: Phase,
     position: Position,
@@ -226,13 +226,13 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
   ) {
     const t = task(position, opts);
     const run = insertRun(db, t.id, { phase, agentKind: opts.agentKind ?? "claude" });
-    // En verificación, la tarea llega con el gate de submit_for_verification en verde en su HEAD.
+    // In verification, the task arrives with the submit_for_verification gate green at its HEAD.
     if (phase === "verify") gated(t.id, commitVerifier.headSha);
     const { call } = await connect(run.runToken);
     return { task: t, run, call };
   }
 
-  /** Registra un gate en verde de submit_for_verification sobre `headSha`. */
+  /** Records a green submit_for_verification gate on `headSha`. */
   function gated(taskId: string, headSha: string | null) {
     appendEvent(db, {
       taskId,
@@ -267,7 +267,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
   const taskOf = (taskId: string) => new TaskRepository(db).get(taskId);
 
   const subagents = new RunSubagentRepository(db);
-  /** Registra, como los hooks SubagentStart y SubagentStop, una ejecución terminada por revisor. */
+  /** Records, like the SubagentStart and SubagentStop hooks, a finished execution per reviewer. */
   function reviewersRan(runId: string, names: readonly string[]) {
     for (const name of names) {
       const ref = { agentId: `${name}-${runId}`, agentType: name };
@@ -276,7 +276,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
     }
   }
 
-  /** Veredicto de ejemplo con los revisores que reporta `ran` registrados en los hooks del Run. */
+  /** Example verdict with the reviewers that report `ran` recorded in the Run's hooks. */
   function verdictFor(
     example: "verification-pass" | "verification-reject",
     run: { id: string; taskId: string },

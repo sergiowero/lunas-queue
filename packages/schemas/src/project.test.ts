@@ -17,7 +17,7 @@ const validCreate = {
 };
 
 describe("AgentProfiles", () => {
-  it("acepta effort solo con los niveles de claude --effort", () => {
+  it("accepts effort only with the levels of claude --effort", () => {
     for (const effort of ["low", "medium", "high", "xhigh", "max"]) {
       expect(AgentProfiles.parse({ implement: { kind: "claude", effort } }).implement.effort).toBe(
         effort,
@@ -27,7 +27,7 @@ describe("AgentProfiles", () => {
     expect(() => VerifyAgentProfile.parse({ kind: "claude", effort: "" })).toThrow();
   });
 
-  it("rellena las fases que faltan con claude sin args", () => {
+  it("fills in the missing phases with claude without args", () => {
     const profiles = AgentProfiles.parse({ implement: { kind: "claude", model: "opus" } });
     expect(profiles).toEqual({
       refine: { kind: "claude", args: [] },
@@ -37,7 +37,7 @@ describe("AgentProfiles", () => {
     });
   });
 
-  it("conserva modelo y args del perfil", () => {
+  it("keeps the model and args of the profile", () => {
     const profiles = AgentProfiles.parse({
       verify: { kind: "claude", model: "sonnet", args: ["--permission-mode", "auto"] },
     });
@@ -48,7 +48,7 @@ describe("AgentProfiles", () => {
     });
   });
 
-  it("acepta Copilot CLI como proveedor en cualquier fase", () => {
+  it("accepts Copilot CLI as a provider in any phase", () => {
     const profiles = AgentProfiles.parse({
       refine: { kind: "copilot", effort: "medium" },
       implement: { kind: "copilot", model: "gpt-5" },
@@ -64,7 +64,7 @@ describe("AgentProfiles", () => {
   });
 
   it.each(["refine", "implement", "verify", "deliver"])(
-    "rechaza un kind desconocido en %s",
+    "rejects an unknown kind in %s",
     (phase) => {
       const result = AgentProfiles.safeParse({ [phase]: { kind: "codex" } });
       expect(result.success).toBe(false);
@@ -72,30 +72,30 @@ describe("AgentProfiles", () => {
     },
   );
 
-  it("verify usa el mismo esquema de perfil por proveedor que las otras fases", () => {
+  it("verify uses the same per-provider profile schema as the other phases", () => {
     expect(AgentProfiles.shape.verify.safeParse({ kind: "claude" }).success).toBe(true);
     expect(AgentProfiles.shape.verify.safeParse({ kind: "copilot" }).success).toBe(true);
   });
 
-  it("verify comparte el esquema de perfil de agente", () => {
+  it("verify shares the agent profile schema", () => {
     expect(AgentProfiles.shape.verify.unwrap()).toBe(VerifyAgentProfile);
     expect(ProjectUpdate.shape.agentProfiles.unwrap().shape.verify.unwrap()).toBe(
       VerifyAgentProfile,
     );
   });
 
-  it("rechaza fases desconocidas y modelo vacío", () => {
+  it("rejects unknown phases and an empty model", () => {
     expect(AgentProfiles.safeParse({ review: { kind: "claude" } }).success).toBe(false);
     expect(AgentProfiles.safeParse({ refine: { kind: "claude", model: "" } }).success).toBe(false);
   });
 });
 
 describe("ProjectLimits", () => {
-  it("acepta límites vacíos", () => {
+  it("accepts empty limits", () => {
     expect(ProjectLimits.parse({})).toEqual({});
   });
 
-  it("acepta concurrencia, timeout por fase y tope de iteraciones", () => {
+  it("accepts concurrency, per-phase timeout and iteration cap", () => {
     const limits = {
       concurrency: 2,
       phaseTimeoutMinutes: { implement: 60 },
@@ -112,20 +112,20 @@ describe("ProjectLimits", () => {
     { global: 5 },
     { maxVerificationIterations: 0 },
     { maxVerificationIterations: 21 },
-  ])("rechaza %j", (limits) => {
+  ])("rejects %j", (limits) => {
     expect(ProjectLimits.safeParse(limits).success).toBe(false);
   });
 });
 
 describe("ProjectCreate", () => {
-  it("aplica defaults de perfiles y límites", () => {
+  it("applies defaults for profiles and limits", () => {
     const project = ProjectCreate.parse(validCreate);
     expect(project.agentProfiles.verify).toEqual({ kind: "claude", args: [] });
     expect(project.limits).toEqual({});
     expect(project.testCommand).toBeUndefined();
   });
 
-  it("acepta comando de tests y bootstrap", () => {
+  it("accepts test command and bootstrap", () => {
     const project = ProjectCreate.parse({
       ...validCreate,
       testCommand: "pnpm test",
@@ -137,40 +137,40 @@ describe("ProjectCreate", () => {
   it.each([
     ["repo sin owner", { repo: "lunas-queue" }],
     ["repo con url", { repo: "https://github.com/sergiowero/lunas-queue" }],
-    ["ruta relativa", { localPath: "workspace/lunas-queue" }],
-    ["rama vacía", { baseBranch: "" }],
-    ["nombre vacío", { name: " " }],
-    ["comando de tests vacío", { testCommand: "" }],
-    ["verify con otro kind", { agentProfiles: { verify: { kind: "codex" } } }],
-  ])("rechaza %s", (_label, overrides) => {
+    ["relative path", { localPath: "workspace/lunas-queue" }],
+    ["empty branch", { baseBranch: "" }],
+    ["empty name", { name: " " }],
+    ["empty test command", { testCommand: "" }],
+    ["verify with another kind", { agentProfiles: { verify: { kind: "codex" } } }],
+  ])("rejects %s", (_label, overrides) => {
     expect(ProjectCreate.safeParse({ ...validCreate, ...overrides }).success).toBe(false);
   });
 
-  it("rechaza campos desconocidos", () => {
+  it("rejects unknown fields", () => {
     expect(ProjectCreate.safeParse({ ...validCreate, id: "x" }).success).toBe(false);
   });
 });
 
 describe("ProjectUpdate", () => {
-  it("es parcial y no aplica defaults", () => {
+  it("is partial and applies no defaults", () => {
     expect(ProjectUpdate.parse({ baseBranch: "develop" })).toEqual({ baseBranch: "develop" });
   });
 
-  it("permite borrar comando de tests y bootstrap con null", () => {
+  it("allows deleting the test command and bootstrap with null", () => {
     expect(ProjectUpdate.parse({ testCommand: null, bootstrap: null })).toEqual({
       testCommand: null,
       bootstrap: null,
     });
   });
 
-  it("valida el perfil de verify", () => {
+  it("validates the verify profile", () => {
     const result = ProjectUpdate.safeParse({ agentProfiles: { verify: { kind: "codex" } } });
     expect(result.success).toBe(false);
   });
 });
 
 describe("Project", () => {
-  it("incluye id y tiempos", () => {
+  it("includes id and timestamps", () => {
     const now = new Date();
     const project = Project.parse({
       ...ProjectCreate.parse(validCreate),
@@ -184,33 +184,33 @@ describe("Project", () => {
   });
 });
 
-describe("normalización y formato", () => {
+describe("normalization and format", () => {
   it.each(["/r/a/", "/r/./a", "//r//a", "/r/b/../a"])("normaliza %s a /r/a", (localPath) => {
     expect(ProjectCreate.parse({ ...validCreate, localPath }).localPath).toBe("/r/a");
   });
 
-  it.each(["/", "/..", "/./"])("rechaza la raíz (%s)", (localPath) => {
+  it.each(["/", "/..", "/./"])("rejects the root (%s)", (localPath) => {
     expect(ProjectCreate.safeParse({ ...validCreate, localPath }).success).toBe(false);
   });
 
-  it("acepta owners con guion bajo", () => {
+  it("accepts owners with an underscore", () => {
     expect(ProjectCreate.safeParse({ ...validCreate, repo: "user_corp/repo.js" }).success).toBe(
       true,
     );
   });
 
-  it.each(["-x/y", "x/..", "x/.", "_x/y"])("rechaza el repo %s", (repo) => {
+  it.each(["-x/y", "x/..", "x/.", "_x/y"])("rejects the repo %s", (repo) => {
     expect(ProjectCreate.safeParse({ ...validCreate, repo }).success).toBe(false);
   });
 
-  it("limita el timeout de fase a una semana", () => {
+  it("limits the phase timeout to one week", () => {
     const at = (minutes: number) =>
       ProjectLimits.safeParse({ phaseTimeoutMinutes: { implement: minutes } }).success;
     expect(at(MAX_PHASE_TIMEOUT_MINUTES)).toBe(true);
     expect(at(MAX_PHASE_TIMEOUT_MINUTES + 1)).toBe(false);
   });
 
-  it("el PATCH de agentProfiles es parcial por fase y sin defaults", () => {
+  it("the PATCH of agentProfiles is partial per phase and without defaults", () => {
     const patch = ProjectUpdate.parse({
       agentProfiles: { verify: { kind: "claude", model: "sonnet" } },
     });

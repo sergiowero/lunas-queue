@@ -2,6 +2,7 @@ import type { HookExecutionView, HookView } from "@lunasq/schemas";
 import { Link } from "@tanstack/react-router";
 import type { Json } from "../../lib/api.ts";
 import { formatDate, formatDuration, formatTimeout } from "../../lib/format.ts";
+import { useT } from "../../lib/i18n.ts";
 import { Muted } from "../section.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table.tsx";
@@ -9,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 type Execution = Json<HookExecutionView>;
 
 function ExecutionRow({ execution: e }: { execution: Execution }) {
+  const t = useT();
   return (
     <TableRow>
       <TableCell>
@@ -19,16 +21,20 @@ function ExecutionRow({ execution: e }: { execution: Execution }) {
       <TableCell>{formatDate(e.at)}</TableCell>
       <TableCell>
         <span className="inline-flex gap-1">
-          <Badge variant={e.passed ? "secondary" : "destructive"}>exit {e.exitCode}</Badge>
-          {e.timedOut && <Badge variant="destructive">timeout</Badge>}
+          <Badge variant={e.passed ? "secondary" : "destructive"}>
+            {t.hooks.exitCode(e.exitCode)}
+          </Badge>
+          {e.timedOut && <Badge variant="destructive">{t.hooks.timedOut}</Badge>}
         </span>
       </TableCell>
       <TableCell>{formatDuration(e.durationMs)}</TableCell>
       <TableCell>
         <details>
-          <summary className="cursor-pointer text-xs text-muted-foreground">Salida</summary>
+          <summary className="cursor-pointer text-xs text-muted-foreground">
+            {t.hooks.output}
+          </summary>
           <pre className="max-h-64 overflow-auto text-xs whitespace-pre-wrap">
-            {e.output || "(sin salida)"}
+            {e.output || t.hooks.noOutput}
           </pre>
         </details>
       </TableCell>
@@ -36,23 +42,24 @@ function ExecutionRow({ execution: e }: { execution: Execution }) {
   );
 }
 
-/** Lo que la tarjeta sabe de las ejecuciones: cargando, fallo de la consulta o la lista. */
+/** What the card knows about the executions: loading, query failure or the list. */
 export type ExecutionsState = Execution[] | "loading" | "failed";
 
 function Executions({ executions }: { executions: ExecutionsState }) {
-  if (executions === "loading") return <Muted>Cargando ejecuciones…</Muted>;
-  if (executions === "failed") return <Muted>No se pudieron cargar las ejecuciones.</Muted>;
-  if (executions.length === 0) return <Muted>Sin ejecuciones.</Muted>;
-  // El servidor ya deja la ejecución más reciente de cada tarea en este script.
+  const t = useT();
+  if (executions === "loading") return <Muted>{t.hooks.loadingExecutions}</Muted>;
+  if (executions === "failed") return <Muted>{t.hooks.executionsFailed}</Muted>;
+  if (executions.length === 0) return <Muted>{t.hooks.noExecutions}</Muted>;
+  // The server already leaves each task's most recent execution in this script.
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Tarea</TableHead>
-          <TableHead>Cuándo</TableHead>
-          <TableHead>Resultado</TableHead>
-          <TableHead>Duración</TableHead>
-          <TableHead>Salida</TableHead>
+          <TableHead>{t.hooks.task}</TableHead>
+          <TableHead>{t.hooks.when}</TableHead>
+          <TableHead>{t.hooks.result}</TableHead>
+          <TableHead>{t.hooks.duration}</TableHead>
+          <TableHead>{t.hooks.output}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -64,7 +71,7 @@ function Executions({ executions }: { executions: ExecutionsState }) {
   );
 }
 
-/** Un script de la rama base (o, sin `hook`, uno que ya no está) con sus últimas ejecuciones. */
+/** A base branch script (or, without `hook`, one that no longer exists) with its latest executions. */
 export function HookCard({
   script,
   hook,
@@ -74,8 +81,9 @@ export function HookCard({
   hook: Json<HookView> | null;
   executions: ExecutionsState;
 }) {
+  const t = useT();
   return (
-    // biome-ignore lint/a11y/useSemanticElements: un fieldset no aplica, esto no es un formulario.
+    // biome-ignore lint/a11y/useSemanticElements: a fieldset does not apply, this is not a form.
     <div
       role="group"
       aria-label={script}
@@ -91,7 +99,7 @@ export function HookCard({
             <Badge variant="outline">{formatTimeout(hook.timeoutSeconds)}</Badge>
           </>
         ) : (
-          <Badge variant="outline">ya no está en la rama base</Badge>
+          <Badge variant="outline">{t.hooks.gone}</Badge>
         )}
       </div>
       {hook && (

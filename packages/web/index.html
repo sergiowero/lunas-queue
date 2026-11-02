@@ -6,8 +6,15 @@
     <title>LunasQ</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <script>
-      // Tema antes de montar React, sin destello de claro. Misma regla y clave que src/lib/theme.ts.
+      // Theme and language before mounting React, without a flash of the light theme or of Spanish.
+      // Same rules and keys as src/lib/theme.ts and src/lib/i18n.ts.
       (() => {
+        try {
+          const lang = localStorage.getItem("lunasq:lang");
+          document.documentElement.lang = lang === "en" ? "en" : "es";
+        } catch {
+          document.documentElement.lang = "es";
+        }
         let theme = null;
         try {
           const stored = localStorage.getItem("lunasq:theme");

@@ -1,5 +1,5 @@
-// Arnés de los tests de la entrega: una tarea con el pass del verificador guardado, un checkout
-// falso con commits propios y la base ya adelantada, y todos los puertos en memoria.
+// Delivery test harness: a task with the verifier's pass saved, a fake checkout with its own commits
+// and the base already ahead, and all the ports in memory.
 import { FakeGit, FakeGitHub } from "@lunasq/adapters";
 import {
   appendEvent,
@@ -25,24 +25,24 @@ export const WORKTREE = "/wt/tarea";
 export const BRANCH = "lunasq/tarea";
 
 export interface DeliveryHarnessOptions {
-  /** Posición de la tarea; por defecto verification/running. */
+  /** Task position; by default verification/running. */
   position?: {
     state: "verification" | "in_progress" | "completed";
     subState: "running" | "queued" | null;
   };
   testCommand?: string | null;
-  /** El veredicto guardado; por defecto pass. */
+  /** The saved verdict; by default pass. */
   verdict?: "verification-pass" | "verification-reject";
-  /** El Run del verificador ya está cerrado (la entrega se retoma tras una caída). */
+  /** The verifier's Run is already closed (the delivery resumes after a crash). */
   verifierClosed?: boolean;
   without?: { evidence?: true };
 }
 
-/** Registra en `calls` cada llamada a `methods` de `target`, sin cambiar lo que hacen. */
+/** Logs in `calls` each call to `methods` of `target`, without changing what they do. */
 function trace<T extends object>(calls: string[], target: T, methods: string[], prefix?: string) {
   for (const name of methods) {
     const original = (target as Record<string, (...a: unknown[]) => unknown>)[name]?.bind(target);
-    if (!original) throw new Error(`no existe ${name}`);
+    if (!original) throw new Error(`${name} does not exist`);
     (target as Record<string, unknown>)[name] = (...args: unknown[]) => {
       calls.push(prefix ?? name);
       return original(...args);
@@ -105,7 +105,7 @@ export function deliveryHarness(options: DeliveryHarnessOptions = {}) {
     { publish: true },
   );
 
-  // Checkout con la rama de la tarea dos commits por delante de origin/main.
+  // Checkout with the task's branch two commits ahead of origin/main.
   const git = new FakeGit();
   git.addCheckout(WORKTREE, { branch: "main", tree: { "README.md": { content: "repo\n" } } });
   const github = new FakeGitHub();
@@ -155,7 +155,7 @@ export function deliveryHarness(options: DeliveryHarnessOptions = {}) {
   };
   const service = new DeliveryService(deps);
 
-  /** Dos commits del agente sobre la base, en el checkout falso. */
+  /** Two agent commits on the base, in the fake checkout. */
   async function agentCommits() {
     git.writeWorkingFile(WORKTREE, "src/a.ts");
     await git.commitAll({ cwd: WORKTREE, message: "feat: a", trailers: {} });
@@ -163,7 +163,7 @@ export function deliveryHarness(options: DeliveryHarnessOptions = {}) {
     await git.commitAll({ cwd: WORKTREE, message: "feat: b", trailers: {} });
   }
 
-  /** La base avanza en el remoto con `tree` (que el rebase verá tras el fetch). */
+  /** The base advances on the remote with `tree` (the rebase will see it after the fetch). */
   function baseMoves(tree: Record<string, { content: string }>) {
     git.pushToRemote(WORKTREE, "main", { "README.md": { content: "repo\n" }, ...tree });
   }

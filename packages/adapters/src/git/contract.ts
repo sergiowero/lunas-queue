@@ -1,5 +1,5 @@
-// Suite de contrato del adapter de git: corre contra el fake y contra git real (ambas en
-// `pnpm test`; git real solo necesita repos temporales).
+// Contract suite of the git adapter: it runs against the fake and against real git (both in
+// `pnpm test`; real git only needs temporary repos).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isGitError } from "./errors.ts";
 import type { GitAdapter } from "./types.ts";
@@ -8,21 +8,21 @@ export type RepoFiles = Record<string, { content: string; executable?: boolean }
 
 export interface GitContractHarness {
   adapter: GitAdapter;
-  /** Un checkout con remoto `origin` cuya rama `main` tiene `files`, ya traída. */
+  /** A checkout with an `origin` remote whose `main` branch has `files`, already fetched. */
   newRepo(files: RepoFiles): Promise<string>;
-  /** Un commit nuevo en `main` del remoto con `files` (reemplaza el árbol); el checkout no lo trae. */
+  /** A new commit on the remote's `main` with `files` (replaces the tree); the checkout does not fetch it. */
   pushToRemote(cwd: string, files: RepoFiles): Promise<void>;
-  /** Escribe en el working tree del checkout sin commitear. */
+  /** Writes into the checkout's working tree without committing. */
   writeWorkingFile(cwd: string, path: string, content: string): Promise<void>;
-  /** Rutas rastreadas en HEAD. */
+  /** Paths tracked at HEAD. */
   trackedFiles(cwd: string): Promise<string[]>;
-  /** Una ruta que todavía no existe, para un worktree temporal. */
+  /** A path that does not exist yet, for a temporary worktree. */
   freePath(): Promise<string>;
-  /** Crea la rama local `branch` en HEAD y se pasa a ella. */
+  /** Creates the local branch `branch` at HEAD and switches to it. */
   checkoutBranch(cwd: string, branch: string): Promise<void>;
-  /** Sha de `branch` en el remoto `origin`; null si no existe. */
+  /** Sha of `branch` on the remote `origin`; null if it does not exist. */
   remoteBranch(cwd: string, branch: string): Promise<string | null>;
-  /** Mensaje completo del commit en HEAD. */
+  /** Full message of the commit at HEAD. */
   headMessage(cwd: string): Promise<string>;
   cleanup(): Promise<void>;
 }
@@ -36,8 +36,8 @@ const hooks: RepoFiles = {
 };
 
 export function gitContract(name: string, setup: () => Promise<GitContractHarness>): void {
-  // Cada prueba arma repos y remotos reales; bajo la carga del gate superan los 5s por defecto.
-  describe(`contrato del adapter de git: ${name}`, { timeout: 30_000 }, () => {
+  // Each test builds real repos and remotes; under the gate's load they exceed the default 5s.
+  describe(`git adapter contract: ${name}`, { timeout: 30_000 }, () => {
     let h: GitContractHarness;
     let git: GitAdapter;
 
@@ -50,8 +50,8 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
       await h?.cleanup();
     });
 
-    describe("rama base", () => {
-      it("fetch trae el commit nuevo del remoto y resolveCommit da su sha", async () => {
+    describe("base branch", () => {
+      it("fetch brings the remote's new commit and resolveCommit gives its sha", async () => {
         const cwd = await h.newRepo(hooks);
         const before = await git.resolveCommit({ cwd, ref: "origin/main" });
         expect(before).toMatch(/^[0-9a-f]{40}$/);
@@ -66,7 +66,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(after).not.toBe(before);
       });
 
-      it("fetch de un branch inexistente y resolveCommit de un ref inexistente fallan", async () => {
+      it("fetch of a nonexistent branch and resolveCommit of a nonexistent ref fail", async () => {
         const cwd = await h.newRepo(hooks);
         await expect(git.fetch({ cwd, remote: "origin", branch: "no-existe" })).rejects.toSatisfy(
           (err) => isGitError(err, "git_failed"),
@@ -76,7 +76,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         );
       });
 
-      it("listFiles da los archivos directos del directorio con su bit de ejecución", async () => {
+      it("listFiles gives the directory's direct files with their execute bit", async () => {
         const cwd = await h.newRepo(hooks);
         const commit = await git.resolveCommit({ cwd, ref: "origin/main" });
         const files = await git.listFiles({ cwd, commit, dir: "lunasq/hooks/before_delivery" });
@@ -87,7 +87,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(await git.listFiles({ cwd, commit, dir: "lunasq/hooks/after_merge" })).toEqual([]);
       });
 
-      it("readFile lee el commit; undefined si no existe o es un directorio", async () => {
+      it("readFile reads the commit; undefined if it does not exist or is a directory", async () => {
         const cwd = await h.newRepo(hooks);
         const commit = await git.resolveCommit({ cwd, ref: "origin/main" });
         const content = await git.readFile({
@@ -100,7 +100,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(await git.readFile({ cwd, commit, path: "lunasq/hooks" })).toBeUndefined();
       });
 
-      it("los cambios del working tree no se ven en el commit", async () => {
+      it("working tree changes are not seen in the commit", async () => {
         const cwd = await h.newRepo(hooks);
         const commit = await git.resolveCommit({ cwd, ref: "origin/main" });
         await h.writeWorkingFile(cwd, "lunasq/hooks/before_delivery/10-bump", "rm -rf /\n");
@@ -117,8 +117,8 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
       });
     });
 
-    describe("worktrees temporales", () => {
-      it("addDetachedWorktree abre el commit en otra ruta y removeWorktree lo borra", async () => {
+    describe("temporary worktrees", () => {
+      it("addDetachedWorktree opens the commit at another path and removeWorktree deletes it", async () => {
         const cwd = await h.newRepo(hooks);
         const commit = await git.resolveCommit({ cwd, ref: "origin/main" });
         const path = await h.freePath();
@@ -135,15 +135,15 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
       });
     });
 
-    describe("commit de cambios", () => {
-      it("isDirty ve archivos nuevos y modificados", async () => {
+    describe("committing changes", () => {
+      it("isDirty sees new and modified files", async () => {
         const cwd = await h.newRepo(hooks);
         expect(await git.isDirty(cwd)).toBe(false);
         await h.writeWorkingFile(cwd, "VERSION", "1.0.1\n");
         expect(await git.isDirty(cwd)).toBe(true);
       });
 
-      it("commitAll commitea todo con los trailers y no crea commits vacíos", async () => {
+      it("commitAll commits everything with the trailers and does not create empty commits", async () => {
         const cwd = await h.newRepo(hooks);
         expect(
           await git.commitAll({ cwd, message: "nada", trailers: { "LunasQ-Task": "t1" } }),
@@ -166,7 +166,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(await git.commitAll({ cwd, message: "otra", trailers: {} })).toBeNull();
       });
 
-      it("isDirty y commitAll ignoran lunasq/tasks/, que es de LunasQ", async () => {
+      it("isDirty and commitAll ignore lunasq/tasks/, which belongs to LunasQ", async () => {
         const cwd = await h.newRepo(hooks);
         await h.writeWorkingFile(cwd, "lunasq/tasks/t1.md", "# evidencia\n");
         expect(await git.isDirty(cwd)).toBe(false);
@@ -174,7 +174,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
           await git.commitAll({ cwd, message: "nada", trailers: { "LunasQ-Task": "t1" } }),
         ).toBeNull();
 
-        // Un cambio del agente sí cuenta, y su commit no arrastra la evidencia.
+        // An agent change does count, and its commit does not drag in the evidence.
         await h.writeWorkingFile(cwd, "VERSION", "1.0.1\n");
         expect(await git.isDirty(cwd)).toBe(true);
         const before = await git.resolveCommit({ cwd, ref: "HEAD" });
@@ -185,15 +185,15 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
       });
     });
 
-    describe("integración con la rama base", () => {
+    describe("integration with the base branch", () => {
       const commit = async (cwd: string, path: string, content: string, message: string) => {
         await h.writeWorkingFile(cwd, path, content);
         const sha = await git.commitAll({ cwd, message, trailers: {} });
-        if (!sha) throw new Error("el commit del test no creó nada");
+        if (!sha) throw new Error("the test commit created nothing");
         return sha;
       };
 
-      it("rebase sin novedades en la base no toca la rama", async () => {
+      it("rebase with nothing new on the base does not touch the branch", async () => {
         const cwd = await h.newRepo(hooks);
         await h.checkoutBranch(cwd, "lunasq/t1");
         const mine = await commit(cwd, "VERSION", "1\n", "feat: version");
@@ -203,7 +203,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         });
       });
 
-      it("rebase pone los commits de la rama sobre la base nueva", async () => {
+      it("rebase puts the branch's commits on top of the new base", async () => {
         const cwd = await h.newRepo(hooks);
         await h.checkoutBranch(cwd, "lunasq/t1");
         await commit(cwd, "VERSION", "1\n", "feat: version");
@@ -218,11 +218,11 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
           expect.arrayContaining(["VERSION", "CHANGELOG.md"]),
         );
         expect(await git.isDirty(cwd)).toBe(false);
-        // Ya integrada, repetirlo no hace nada.
+        // Already integrated, repeating it does nothing.
         expect((await git.rebase({ cwd, onto: "origin/main" })).status).toBe("up_to_date");
       });
 
-      it("rebase con un conflicto lo aborta y deja el worktree como estaba", async () => {
+      it("rebase with a conflict aborts it and leaves the worktree as it was", async () => {
         const cwd = await h.newRepo(hooks);
         await h.checkoutBranch(cwd, "lunasq/t1");
         const mine = await commit(cwd, "README.md", "mi cambio\n", "feat: readme");
@@ -237,7 +237,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(await git.isDirty(cwd)).toBe(false);
       });
 
-      it("rebase con el worktree sucio falla sin tocar nada", async () => {
+      it("rebase with a dirty worktree fails without touching anything", async () => {
         const cwd = await h.newRepo(hooks);
         await h.checkoutBranch(cwd, "lunasq/t1");
         await commit(cwd, "VERSION", "1\n", "feat: version");
@@ -250,7 +250,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         );
       });
 
-      it("listCommits da los commits de base..HEAD del más viejo al más nuevo", async () => {
+      it("listCommits gives the commits of base..HEAD from oldest to newest", async () => {
         const cwd = await h.newRepo(hooks);
         const base = await git.resolveCommit({ cwd, ref: "origin/main" });
         await h.checkoutBranch(cwd, "lunasq/t1");
@@ -266,7 +266,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(Number.isNaN(commits[0]?.authoredAt.getTime())).toBe(false);
       });
 
-      it("addTrailers reescribe los commits indicados y repetirlo no cambia nada", async () => {
+      it("addTrailers rewrites the given commits and repeating it changes nothing", async () => {
         const cwd = await h.newRepo(hooks);
         const base = await git.resolveCommit({ cwd, ref: "origin/main" });
         await h.checkoutBranch(cwd, "lunasq/t1");
@@ -288,7 +288,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(commits[0]?.message).toMatch(/^feat\(x\): a\n\nLunasQ-Task: t1\nLunasQ-Run: r1\n*$/);
         expect(commits[1]?.message).not.toContain("LunasQ-");
 
-        // Segunda vez: los shas son otros, pero las claves ya están y no se agrega nada.
+        // Second time: the shas are different, but the keys are already there and nothing is added.
         const [rewritten] = commits;
         const again = await git.addTrailers({
           cwd,
@@ -298,7 +298,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(again).toBe(head);
       });
 
-      it("push publica el HEAD en la rama del remoto y se repite tras reescribir la historia", async () => {
+      it("push publishes HEAD on the remote's branch and repeats after rewriting history", async () => {
         const cwd = await h.newRepo(hooks);
         const base = await git.resolveCommit({ cwd, ref: "origin/main" });
         await h.checkoutBranch(cwd, "lunasq/t1");
@@ -307,7 +307,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
 
         await git.push({ cwd, remote: "origin", branch: "lunasq/t1" });
         expect(await h.remoteBranch(cwd, "lunasq/t1")).toBe(mine);
-        // Mismo HEAD: no falla.
+        // Same HEAD: it does not fail.
         await git.push({ cwd, remote: "origin", branch: "lunasq/t1" });
 
         const head = await git.addTrailers({
@@ -319,7 +319,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(await h.remoteBranch(cwd, "lunasq/t1")).toBe(head);
       });
 
-      it("push a un remoto que no existe falla con git_failed", async () => {
+      it("push to a nonexistent remote fails with git_failed", async () => {
         const cwd = await h.newRepo(hooks);
         await h.checkoutBranch(cwd, "lunasq/t1");
         await expect(git.push({ cwd, remote: "no-existe", branch: "lunasq/t1" })).rejects.toSatisfy(
@@ -329,7 +329,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
     });
 
     describe("commitPaths", () => {
-      it("commitea solo esas rutas con los trailers y no crea commits vacíos", async () => {
+      it("commits only those paths with the trailers and does not create empty commits", async () => {
         const cwd = await h.newRepo(hooks);
         await h.writeWorkingFile(cwd, "lunasq/tasks/t1.md", "# evidencia\n");
         await h.writeWorkingFile(cwd, "VERSION", "1.0.1\n");
@@ -344,7 +344,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         expect(sha).toBe(await git.resolveCommit({ cwd, ref: "HEAD" }));
         expect(await h.trackedFiles(cwd)).toContain("lunasq/tasks/t1.md");
         expect(await h.trackedFiles(cwd)).not.toContain("VERSION");
-        // El cambio ajeno sigue sin commitear.
+        // The other change is still uncommitted.
         expect(await git.isDirty(cwd)).toBe(true);
 
         const message = await h.headMessage(cwd);
@@ -361,7 +361,7 @@ export function gitContract(name: string, setup: () => Promise<GitContractHarnes
         ).toBeNull();
       });
 
-      it("commitea una nueva versión del archivo ya rastreado", async () => {
+      it("commits a new version of the already tracked file", async () => {
         const cwd = await h.newRepo(hooks);
         const input = { cwd, paths: ["lunasq/tasks/t1.md"], message: "evidencia", trailers: {} };
         await h.writeWorkingFile(cwd, "lunasq/tasks/t1.md", "uno\n");

@@ -45,7 +45,7 @@
                 "patterns": [
                   {
                     "group": ["@lunasq/*"],
-                    "message": "Frontera: schemas solo puede importar paquetes externos (docs/tech-stack.md)."
+                    "message": "Boundary: schemas can only import external packages (docs/tech-stack.md)."
                   },
                   {
                     "group": [
@@ -63,7 +63,7 @@
                       "@hono/*",
                       "@modelcontextprotocol/*"
                     ],
-                    "message": "Frontera: schemas es TypeScript puro; no conoce base de datos, HTTP, procesos ni herdr."
+                    "message": "Boundary: schemas is pure TypeScript; it knows nothing about databases, HTTP, processes or herdr."
                   }
                 ]
               }
@@ -81,13 +81,13 @@
               "level": "error",
               "options": {
                 "deniedGlobals": {
-                  "process": "Frontera: schemas es TypeScript puro; no conoce el proceso ni el sistema.",
-                  "Buffer": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
-                  "require": "Frontera: schemas es TypeScript puro; usa import.",
-                  "global": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
-                  "__dirname": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
-                  "__filename": "Frontera: schemas es TypeScript puro; usa APIs estándar.",
-                  "setImmediate": "Frontera: schemas es TypeScript puro; usa APIs estándar."
+                  "process": "Boundary: schemas is pure TypeScript; it knows nothing about the process or the system.",
+                  "Buffer": "Boundary: schemas is pure TypeScript; use standard APIs.",
+                  "require": "Boundary: schemas is pure TypeScript; use import.",
+                  "global": "Boundary: schemas is pure TypeScript; use standard APIs.",
+                  "__dirname": "Boundary: schemas is pure TypeScript; use standard APIs.",
+                  "__filename": "Boundary: schemas is pure TypeScript; use standard APIs.",
+                  "setImmediate": "Boundary: schemas is pure TypeScript; use standard APIs."
                 }
               }
             }
@@ -106,7 +106,7 @@
                 "patterns": [
                   {
                     "group": ["@lunasq/*"],
-                    "message": "Frontera: schemas solo puede importar paquetes externos (docs/tech-stack.md)."
+                    "message": "Boundary: schemas can only import external packages (docs/tech-stack.md)."
                   }
                 ]
               }
@@ -126,7 +126,7 @@
                 "patterns": [
                   {
                     "group": ["@lunasq/*", "!@lunasq/schemas", "!@lunasq/schemas/**"],
-                    "message": "Frontera: domain solo puede importar @lunasq/schemas (docs/tech-stack.md)."
+                    "message": "Boundary: domain can only import @lunasq/schemas (docs/tech-stack.md)."
                   },
                   {
                     "group": [
@@ -144,7 +144,7 @@
                       "@hono/*",
                       "@modelcontextprotocol/*"
                     ],
-                    "message": "Frontera: domain es TypeScript puro; no conoce base de datos, HTTP, procesos ni herdr."
+                    "message": "Boundary: domain is pure TypeScript; it knows nothing about databases, HTTP, processes or herdr."
                   }
                 ]
               }
@@ -170,7 +170,7 @@
                       "!@lunasq/schemas/**",
                       "!@lunasq/domain/**"
                     ],
-                    "message": "Frontera: db solo puede importar @lunasq/schemas, @lunasq/domain (docs/tech-stack.md)."
+                    "message": "Boundary: db can only import @lunasq/schemas, @lunasq/domain (docs/tech-stack.md)."
                   }
                 ]
               }
@@ -190,7 +190,7 @@
                 "patterns": [
                   {
                     "group": ["@lunasq/*", "!@lunasq/schemas", "!@lunasq/schemas/**"],
-                    "message": "Frontera: adapters solo puede importar @lunasq/schemas (docs/tech-stack.md)."
+                    "message": "Boundary: adapters can only import @lunasq/schemas (docs/tech-stack.md)."
                   }
                 ]
               }
@@ -220,7 +220,7 @@
                       "!@lunasq/adapters/**",
                       "!@lunasq/schemas/**"
                     ],
-                    "message": "Frontera: server solo puede importar @lunasq/domain, @lunasq/db, @lunasq/adapters, @lunasq/schemas (docs/tech-stack.md)."
+                    "message": "Boundary: server can only import @lunasq/domain, @lunasq/db, @lunasq/adapters, @lunasq/schemas (docs/tech-stack.md)."
                   }
                 ]
               }
@@ -240,7 +240,7 @@
                 "patterns": [
                   {
                     "group": ["@lunasq/*", "!@lunasq/schemas", "!@lunasq/schemas/**"],
-                    "message": "Frontera: web solo puede importar @lunasq/schemas (docs/tech-stack.md)."
+                    "message": "Boundary: web can only import @lunasq/schemas (docs/tech-stack.md)."
                   }
                 ]
               }
@@ -260,7 +260,7 @@
                 "patterns": [
                   {
                     "group": ["@lunasq/*", "!@lunasq/server", "!@lunasq/server/**"],
-                    "message": "Frontera: cli solo puede importar @lunasq/server (docs/tech-stack.md)."
+                    "message": "Boundary: cli can only import @lunasq/server (docs/tech-stack.md)."
                   }
                 ]
               }
@@ -288,7 +288,7 @@
                       "!@lunasq/adapters/**",
                       "!@lunasq/schemas/**"
                     ],
-                    "message": "Frontera: e2e solo puede importar @lunasq/server, @lunasq/adapters, @lunasq/schemas (docs/tech-stack.md)."
+                    "message": "Boundary: e2e can only import @lunasq/server, @lunasq/adapters, @lunasq/schemas (docs/tech-stack.md)."
                   }
                 ]
               }

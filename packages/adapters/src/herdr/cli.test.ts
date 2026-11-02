@@ -12,7 +12,7 @@ function fakeExec(stdout: string, stderr = "", exitCode = 0) {
 }
 
 describe("HerdrCli", () => {
-  it("antepone la sesión y devuelve result", async () => {
+  it("prepends the session and returns result", async () => {
     const { exec, calls } = fakeExec('{"id":"cli:pane:close","result":{"type":"ok"}}\n');
     const cli = new HerdrCli({ bin: "/bin/herdr", session: "s1", exec });
     expect(await cli.json(["pane", "close", "w1:p2"])).toEqual({ type: "ok" });
@@ -21,13 +21,13 @@ describe("HerdrCli", () => {
     ]);
   });
 
-  it("sin sesión usa la por defecto", async () => {
+  it("without a session uses the default one", async () => {
     const { exec, calls } = fakeExec("");
     await new HerdrCli({ exec }).text(["pane", "report-metadata", "w1:p1"]);
     expect(calls[0]).toEqual({ file: "herdr", args: ["pane", "report-metadata", "w1:p1"] });
   });
 
-  it("convierte el error JSON de stderr en HerdrError con su code", async () => {
+  it("converts the stderr JSON error into HerdrError with its code", async () => {
     const stderr =
       '{"error":{"code":"agent_not_found","message":"agent target x not found"},"id":"cli:agent:get"}\n';
     const { exec } = fakeExec("", stderr, 1);
@@ -36,21 +36,30 @@ describe("HerdrCli", () => {
     expect(err).toMatchObject({ code: "agent_not_found" });
   });
 
-  it("exit 2 sin JSON es un error de uso del CLI", async () => {
+  it("exit 2 without JSON is a CLI usage error", async () => {
     const { exec } = fakeExec("", "error: unexpected argument", 2);
     await expect(new HerdrCli({ exec }).json(["pane", "nope"])).rejects.toMatchObject({
       code: "cli_usage",
     });
   });
 
-  it("mata el proceso que no responde dentro del límite", async () => {
+  it("kills the process that does not respond within the limit", async () => {
     await expect(execHerdr("sleep", ["5"], 100)).rejects.toMatchObject({ code: "cli_timeout" });
   });
 
-  it("rechaza una salida que no es JSON", async () => {
-    const { exec } = fakeExec("hola");
+  it("rejects an output that is not JSON", async () => {
+    const { exec } = fakeExec("hello");
     await expect(new HerdrCli({ exec }).json(["api", "snapshot"])).rejects.toMatchObject({
       code: "invalid_response",
+      message: "herdr invalid_response: api snapshot: output is not JSON: hello",
+    });
+  });
+
+  it("rejects a JSON output without result with an English message", async () => {
+    const { exec } = fakeExec('{"id":"x"}');
+    await expect(new HerdrCli({ exec }).json(["api", "snapshot"])).rejects.toMatchObject({
+      code: "invalid_response",
+      message: 'herdr invalid_response: api snapshot: missing result: {"id":"x"}',
     });
   });
 });

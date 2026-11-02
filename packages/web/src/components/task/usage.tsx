@@ -1,7 +1,8 @@
-// Consumo de la tarea (docs/design.md §Consumo): read-only, lo escribe el usage collector (UW-20).
+// Task consumption (docs/design.md §Consumption): read-only, written by the usage collector (UW-20).
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { formatCost, formatTokens, PHASE_LABEL } from "../../lib/format.ts";
+import { formatCost, formatTokens } from "../../lib/format.ts";
+import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
 import { PAGE_SIZE, Pagination } from "../pagination.tsx";
 import { Muted, Section } from "../section.tsx";
@@ -9,19 +10,20 @@ import { Loading, QueryError } from "../status.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table.tsx";
 
 export function UsagePanel({ taskId }: { taskId: string }) {
+  const t = useT();
   const usage = useQuery(queries.usage(taskId));
   const runs = useQuery(queries.runs(taskId));
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   if (usage.error) {
     return (
-      <Section title="Usage">
+      <Section title={t.usage.title}>
         <QueryError error={usage.error} />
       </Section>
     );
   }
   if (runs.error) {
     return (
-      <Section title="Usage">
+      <Section title={t.usage.title}>
         <QueryError error={runs.error} />
       </Section>
     );
@@ -42,38 +44,38 @@ export function UsagePanel({ taskId }: { taskId: string }) {
   const page = Math.min(selectedPage ?? Math.max(0, pageCount - 1), Math.max(0, pageCount - 1));
   const pageRows = runRows?.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   return (
-    <Section title="Usage">
+    <Section title={t.usage.title}>
       {!data ? (
         <Loading />
       ) : (
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">
-            {`${unavailableCopilot ? "Consumo registrado (parcial: Copilot CLI no informa usage): " : ""}${formatTokens(data.total)} tokens · ${formatCost(data.total.costUsd)}`}
+            {`${unavailableCopilot ? t.usage.partial : ""}${t.usage.summary(formatTokens(data.total), formatCost(data.total.costUsd))}`}
           </p>
           {runRows?.length === 0 ? (
-            <Muted>Sin consumo registrado todavía.</Muted>
+            <Muted>{t.usage.none}</Muted>
           ) : (
             <div className="flex flex-col gap-3">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fase</TableHead>
-                    <TableHead>Entrada</TableHead>
-                    <TableHead>Salida</TableHead>
-                    <TableHead>Caché (lectura / escritura)</TableHead>
-                    <TableHead>Costo</TableHead>
+                    <TableHead>{t.usage.phase}</TableHead>
+                    <TableHead>{t.usage.input}</TableHead>
+                    <TableHead>{t.usage.output}</TableHead>
+                    <TableHead>{t.usage.cache}</TableHead>
+                    <TableHead>{t.usage.cost}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pageRows?.map(({ runId, phase, usage: u }) => (
                     <TableRow key={runId}>
-                      <TableCell>{PHASE_LABEL[phase]}</TableCell>
-                      <TableCell>{u?.inputTokens ?? "No disponible"}</TableCell>
-                      <TableCell>{u?.outputTokens ?? "No disponible"}</TableCell>
+                      <TableCell>{t.phase[phase]}</TableCell>
+                      <TableCell>{u?.inputTokens ?? t.usage.unavailable}</TableCell>
+                      <TableCell>{u?.outputTokens ?? t.usage.unavailable}</TableCell>
                       <TableCell>
-                        {u ? `${u.cacheReadTokens} / ${u.cacheWriteTokens}` : "No disponible"}
+                        {u ? `${u.cacheReadTokens} / ${u.cacheWriteTokens}` : t.usage.unavailable}
                       </TableCell>
-                      <TableCell>{u ? formatCost(u.costUsd) : "No disponible"}</TableCell>
+                      <TableCell>{u ? formatCost(u.costUsd) : t.usage.unavailable}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

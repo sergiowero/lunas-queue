@@ -1,24 +1,24 @@
-# ADR 0016: adapters de proveedores de agente
+# ADR 0016: agent provider adapters
 
-## Estado
+## Status
 
-Aceptada
+Accepted
 
-## Contexto
+## Context
 
-El dispatcher debe ejecutar Claude Code y GitHub Copilot CLI sin mezclar flags, MCP ni telemetría de un proveedor con otro. Los proyectos pueden seleccionar proveedor por fase. Claude Code emite usage OTLP y hooks HTTP de subagentes; Copilot CLI no ofrece esas mismas señales en la integración actual.
+The dispatcher must run Claude Code and GitHub Copilot CLI without mixing one provider's flags, MCP or telemetry with another's. Projects can select a provider per phase. Claude Code emits OTLP usage and HTTP subagent hooks; Copilot CLI does not offer those same signals in the current integration.
 
-## Decisión
+## Decision
 
-- Los proveedores explícitos y validados por esquema son Claude Code y Copilot CLI; un registry en `adapters` declara sus capacidades y compone argumentos específicos.
-- La configuración primaria es por fase. El fallback prueba una vez cada proveedor registrado, en orden empezando por el primario, solo cuando el proceso no puede arrancar o quedar listo antes de recibir el prompt. Los fallos de todos los proveedores se conservan como eventos del Run y escalan la tarea a `needs_human`.
-- `lunasq install` mantiene una entrada `lunasq` en `~/.copilot/mcp-config.json`, preservando las demás opciones y servidores. Cada Run Copilot usa un archivo MCP temporal de permisos restrictivos con su token; se elimina tras iniciar el CLI.
-- Copilot CLI corre siempre en modo autopilot: el adapter agrega `--autopilot` a toda sesión de fase y `CopilotCliReviewerExecutor` lo agrega a los revisores. `--autopilot`, `--mode` y `--plan` (también como `--flag=valor`) quedan reservados y un perfil que los traiga en `args` se rechaza. Tampoco se acepta el terminador `--` en los `args` de Copilot, porque convertiría en posicionales los flags fijos, incluido `--autopilot`. Los argumentos de Claude no cambian.
-- Los datos de usage no soportados no se inventan: la UI identifica Runs de Copilot sin métricas y marca los totales registrados como parciales.
-- La verificación con revisores HTTP y los hooks de evidencia siguen siendo Claude-only. No se debe presentar la verificación de Copilot como paritaria hasta conectar revisores/evidencia a los mismos guards.
+- The explicit providers validated by the schema are Claude Code and Copilot CLI; a registry in `adapters` declares their capabilities and composes provider‑specific arguments.
+- The primary configuration is per phase. The fallback tries each registered provider once, in order starting with the primary, only when the process cannot start or become ready before receiving the prompt. The failures of all providers are kept as Run events and escalate the task to `needs_human`.
+- `lunasq install` maintains a `lunasq` entry in `~/.copilot/mcp-config.json`, preserving the other options and servers. Each Copilot Run uses a temporary MCP file with restrictive permissions containing its token; it is deleted after the CLI starts.
+- Copilot CLI always runs in autopilot mode: the adapter adds `--autopilot` to every phase session and `CopilotCliReviewerExecutor` adds it to the reviewers. `--autopilot`, `--mode` and `--plan` (also as `--flag=value`) are reserved and a profile that brings them in `args` is rejected. The `--` terminator is not accepted in Copilot's `args` either, because it would turn the fixed flags, including `--autopilot`, into positionals. Claude's arguments do not change.
+- Unsupported usage data is not invented: the UI identifies Copilot Runs without metrics and marks the recorded totals as partial.
+- Verification with HTTP reviewers and the evidence hooks remain Claude‑only. Copilot's verification must not be presented as on par until reviewers/evidence are connected to the same guards.
 
-## Consecuencias
+## Consequences
 
-- `domain` mantiene reglas de fase agnósticas; los flags y capacidades viven en `adapters`.
-- Si se añade un proveedor, requiere enum/esquema, adapter y tests; no se permite cargar plugins arbitrarios.
-- Añadir revisores Copilot requiere una integración de hooks compatible con la identidad del Run y pruebas que demuestren que los guards rechazan evidencia ausente.
+- `domain` keeps phase rules agnostic; the flags and capabilities live in `adapters`.
+- If a provider is added, it requires an enum/schema, an adapter and tests; loading arbitrary plugins is not allowed.
+- Adding Copilot reviewers requires a hook integration compatible with the Run's identity and tests proving that the guards reject missing evidence.

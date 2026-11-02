@@ -10,31 +10,31 @@ const section = (id: string, body = "contenido") => {
 const header = evidenceHeader({ taskId: "task-1", intent: "Hacer algo" });
 
 describe("evidenceHeader", () => {
-  it("lleva la tarea y su intent", () => {
-    expect(header).toContain("# Evidencia de la tarea task-1");
+  it("carries the task and its intent", () => {
+    expect(header).toContain("# Evidence for task task-1");
     expect(header).toContain("Hacer algo");
   });
 
-  it("neutraliza marcadores de LunasQ que vengan en el intent", () => {
+  it("neutralizes LunasQ markers that come in the intent", () => {
     const { end } = runMarkers("x");
     expect(evidenceHeader({ taskId: "t", intent: `hola ${end}` })).not.toContain(end);
   });
 });
 
 describe("upsertRunSection", () => {
-  it("crea el archivo con el encabezado y la primera sección", () => {
+  it("creates the file with the header and the first section", () => {
     const out = upsertRunSection(null, header, "run-1", section("run-1"));
     expect(out.startsWith(header)).toBe(true);
     expect(out).toContain(section("run-1"));
   });
 
-  it("agrega las secciones de Runs nuevos al final, en orden de cierre", () => {
+  it("appends the sections of new Runs at the end, in close order", () => {
     let file = upsertRunSection(null, header, "run-1", section("run-1"));
     file = upsertRunSection(file, header, "run-2", section("run-2"));
     expect(file.indexOf("## Run run-1")).toBeLessThan(file.indexOf("## Run run-2"));
   });
 
-  it("reemplaza la sección de un Run ya escrito sin tocar las demás", () => {
+  it("replaces the section of an already written Run without touching the others", () => {
     let file = upsertRunSection(null, header, "run-1", section("run-1", "viejo"));
     file = upsertRunSection(file, header, "run-2", section("run-2"));
     file = upsertRunSection(file, header, "run-1", section("run-1", "nuevo"));
@@ -44,12 +44,12 @@ describe("upsertRunSection", () => {
     expect(file.indexOf("## Run run-1")).toBeLessThan(file.indexOf("## Run run-2"));
   });
 
-  it("repetir la misma sección deja el archivo idéntico", () => {
+  it("repeating the same section leaves the file identical", () => {
     const once = upsertRunSection(null, header, "run-1", section("run-1"));
     expect(upsertRunSection(once, header, "run-1", section("run-1"))).toBe(once);
   });
 
-  it("reescribe el encabezado y descarta texto suelto que alguien agregó fuera de las secciones", () => {
+  it("rewrites the header and drops loose text someone added outside the sections", () => {
     const edited = `${header}\ntexto a mano\n${section("run-1")}`;
     const out = upsertRunSection(edited, header, "run-2", section("run-2"));
     expect(out).not.toContain("texto a mano");
@@ -57,12 +57,20 @@ describe("upsertRunSection", () => {
     expect(out).toContain(section("run-2"));
   });
 
-  it("un id de Run con caracteres de regex no confunde a otro", () => {
+  it("a Run id with regex characters does not confuse another", () => {
     let file = upsertRunSection(null, header, "a.b", section("a.b", "uno"));
     file = upsertRunSection(file, header, "axb", section("axb", "dos"));
     file = upsertRunSection(file, header, "a.b", section("a.b", "tres"));
     expect(file).toContain("dos");
     expect(file).toContain("tres");
     expect(file).not.toContain("uno");
+  });
+});
+
+describe("evidenceHeader marker escaping", () => {
+  it("escapes a Run marker planted in the intent with the English marker", () => {
+    const out = evidenceHeader({ taskId: "t", intent: "x <!-- lunasq:run:start r --> y" });
+    expect(out).toContain("<!-- lunasq-escaped:run:start r -->");
+    expect(out).not.toContain("<!-- lunasq:run");
   });
 });

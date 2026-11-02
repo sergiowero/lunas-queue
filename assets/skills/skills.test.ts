@@ -13,36 +13,36 @@ function markdownFiles(dir: string): string[] {
   });
 }
 
-/** Frontmatter `clave: valor` de una línea, la forma que usan las skills de Claude Code. */
+/** One-line `key: value` frontmatter, the form Claude Code skills use. */
 function parseSkill(name: string): { meta: Record<string, string>; body: string } {
   const file = join(root, name, "SKILL.md");
   const text = readFileSync(file, "utf8");
   const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(text);
-  if (!match) throw new Error(`${file}: sin frontmatter`);
+  if (!match) throw new Error(`${file}: no frontmatter`);
   const meta: Record<string, string> = {};
   for (const line of (match[1] ?? "").split("\n")) {
     const sep = line.indexOf(":");
-    if (sep <= 0) throw new Error(`${file}: línea de frontmatter inválida: ${line}`);
+    if (sep <= 0) throw new Error(`${file}: invalid frontmatter line: ${line}`);
     const value = line.slice(sep + 1).trim();
-    // Sin comillas, `: ` o ` #` dentro del valor rompen el YAML que lee Claude Code.
+    // Without quotes, `: ` or ` #` inside the value break the YAML Claude Code reads.
     if (value.includes(": ") || value.includes(" #")) {
-      throw new Error(`${file}: valor de frontmatter que no es YAML plano: ${line}`);
+      throw new Error(`${file}: frontmatter value that is not plain YAML: ${line}`);
     }
     meta[line.slice(0, sep).trim()] = value;
   }
   return { meta, body: match[2] ?? "" };
 }
 
-/** El primer bloque ```json de la skill: el handoff de ejemplo. */
+/** The skill's first ```json block: the example handoff. */
 function handoffExample(body: string): Record<string, unknown> & { body: Record<string, unknown> } {
   const match = /```json\n([\s\S]*?)\n```/.exec(body);
-  if (!match) throw new Error("la skill no trae un bloque json con el handoff");
+  if (!match) throw new Error("the skill carries no json block with the handoff");
   return JSON.parse(match[1] ?? "");
 }
 
-// Los mismos nombres que `REVIEWER_NAMES` de @lunasq/schemas, y las claves del sobre y de cada
-// cuerpo del handoff v1 (ADR 0006); este paquete no depende de ninguno. La validación completa del
-// ejemplo con `parseHandoff` vive en packages/server/src/skills/.
+// The same names as `REVIEWER_NAMES` from @lunasq/schemas, and the keys of the envelope and of each
+// v1 handoff body (ADR 0006); this package depends on none of them. The full validation of the
+// example with `parseHandoff` lives in packages/server/src/skills/.
 const REVIEWERS = [
   "lunasq-security-reviewer",
   "lunasq-ux-reviewer",
@@ -85,13 +85,13 @@ const PHASES = [
 ] as const;
 
 describe("@lunasq/assets-skills", () => {
-  it("todo markdown de skills abre con frontmatter", () => {
+  it("every skills markdown opens with frontmatter", () => {
     for (const file of markdownFiles(root)) {
       expect(readFileSync(file, "utf8").startsWith("---\n"), file).toBe(true);
     }
   });
 
-  it("trae exactamente las 3 skills de fase que despacha LunasQ, una carpeta con SKILL.md", () => {
+  it("carries exactly the 3 phase skills LunasQ dispatches, a folder with SKILL.md", () => {
     const dirs = readdirSync(root).filter(
       (name) => name !== "node_modules" && statSync(join(root, name)).isDirectory(),
     );
@@ -101,15 +101,15 @@ describe("@lunasq/assets-skills", () => {
   describe.each(PHASES)("$skill", ({ skill, exit, handoffPhase, body: bodyKeys }) => {
     const parsed = () => parseSkill(skill);
 
-    it("su name es el de la carpeta, el que cita el prompt de fase", () => {
+    it("its name is the folder's, the one the phase prompt cites", () => {
       expect(parsed().meta.name).toBe(skill);
     });
 
-    it("tiene descripción para que Claude Code la elija", () => {
+    it("has a description so Claude Code can choose it", () => {
       expect(parsed().meta.description?.length ?? 0).toBeGreaterThan(60);
     });
 
-    it("empieza por get_task_context y termina con su tool de salida, sin las de otras fases", () => {
+    it("starts with get_task_context and ends with its exit tool, without those of other phases", () => {
       const { body } = parsed();
       expect(body).toContain("get_task_context");
       expect(body).toContain("context_required");
@@ -117,7 +117,7 @@ describe("@lunasq/assets-skills", () => {
       for (const other of EXIT_TOOLS.filter((t) => t !== exit)) expect(body).not.toContain(other);
     });
 
-    it("trae un handoff de ejemplo con el sobre común y el cuerpo de su fase", () => {
+    it("carries an example handoff with the common envelope and its phase body", () => {
       const example = handoffExample(parsed().body);
       expect(Object.keys(example).sort()).toEqual([...ENVELOPE].sort());
       expect(example.schemaVersion).toBe(1);
@@ -125,68 +125,68 @@ describe("@lunasq/assets-skills", () => {
       expect(Object.keys(example.body).sort()).toEqual([...bodyKeys].sort());
     });
 
-    it("explica cómo corregir un rechazo en el mismo Run", () => {
+    it("explains how to fix a rejection in the same Run", () => {
       const { body } = parsed();
       for (const code of ["invalid_handoff", "handoff_mismatch", "tool_not_allowed"]) {
         expect(body, code).toContain(code);
       }
-      expect(body).toMatch(/mismo Run/);
+      expect(body).toMatch(/same Run/);
     });
 
-    it("dice que invalid_run_token tras la tool de salida significa que la fase ya cerró", () => {
+    it("says that invalid_run_token after the exit tool means the phase already closed", () => {
       const { body } = parsed();
       expect(body).toContain("invalid_run_token");
-      expect(body).toMatch(/fase ya (terminó|cerró)/);
+      expect(body).toMatch(/phase has already ended/);
     });
 
-    it("cubre ask_human y report_failure", () => {
+    it("covers ask_human and report_failure", () => {
       const { body } = parsed();
       expect(body).toContain("ask_human");
       expect(body).toContain("report_failure");
-      expect(body).toMatch(/termina tu turno/i);
+      expect(body).toMatch(/end your turn/i);
     });
 
-    it("explica cuándo y cómo mandar options en ask_human", () => {
+    it("explains when and how to send options in ask_human", () => {
       const { body } = parsed();
       expect(body).toContain("options");
-      expect(body).toMatch(/2 a 6/);
+      expect(body).toMatch(/2 to 6/);
       expect(body).toMatch(/label/);
       expect(body).toMatch(/otra respuesta/i);
     });
 
-    it("pide usar engram solo si está disponible, en cada momento del diseño", () => {
+    it("asks to use engram only if available, at each point of the design", () => {
       const { body } = parsed();
-      expect(body).toContain("## Memoria con engram (opcional)");
+      expect(body).toContain("## Memory with engram (optional)");
       for (const piece of [
         "mem_context",
         "mem_search",
-        "1 o 2 términos",
+        "1 or 2 terms",
         "mem_session_summary",
         "superseded",
         "needs_review",
       ]) {
         expect(body, piece).toContain(piece);
       }
-      expect(body).toMatch(/si no está disponible/i);
-      expect(body).toMatch(/mem_session_summary[^\n]*antes de la tool de salida/);
+      expect(body).toMatch(/if it is not available/i);
+      expect(body).toMatch(/mem_session_summary[^\n]*before the exit tool/);
     });
   });
 
-  it("refine-task modela con DDD y escribe criterios Given / When / Then", () => {
+  it("refine-task models with DDD and writes Given / When / Then criteria", () => {
     const { body } = parseSkill("refine-task");
     for (const piece of [
       "bounded context",
-      "glosario",
-      "agregados",
-      "invariantes",
-      "eventos de dominio",
+      "glossary",
+      "aggregates",
+      "invariants",
+      "domain events",
       "Given / When / Then",
       "changesRequested",
       "topic_key",
     ]) {
       expect(body, piece).toContain(piece);
     }
-    expect(body).toMatch(/no (escribas|edites) código/i);
+    expect(body).toMatch(/do not write code/i);
   });
 
   it.each([
@@ -195,18 +195,18 @@ describe("@lunasq/assets-skills", () => {
       "implement-task",
       ["submit_result", "branch_has_commits", "already_implemented", "not_resolvable"],
     ],
-  ])("%s explica cuándo cerrar una tarea sin código con submit_result", (skill, pieces) => {
+  ])("%s explains when to close a task without code with submit_result", (skill, pieces) => {
     const { body } = parseSkill(skill);
     for (const piece of pieces) expect(body, piece).toContain(piece);
-    expect(body).toMatch(/sin (verificación|PR)/i);
+    expect(body).toMatch(/without (verification|PR)/i);
   });
 
-  it("implement-task sigue TDD, marca el checklist y entrega commits sobre un worktree limpio", () => {
+  it("implement-task follows TDD, checks off the checklist and delivers commits on a clean worktree", () => {
     const { body } = parseSkill("implement-task");
     for (const piece of [
       "update_checklist",
-      "test que falla",
-      "implementación mínima",
+      "failing test",
+      "minimal implementation",
       "refactor",
       "criterionTests",
       "rework",
@@ -225,18 +225,18 @@ describe("@lunasq/assets-skills", () => {
     }
   });
 
-  it("verify-task elige revisores y solo reporta ejecuciones MCP completadas", () => {
+  it("verify-task chooses reviewers and only reports completed MCP executions", () => {
     const { body } = parseSkill("verify-task");
     for (const reviewer of REVIEWERS) expect(body, reviewer).toContain(reviewer);
-    expect(body).toMatch(/Tú decides en cada tarea cuáles lanzar/);
-    expect(body).toMatch(/reportarlos no es lanzarlos/);
+    expect(body).toMatch(/You decide on each task which ones to launch/);
+    expect(body).toMatch(/reporting them is not launching them/);
     expect(body).toMatch(/run_reviewer/);
-    expect(body).toMatch(/ejecución completada y respuesta recibida/);
-    expect(parseSkill("verify-task").meta.description).not.toMatch(/lanza los 4/);
-    expect(body).toMatch(/no edites/i);
+    expect(body).toMatch(/completed execution and a received response/);
+    expect(parseSkill("verify-task").meta.description).not.toMatch(/launch the 4/);
+    expect(body).toMatch(/do not edit/i);
     for (const piece of [
       "justification",
-      "prueba de reversión",
+      "reversal test",
       "git stash",
       "refuted",
       "riskLabel",
@@ -248,13 +248,13 @@ describe("@lunasq/assets-skills", () => {
       "learning",
       "merge-base origin/",
       "criterionTests",
-      "vuelve a tu `mustFix`",
+      "returns to your `mustFix`",
     ]) {
       expect(body, piece).toContain(piece);
     }
   });
 
-  it("verify-task trae además el cuerpo de un pass", () => {
+  it("verify-task also carries the body of a pass", () => {
     const blocks = [...parseSkill("verify-task").body.matchAll(/```json\n([\s\S]*?)\n```/g)];
     const pass = JSON.parse(blocks[1]?.[1] ?? "{}");
     expect(pass.verdict).toBe("pass");
@@ -262,15 +262,15 @@ describe("@lunasq/assets-skills", () => {
     expect(Object.keys(pass.reviewers).sort()).toEqual([...REVIEWERS].sort());
   });
 
-  it("verify-task lleva el checklist de coherencia de tests del diseño", () => {
+  it("verify-task carries the design's test coherence checklist", () => {
     const { body } = parseSkill("verify-task");
     for (const piece of [
-      "al menos un test",
-      "comportamiento observable",
-      "tests saltados",
-      "aserciones triviales",
-      "invariantes",
-      "se debilitó",
+      "at least one test",
+      "observable behavior",
+      "skipped tests",
+      "trivial assertions",
+      "invariants",
+      "was weakened",
     ]) {
       expect(body, piece).toContain(piece);
     }

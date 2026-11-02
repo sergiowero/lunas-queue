@@ -4,7 +4,7 @@ import { KeyedLock } from "./keyed-lock.ts";
 const tick = () => new Promise((resolve) => setTimeout(resolve, 1));
 
 describe("KeyedLock", () => {
-  it("serializa la misma clave y deja correr claves distintas en paralelo", async () => {
+  it("serializes the same key and lets different keys run in parallel", async () => {
     const lock = new KeyedLock();
     const log: string[] = [];
     const job = (name: string) => async () => {
@@ -21,7 +21,7 @@ describe("KeyedLock", () => {
     expect(log.indexOf("b1:start")).toBeLessThan(log.indexOf("a1:end"));
   });
 
-  it("un fallo no bloquea a la siguiente y se propaga a quien la pidió", async () => {
+  it("a failure does not block the next one and propagates to whoever requested it", async () => {
     const lock = new KeyedLock();
     const failing = lock.run("a", async () => {
       throw new Error("boom");

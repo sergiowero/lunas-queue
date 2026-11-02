@@ -15,7 +15,7 @@ import { fakeUuid, projectConfigReaderContract, sampleProject } from "./testing.
 const project = (overrides: Partial<ProjectCreate> = {}) => sampleProject("lunas-queue", overrides);
 
 describe("phaseProfile", () => {
-  it("devuelve el perfil configurado de la fase", () => {
+  it("returns the configured profile of the phase", () => {
     const config = project({
       agentProfiles: { verify: { kind: "claude", model: "sonnet", args: ["--x"] } },
     });
@@ -27,7 +27,7 @@ describe("phaseProfile", () => {
     expect(phaseProfile(config, "refine")).toEqual({ kind: "claude", args: [] });
   });
 
-  it("el approver de verificación usa Sonnet si el perfil no fija modelo", () => {
+  it("the verification approver uses Sonnet if the profile sets no model", () => {
     expect(DEFAULT_VERIFY_MODEL).toBe("sonnet");
     expect(phaseProfile(project(), "verify")).toEqual({
       kind: "claude",
@@ -43,32 +43,32 @@ describe("phaseProfile", () => {
 });
 
 describe("maxVerificationIterations", () => {
-  it("usa 3 si el proyecto no fija el tope", () => {
+  it("uses 3 if the project sets no cap", () => {
     expect(maxVerificationIterations(project())).toBe(DEFAULT_MAX_ITERATIONS);
     expect(DEFAULT_MAX_ITERATIONS).toBe(3);
   });
 
-  it("respeta el tope del proyecto", () => {
+  it("respects the project cap", () => {
     const config = project({ limits: { maxVerificationIterations: 5 } });
     expect(maxVerificationIterations(config)).toBe(5);
   });
 });
 
 describe("phaseTimeoutMs", () => {
-  it("usa 30 minutos si la fase no tiene timeout propio", () => {
+  it("uses 30 minutes if the phase has no timeout of its own", () => {
     expect(DEFAULT_PHASE_TIMEOUT_MINUTES).toBe(30);
     expect(phaseTimeoutMs(project(), "implement")).toBe(30 * 60_000);
   });
 
-  it("respeta el timeout configurado por fase", () => {
+  it("respects the timeout configured per phase", () => {
     const config = project({ limits: { phaseTimeoutMinutes: { implement: 90 } } });
     expect(phaseTimeoutMs(config, "implement")).toBe(90 * 60_000);
     expect(phaseTimeoutMs(config, "verify")).toBe(30 * 60_000);
   });
 });
 
-describe("un consumidor lee la configuración sin tocar la base", () => {
-  // Así la leerán el dispatcher, el gate de tests y los hooks: solo con el puerto.
+describe("a consumer reads the configuration without touching the database", () => {
+  // This is how the dispatcher, the test gate and the hooks will read it: only through the port.
   function launchPlan(reader: ProjectConfigReader, projectId: string, phase: Phase) {
     const config = reader.get(projectId);
     if (!config) return null;
@@ -79,7 +79,7 @@ describe("un consumidor lee la configuración sin tocar la base", () => {
     };
   }
 
-  it("resuelve perfil y timeout desde un reader en memoria", () => {
+  it("resolves profile and timeout from an in-memory reader", () => {
     const config = project({
       agentProfiles: { implement: { kind: "claude", model: "opus" } },
       limits: { phaseTimeoutMinutes: { implement: 45 } },
@@ -94,4 +94,4 @@ describe("un consumidor lee la configuración sin tocar la base", () => {
   });
 });
 
-projectConfigReaderContract("en memoria", (configs) => new InMemoryProjectConfigReader(configs));
+projectConfigReaderContract("in memory", (configs) => new InMemoryProjectConfigReader(configs));

@@ -1,5 +1,5 @@
-// PaneTestGate con git real y FakeHerdr, que ejecuta de verdad lo que recibe el pane: la suite
-// corre en el worktree y su resultado queda en el Event log.
+// PaneTestGate with real git and FakeHerdr, which actually executes what the pane receives: the suite
+// runs in the worktree and its result is left in the Event log.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -82,7 +82,7 @@ async function setup(opts: { runner?: ProcessRunner; timeoutMs?: number } = {}) 
 }
 
 describe("PaneTestGate", () => {
-  it("una suite en rojo no pasa y su salida y exit code quedan en el Event log", async () => {
+  it("a red suite does not pass and its output and exit code are left in the Event log", async () => {
     const { gate, input, events, wt, panes, rootPaneId } = await setup();
     const result = await gate.run(input("echo '1 failed'; exit 1"));
     expect(result).toEqual({ passed: false, output: "1 failed\n" });
@@ -103,21 +103,21 @@ describe("PaneTestGate", () => {
     ]);
   });
 
-  it("la salida guardada en el Event log no lleva secuencias ANSI", async () => {
+  it("the output stored in the Event log carries no ANSI sequences", async () => {
     const { gate, input, events } = await setup();
     const result = await gate.run(input("printf '\\033[2mms\\033[22m ok\\n'"));
     expect(result.output).toBe("ms ok\n");
     expect(events()).toMatchObject([{ output: "ms ok\n" }]);
   });
 
-  it("una suite en verde pasa, corre en el worktree y registra el disparo", async () => {
+  it("a green suite passes, runs in the worktree and records the trigger", async () => {
     const { gate, input, events, wt } = await setup();
     const result = await gate.run({ ...input("pwd; echo ok"), trigger: "verdict_pass" });
     expect(result).toEqual({ passed: true, output: `${wt.dir}\nok\n` });
     expect(events()).toMatchObject([{ trigger: "verdict_pass", exitCode: 0, passed: true }]);
   });
 
-  it("la suite no ve credenciales del entorno y corre en modo CI con el contexto de la tarea", async () => {
+  it("the suite sees no environment credentials and runs in CI mode with the task context", async () => {
     process.env.GH_TOKEN = "secreto";
     try {
       const { gate, input, task } = await setup();
@@ -132,7 +132,7 @@ describe("PaneTestGate", () => {
     }
   });
 
-  it("pasa la allowlist mínima y el timeout al runner", async () => {
+  it("passes the minimal allowlist and the timeout to the runner", async () => {
     const calls: Parameters<ProcessRunner["run"]>[0][] = [];
     const runner: ProcessRunner = {
       run: async (i) => {
@@ -155,25 +155,25 @@ describe("PaneTestGate", () => {
     expect(GATE_ENV_ALLOWLIST).not.toContain("GH_TOKEN");
   });
 
-  it("sin comando de tests no pasa, no abre pane y queda registrado", async () => {
+  it("without a test command it does not pass, opens no pane and is recorded", async () => {
     const { gate, input, events, panes } = await setup();
     const result = await gate.run(input(null));
     expect(result.passed).toBe(false);
-    expect(result.output).toMatch(/no tiene comando de tests/);
+    expect(result.output).toMatch(/no test command/);
     expect(panes).toEqual([]);
     expect(events()).toMatchObject([
-      { command: null, exitCode: null, passed: false, error: expect.stringMatching(/comando/) },
+      { command: null, exitCode: null, passed: false, error: expect.stringMatching(/command/) },
     ]);
   });
 
-  it("un comando vacío cuenta como sin comando y queda registrado", async () => {
+  it("an empty command counts as no command and is recorded", async () => {
     const { gate, input, events, panes } = await setup();
     expect((await gate.run(input("  "))).passed).toBe(false);
     expect(panes).toEqual([]);
     expect(events()).toMatchObject([{ command: null, passed: false }]);
   });
 
-  it("si el worktree asegurado no es el del Run, falla cerrado sin correr la suite", async () => {
+  it("if the ensured worktree is not the Run's, it fails closed without running the suite", async () => {
     const { gate, input, events, panes } = await setup();
     const result = await gate.run({ ...input("true"), worktreePath: "/otro/worktree" });
     expect(result.passed).toBe(false);
@@ -181,15 +181,15 @@ describe("PaneTestGate", () => {
     expect(events()).toMatchObject([{ passed: false, error: expect.stringMatching(/otro/) }]);
   });
 
-  it("una suite que excede el tiempo límite no pasa", async () => {
+  it("a suite that exceeds the time limit does not pass", async () => {
     const { gate, input, events } = await setup({ timeoutMs: 1500 });
     const result = await gate.run(input("echo empieza; sleep 5"));
     expect(result.passed).toBe(false);
-    expect(result.output).toMatch(/empieza[\s\S]*tiempo límite/);
+    expect(result.output).toMatch(/empieza[\s\S]*time limit/);
     expect(events()).toMatchObject([{ timedOut: true, passed: false }]);
   });
 
-  it("si herdr no puede abrir el pane, falla cerrado y lo registra", async () => {
+  it("if herdr cannot open the pane, it fails closed and records it", async () => {
     const runner: ProcessRunner = {
       run: async () => {
         throw new Error("herdr no responde");
@@ -204,7 +204,7 @@ describe("PaneTestGate", () => {
     ]);
   });
 
-  it("si no se puede asegurar el worktree, falla cerrado y lo registra", async () => {
+  it("if the worktree cannot be ensured, it fails closed and records it", async () => {
     const { gate, input, events, worktrees } = await setup();
     worktrees.ensure.mockRejectedValueOnce(new Error("sin workspace"));
     const result = await gate.run(input("pnpm test"));
@@ -214,7 +214,7 @@ describe("PaneTestGate", () => {
     ]);
   });
 
-  it("recorta la salida: el agente recibe el final y el evento hasta 16 KiB", async () => {
+  it("trims the output: the agent receives the end and the event up to 16 KiB", async () => {
     const { gate, input, events } = await setup();
     const result = await gate.run(input("yes linea | head -c 40000; echo; echo FIN; exit 2"));
     expect(result.output.length).toBeLessThanOrEqual(GATE_OUTPUT_LIMIT);
@@ -226,7 +226,7 @@ describe("PaneTestGate", () => {
 });
 
 describe("UnavailableTestGate", () => {
-  it("nunca pasa: un servidor sin herdr no acepta verificaciones", async () => {
+  it("never passes: a server without herdr accepts no verifications", async () => {
     const result = await new UnavailableTestGate().run({
       taskId: "t",
       runId: "r",

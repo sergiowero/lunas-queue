@@ -2,7 +2,7 @@
   "name": "@lunasq/schemas",
   "version": "0.0.0",
   "private": true,
-  "description": "Esquemas Zod compartidos: entidades, handoffs y eventos",
+  "description": "Shared Zod schemas: entities, handoffs and events",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

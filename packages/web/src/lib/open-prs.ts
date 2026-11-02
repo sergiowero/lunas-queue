@@ -1,5 +1,5 @@
-// Contador de PR abiertos: tareas completadas cuyo PR sigue abierto, de todos los proyectos.
-// Sale de la misma query de tareas que ya invalida useLiveUpdates.
+// Open PR counter: completed tasks whose PR is still open, across all projects.
+// It comes from the same tasks query that useLiveUpdates already invalidates.
 import { useQuery } from "@tanstack/react-query";
 import { queries } from "./queries.ts";
 

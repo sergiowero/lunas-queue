@@ -1,8 +1,8 @@
-// Dispatcher (docs/design.md §Secuencia de despacho, ADR 0002, ADR 0004, ADR 0014, ADR
-// uw-16-dispatcher). Implementa el puerto `Dispatcher` del scheduler: el claim es atómico en la
-// base y el resto de la secuencia (worktree, pane, agente, confianza, metadata, prompt) corre
-// después, en segundo plano, guardando cada paso en el Run. Así un despacho que se cae a medias se
-// retoma sin duplicar panes ni agentes, y repetir una decisión ya aplicada da `stale_state`.
+// Dispatcher (docs/design.md §Dispatch sequence, ADR 0002, ADR 0004, ADR 0014, ADR
+// uw-16-dispatcher). Implements the scheduler's `Dispatcher` port: the claim is atomic in the
+// database and the rest of the sequence (worktree, pane, agent, trust, metadata, prompt) runs
+// afterwards, in the background, saving each step in the Run. This way a dispatch that falls halfway is
+// resumed without duplicating panes or agents, and repeating an already applied decision gives `stale_state`.
 import { randomUUID } from "node:crypto";
 import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -56,17 +56,17 @@ import type { Dispatcher } from "../scheduler/scheduler.ts";
 import { KeyedLock } from "../worktrees/keyed-lock.ts";
 import { isWorktreeError, type WorktreeService } from "../worktrees/service.ts";
 
-/** Cuánto esperar a que Claude Code quede listo tras aceptar la confianza de carpeta. */
+/** How long to wait for Claude Code to be ready after accepting folder trust. */
 export const DEFAULT_TRUST_TIMEOUT_MS = 15_000;
 /**
- * `MCP_TOOL_TIMEOUT` de Claude Code en el pane: `submit_for_verification` y un `submit_verdict`
- * con pass corren el gate de tests dentro de la llamada (ADR uw-11-gate-tests), así que debe
- * cubrir su timeout con margen.
+ * Claude Code's `MCP_TOOL_TIMEOUT` in the pane: `submit_for_verification` and a `submit_verdict`
+ * with pass run the test gate inside the call (ADR uw-11-gate-tests), so it must
+ * cover its timeout with margin.
  */
 export const DEFAULT_MCP_TOOL_TIMEOUT_MS = DEFAULT_GATE_TIMEOUT_MS + 5 * 60_000;
-/** `--timeout` de `agent start`: lo que tarda el agente en quedar listo para prompts. */
+/** `--timeout` of `agent start`: how long the agent takes to be ready for prompts. */
 export const DEFAULT_START_TIMEOUT_MS = 30_000;
-/** Líneas de la pantalla del agente que se leen para reconocer el diálogo de confianza. */
+/** Lines of the agent's screen read to recognize the trust dialog. */
 const SCREEN_LINES = 60;
 
 export type DispatchErrorCode =
@@ -91,8 +91,8 @@ export function isDispatchError(err: unknown, code?: DispatchErrorCode): err is 
 }
 
 /**
- * Quien observa los agentes vivos (UW-17: señales de herdr, nudges, timeout de fase). El
- * dispatcher solo avisa cuándo empieza y cuándo termina cada Run.
+ * Whoever observes the live agents (UW-17: herdr signals, nudges, phase timeout). The
+ * dispatcher only reports when each Run starts and when it ends.
  */
 export interface RunObserver {
   watch(run: RunRow, agent: HerdrAgent): void;
@@ -100,35 +100,35 @@ export interface RunObserver {
 }
 
 /**
- * Quien deja constancia de un Run cerrado (el archivo de evidencia, UW-24). El dispatcher lo llama
- * por cada Run que cierra o que ya encuentra cerrado; debe ser idempotente.
+ * Whoever records a closed Run (the evidence file, UW-24). The dispatcher calls it
+ * for each Run it closes or already finds closed; it must be idempotent.
  */
 export interface RunEvidenceSink {
   recordRun(runId: string): Promise<unknown>;
 }
 
-/** `runId` es null si el fallo no es de un Run (p. ej. la lectura de `recover`). */
+/** `runId` is null if the failure is not a Run's (e.g. reading in `recover`). */
 export type DispatchErrorHandler = (error: Error, runId: string | null) => void;
 
 export interface PhaseDispatcherOptions {
   db: LunasqDatabase;
   herdr: HerdrAdapter;
   worktrees: WorktreeService;
-  /** Archivo MCP estable con `${LUNASQ_RUN_TOKEN}` (ADR 0002); ver `ensureMcpConfig`. */
+  /** Stable MCP file with `${LUNASQ_RUN_TOKEN}` (ADR 0002); see `ensureMcpConfig`. */
   mcpConfigPath: string;
-  /** URL local del LunasQ MCP para generar la configuración Copilot de cada Run. */
+  /** Local URL of the LunasQ MCP to generate each Run's Copilot configuration. */
   mcpUrl?: string;
-  /** Settings estable con los hooks de subagentes (ADR uw-19-revisores); ver `ensureHookSettings`. */
+  /** Stable settings with the subagent hooks (ADR uw-19-revisores); see `ensureHookSettings`. */
   hookSettingsPath: string;
   projects?: ProjectConfigReader;
-  /** Proveedores habilitados; por defecto los de la base. Se leen en el claim y al lanzar. */
+  /** Enabled providers; by default those in the database. Read on claim and on launch. */
   settings?: ProviderSettingsReader;
-  /** Los mismos límites que el scheduler: el claim los revalida (ADR 0014). */
+  /** The same limits as the scheduler: the claim revalidates them (ADR 0014). */
   config?: SchedulerConfigInput;
-  /** Variables extra del pane de cada agente (telemetría, PATH de pruebas). */
+  /** Extra variables of each agent's pane (telemetry, test PATH). */
   paneEnv?: Record<string, string>;
   observer?: RunObserver;
-  /** Sin él no se escribe evidencia. Un fallo al escribirla se reporta en `onError`. */
+  /** Without it no evidence is written. A failure writing it is reported in `onError`. */
   evidence?: RunEvidenceSink;
   newSessionId?: () => string;
   startTimeoutMs?: number;
@@ -156,12 +156,12 @@ export class PhaseDispatcher implements Dispatcher {
   private readonly onError: DispatchErrorHandler;
   private readonly runs: RunRepository;
   private readonly tasks: TaskWorktreeRepository;
-  /** Un lanzamiento por Run a la vez: `recover` y `dispatch` pueden coincidir. */
+  /** One launch per Run at a time: `recover` and `dispatch` may coincide. */
   private readonly locks = new KeyedLock();
-  /** Cierres de un mismo Run en orden; no esperan al lanzamiento (puede tardar minutos). */
+  /** Closes of the same Run in order; they do not wait for the launch (it can take minutes). */
   private readonly closeLocks = new KeyedLock();
   private readonly inFlight = new Set<Promise<unknown>>();
-  /** Runs con un lanzamiento en segundo plano en curso. */
+  /** Runs with a background launch in progress. */
   private readonly launching = new Set<string>();
 
   constructor(opts: PhaseDispatcherOptions) {
@@ -188,8 +188,8 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   /**
-   * Resuelve cuando el claim quedó confirmado (la tarea está en running y ocupa su slot) y lanza
-   * el agente en segundo plano; rechaza con `DispatchError` si el claim no procede.
+   * Resolves when the claim was confirmed (the task is in running and occupies its slot) and launches
+   * the agent in the background; rejects with `DispatchError` if the claim does not go through.
    */
   async dispatch(decision: DispatchDecision): Promise<void> {
     const claim = claimRun(this.db, {
@@ -203,8 +203,8 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   /**
-   * Retoma los Runs reclamados que no llegaron a mandar su prompt (tras una caída). Salta los que
-   * ya se están lanzando: la reconciliación (UW-17) lo llama en cada pasada.
+   * Resumes the claimed Runs that never got to send their prompt (after a crash). Skips those
+   * already being launched: reconciliation (UW-17) calls it on each pass.
    */
   async recover(): Promise<void> {
     for (const run of this.runs.active()) {
@@ -212,20 +212,20 @@ export class PhaseDispatcher implements Dispatcher {
     }
   }
 
-  /** Espera los lanzamientos en curso (para `stop` y para tests). */
+  /** Waits for launches in progress (for `stop` and for tests). */
   async idle(): Promise<void> {
     while (this.inFlight.size > 0) await Promise.allSettled([...this.inFlight]);
   }
 
   /**
-   * Lanza el Run: idempotente. Cada paso se salta si ya está hecho según el Run y herdr. Un fallo
-   * cierra el Run como failure (`run_failed`) y cierra su pane. Si el Run se cierra mientras se
-   * lanza (cancelación durante el bootstrap), el lanzamiento se detiene y cierra lo que abrió.
+   * Launches the Run: idempotent. Each step is skipped if already done according to the Run and herdr. A failure
+   * closes the Run as failure (`run_failed`) and closes its pane. If the Run is closed while
+   * launching (cancellation during the bootstrap), the launch stops and closes what it opened.
    */
   launch(runId: string): Promise<RunRow> {
     return this.locks.run(runId, async () => {
       const run = this.runs.get(runId);
-      if (!run) throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
+      if (!run) throw new DispatchError("run_not_found", `Run ${runId} does not exist`);
       if (run.endedAt !== null || run.launchedAt !== null) return run;
       try {
         return await this.launchSteps(run);
@@ -237,7 +237,7 @@ export class PhaseDispatcher implements Dispatcher {
         try {
           await this.failRun(run.id, failureReason(error));
         } catch (failError) {
-          // No tapar el error original: se reportan los dos y el pane se cierra igual.
+          // Do not mask the original error: both are reported and the pane is closed anyway.
           this.onError(asError(failError), run.id);
           await this.release(run.id).catch((e: unknown) => this.onError(asError(e), run.id));
         }
@@ -247,15 +247,15 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   /**
-   * Cierre de fase: guarda resultado, handoff e identidad de sesión y cierra el pane. Lo llama
-   * quien aplica la transición de fin de fase (UW-15) o de cancelación. Idempotente.
+   * Phase close: saves result, handoff and session identity and closes the pane. Called by
+   * whoever applies the end-of-phase or cancellation transition (UW-15). Idempotent.
    */
   closeRun(runId: string, input: Omit<CloseRunInput, "session">) {
     return this.closeLocks.run(runId, async () => {
       const run = this.runs.get(runId);
-      if (!run) throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
+      if (!run) throw new DispatchError("run_not_found", `Run ${runId} does not exist`);
       if (run.endedAt !== null) {
-        // Lo cerró otro (la tool de salida del MCP): queda dejar su evidencia y limpiar el pane.
+        // Another one closed it (the MCP exit tool): what remains is leaving its evidence and cleaning the pane.
         await this.releaseAndRecord(runId);
         return { closed: false, run };
       }
@@ -267,9 +267,9 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   /**
-   * Limpia el pane de un Run que ya cerró otro: las tools de salida del LunasQ MCP cierran el Run
-   * en su transacción y el dispatcher solo detiene el agente (ADR uw-15-mcp-tools). Un Run abierto
-   * no se toca.
+   * Cleans the pane of a Run that another closed: the LunasQ MCP exit tools close the Run
+   * in their transaction and the dispatcher only stops the agent (ADR uw-15-mcp-tools). An open Run
+   * is not touched.
    */
   releaseRun(runId: string): Promise<void> {
     return this.closeLocks.run(runId, async () => {
@@ -278,7 +278,7 @@ export class PhaseDispatcher implements Dispatcher {
     });
   }
 
-  /** Run fallido: lo cierra, aplica `run_failed` si la tarea sigue en su fase y cierra el pane. */
+  /** Failed Run: closes it, applies `run_failed` if the task is still in its phase and closes the pane. */
   failRun(
     runId: string,
     reason: string,
@@ -286,19 +286,19 @@ export class PhaseDispatcher implements Dispatcher {
   ): Promise<FailRunResult> {
     return this.closeLocks.run(runId, async () => {
       if (!this.runs.get(runId))
-        throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
+        throw new DispatchError("run_not_found", `Run ${runId} does not exist`);
       const res = this.runs.fail(runId, reason, opts);
-      // También con closed false: un lanzamiento que falla tras un cierre deja su pane abierto.
+      // Also with closed false: a launch that fails after a close leaves its pane open.
       await this.releaseAndRecord(runId);
       return res;
     });
   }
 
-  /** Despacho en pausa: cierra el Run sin contarlo como fallo y la tarea vuelve a queued. */
+  /** Paused dispatch: closes the Run without counting it as a failure and the task goes back to queued. */
   pauseRun(runId: string, reason: string): Promise<FailRunResult> {
     return this.closeLocks.run(runId, async () => {
       if (!this.runs.get(runId))
-        throw new DispatchError("run_not_found", `no existe el Run ${runId}`);
+        throw new DispatchError("run_not_found", `Run ${runId} does not exist`);
       const res = this.runs.pause(runId, reason);
       await this.releaseAndRecord(runId);
       return res;
@@ -306,9 +306,9 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   /**
-   * Cierra el pane y después deja la evidencia: con el agente ya detenido, su transcript está
-   * completo (una tool de salida del MCP cierra el Run mientras el agente termina su turno). Si
-   * cerrar el pane falla, la evidencia se escribe igual.
+   * Closes the pane and then leaves the evidence: with the agent already stopped, its transcript is
+   * complete (an MCP exit tool closes the Run while the agent finishes its turn). If
+   * closing the pane fails, the evidence is written anyway.
    */
   private async releaseAndRecord(runId: string): Promise<void> {
     try {
@@ -318,7 +318,7 @@ export class PhaseDispatcher implements Dispatcher {
     }
   }
 
-  /** La evidencia no es parte del cierre: si falla se reporta y el Run se cierra igual. */
+  /** Evidence is not part of the close: if it fails it is reported and the Run is closed anyway. */
   private async recordEvidence(runId: string): Promise<void> {
     try {
       await this.evidence?.recordRun(runId);
@@ -337,7 +337,7 @@ export class PhaseDispatcher implements Dispatcher {
     });
   }
 
-  /** Lanza RunClosed si el Run se cerró mientras se lanzaba. */
+  /** Throws RunClosed if the Run was closed while launching. */
   private checkOpen(runId: string): RunRow {
     const run = this.runs.get(runId);
     if (!run || run.endedAt !== null) throw new RunClosed();
@@ -355,7 +355,7 @@ export class PhaseDispatcher implements Dispatcher {
     if (agent && !this.owns(run, agent)) {
       throw new DispatchError(
         "agent_name_taken",
-        `el agente ${name} de herdr pertenece a otro Run (pane ${agent.paneId})`,
+        `herdr agent ${name} belongs to another Run (pane ${agent.paneId})`,
       );
     }
     let fresh = !agent;
@@ -366,8 +366,8 @@ export class PhaseDispatcher implements Dispatcher {
       fresh = true;
       run = this.checkOpen(run.id);
     }
-    // Recién arrancado y aún cargando (herdr devuelve `agent_not_ready` con el estado del
-    // momento): esperar a que quede listo o bloqueado antes de decidir.
+    // Just started and still loading (herdr returns `agent_not_ready` with the state of the
+    // moment): wait for it to be ready or blocked before deciding.
     if (fresh && agent.status !== "idle" && agent.status !== "blocked") {
       agent = await this.herdr.waitAgent({
         name,
@@ -394,13 +394,13 @@ export class PhaseDispatcher implements Dispatcher {
       tokens: { task: run.taskId, phase, iter: String(run.iteration), run: run.id },
     });
     run = this.checkOpen(run.id);
-    // Solo un agente idle no recibió aún el prompt; working, blocked o done ya lo tienen.
+    // Only an idle agent has not received the prompt yet; working, blocked or done already have it.
     if (agent.status === "idle") {
       agent = await this.herdr.promptAgent({ name, text: phasePrompt(phase, run.taskId) });
     }
     const launched = this.runs.markLaunched(run.id);
-    if (!launched) throw new DispatchError("run_not_found", `el Run ${run.id} desapareció`);
-    // Un cierre que llegó durante el prompt ya no encontrará al lanzamiento: se cierra aquí.
+    if (!launched) throw new DispatchError("run_not_found", `Run ${run.id} disappeared`);
+    // A close that arrived during the prompt will no longer find the launch: it is closed here.
     this.checkOpen(run.id);
     this.observer?.watch(launched, agent);
     return launched;
@@ -410,12 +410,12 @@ export class PhaseDispatcher implements Dispatcher {
     const task = this.tasks.get(taskId);
     const project = task ? this.projects.get(task.projectId) : null;
     if (!task || !project) {
-      throw new DispatchError("project_not_found", `sin proyecto para ${taskId}`);
+      throw new DispatchError("project_not_found", `no project for ${taskId}`);
     }
     return { task, project };
   }
 
-  /** El agente con el nombre del Run es de este Run: lo dice su metadata o su pane guardado. */
+  /** The agent with the Run's name belongs to this Run: its metadata or its saved pane says so. */
   private owns(run: RunRow, agent: HerdrAgent): boolean {
     const owner = agent.tokens.run;
     if (owner !== undefined) return owner === run.id;
@@ -430,8 +430,8 @@ export class PhaseDispatcher implements Dispatcher {
     worktree: { workspaceId: string; rootPaneId: string; path: string },
   ): Promise<HerdrAgent | null> {
     const primary = phaseProfile(project, phase);
-    // Solo los proveedores habilitados ahora; el humano pudo cambiarlos después del claim, así que
-    // se vuelve a leer justo antes de arrancar cada uno.
+    // Only the providers enabled now; the human may have changed them after the claim, so
+    // it is read again right before starting each one.
     const order = agentProviders.fallbackOrder(primary.kind);
     const isEnabled = (kind: AgentKind) => this.settings.providers()[kind];
     const attempts = this.runs.providerAttempts(initial.id);
@@ -446,7 +446,7 @@ export class PhaseDispatcher implements Dispatcher {
     if ([...latest.values()].includes("started")) {
       for (const [kind, status] of latest) {
         if (status !== "started") continue;
-        const reason = "el proceso se interrumpió antes de confirmar el arranque";
+        const reason = "the process was interrupted before confirming the start";
         this.runs.recordProviderAttempt(initial.id, kind, "failed", reason);
         diagnostics.push(`${kind}: ${reason}`);
         latest.set(kind, "failed");
@@ -467,10 +467,10 @@ export class PhaseDispatcher implements Dispatcher {
         provider.kind === primary.kind ? (primary.model ?? null) : null,
         { projects: this.projects, config: this.config },
       );
-      if (!switched) throw new DispatchError("run_not_found", `no existe el Run ${initial.id}`);
+      if (!switched) throw new DispatchError("run_not_found", `Run ${initial.id} does not exist`);
       if (switched === "no_slot") {
-        // El claim reservó otro proveedor: pasar a este rebasaría su límite de concurrencia.
-        diagnostics.push(`${provider.kind}: sin slot de concurrencia`);
+        // The claim reserved another provider: moving to this one would exceed its concurrency limit.
+        diagnostics.push(`${provider.kind}: no concurrency slot`);
         saturated = true;
         continue;
       }
@@ -479,7 +479,7 @@ export class PhaseDispatcher implements Dispatcher {
       const args = await this.args(project, phase, run);
       const paneId = await this.ensurePane(run, worktree, phase);
       run = this.checkOpen(run.id);
-      // La preparación espera a herdr y al sistema de archivos: el humano pudo apagar el proveedor.
+      // Preparation waits for herdr and the file system: the human may have turned the provider off.
       if (!isEnabled(provider.kind)) {
         await this.herdr.closePane(paneId);
         this.runs.clearPane(run.id);
@@ -517,23 +517,23 @@ export class PhaseDispatcher implements Dispatcher {
     }
 
     if (order.every((p) => !isEnabled(p.kind))) {
-      // El humano apagó todos durante el lanzamiento: no es un fallo de los CLI, el despacho se
-      // pausa y la tarea espera en queued hasta que habilite uno.
-      await this.pauseRun(initial.id, "todos los proveedores están deshabilitados en Settings");
+      // The human turned them all off during the launch: it is not a CLI failure, the dispatch
+      // pauses and the task waits in queued until one is enabled.
+      await this.pauseRun(initial.id, "all providers are disabled in Settings");
       return null;
     }
     const hadRealFailure = this.runs
       .providerAttempts(initial.id)
       .some((a) => a.status === "failed");
     if (saturated && !hadRealFailure) {
-      // Ningún proveedor falló al arrancar y uno habilitado quedó sin slot: es saturación
-      // transitoria, no un fallo de los CLI. La tarea espera en queued y el scheduler la
-      // replanifica cuando se libere un slot. Si algún proveedor sí falló, el fallo se cuenta
-      // abajo: pausar lo ocultaría y el scheduler reintentaría el proveedor roto sin backoff.
-      await this.pauseRun(initial.id, `sin slot de concurrencia: ${diagnostics.join("; ")}`);
+      // No provider failed to start and an enabled one was left without a slot: it is transient
+      // saturation, not a CLI failure. The task waits in queued and the scheduler
+      // replans it when a slot frees up. If some provider did fail, the failure is counted
+      // below: pausing would hide it and the scheduler would retry the broken provider without backoff.
+      await this.pauseRun(initial.id, `no concurrency slot: ${diagnostics.join("; ")}`);
       return null;
     }
-    const reason = `ningún proveedor respondió al arrancar: ${diagnostics.join("; ") || "sin diagnóstico"}`;
+    const reason = `no provider responded on start: ${diagnostics.join("; ") || "no diagnosis"}`;
     await this.failRun(initial.id, reason, { providersUnavailable: true });
     return null;
   }
@@ -561,7 +561,7 @@ export class PhaseDispatcher implements Dispatcher {
     if (!this.mcpUrl) {
       throw new DispatchError(
         "profile_conflict",
-        "falta la URL del MCP de LunasQ para configurar Copilot CLI",
+        "the LunasQ MCP URL is missing to configure Copilot CLI",
       );
     }
     const dir = await mkdtemp(join(tmpdir(), "lunasq-copilot-"));
@@ -598,8 +598,8 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   /**
-   * El pane guardado si sigue abierto, sin agente y en el worktree de la tarea (los ids de herdr
-   * se reutilizan tras un reinicio); si no, uno nuevo con el entorno del Run.
+   * The saved pane if it is still open, without an agent and in the task's worktree (herdr ids
+   * are reused after a restart); otherwise a new one with the Run's environment.
    */
   private async ensurePane(
     run: RunRow,
@@ -637,7 +637,7 @@ export class PhaseDispatcher implements Dispatcher {
       delete env.MCP_TOOL_TIMEOUT;
     } else {
       env.MCP_TOOL_TIMEOUT ??= String(DEFAULT_MCP_TOOL_TIMEOUT_MS);
-      // El approver espera a los revisores en vez de lanzarlos en segundo plano.
+      // The approver waits for the reviewers instead of launching them in the background.
       env.CLAUDE_CODE_FORK_SUBAGENT ??= "0";
     }
     const pane = await this.herdr.splitPane({
@@ -655,9 +655,9 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   /**
-   * Un worktree nuevo abre Claude Code en el diálogo de confianza de carpeta (ADR 0004). Se acepta
-   * solo si la pantalla muestra ese diálogo. Otro `blocked` en un agente recién arrancado falla el
-   * Run; en uno reutilizado (caída después del prompt) es un permiso de la fase y se respeta.
+   * A new worktree opens Claude Code in the folder trust dialog (ADR 0004). It is accepted
+   * only if the screen shows that dialog. Another `blocked` in a freshly started agent fails the
+   * Run; in a reused one (crash after the prompt) it is a phase permission and is respected.
    */
   private async unblockStart(name: string, agent: HerdrAgent, fresh: boolean): Promise<HerdrAgent> {
     const screen = await this.herdr.readAgent({ name, lines: SCREEN_LINES });
@@ -671,7 +671,7 @@ export class PhaseDispatcher implements Dispatcher {
       if (!fresh) return agent;
       throw new DispatchError(
         "agent_blocked",
-        `el agente ${name} arrancó bloqueado: ${screen.slice(-300)}`,
+        `agent ${name} started blocked: ${screen.slice(-300)}`,
       );
     }
     await this.herdr.sendKeys({ name, keys: [...acceptKeys] });
@@ -687,8 +687,8 @@ export class PhaseDispatcher implements Dispatcher {
   }
 
   /**
-   * Cierra el pane del Run (con él, su agente) y avisa al observador. Solo si el pane sigue siendo
-   * del Run: tiene su agente, o está vacío en su workspace y en el worktree de la tarea.
+   * Closes the Run's pane (and with it, its agent) and notifies the observer. Only if the pane is still
+   * the Run's: it has its agent, or is empty in its workspace and in the task's worktree.
    */
   private async release(runId: string): Promise<void> {
     this.observer?.unwatch(runId);
@@ -709,15 +709,15 @@ export class PhaseDispatcher implements Dispatcher {
   }
 }
 
-/** El Run se cerró mientras se lanzaba: el lanzamiento se detiene sin fallarlo. */
+/** The Run was closed while launching: the launch stops without failing it. */
 class RunClosed extends Error {}
 
 function requireName(run: RunRow): string {
-  if (!run.herdrName) throw new DispatchError("run_not_found", `el Run ${run.id} no tiene nombre`);
+  if (!run.herdrName) throw new DispatchError("run_not_found", `Run ${run.id} has no name`);
   return run.herdrName;
 }
 
-/** `failure_reason` legible: código del error y su mensaje. */
+/** Readable `failure_reason`: error code and its message. */
 function failureReason(error: unknown): string {
   const err = asError(error);
   const code =

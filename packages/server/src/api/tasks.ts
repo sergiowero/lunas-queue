@@ -1,5 +1,5 @@
-// Rutas de tareas y de su DAG (UW-07, ADR 0010). La validación vive en @lunasq/schemas y las
-// reglas en TaskRepository; aquí solo se traducen sus errores a códigos HTTP.
+// Task routes and their DAG (UW-07, ADR 0010). Validation lives in @lunasq/schemas and the
+// rules in TaskRepository; here only their errors are translated into HTTP codes.
 import {
   type RunRepository,
   type TaskRepository,
@@ -10,7 +10,7 @@ import { TaskCancel, TaskCreate, TaskListQuery, TaskUpdate } from "@lunasq/schem
 import { type Context, Hono } from "hono";
 import { invalidInput, notFound, readJson, readOptionalJson } from "./http.ts";
 
-// Referencias del cuerpo o de la ruta que no existen: la petición es válida pero no aplicable.
+// Body or route references that do not exist: the request is valid but not applicable.
 const UNPROCESSABLE = new Set(["project_not_found", "dependency_not_found", "caused_by_not_found"]);
 
 function repositoryError(c: Context, error: unknown) {
@@ -69,10 +69,10 @@ export function taskRoutes(tasks: TaskRepository, runs: RunRepository): Hono {
       return task ? c.json(task) : notFound(c);
     })
     .post("/:id/pause", (c) => {
-      // La API REST no autentica al llamante: es el canal local del humano (como cancel y resume).
-      // Que solo el humano pause (AC-3) lo impone el dominio: esta ruta emite siempre con actor human.
+      // The REST API does not authenticate the caller: it is the human's local channel (like cancel and resume).
+      // That only the human pauses (AC-3) is enforced by the domain: this route always emits with actor human.
       const id = c.req.param("id");
-      // La entrega corre con el Run del verificador abierto y su pass guardado: no se pausa.
+      // Delivery runs with the verifier's Run open and its pass saved: it is not paused.
       const result = tasks.pause(id, runs.deliveryInProgress(id));
       if (!result.ok) return transitionError(c, result);
       const task = tasks.get(result.task.id);

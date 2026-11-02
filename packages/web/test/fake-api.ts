@@ -1,8 +1,8 @@
-// API de LunasQ en memoria para los tests del front end. Responde las mismas rutas y formas que
-// packages/server (tipadas con Json<T> de @lunasq/schemas) y deja simular lo que hacen el
-// scheduler y los agentes: transiciones, Runs, specs, usage, evidencia, preguntas y bloqueos. Valida
-// y rechaza como el servidor (TaskCreate, 422 de referencias, 409 del gate y de la máquina de
-// estados, 409 de preguntas ya respondidas).
+// In-memory LunasQ API for the front end tests. It answers the same routes and shapes as
+// packages/server (typed with Json<T> from @lunasq/schemas) and lets you simulate what the
+// scheduler and the agents do: transitions, Runs, specs, usage, evidence, questions and blocks. It validates
+// and rejects like the server (TaskCreate, 422 for references, 409 from the gate and the state
+// machine, 409 for already answered questions).
 
 import type {
   Actor,
@@ -67,7 +67,7 @@ const conflict = (
   extra: Record<string, unknown> = {},
 ): [number, unknown] => [409, { error, message, ...extra }];
 
-/** Valida como el servidor (`invalidInput`): 400 con los issues del esquema, o los datos. */
+/** Validates like the server (`invalidInput`): 400 with the schema's issues, or the data. */
 function validate<T>(
   schema: {
     safeParse: (
@@ -99,46 +99,46 @@ export class FakeApi {
   readonly specs: Json<Spec>[] = [];
   readonly usage = new Map<string, Json<TaskUsage>>();
   readonly evidence = new Map<string, string>();
-  /** Origen de la evidencia por tarea; sin entrada, el worktree. */
+  /** Evidence source per task; without an entry, the worktree. */
   readonly evidenceSource = new Map<string, EvidenceSource>();
-  /** Hooks de la rama base por proyecto; sin entrada, GET .../hooks responde 502 como sin red. */
+  /** Base branch hooks per project; without an entry, GET .../hooks answers 502 as if offline. */
   readonly hooks = new Map<string, Json<ProjectHooksView>>();
   readonly hookExecutions: Json<HookExecutionView>[] = [];
-  /** Si es true, GET .../hooks/executions responde 500. */
+  /** If true, GET .../hooks/executions answers 500. */
   hookExecutionsFail = false;
-  /** Tareas cuyo GET .../runs responde 500. */
+  /** Tasks whose GET .../runs answers 500. */
   readonly runsFail = new Set<string>();
-  /** Si se asigna, GET .../runs no responde hasta que la promesa se resuelva (consulta pendiente). */
+  /** If set, GET .../runs does not answer until the promise resolves (pending query). */
   runsGate: Promise<void> | null = null;
   readonly requests: Request[] = [];
   readonly questions: Json<Question>[] = [];
-  /** Lo que respondería el RunWatcher: los agentes bloqueados ahora. */
+  /** What the RunWatcher would answer: the agents blocked now. */
   blocked: Json<BlockedAgent>[] = [];
-  /** Nombres de agente que la UI pidió enfocar en herdr. */
+  /** Agent names the UI asked to focus in herdr. */
   readonly focused: string[] = [];
-  /** Si se fija, `POST /api/blocked/:runId/focus` y `POST /api/runs/:runId/focus` responden este error de herdr. */
+  /** If set, `POST /api/blocked/:runId/focus` and `POST /api/runs/:runId/focus` answer this herdr error. */
   focusError: { status: number; error: string; message: string } | null = null;
-  /** Proveedores habilitados guardados; por defecto todos, como el servidor sin configuración. */
+  /** Saved enabled providers; all by default, like the server without configuration. */
   providers: AgentProviderSettingsValue = { claude: true, copilot: true };
-  /** Si se fija, PUT /api/settings/providers responde este error. */
+  /** If set, PUT /api/settings/providers answers this error. */
   providersError: { status: number; error: string; message: string } | null = null;
-  /** Si es true, GET /api/settings/providers responde 500. */
+  /** If true, GET /api/settings/providers answers 500. */
   providersReadFails = false;
-  /** Se ejecuta tras guardar un PUT y antes de responderlo: simula un cambio de otra pestaña. */
+  /** Runs after saving a PUT and before answering it: simulates a change from another tab. */
   afterProvidersPut: (() => void) | null = null;
-  /** Si se fija, el PUT de proveedores espera a esta promesa antes de responder. */
+  /** If set, the providers PUT waits for this promise before answering. */
   holdProvidersPut: Promise<void> | null = null;
-  /** Límite global guardado; por defecto 5, como el servidor sin configuración. */
+  /** Saved global limit; 5 by default, like the server without configuration. */
   concurrency = { globalConcurrency: 5 };
-  /** Si se fija, PUT /api/settings/concurrency responde este error. */
+  /** If set, PUT /api/settings/concurrency answers this error. */
   concurrencyError: { status: number; error: string; message: string } | null = null;
-  /** Si es true, GET /api/settings/concurrency responde 500. */
+  /** If true, GET /api/settings/concurrency answers 500. */
   concurrencyReadFails = false;
-  /** Si se fija, el PUT de concurrencia espera a esta promesa antes de responder. */
+  /** If set, the concurrency PUT waits for this promise before answering. */
   holdConcurrencyPut: Promise<void> | null = null;
-  /** Si el agente que preguntó sigue vivo: la respuesta va al pane; si no, a un Run nuevo. */
+  /** If the agent that asked is still alive: the answer goes to the pane; if not, to a new Run. */
   agentAlive = false;
-  /** Si se fija, GET /api/queue responde esto tal cual. */
+  /** If set, GET /api/queue answers this as is. */
   queue: Json<QueueEntry>[] | null = null;
   private clock = Date.parse("2026-10-29T10:00:00Z");
   private eventId = 0;
@@ -207,7 +207,7 @@ export class FakeApi {
     this.events.push({ id: this.eventId, taskId, type, actor, payload, createdAt: this.now() });
   }
 
-  /** Como la máquina de estados: mueve la tarea y deja task.transitioned en el Event log. */
+  /** Like the state machine: moves the task and leaves task.transitioned in the Event log. */
   transition(
     taskId: string,
     state: TaskState,
@@ -251,7 +251,7 @@ export class FakeApi {
 
   endRun(runId: string, patch: Partial<Json<RunView>>): void {
     const run = this.runs.find((r) => r.id === runId);
-    if (!run) throw new Error(`run ${runId} no existe`);
+    if (!run) throw new Error(`run ${runId} does not exist`);
     Object.assign(run, { endedAt: this.now(), result: "success", ...patch });
   }
 
@@ -274,7 +274,7 @@ export class FakeApi {
     return spec;
   }
 
-  /** Como `ask_human`: guarda la Question y pasa la tarea a waiting_human. */
+  /** Like `ask_human`: stores the Question and moves the task to waiting_human. */
   ask(
     taskId: string,
     question: string,
@@ -302,7 +302,7 @@ export class FakeApi {
     return created;
   }
 
-  /** Como el RunWatcher cuando herdr reporta `blocked`. */
+  /** Like the RunWatcher when herdr reports `blocked`. */
   block(run: Json<RunView>): Json<BlockedAgent> {
     const agent: Json<BlockedAgent> = {
       runId: run.id,
@@ -318,7 +318,7 @@ export class FakeApi {
 
   task(id: string): Json<Task> {
     const task = this.tasks.find((t) => t.id === id);
-    if (!task) throw new Error(`tarea ${id} no existe`);
+    if (!task) throw new Error(`task ${id} does not exist`);
     return task;
   }
 
@@ -339,12 +339,12 @@ export class FakeApi {
     });
   };
 
-  /** Como `runRoutes`: 404 sin Run, 409 sin pane, y recién entonces lo que responda herdr. */
+  /** Like `runRoutes`: 404 without a Run, 409 without a pane, and only then what herdr answers. */
   private focusRun(id: string | undefined, sub: string | undefined): [number, unknown] {
     const run = this.runs.find((r) => r.id === id);
     if (sub !== "focus" || !run) return [404, { error: "not_found" }];
     if (!run.herdrPane || !run.herdrName) {
-      return [409, { error: "no_pane", message: "el Run no tiene un pane de herdr" }];
+      return [409, { error: "no_pane", message: "the Run has no herdr pane" }];
     }
     if (this.focusError) {
       const { status, ...error } = this.focusError;
@@ -356,7 +356,7 @@ export class FakeApi {
 
   private providerSettings(method: string, body: unknown): [number, unknown] {
     if (method === "GET") {
-      if (this.providersReadFails) return [500, { error: "internal", message: "sin conexión" }];
+      if (this.providersReadFails) return [500, { error: "internal", message: "no connection" }];
       return [200, this.providers];
     }
     if (method !== "PUT") return [404, { error: "not_found" }];
@@ -377,7 +377,7 @@ export class FakeApi {
 
   private concurrencySettings(method: string, body: unknown): [number, unknown] {
     if (method === "GET") {
-      if (this.concurrencyReadFails) return [500, { error: "internal", message: "sin conexión" }];
+      if (this.concurrencyReadFails) return [500, { error: "internal", message: "no connection" }];
       return [200, this.concurrency];
     }
     if (method !== "PUT") return [404, { error: "not_found" }];
@@ -411,7 +411,7 @@ export class FakeApi {
       if (method === "GET") return [200, this.blocked];
       const agent = this.blocked.find((b) => b.runId === id);
       if (sub !== "focus" || !agent) {
-        return [404, { error: "not_blocked", message: "el Run no tiene un agente bloqueado" }];
+        return [404, { error: "not_blocked", message: "the Run has no blocked agent" }];
       }
       if (this.focusError) {
         const { status, ...error } = this.focusError;
@@ -437,26 +437,26 @@ export class FakeApi {
         return [200, task];
       case "cancel":
         if (task.state === "completed" || task.state === "cancelled") {
-          return conflict("invalid_transition", `la tarea ya está en ${task.state}`);
+          return conflict("invalid_transition", `the task is already ${task.state}`);
         }
         this.transition(id, "cancelled", null);
         return [200, task];
       case "pause":
         if (!["draft", "refined", "in_progress", "verification"].includes(task.state)) {
-          return conflict("invalid_transition", `pause no aplica desde ${task.state}`);
+          return conflict("invalid_transition", `pause does not apply from ${task.state}`);
         }
         this.transition(id, "paused", null, {}, "pause");
         return [200, task];
       case "resume": {
         if (task.state !== "needs_human" && task.state !== "paused") {
-          return conflict("invalid_transition", `la tarea está en ${task.state}`);
+          return conflict("invalid_transition", `the task is ${task.state}`);
         }
         const entered = task.state;
         const origin = this.events
           .filter((e) => e.taskId === id && e.type === "task.transitioned")
           .map((e) => e.payload as { from: { state: TaskState }; to: { state: TaskState } })
           .findLast((p) => p.to.state === entered)?.from.state;
-        if (!origin) return conflict("no_escalation_found", `la tarea ${id} no tiene escalamiento`);
+        if (!origin) return conflict("no_escalation_found", `task ${id} has no escalation`);
         this.transition(id, origin, origin === "refined" ? null : "queued", {}, "resume");
         return [200, task];
       }
@@ -501,8 +501,8 @@ export class FakeApi {
     if (rest === "executions") {
       if (this.hookExecutionsFail) return [500, { error: "internal" }];
       const tasks = new Set(this.tasks.filter((t) => t.projectId === projectId).map((t) => t.id));
-      // Como TaskViewRepository.hookExecutions: la más reciente de cada tarea por script, y a lo
-      // más `limit` tareas por punto y script.
+      // Like TaskViewRepository.hookExecutions: the most recent of each task per script, and at
+      // most `limit` tasks per point and script.
       const limit = Number(url.searchParams.get("limit") ?? 10);
       const perHook = new Map<string, number>();
       const seen = new Set<string>();
@@ -522,7 +522,7 @@ export class FakeApi {
     const hooks = this.hooks.get(projectId);
     return hooks
       ? [200, hooks]
-      : [502, { error: "hooks_unavailable", message: "no se pudo leer la rama base" }];
+      : [502, { error: "hooks_unavailable", message: "the base branch could not be read" }];
   }
 
   private question(
@@ -539,17 +539,17 @@ export class FakeApi {
     const question = this.questions.find((q) => q.id === id);
     if (method === "GET") return question ? [200, question] : [404, { error: "not_found" }];
     if (sub !== "answer") return [404, { error: "not_found" }];
-    // Como el servidor: primero el cuerpo, después la pregunta.
+    // Like the server: first the body, then the question.
     const input = validate(QuestionAnswer, body);
     if (!input.ok) return input.response;
     if (!question) return [404, { error: "not_found" }];
     const answer = input.data.answer;
     if (question.status !== "open") {
-      return conflict("not_open", `la pregunta ya está en ${question.status}`);
+      return conflict("not_open", `the question is already ${question.status}`);
     }
     const task = this.task(question.taskId);
     if (task.subState !== "waiting_human") {
-      return conflict("task_not_waiting", "la tarea ya no espera una respuesta");
+      return conflict("task_not_waiting", "the task no longer waits for an answer");
     }
     const delivery = this.agentAlive ? "pane" : "new_run";
     Object.assign(question, {
@@ -631,7 +631,7 @@ export class FakeApi {
       return [422, { error: "project_not_found", message: "no existe el proyecto" }];
     }
     if (input.dependsOn.some((id) => !this.tasks.some((t) => t.id === id))) {
-      return [422, { error: "dependency_not_found", message: "no existe la dependencia" }];
+      return [422, { error: "dependency_not_found", message: "the dependency does not exist" }];
     }
     const task = this.addTask(input.projectId, {
       intent: input.intent,
@@ -651,7 +651,7 @@ export class FakeApi {
   ): [number, unknown] {
     const versions = this.specs.filter((s) => s.taskId === task.id);
     if (Number.isNaN(version)) return [200, versions];
-    // Como el servidor: en un POST se valida el cuerpo antes de buscar la versión.
+    // Like the server: on a POST the body is validated before looking up the version.
     const input =
       method !== "POST"
         ? null
@@ -693,13 +693,13 @@ export class FakeApi {
     if (method === "GET") return [200, spec];
     const latest = versions.at(-1)?.version;
     if (version !== latest) {
-      return conflict("stale_version", `la versión ${version} fue superada por la ${latest}`);
+      return conflict("stale_version", `version ${version} was superseded by ${latest}`);
     }
     if (spec.approval !== "pending") {
-      return conflict("spec_not_pending", `la versión ${version} ya está en ${spec.approval}`);
+      return conflict("spec_not_pending", `version ${version} is already ${spec.approval}`);
     }
     if (task.state !== "refined") {
-      return conflict("invalid_transition", `la tarea está en ${task.state}, no en refined`);
+      return conflict("invalid_transition", `the task is ${task.state}, not refined`);
     }
     if (action === "approve") {
       Object.assign(spec, { approval: "approved", approvedBy: "human", approvedAt: this.now() });
@@ -730,18 +730,19 @@ export class FakeApi {
     return [404, { error: "not_found" }];
   }
 
-  /** Como TaskRepository.addDependency: solo en draft, sin canceladas ni ciclos; idempotente. */
+  /** Like TaskRepository.addDependency: only in draft, without canceled ones or cycles; idempotent. */
   private addDependency(task: Json<Task>, dependsOnId = ""): [number, unknown] {
     if (this.edges.some((e) => e.taskId === task.id && e.dependsOnId === dependsOnId)) {
       return [200, { created: false }];
     }
     if (task.state !== "draft") {
-      return conflict("task_not_draft", `la tarea ${task.id} está en ${task.state}`);
+      return conflict("task_not_draft", `task ${task.id} is ${task.state}`);
     }
     const target = this.tasks.find((t) => t.id === dependsOnId);
-    if (!target) return [422, { error: "dependency_not_found", message: "no existe la tarea" }];
+    if (!target)
+      return [422, { error: "dependency_not_found", message: "the task does not exist" }];
     if (target.state === "cancelled") {
-      return conflict("dependency_cancelled", `la tarea ${dependsOnId} está cancelada`);
+      return conflict("dependency_cancelled", `task ${dependsOnId} is cancelled`);
     }
     if (dependsOnId === task.id || this.dependsOnTransitively(dependsOnId, task.id)) {
       return conflict("cycle", "la arista cierra un ciclo", { cycle: [task.id, dependsOnId] });
@@ -795,7 +796,7 @@ export class FakeApi {
     });
   }
 
-  /** Cola simple: vivas, el ready set (queued en fase con agente) primero por prioridad. */
+  /** Simple queue: live ones, the ready set (queued in a phase with an agent) first by priority. */
   private defaultQueue(url: URL): Json<QueueEntry>[] {
     const projectId = url.searchParams.get("projectId");
     const live = this.tasks.filter(

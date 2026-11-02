@@ -4,7 +4,7 @@ import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 import { CHANGE_STREAM_URL } from "../lib/live.ts";
 
-/** EventSource mínimo: los tests disparan los mensajes a mano. */
+/** Minimal EventSource: the tests fire the messages by hand. */
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
   readonly url: string;
@@ -41,8 +41,8 @@ function emitChange(taskId: string) {
     ?.emit("change", JSON.stringify({ taskIds: [taskId] }));
 }
 
-describe("contador del enlace En curso", () => {
-  it("muestra las tareas en curso de todos los proyectos y las anuncia en el nombre accesible", async () => {
+describe("In progress link counter", () => {
+  it("shows the in-progress tasks of all projects and announces them in the accessible name", async () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
@@ -59,7 +59,7 @@ describe("contador del enlace En curso", () => {
     expect(within(link).getByText("3")).toBeTruthy();
   });
 
-  it("con una sola tarea en curso el nombre accesible va en singular", async () => {
+  it("with a single task in progress the accessible name is singular", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, { state: "in_progress", subState: "running" });
     renderApp("/queue", fake);
@@ -67,7 +67,7 @@ describe("contador del enlace En curso", () => {
     expect(await screen.findByRole("link", { name: "En curso, 1 tarea" })).toBeTruthy();
   });
 
-  it("sin tareas en curso el enlace se ve solo con su texto", async () => {
+  it("without tasks in progress the link shows only its text", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, { intent: "Borrador" });
     renderApp("/queue", fake);
@@ -78,7 +78,7 @@ describe("contador del enlace En curso", () => {
     expect(link.getAttribute("aria-label")).toBeNull();
   });
 
-  it("se actualiza en vivo cuando una tarea sale o entra de En curso", async () => {
+  it("updates live when a task leaves or enters In progress", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
     const project = fake.addProject();
@@ -104,7 +104,7 @@ describe("contador del enlace En curso", () => {
     expect(await screen.findByRole("link", { name: "En curso, 2 tareas" })).toBeTruthy();
   });
 
-  it("no depende del proyecto elegido en la página En curso", async () => {
+  it("does not depend on the project chosen on the In progress page", async () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
@@ -134,8 +134,8 @@ function completed(fake: FakeApi, projectId: string, prState: Pr) {
 
 const menu = async () => within(await screen.findByRole("navigation"));
 
-describe("contador de PR abiertos en la pestaña Completed", () => {
-  it("cuenta solo las tareas completed con el PR abierto", async () => {
+describe("open PR counter on the Completed tab", () => {
+  it("counts only completed tasks with an open PR", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "uno" });
     for (const pr of ["open", "open", "open", "merged", "closed", null] as Pr[]) {
@@ -149,7 +149,7 @@ describe("contador de PR abiertos en la pestaña Completed", () => {
     expect(within(link).getByText("3")).toBeTruthy();
   });
 
-  it("sin PR abiertos no muestra número y el nombre accesible es solo Completed", async () => {
+  it("without open PRs it shows no number and the accessible name is just Completed", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "uno" });
     completed(fake, project.id, "merged");
@@ -162,7 +162,7 @@ describe("contador de PR abiertos en la pestaña Completed", () => {
     expect(link.textContent).toBe("Completed");
   });
 
-  it("suma los PR abiertos de todos los proyectos", async () => {
+  it("adds up the open PRs of all projects", async () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
@@ -176,7 +176,7 @@ describe("contador de PR abiertos en la pestaña Completed", () => {
     ).toBeTruthy();
   });
 
-  it("el badge es verde (success) y el de la Bandeja sigue siendo destructive", async () => {
+  it("the badge is green (success) and the Inbox's stays destructive", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "uno" });
     completed(fake, project.id, "open");
@@ -192,7 +192,7 @@ describe("contador de PR abiertos en la pestaña Completed", () => {
     expect(inbox.querySelector("[data-variant]")?.getAttribute("data-variant")).toBe("destructive");
   });
 
-  it("baja de 2 a 1 cuando un PR pasa a merged y llega la actualización", async () => {
+  it("drops from 2 to 1 when a PR becomes merged and the update arrives", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "uno" });
     const first = completed(fake, project.id, "open");

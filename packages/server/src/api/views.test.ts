@@ -36,8 +36,8 @@ function setup() {
 
 type Entry = { task: { id: string }; ready: boolean; score: number | null; usage: unknown };
 
-describe("número de tarea en las vistas", () => {
-  it("la cola y las dependencias traen el número de cada tarea", async () => {
+describe("task number in the views", () => {
+  it("the queue and the dependencies carry each task's number", async () => {
     const { db, project, get } = setup();
     const base = insertTask(db, project.id, { intent: "Base" });
     const task = insertTask(db, project.id, { intent: "Depende" });
@@ -58,7 +58,7 @@ describe("número de tarea en las vistas", () => {
 });
 
 describe("GET /api/queue", () => {
-  it("pone primero el ready set en el orden del scheduler y después las demás vivas", async () => {
+  it("puts the ready set first in the scheduler's order and then the other live ones", async () => {
     const { db, project, get } = setup();
     const created = new Date("2026-10-29T10:00:00Z");
     const low = insertTask(db, project.id, { priority: 10, createdAt: created });
@@ -76,12 +76,12 @@ describe("GET /api/queue", () => {
       [low.id, true],
       [running.id, false],
     ]);
-    // score = prioridad + 10 puntos/hora de aging (2 h desde la creación).
+    // score = priority + 10 points/hour of aging (2 h since creation).
     expect(entries[0]).toMatchObject({ score: 70, effectivePriority: 50 });
     expect(entries[2]).toMatchObject({ score: null, effectivePriority: null });
   });
 
-  it("hereda la prioridad de lo que bloquea y suma el boost", async () => {
+  it("inherits the priority of what it blocks and adds the boost", async () => {
     const { db, project, get } = setup();
     const created = new Date("2026-10-29T12:00:00Z");
     const base = insertTask(db, project.id, { priority: 1, createdAt: created });
@@ -94,7 +94,7 @@ describe("GET /api/queue", () => {
     ]);
   });
 
-  it("filtra por proyecto e incluye el usage de cada tarea", async () => {
+  it("filters by project and includes each task's usage", async () => {
     const { db, project, get } = setup();
     const other = insertProject(db);
     const mine = insertTask(db, project.id);
@@ -109,14 +109,14 @@ describe("GET /api/queue", () => {
     expect(entries[0]?.usage).toEqual({ ...EMPTY_USAGE, inputTokens: 9 });
   });
 
-  it("responde 400 con un projectId inválido", async () => {
+  it("answers 400 with an invalid projectId", async () => {
     const { get } = setup();
     expect((await get("/api/queue?projectId=x")).status).toBe(400);
   });
 });
 
 describe("GET /api/tasks/:id/runs", () => {
-  it("lista los Runs sin el run token", async () => {
+  it("lists the Runs without the run token", async () => {
     const { db, project, get } = setup();
     const task = insertTask(db, project.id);
     insertRun(db, task.id, {
@@ -133,14 +133,14 @@ describe("GET /api/tasks/:id/runs", () => {
     expect(JSON.stringify(body)).not.toContain("token-");
   });
 
-  it("responde 404 si la tarea no existe", async () => {
+  it("answers 404 if the task does not exist", async () => {
     const { get } = setup();
     expect((await get(`/api/tasks/${missing}/runs`)).status).toBe(404);
   });
 });
 
 describe("GET /api/tasks/:id/events", () => {
-  it("devuelve el Event log en orden", async () => {
+  it("returns the Event log in order", async () => {
     const { db, project, get } = setup();
     const task = insertTask(db, project.id);
     appendEvent(db, { taskId: task.id, type: "task.created", actor: "human" });
@@ -157,14 +157,14 @@ describe("GET /api/tasks/:id/events", () => {
     ]);
   });
 
-  it("responde 404 si la tarea no existe", async () => {
+  it("answers 404 if the task does not exist", async () => {
     const { get } = setup();
     expect((await get(`/api/tasks/${missing}/events`)).status).toBe(404);
   });
 });
 
 describe("GET /api/tasks/:id/usage", () => {
-  it("devuelve el total y el desglose por Run", async () => {
+  it("returns the total and the per-Run breakdown", async () => {
     const { db, project, get } = setup();
     const task = insertTask(db, project.id);
     const run = insertRun(db, task.id, { phase: "refine", endedAt: now });
@@ -182,14 +182,14 @@ describe("GET /api/tasks/:id/usage", () => {
     });
   });
 
-  it("responde 404 si la tarea no existe", async () => {
+  it("answers 404 if the task does not exist", async () => {
     const { get } = setup();
     expect((await get(`/api/tasks/${missing}/usage`)).status).toBe(404);
   });
 });
 
 describe("GET /api/tasks/:id/evidence", () => {
-  it("lee lunasq/tasks/{id}.md del worktree", async () => {
+  it("reads lunasq/tasks/{id}.md from the worktree", async () => {
     const { db, project, get } = setup();
     const worktree = mkdtempSync(join(tmpdir(), "lunasq-evidence-"));
     dirs.push(worktree);
@@ -203,7 +203,7 @@ describe("GET /api/tasks/:id/evidence", () => {
     });
   });
 
-  it("sin worktree la lee de la branch de la tarea en el repo del proyecto", async () => {
+  it("without a worktree it reads it from the task's branch in the project repo", async () => {
     const { db, project, git, get } = setup();
     const task = insertTask(db, project.id, { branch: "lunasq/login" });
     const file = `lunasq/tasks/${task.id}.md`;
@@ -216,7 +216,7 @@ describe("GET /api/tasks/:id/evidence", () => {
     });
   });
 
-  it("tras el merge, con la branch borrada, la lee de la rama base", async () => {
+  it("after the merge, with the branch deleted, it reads it from the base branch", async () => {
     const { db, project, git, get } = setup();
     const task = insertTask(db, project.id, { branch: "lunasq/borrada", prState: "merged" });
     const file = `lunasq/tasks/${task.id}.md`;
@@ -230,7 +230,7 @@ describe("GET /api/tasks/:id/evidence", () => {
     });
   });
 
-  it("un repo inaccesible cuenta como evidencia faltante", async () => {
+  it("an inaccessible repo counts as missing evidence", async () => {
     const { db, project, get } = setup();
     const task = insertTask(db, project.id, { branch: "lunasq/x" });
     expect(await get(`/api/tasks/${task.id}/evidence`)).toEqual({
@@ -239,7 +239,7 @@ describe("GET /api/tasks/:id/evidence", () => {
     });
   });
 
-  it("responde 404 sin worktree o sin archivo", async () => {
+  it("answers 404 without a worktree or without a file", async () => {
     const { db, project, get } = setup();
     const bare = insertTask(db, project.id);
     expect((await get(`/api/tasks/${bare.id}/evidence`)).status).toBe(404);

@@ -16,7 +16,7 @@ function tmp() {
 }
 
 describe("mcpConfig", () => {
-  it("apunta al LunasQ MCP y manda el token por expansión de entorno, nunca literal", () => {
+  it("points to the LunasQ MCP and sends the token by environment expansion, never literal", () => {
     expect(mcpConfig("http://127.0.0.1:4518/mcp")).toEqual({
       mcpServers: {
         lunasq: {
@@ -30,7 +30,7 @@ describe("mcpConfig", () => {
 });
 
 describe("ensureMcpConfig", () => {
-  it("crea el archivo y sus carpetas; repetirlo no lo reescribe", async () => {
+  it("creates the file and its folders; repeating it does not rewrite it", async () => {
     const path = join(tmp(), "nested", "mcp.json");
     expect(await ensureMcpConfig(path, "http://localhost:1/mcp")).toEqual({ written: true });
     const mtime = statSync(path).mtimeMs;
@@ -39,7 +39,7 @@ describe("ensureMcpConfig", () => {
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(mcpConfig("http://localhost:1/mcp"));
   });
 
-  it("lo reescribe si cambió la URL", async () => {
+  it("rewrites it if the URL changed", async () => {
     const path = join(tmp(), "mcp.json");
     await ensureMcpConfig(path, "http://localhost:1/mcp");
     expect(await ensureMcpConfig(path, "http://localhost:2/mcp")).toEqual({ written: true });

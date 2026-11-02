@@ -6,8 +6,8 @@ import { ApiError } from "./lib/api.ts";
 import { createAppRouter } from "./router.tsx";
 import "./index.css";
 
-// Las actualizaciones llegan por SSE (lib/live.ts); el refresco periódico solo cubre un stream
-// caído. Ver ADR uw-21-front-end.
+// Updates arrive over SSE (lib/live.ts); the periodic refresh only covers a dropped stream.
+// See ADR uw-21-front-end.
 const REFRESH_MS = 30_000;
 
 const queryClient = new QueryClient({
@@ -15,7 +15,7 @@ const queryClient = new QueryClient({
     queries: {
       refetchInterval: REFRESH_MS,
       staleTime: 1000,
-      // Un 4xx no cambia al reintentar: «la tarea no existe» se muestra de inmediato.
+      // A 4xx does not change on retry: «the task does not exist» is shown immediately.
       retry: (failures, error) =>
         !(error instanceof ApiError && error.status < 500) && failures < 3,
     },

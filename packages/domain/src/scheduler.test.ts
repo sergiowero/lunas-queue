@@ -28,7 +28,7 @@ const alfa = sampleProject("alfa");
 const beta = sampleProject("beta");
 
 let order = 0;
-/** Tarea en draft/queued, lista desde ahora; cada una un poco más nueva que la anterior. */
+/** Task in draft/queued, ready from now; each one a little newer than the previous. */
 function task(id: string, overrides: Partial<SchedulerTask> = {}): SchedulerTask {
   order += 1;
   return {
@@ -49,7 +49,7 @@ const merged = (id: string, overrides: Partial<SchedulerTask> = {}) =>
 
 const edge = (taskId: string, dependsOnId: string): DependencyEdge => ({ taskId, dependsOnId });
 
-// Sin aging ni boost salvo que el test los pida: aísla la regla que se prueba.
+// No aging or boost unless the test asks for them: it isolates the rule under test.
 const config = (input: SchedulerConfigInput = {}) =>
   SchedulerConfig.parse({ agingPointsPerHour: 0, boostPerDescendant: 0, ...input });
 
@@ -73,14 +73,14 @@ function plan(
 const dispatched = (result: ReturnType<typeof plan>) => result.dispatch.map((d) => d.taskId);
 
 describe("pendingPhase", () => {
-  it("draft refina, in_progress implementa y verification verifica", () => {
+  it("draft refines, in_progress implements and verification verifies", () => {
     expect(pendingPhase("draft")).toBe("refine");
     expect(pendingPhase("in_progress")).toBe("implement");
     expect(pendingPhase("verification")).toBe("verify");
   });
 
   it.each(["refined", "needs_human", "paused", "completed", "cancelled"] as const)(
-    "%s no lleva agente",
+    "%s carries no agent",
     (state) => {
       expect(pendingPhase(state)).toBeNull();
     },
@@ -88,7 +88,7 @@ describe("pendingPhase", () => {
 });
 
 describe("ready set", () => {
-  it("solo entran las tareas queued de un estado con agente", () => {
+  it("only queued tasks of a state with an agent enter", () => {
     const result = plan([
       task("draft"),
       task("impl", { state: "in_progress" }),
@@ -107,7 +107,7 @@ describe("ready set", () => {
     });
   });
 
-  it("una tarea paused no se despacha aunque esté lista y otra queued sí", () => {
+  it("a paused task is not dispatched even if it is ready and another queued one is", () => {
     const result = plan([
       task("pausada", { state: "paused", subState: null }),
       task("lista", { state: "in_progress" }),
@@ -115,7 +115,7 @@ describe("ready set", () => {
     expect(dispatched(result)).toEqual(["lista"]);
   });
 
-  it("una tarea espera hasta que todas sus dependencias tengan el PR mergeado", () => {
+  it("a task waits until all its dependencies have their PR merged", () => {
     const result = plan(
       [
         task("a", { state: "completed", subState: null, prState: "open" }),
@@ -128,7 +128,7 @@ describe("ready set", () => {
     expect(dispatched(result)).toEqual(["d"]);
   });
 
-  it("una dependencia completed con Resultado y sin PR satisface y despacha a su dependiente", () => {
+  it("a completed dependency with a Result and without a PR is satisfied and dispatches its dependent", () => {
     const result = plan(
       [
         task("a", { state: "completed", subState: null, resultKind: "research" }),
@@ -142,7 +142,7 @@ describe("ready set", () => {
     expect(result.escalate).toEqual([]);
   });
 
-  it("un Resultado solo satisface si la tarea está completed", () => {
+  it("a Result only satisfies if the task is completed", () => {
     const result = plan(
       [task("a", { state: "in_progress", subState: "running", resultKind: "research" }), task("x")],
       [edge("x", "a")],
@@ -150,7 +150,7 @@ describe("ready set", () => {
     expect(dispatched(result)).toEqual([]);
   });
 
-  it("una dependencia completed sin PR o en curso no satisface", () => {
+  it("a completed dependency without a PR or in progress does not satisfy", () => {
     const result = plan(
       [
         task("sin-pr", { state: "completed", subState: null }),
@@ -163,16 +163,16 @@ describe("ready set", () => {
     expect(dispatched(result)).toEqual([]);
   });
 
-  it("una dependencia ausente del snapshot no satisface", () => {
+  it("a dependency absent from the snapshot does not satisfy", () => {
     expect(dispatched(plan([task("x")], [edge("x", "fantasma")]))).toEqual([]);
   });
 
-  it("en una cadena solo avanza el primer eslabón", () => {
+  it("in a chain only the first link advances", () => {
     const result = plan([task("a"), task("b"), task("c")], [edge("b", "a"), edge("c", "b")]);
     expect(dispatched(result)).toEqual(["a"]);
   });
 
-  it("en un diamante la de abajo espera a las dos ramas", () => {
+  it("in a diamond the bottom one waits for both branches", () => {
     const tasks = [merged("raiz"), merged("izq"), task("der"), task("abajo")];
     const edges = [
       edge("izq", "raiz"),
@@ -186,11 +186,11 @@ describe("ready set", () => {
   });
 });
 
-describe("backoff de reintentos", () => {
+describe("retry backoff", () => {
   const SEC = 1000;
   const failedAt = (msAgo: number) => new Date(NOW.getTime() - msAgo);
 
-  it("duplica la espera con cada fallo seguido, desde el último fallo, con tope", () => {
+  it("doubles the wait with each consecutive failure, from the last failure, with a cap", () => {
     const cfg = config({ retryBackoffMs: 30 * SEC, maxRetryBackoffMs: 100 * SEC });
     const at = (failures: number) => retryAt({ failures, lastFailedAt: NOW }, cfg)?.getTime();
     expect(at(1)).toBe(NOW.getTime() + 30 * SEC);
@@ -199,27 +199,27 @@ describe("backoff de reintentos", () => {
     expect(at(40)).toBe(NOW.getTime() + 100 * SEC);
   });
 
-  it("sin fallos no hay espera", () => {
+  it("without failures there is no wait", () => {
     expect(retryAt(undefined, config())).toBeNull();
     expect(retryAt({ failures: 0, lastFailedAt: NOW }, config())).toBeNull();
   });
 
-  it("una tarea que falló hace poco no entra al ready set hasta cumplir la espera", () => {
+  it("a task that failed recently does not enter the ready set until the wait is met", () => {
     const input = { retryBackoffMs: 30 * SEC };
     const recent = task("reciente", { retry: { failures: 1, lastFailedAt: failedAt(10 * SEC) } });
     const old = task("vieja", { retry: { failures: 1, lastFailedAt: failedAt(31 * SEC) } });
     expect(dispatched(plan([recent, old], [], input))).toEqual(["vieja"]);
   });
 
-  it("el segundo fallo seguido espera el doble", () => {
+  it("the second consecutive failure waits twice as long", () => {
     const input = { retryBackoffMs: 30 * SEC };
     const second = task("segundo", { retry: { failures: 2, lastFailedAt: failedAt(45 * SEC) } });
     expect(dispatched(plan([second], [], input))).toEqual([]);
-    const later = task("después", { retry: { failures: 2, lastFailedAt: failedAt(61 * SEC) } });
-    expect(dispatched(plan([later], [], input))).toEqual(["después"]);
+    const later = task("later", { retry: { failures: 2, lastFailedAt: failedAt(61 * SEC) } });
+    expect(dispatched(plan([later], [], input))).toEqual(["later"]);
   });
 
-  it("una tarea en espera no ocupa slot", () => {
+  it("a task waiting does not take a slot", () => {
     const waiting = task("espera", { retry: { failures: 1, lastFailedAt: NOW } });
     expect(dispatched(plan([waiting, task("otra")], [], { globalConcurrency: 1 }))).toEqual([
       "otra",
@@ -227,8 +227,8 @@ describe("backoff de reintentos", () => {
   });
 });
 
-describe("orden por score", () => {
-  it("mayor prioridad primero y los empates por antigüedad", () => {
+describe("order by score", () => {
+  it("higher priority first and ties by age", () => {
     const result = plan([
       task("vieja-100"),
       task("p300", { priority: 300 }),
@@ -238,13 +238,13 @@ describe("orden por score", () => {
     expect(dispatched(result)).toEqual(["p300", "p200", "vieja-100", "nueva-100"]);
   });
 
-  it("con la misma antigüedad desempata por id", () => {
+  it("with the same age ties are broken by id", () => {
     const createdAt = ago(1);
     const result = plan([task("b", { createdAt }), task("a", { createdAt })]);
     expect(dispatched(result)).toEqual(["a", "b"]);
   });
 
-  it("el aging deja que una tarea vieja de baja prioridad rebase a una nueva", () => {
+  it("aging lets an old low-priority task overtake a new one", () => {
     const tasks = [
       task("nueva-alta", { priority: 200, readySince: NOW }),
       task("vieja-baja", { priority: 100, readySince: ago(11) }),
@@ -259,7 +259,7 @@ describe("orden por score", () => {
     ]);
   });
 
-  it("el aging no resta si readySince está en el futuro", () => {
+  it("aging does not subtract if readySince is in the future", () => {
     const ranked = rankReady(
       { tasks: [task("x", { readySince: new Date(NOW.getTime() + HOUR) })], edges: [] },
       config({ agingPointsPerHour: 10 }),
@@ -268,7 +268,7 @@ describe("orden por score", () => {
     expect(ranked[0]?.score).toBe(100);
   });
 
-  it("el boost sube a la que bloquea más tareas no terminales", () => {
+  it("the boost raises the one that blocks more non-terminal tasks", () => {
     const tasks = [
       task("bloquea-1", { priority: 100 }),
       task("bloquea-3", { priority: 100 }),
@@ -293,7 +293,7 @@ describe("orden por score", () => {
     ]);
   });
 
-  it("hereda la prioridad de la tarea que bloquea, directa o transitivamente", () => {
+  it("inherits the priority of the task it blocks, directly or transitively", () => {
     const tasks = [
       task("base-100", { priority: 100 }),
       task("medio", { priority: 50 }),
@@ -306,11 +306,11 @@ describe("orden por score", () => {
       ["base-100", 900],
       ["otra", 500],
     ]);
-    // La prioridad capturada no cambia.
+    // The captured priority does not change.
     expect(ranked[0]?.task.priority).toBe(100);
   });
 
-  it("la herencia termina cuando la tarea bloqueada deja de estar viva", () => {
+  it("inheritance ends when the blocked task stops being alive", () => {
     const tasks = [
       task("base-100", { priority: 100 }),
       task("urgente", { priority: 900, state: "cancelled", subState: null }),
@@ -324,15 +324,15 @@ describe("orden por score", () => {
   });
 });
 
-describe("límites de concurrencia", () => {
+describe("concurrency limits", () => {
   const many = (n: number, overrides: Partial<SchedulerTask> = {}) =>
     Array.from({ length: n }, (_, i) => task(`t${i}`, overrides));
 
-  it("el límite global es 5 por default", () => {
+  it("the global limit is 5 by default", () => {
     expect(plan(many(8)).dispatch).toHaveLength(5);
   });
 
-  it("los agentes vivos ocupan slots, también los que esperan al humano", () => {
+  it("live agents take slots, also those waiting for the human", () => {
     const vivos = [
       task("r1", { subState: "running" }),
       task("r2", { state: "in_progress", subState: "running" }),
@@ -341,7 +341,7 @@ describe("límites de concurrencia", () => {
     expect(plan([...vivos, ...many(5)]).dispatch).toHaveLength(2);
   });
 
-  it("los gates humanos y las tareas en needs_human no ocupan slots", () => {
+  it("human gates and tasks in needs_human do not take slots", () => {
     const sinAgente = [
       task("gate", { state: "refined", subState: null }),
       task("humano", { state: "needs_human", subState: null }),
@@ -349,13 +349,13 @@ describe("límites de concurrencia", () => {
     expect(plan([...sinAgente, ...many(5)]).dispatch).toHaveLength(5);
   });
 
-  it("con todos los slots ocupados no despacha nada y no hay preemption", () => {
+  it("with all slots taken it dispatches nothing and there is no preemption", () => {
     const vivos = many(5, { subState: "running", priority: 1 });
     const result = plan([...vivos, task("urgente", { priority: 1000 })]);
     expect(result.dispatch).toEqual([]);
   });
 
-  it("respeta el límite por proyecto y deja pasar a otros proyectos", () => {
+  it("respects the per-project limit and lets other projects through", () => {
     const limitado = sampleProject("limitado", { limits: { concurrency: 1 } });
     const tasks = [
       task("l-vivo", { projectId: limitado.id, subState: "running" }),
@@ -366,7 +366,7 @@ describe("límites de concurrencia", () => {
     expect(dispatched(plan(tasks, [], {}, [limitado, beta]))).toEqual(["b1"]);
   });
 
-  it("el límite por proyecto cuenta todas las fases", () => {
+  it("the per-project limit counts all phases", () => {
     const limitado = sampleProject("limitado", { limits: { concurrency: 2 } });
     const tasks = [
       task("refina", { projectId: limitado.id, priority: 300 }),
@@ -376,7 +376,7 @@ describe("límites de concurrencia", () => {
     expect(dispatched(plan(tasks, [], {}, [limitado]))).toEqual(["refina", "implementa"]);
   });
 
-  it("respeta el límite por fase", () => {
+  it("respects the per-phase limit", () => {
     const tasks = [
       task("r1", { priority: 900 }),
       task("r2", { priority: 800 }),
@@ -388,12 +388,12 @@ describe("límites de concurrencia", () => {
     expect(dispatched(result)).toEqual(["r1", "i1"]);
   });
 
-  it("respeta el límite por tipo de agente", () => {
+  it("respects the per-agent-kind limit", () => {
     const tasks = [task("vivo", { subState: "running" }), ...many(4)];
     expect(plan(tasks, [], { agentKindConcurrency: { claude: 3 } }).dispatch).toHaveLength(2);
   });
 
-  it("un límite agotado salta a la siguiente tarea que sí cabe", () => {
+  it("an exhausted limit skips to the next task that does fit", () => {
     const tasks = [
       task("r-alta", { priority: 900 }),
       task("r-media", { priority: 800 }),
@@ -403,7 +403,7 @@ describe("límites de concurrencia", () => {
     expect(dispatched(result)).toEqual(["r-alta", "i-baja"]);
   });
 
-  it("no despacha tareas de un proyecto sin configuración", () => {
+  it("does not dispatch tasks of a project without configuration", () => {
     expect(plan([task("x")], [], {}, [beta]).dispatch).toEqual([]);
   });
 });
@@ -411,18 +411,18 @@ describe("límites de concurrencia", () => {
 describe("Occupancy", () => {
   const reader = new InMemoryProjectConfigReader([alfa]);
 
-  it("revalida una decisión contra un snapshot más nuevo", () => {
+  it("revalidates a decision against a newer snapshot", () => {
     const decision = plan([task("x")], [], { globalConcurrency: 1 }).dispatch[0];
-    if (!decision) throw new Error("sin decisión");
+    if (!decision) throw new Error("no decision");
     const occupancy = (tasks: SchedulerTask[]) => Occupancy.of({ tasks, edges: [] }, reader);
     const slot = occupancy([]).slotFor(decision, decision.phase);
     expect(occupancy([]).fits(slot, config({ globalConcurrency: 1 }))).toBe(true);
-    // Otro proceso despachó en medio: el claim ya no cabe.
-    const otro = [task("otro", { subState: "running" })];
-    expect(occupancy(otro).fits(slot, config({ globalConcurrency: 1 }))).toBe(false);
+    // Another process dispatched in between: the claim no longer fits.
+    const other = [task("other", { subState: "running" })];
+    expect(occupancy(other).fits(slot, config({ globalConcurrency: 1 }))).toBe(false);
   });
 
-  it("sin configuración del proyecto no cabe", () => {
+  it("without project configuration it does not fit", () => {
     const occupancy = Occupancy.of({ tasks: [], edges: [] }, reader);
     const slot = occupancy.slotFor({ projectId: beta.id }, "refine");
     expect(slot.agentKind).toBeUndefined();
@@ -430,26 +430,26 @@ describe("Occupancy", () => {
   });
 });
 
-describe("proveedores habilitados", () => {
+describe("enabled providers", () => {
   const copilotPrimary = sampleProject("copiloto", {
     agentProfiles: { refine: { kind: "copilot", args: [] } },
   });
   const projects = [alfa, copilotPrimary];
 
-  it("con claude y copilot deshabilitados no despacha nada y las tareas siguen en queued", () => {
+  it("with claude and copilot disabled it dispatches nothing and the tasks stay in queued", () => {
     const tareas = [task("a"), task("b", { projectId: copilotPrimary.id })];
     const result = plan(tareas, [], {}, projects, { claude: false, copilot: false });
-    // La pausa no escala ni descarta nada: el plan entero es vacío y las tareas esperan.
+    // The pause neither escalates nor discards anything: the whole plan is empty and the tasks wait.
     expect(result).toEqual({ dispatch: [], escalate: [] });
-    // Contraste: habilitado uno, las mismas tareas sí se despachan.
+    // Contrast: with one enabled, the same tasks are dispatched.
     const reanudado = plan(tareas, [], {}, projects, { claude: true, copilot: false });
     expect(reanudado.dispatch.map((d) => d.taskId).sort()).toEqual(["a", "b"]);
   });
 
-  it("con claude deshabilitado, una tarea con primario claude va a copilot y ocupa su slot", () => {
+  it("with claude disabled, a task with primary claude goes to copilot and takes its slot", () => {
     const result = plan([task("a")], [], {}, projects, { claude: false, copilot: true });
     expect(result.dispatch.map((d) => d.agentKind)).toEqual(["copilot"]);
-    // El slot de copilot se llena: el límite por tipo de agente se aplica al proveedor efectivo.
+    // The copilot slot fills up: the per-agent-kind limit applies to the effective provider.
     const limited = plan(
       [task("a"), task("b")],
       [],
@@ -460,7 +460,7 @@ describe("proveedores habilitados", () => {
     expect(dispatched(limited)).toEqual(["a"]);
   });
 
-  it("con copilot deshabilitado, una tarea con primario copilot va a claude", () => {
+  it("with copilot disabled, a task with primary copilot goes to claude", () => {
     const result = plan([task("a", { projectId: copilotPrimary.id })], [], {}, projects, {
       claude: true,
       copilot: false,
@@ -468,7 +468,7 @@ describe("proveedores habilitados", () => {
     expect(result.dispatch.map((d) => d.agentKind)).toEqual(["claude"]);
   });
 
-  it("con ambos habilitados cada tarea usa el primario de su perfil y ocupa el slot de ese tipo", () => {
+  it("with both enabled each task uses the primary of its profile and takes the slot of that kind", () => {
     const both = { claude: true, copilot: true };
     const kinds = (tasks: SchedulerTask[], input: SchedulerConfigInput = {}) =>
       plan(tasks, [], input, projects, both).dispatch.map((d) => [d.taskId, d.agentKind]);
@@ -476,7 +476,7 @@ describe("proveedores habilitados", () => {
       ["a", "claude"],
       ["b", "copilot"],
     ]);
-    // Cada tipo cuenta contra su propio límite: la de copilot no gasta el slot de claude.
+    // Each kind counts against its own limit: the copilot one does not spend the claude slot.
     const limited = kinds([task("a"), task("b"), task("c", { projectId: copilotPrimary.id })], {
       agentKindConcurrency: { claude: 1, copilot: 1 },
     });
@@ -484,16 +484,16 @@ describe("proveedores habilitados", () => {
       ["a", "claude"],
       ["c", "copilot"],
     ]);
-    // Sin configuración explícita, todos habilitados.
+    // Without explicit configuration, all enabled.
     expect(plan([task("g")], [], {}, projects).dispatch[0]?.agentKind).toBe("claude");
-    // El primario manda porque está habilitado: la misma tarea cambia al deshabilitarlo.
+    // The primary rules because it is enabled: the same task changes when it is disabled.
     const solo = (providers: AgentProviderSettings) =>
       plan([task("h")], [], {}, projects, providers).dispatch.map((d) => d.agentKind);
     expect(solo(both)).toEqual(["claude"]);
     expect(solo({ claude: false, copilot: true })).toEqual(["copilot"]);
   });
 
-  it("la misma tarea cambia de proveedor solo cuando su primario se deshabilita", () => {
+  it("the same task changes provider only when its primary is disabled", () => {
     const providerOf = (id: string, projectId: string, providers: AgentProviderSettings) =>
       plan([task(id, { projectId })], [], {}, projects, providers).dispatch.map((d) => d.agentKind);
     expect(providerOf("c", alfa.id, { claude: true, copilot: false })).toEqual(["claude"]);
@@ -504,9 +504,9 @@ describe("proveedores habilitados", () => {
     expect(providerOf("f", alfa.id, { claude: false, copilot: false })).toEqual([]);
   });
 
-  it("un agente vivo ocupa el slot del proveedor con el que corre, no el de su perfil", () => {
+  it("a live agent takes the slot of the provider it runs with, not that of its profile", () => {
     const both = { claude: true, copilot: true };
-    // El perfil dice claude, pero el Run cayó a copilot en el fallback.
+    // The profile says claude, but the Run fell back to copilot.
     const viva = task("viva", { subState: "running", agentKind: "copilot" });
     const claudeLibre = plan(
       [viva, task("a")],
@@ -526,7 +526,7 @@ describe("proveedores habilitados", () => {
     expect(dispatched(copilotLleno)).toEqual(["c"]);
   });
 
-  it("un agente vivo sin proveedor registrado cuenta contra el primario de su perfil", () => {
+  it("a live agent without a registered provider counts against the primary of its profile", () => {
     const viva = task("viva", { subState: "running" });
     const result = plan([viva, task("a")], [], { agentKindConcurrency: { claude: 1 } }, projects, {
       claude: true,
@@ -536,8 +536,8 @@ describe("proveedores habilitados", () => {
   });
 });
 
-describe("dependencias que ya no se entregarán", () => {
-  it("escala a los dependientes de una dependencia con PR cerrado o cancelada", () => {
+describe("dependencies that will no longer be delivered", () => {
+  it("escalates the dependents of a dependency with a closed PR or cancelled", () => {
     const result = plan(
       [
         task("cerrada", { state: "completed", subState: null, prState: "closed" }),
@@ -555,7 +555,7 @@ describe("dependencias que ya no se entregarán", () => {
     expect(result.dispatch).toEqual([]);
   });
 
-  it("una cancelada con el PR ya mergeado sigue satisfaciendo", () => {
+  it("a cancelled one with the PR already merged still satisfies", () => {
     const result = plan(
       [task("dep", { state: "cancelled", subState: null, prState: "merged" }), task("x")],
       [edge("x", "dep")],
@@ -564,7 +564,7 @@ describe("dependencias que ya no se entregarán", () => {
     expect(dispatched(result)).toEqual(["x"]);
   });
 
-  it("no escala a dependientes terminales ni a los que ya están en needs_human", () => {
+  it("does not escalate terminal dependents or those already in needs_human", () => {
     const result = plan(
       [
         task("cancelada", { state: "cancelled", subState: null }),
@@ -576,7 +576,7 @@ describe("dependencias que ya no se entregarán", () => {
     expect(result.escalate).toEqual([]);
   });
 
-  it("no escala a un dependiente paused: escalate se rechaza en paused", () => {
+  it("does not escalate a paused dependent: escalate is rejected in paused", () => {
     const result = plan(
       [
         task("cerrada", { state: "completed", subState: null, prState: "closed" }),
@@ -587,7 +587,7 @@ describe("dependencias que ya no se entregarán", () => {
     expect(result.escalate).toEqual([]);
   });
 
-  it("no escala a un dependiente con su agente vivo: liberaría el slot con el agente corriendo", () => {
+  it("does not escalate a dependent with its live agent: it would free the slot with the agent running", () => {
     const result = plan(
       [
         task("cerrada", { state: "completed", subState: null, prState: "closed" }),
@@ -599,7 +599,7 @@ describe("dependencias que ya no se entregarán", () => {
     expect(result.escalate).toEqual([]);
   });
 
-  it("escala una vez aunque falle más de una dependencia", () => {
+  it("escalates once even if more than one dependency fails", () => {
     const result = plan(
       [
         task("c1", { state: "cancelled", subState: null }),
@@ -612,8 +612,8 @@ describe("dependencias que ya no se entregarán", () => {
   });
 });
 
-describe("nunca se exceden los límites (DAGs aleatorios)", () => {
-  // mulberry32: determinístico para que un fallo se pueda reproducir con la semilla.
+describe("limits are never exceeded (random DAGs)", () => {
+  // mulberry32: deterministic so that a failure can be reproduced with the seed.
   function rng(seed: number) {
     let a = seed;
     return () => {
@@ -656,7 +656,7 @@ describe("nunca se exceden los límites (DAGs aleatorios)", () => {
         readySince: ago(random() * 48),
       });
     });
-    // Aristas solo hacia tareas anteriores: acíclico por construcción.
+    // Edges only toward earlier tasks: acyclic by construction.
     const edges: DependencyEdge[] = [];
     for (let i = 1; i < tasks.length; i++) {
       for (let j = 0; j < i; j++) if (random() < 0.06) edges.push(edge(`t${i}`, `t${j}`));
@@ -672,7 +672,7 @@ describe("nunca se exceden los límites (DAGs aleatorios)", () => {
       tasks = tasks.map((t) => (chosen.has(t.id) ? { ...t, subState: "running" } : t));
       const running = live();
       const count = (pred: (t: SchedulerTask) => boolean) => running.filter(pred).length;
-      // Solo se exige el tope si esta pasada agregó algo: los vivos iniciales son aleatorios.
+      // The cap is only required if this pass added something: the initial live ones are random.
       if (chosen.size > 0) {
         expect(running.length).toBeLessThanOrEqual(parsed.globalConcurrency);
         expect(before + chosen.size).toBe(running.length);
@@ -687,18 +687,18 @@ describe("nunca se exceden los límites (DAGs aleatorios)", () => {
         }
         const kindLimit = parsed.agentKindConcurrency.claude;
         if (kindLimit) expect(running.length).toBeLessThanOrEqual(kindLimit);
-        // Toda tarea despachada tiene sus dependencias mergeadas.
+        // Every dispatched task has its dependencies merged.
         for (const dep of edges.filter((e) => e.taskId === d.taskId)) {
           expect(tasks.find((t) => t.id === dep.dependsOnId)?.prState).toBe("merged");
         }
       }
-      // Y no deja slots libres sin usar: toda tarea lista que quedó fuera ya no cabe.
+      // And it leaves no free slots unused: every ready task left out no longer fits.
       const after = Occupancy.of({ tasks, edges }, reader);
       for (const { task: waiting } of rankReady({ tasks, edges }, parsed, NOW)) {
         const slot = after.slotFor(waiting, pendingPhase(waiting.state) as SchedulablePhase);
         expect(after.fits(slot, parsed)).toBe(false);
       }
-      // Algunos agentes terminan entre pasadas.
+      // Some agents finish between passes.
       tasks = tasks.map((t) =>
         t.subState === "running" && random() < 0.4
           ? { ...t, state: "completed", subState: null, prState: "merged" }
@@ -708,7 +708,7 @@ describe("nunca se exceden los límites (DAGs aleatorios)", () => {
   });
 });
 
-schedulerStateReaderContract("en memoria", (seeds, edges) => {
+schedulerStateReaderContract("in memory", (seeds, edges) => {
   const project = sampleProject("contrato");
   const tasks = seeds.map((seed) =>
     task(seed.name, {

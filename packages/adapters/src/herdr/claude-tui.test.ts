@@ -6,8 +6,8 @@ import {
   usageLimitMessage,
 } from "./claude-tui.ts";
 
-// Pantallas observadas del CLI (docs/design.md §Señales): el aviso de límite queda en la TUI y
-// herdr no lo detecta (su manifiesto no tiene regla para ese UI), así que LunasQ lo reconoce aquí.
+// Observed CLI screens (docs/design.md §Signals): the limit notice stays in the TUI and
+// herdr does not detect it (its manifest has no rule for that UI), so LunasQ recognizes it here.
 const WAIT_SCREEN =
   "Usage limit reached · limit resets 3:45pm\nContinuing automatically at 3:45pm · Esc to cancel";
 const WRAP_UP_SCREEN = "trabajo en curso…\n❯ claude\nUsage limit reached · wrapping up";
@@ -31,32 +31,32 @@ const withoutLimit: readonly string[] = [
 ];
 
 describe("showsUsageLimit", () => {
-  it("reconoce las pantallas de límite de uso vistas del CLI", () => {
+  it("recognizes the usage-limit screens seen from the CLI", () => {
     for (const screen of withLimit) expect(showsUsageLimit(screen)).toBe(true);
   });
 
-  it("no marca el diálogo de confianza ni el trabajo propio del agente", () => {
+  it("does not flag the trust dialog or the agent's own work", () => {
     for (const screen of withoutLimit) expect(showsUsageLimit(screen)).toBe(false);
   });
 });
 
 describe("usageLimitMessage", () => {
-  it("devuelve el aviso con su tanda contigua de líneas", () => {
+  it("returns the notice with its contiguous run of lines", () => {
     expect(usageLimitMessage(WAIT_SCREEN)).toBe(
       "Usage limit reached · limit resets 3:45pm · Continuing automatically at 3:45pm · Esc to cancel",
     );
   });
 
-  it("sin aviso devuelve el fallback", () => {
+  it("without a notice returns the fallback", () => {
     expect(usageLimitMessage(AGENTS_OWN_WORK)).toBe("usage limit reached");
   });
 
-  it("corta en 500 caracteres", () => {
+  it("cuts at 500 characters", () => {
     const long = `${WRAP_UP_SCREEN}`.padEnd(600, "-");
     expect(usageLimitMessage(long).length).toBeLessThanOrEqual(500);
   });
 
-  it("el patrón es el mismo para detectar la pantalla y sacar el mensaje", () => {
+  it("the pattern is the same to detect the screen and extract the message", () => {
     expect(showsUsageLimit(WRAP_UP_SCREEN)).toBe(USAGE_LIMIT_PATTERN.test(WRAP_UP_SCREEN));
   });
 });

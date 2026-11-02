@@ -1,9 +1,9 @@
-// Fase de entrega (docs/design.md §Entrega, ADR uw-26-entrega). Corre dentro del Run del
-// verificador, sin agente, cuando éste registró un pass: hook `before_delivery`, rebase sobre la
-// base, trailers en los commits, suite final, cierre del Run y archivo de evidencia, push, PR con
-// intent, criterios, evidencia y etiqueta de riesgo, `after_delivery` y `verdict_pass`. Un conflicto
-// o una suite en rojo regresan la tarea a in_progress; cualquier otro fallo la escala. Cada paso se
-// puede repetir: una entrega a medias se retoma con `deliver` o `recover`.
+// Delivery phase (docs/design.md §Delivery, ADR uw-26-entrega). It runs inside the verifier's
+// Run, without an agent, once it recorded a pass: `before_delivery` hook, rebase onto the
+// base, trailers on the commits, final suite, closing the Run and evidence file, push, PR with
+// intent, criteria, evidence and risk label, `after_delivery` and `verdict_pass`. A conflict
+// or a red suite send the task back to in_progress; any other failure escalates it. Each step
+// can be repeated: a half-done delivery is resumed with `deliver` or `recover`.
 import type { GitAdapter, GitHubAdapter } from "@lunasq/adapters";
 import {
   appendEvent,
@@ -45,9 +45,9 @@ import type { EnsuredWorktree } from "../worktrees/service.ts";
 
 export type DeliveryResult =
   | { status: "delivered"; prUrl: string; created: boolean }
-  /** La tarea volvió a in_progress (o escaló, si ya van demasiados conflictos). */
+  /** The task went back to in_progress (or escalated, if there have been too many conflicts). */
   | { status: "conflict"; reason: DeliveryConflictReason }
-  /** Un hook con política block detuvo la entrega; HookService ya escaló la tarea. */
+  /** A hook with block policy stopped the delivery; HookService already escalated the task. */
   | { status: "blocked" }
   | { status: "escalated"; error: string }
   | {
@@ -64,23 +64,23 @@ export interface DeliveryServiceDeps {
   github: Pick<GitHubAdapter, "createPr" | "addLabels">;
   hooks: PhaseHooks;
   testGate: TestGate;
-  /** WorktreeService.ensure: la entrega corre en el worktree de la tarea. */
+  /** WorktreeService.ensure: the delivery runs in the task's worktree. */
   worktrees: { ensure(taskId: string): Promise<EnsuredWorktree> };
-  /** PhaseDispatcher: cierra el Run, su pane y deja la sección de evidencia. */
+  /** PhaseDispatcher: closes the Run, its pane and leaves the evidence section. */
   runs: {
     closeRun(runId: string, input: { result: RunResult; failureReason?: string }): Promise<unknown>;
   };
-  /** EvidenceService: sin él, el archivo de evidencia no viaja en el PR. */
+  /** EvidenceService: without it, the evidence file does not travel in the PR. */
   evidence?: { commit(taskId: string): Promise<string | null> };
   remote?: string;
 }
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-/** Longitud máxima de la nota de un escalamiento (TaskTransitionedPayload.note). */
+/** Maximum length of an escalation's note (TaskTransitionedPayload.note). */
 const NOTE_LIMIT = 2000;
 
-/** Parada de la entrega que no es un error: se devuelve tal cual. */
+/** Delivery stop that is not an error: it is returned as is. */
 class Stop extends Error {
   readonly result: DeliveryResult;
 
@@ -98,7 +98,7 @@ export class DeliveryService {
   readonly #specs: SpecRepository;
   readonly #prs: TaskPrRepository;
   readonly #remote: string;
-  /** Una entrega a la vez por tarea: el outbox entrega al menos una vez. */
+  /** One delivery at a time per task: the outbox delivers at least once. */
   readonly #locks = new KeyedLock();
 
   constructor(deps: DeliveryServiceDeps) {
@@ -111,14 +111,14 @@ export class DeliveryService {
     this.#remote = deps.remote ?? "origin";
   }
 
-  /** Entrega la tarea cuyo verificador dio pass. Idempotente. */
+  /** Delivers the task whose verifier gave a pass. Idempotent. */
   deliver(taskId: string): Promise<DeliveryResult> {
     return this.#locks.run(taskId, () => this.#deliver(taskId));
   }
 
   /**
-   * Retoma las entregas que un reinicio dejó a medias: tareas en verification/running con un pass
-   * guardado. Una verificación en curso (sin pass) no se toca.
+   * Resumes the deliveries a restart left half done: tasks in verification/running with a saved
+   * pass. A verification in progress (without a pass) is not touched.
    */
   async recover(): Promise<DeliveryResult[]> {
     const results: DeliveryResult[] = [];
@@ -183,14 +183,14 @@ export class DeliveryService {
 
     await this.#hook(taskId, run, "before_delivery");
 
-    // Los cierres de Runs anteriores (p. ej. el de implementación) dejan secciones nuevas en el
-    // archivo de evidencia. Si el proyecto lo trackea, esas ediciones ensucian el worktree y el
-    // rebase falla con «You have unstaged changes»: se commitean antes de integrar la base. La
-    // entrega vuelve a llamarlo tras cerrar el Run del verificador, para que su sección también
-    // viaje en el PR.
+    // Closes of earlier Runs (e.g. implementation's) leave new sections in the
+    // evidence file. If the project tracks it, those edits dirty the worktree and the
+    // rebase fails with «You have unstaged changes»: they are committed before integrating the base. The
+    // delivery calls it again after closing the verifier's Run, so its section also
+    // travels in the PR.
     await this.#deps.evidence?.commit(taskId);
 
-    // Integrar la base: un conflicto no se resuelve aquí, lo resuelve el implementador.
+    // Integrating the base: a conflict is not resolved here, the implementer resolves it.
     await git.fetch({ cwd: worktree.path, remote: this.#remote, branch: base });
     const onto = `${this.#remote}/${base}`;
     const rebase = await git.rebase({ cwd: worktree.path, onto });
@@ -198,7 +198,7 @@ export class DeliveryService {
       return this.#conflict(ctx, { reason: "rebase_conflict", files: rebase.files, output: null });
     }
 
-    // Trailers LunasQ-Task y LunasQ-Run en cada commit del branch.
+    // LunasQ-Task and LunasQ-Run trailers on each branch commit.
     const commits = await git.listCommits({ cwd: worktree.path, base: onto });
     await git.addTrailers({
       cwd: worktree.path,
@@ -211,7 +211,7 @@ export class DeliveryService {
       }),
     });
 
-    // Suite final sobre lo que se va a publicar.
+    // Final suite on what is going to be published.
     const gate = await testGate.run({
       taskId,
       runId: run.id,
@@ -227,7 +227,7 @@ export class DeliveryService {
       });
     }
 
-    // El Run se cierra antes del push para que su sección de evidencia viaje en el PR.
+    // The Run is closed before the push so its evidence section travels in the PR.
     await this.#closeRun(run, "success");
     await this.#deps.evidence?.commit(taskId);
 
@@ -249,7 +249,7 @@ export class DeliveryService {
         baseBranch: base,
       }),
     });
-    // La etiqueta es para priorizar la revisión: si falla, el PR sigue siendo válido.
+    // The label is for prioritizing review: if it fails, the PR is still valid.
     await github
       .addLabels({
         cwd: worktree.path,
@@ -257,11 +257,11 @@ export class DeliveryService {
         labels: [riskPrLabel(ctx.verification.body.riskLabel)],
       })
       .catch(() => undefined);
-    // Repetir el registro del mismo PR abierto no escribe nada; otro PR abierto lanza TaskPrError.
+    // Repeating the registration of the same open PR writes nothing; another open PR throws TaskPrError.
     this.#prs.recordPrOpened(taskId, pr.url);
 
-    // Un hook que commitea (HookService incluye sus cambios en un commit) deja HEAD por delante de
-    // lo publicado: un segundo push los lleva al PR.
+    // A hook that commits (HookService includes its changes in a commit) leaves HEAD ahead of
+    // what was published: a second push carries them to the PR.
     const published = await git.resolveCommit({ cwd: worktree.path, ref: "HEAD" });
     await this.#hook(taskId, run, "after_delivery", pr.url);
     if ((await git.resolveCommit({ cwd: worktree.path, ref: "HEAD" })) !== published) {
@@ -280,12 +280,12 @@ export class DeliveryService {
       expected: { state: "verification", subState: "running" },
     });
     if (!passed.ok) {
-      throw new Error(`verdict_pass rechazado: ${passed.error.code}: ${passed.error.message}`);
+      throw new Error(`verdict_pass rejected: ${passed.error.code}: ${passed.error.message}`);
     }
     return { status: "delivered", prUrl: pr.url, created };
   }
 
-  /** Último handoff de implementación guardado, para comprobar que cada criterio tiene tests. */
+  /** Last saved implementation handoff, to check that each criterion has tests. */
   #implementation(taskId: string) {
     for (const stored of this.#runs.handoffs(taskId, "implement").reverse()) {
       const parsed = parseHandoff(stored);
@@ -308,15 +308,15 @@ export class DeliveryService {
     });
     if (result.outcome !== "blocked") return;
     if (!result.escalated) {
-      this.#escalateTask(taskId, "hook_failed", result.error ?? `el punto ${point} bloqueó`);
+      this.#escalateTask(taskId, "hook_failed", result.error ?? `point ${point} blocked`);
     }
     throw new Stop({ status: "blocked" });
   }
 
   /**
-   * Conflicto de integración o suite en rojo: la tarea vuelve a in_progress sin subir la
-   * iteración y el implementador recibe qué lo causó. Con tantos conflictos como iteraciones
-   * permite el proyecto, escala en vez de repetir el ciclo.
+   * Integration conflict or red suite: the task goes back to in_progress without raising the
+   * iteration and the implementer receives what caused it. With as many conflicts as iterations
+   * the project allows, it escalates instead of repeating the cycle.
    */
   async #conflict(
     ctx: { taskId: string; run: RunRow; project: Project },
@@ -329,13 +329,13 @@ export class DeliveryService {
         taskId,
         run,
         "delivery_failed",
-        `${previous} entregas seguidas volvieron a implementación (${detail.reason})`,
+        `${previous} consecutive deliveries went back to implementation (${detail.reason})`,
       );
     }
     await this.#closeRun(run, "success");
-    // Su sección de evidencia acaba de escribirse: commitearla deja el worktree limpio para que
-    // el implementador pueda integrar la base sin que un `git rebase` falle por cambios sin
-    // commitear del archivo trackeado.
+    // Its evidence section was just written: committing it leaves the worktree clean so
+    // the implementer can integrate the base without a `git rebase` failing from
+    // uncommitted changes in the tracked file.
     await this.#deps.evidence?.commit(taskId).catch(() => undefined);
     const payload: DeliveryConflictPayload = {
       runId: run.id,
@@ -352,7 +352,7 @@ export class DeliveryService {
           command: { type: "delivery_conflict" },
           expected: { state: "verification", subState: "running" },
         });
-        if (!moved.ok) throw new Error(`delivery_conflict rechazado: ${moved.error.message}`);
+        if (!moved.ok) throw new Error(`delivery_conflict rejected: ${moved.error.message}`);
         appendEvent(
           tx,
           { taskId, type: DELIVERY_CONFLICT, actor: "system", payload },
@@ -365,9 +365,9 @@ export class DeliveryService {
   }
 
   /**
-   * Conflictos de entrega seguidos: desde el último `resume` (un humano que reanuda concede otra
-   * vuelta) o el último `verdict_pass` (un PR entregado que después quedó en conflicto empieza de
-   * cero, ADR pr-en-conflicto).
+   * Delivery conflicts in a row: since the last `resume` (a human resuming grants another
+   * round) or the last `verdict_pass` (a delivered PR that later ends up in conflict starts from
+   * zero, ADR pr-en-conflicto).
    */
   #conflicts(taskId: string): number {
     let count = 0;
@@ -387,7 +387,7 @@ export class DeliveryService {
     reason: "delivery_failed",
     note: string,
   ): Promise<DeliveryResult> {
-    // El Run no queda abierto con la tarea en needs_human; "cancelled" no cuenta como fallo.
+    // The Run is not left open with the task in needs_human; "cancelled" does not count as a failure.
     if (!this.#runs.get(run.id)?.endedAt) {
       await this.#closeRun(run, "cancelled", `delivery_failed: ${note}`).catch(() => undefined);
       await this.#deps.evidence?.commit(taskId).catch(() => undefined);
@@ -406,7 +406,7 @@ export class DeliveryService {
   }
 
   async #closeRun(run: RunRow, result: RunResult, failureReason?: string) {
-    // Un Run ya cerrado (entrega retomada) no se vuelve a cerrar.
+    // A Run already closed (resumed delivery) is not closed again.
     if (this.#runs.get(run.id)?.endedAt) return;
     await this.#deps.runs.closeRun(run.id, {
       result,

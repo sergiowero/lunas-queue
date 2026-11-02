@@ -1,21 +1,21 @@
-// Reglas del ciclo de vida del worktree de una tarea (docs/design.md §Ciclo de vida del worktree,
-// docs/decisions/0012-ciclo-de-vida-worktrees.md): nombre del branch y cuándo sobra un worktree.
+// Rules of the lifecycle of a task's worktree (docs/design.md §Worktree lifecycle,
+// docs/decisions/0012-ciclo-de-vida-worktrees.md): branch name and when a worktree is no longer needed.
 import type { PrState, ResultKind, TaskState } from "@lunasq/schemas";
 
 export const TASK_BRANCH_PREFIX = "lunasq/";
 
-/** Un solo segmento de ref seguro para git (los UUID de las tareas lo cumplen). */
+/** A single ref segment safe for git (the task UUIDs meet it). */
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
-/** Branch de la tarea: determinístico, uno por tarea, nunca compartido. */
+/** Task branch: deterministic, one per task, never shared. */
 export function taskBranch(taskId: string): string {
   if (!SAFE_SEGMENT.test(taskId)) {
-    throw new Error(`id de tarea inválido para un branch: ${JSON.stringify(taskId)}`);
+    throw new Error(`invalid task id for a branch: ${JSON.stringify(taskId)}`);
   }
   return `${TASK_BRANCH_PREFIX}${taskId}`;
 }
 
-/** El id de la tarea si `branch` es un branch de LunasQ; si no, undefined. */
+/** The task id if `branch` is a LunasQ branch; otherwise undefined. */
 export function taskIdFromBranch(branch: string): string | undefined {
   if (!branch.startsWith(TASK_BRANCH_PREFIX)) return undefined;
   const id = branch.slice(TASK_BRANCH_PREFIX.length);
@@ -25,13 +25,13 @@ export function taskIdFromBranch(branch: string): string | undefined {
 export type WorktreeTaskView = {
   state: TaskState;
   prState: PrState | null;
-  /** Tarea completada con un Resultado (submit_result): no tiene PR que esperar. */
+  /** Task completed with a Result (submit_result): it has no PR to wait for. */
   resultKind?: ResultKind | null;
 };
 
 /**
- * La tarea ya no necesita su worktree: se canceló, su PR se mergeó o se completó con un Resultado.
- * completed llega con el PR abierto y la tarea puede volver a in progress, así que no basta.
+ * The task no longer needs its worktree: it was cancelled, its PR was merged or it was completed with a Result.
+ * completed arrives with the PR open and the task can return to in progress, so it is not enough.
  */
 export function worktreeReleased(task: WorktreeTaskView): boolean {
   if (task.state === "cancelled") return true;
@@ -43,8 +43,8 @@ export type OrphanReason = "task_not_found" | "task_released";
 export type OrphanWorktree<W> = { worktree: W; taskId: string; reason: OrphanReason };
 
 /**
- * Worktrees de LunasQ cuya tarea no existe o ya los liberó. Los de branches ajenos (o en HEAD
- * detached) no se tocan nunca.
+ * Worktrees of LunasQ whose task does not exist or has already released them. Those of foreign branches (or at HEAD
+ * detached) are never touched.
  */
 export function findOrphanWorktrees<W extends { branch?: string }>(
   worktrees: readonly W[],
@@ -63,26 +63,26 @@ export function findOrphanWorktrees<W extends { branch?: string }>(
 
 export type TaskWorktreeRecord = WorktreeTaskView & {
   id: string;
-  /** Número de tarea (#N): identifica la tarea en las etiquetas de herdr. */
+  /** Task number (#N): identifies the task in the herdr labels. */
   number: number;
   projectId: string;
   branch: string | null;
-  /** Se guarda solo cuando el worktree quedó listo (bootstrap incluido) y se borra al removerlo. */
+  /** Saved only when the worktree is ready (bootstrap included) and deleted when it is removed. */
   worktreePath: string | null;
 };
 
-/** Puerto de lectura y escritura del branch y el worktree de las tareas; db lo implementa. */
+/** Read and write port of the task branch and worktree: db implements it. */
 export interface TaskWorktreeStore {
   get(taskId: string): TaskWorktreeRecord | null;
-  /** Lanza si la tarea no existe. */
+  /** Throws if the task does not exist. */
   recordWorktree(taskId: string, worktree: { branch: string; worktreePath: string }): void;
-  /** Conserva el branch: `worktree remove` no lo borra. */
+  /** Keeps the branch: `worktree remove` does not delete it. */
   clearWorktreePath(taskId: string): void;
 }
 
 /**
- * Id del workspace de herdr de cada proyecto (docs/design.md §Secuencia de despacho, paso 2). Es
- * una pista: herdr es efímero y `ensureWorkspace` lo revalida; db lo implementa.
+ * Id of the herdr workspace of each project (docs/design.md §Dispatch sequence, step 2). It is
+ * a hint: herdr is ephemeral and `ensureWorkspace` revalidates it; db implements it.
  */
 export interface ProjectWorkspaceStore {
   get(projectId: string): string | null;

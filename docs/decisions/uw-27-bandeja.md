@@ -1,38 +1,38 @@
-# UW-27 — Bandeja de aprobaciones, preguntas y bloqueos
+# UW-27 — Inbox of approvals, questions and blocks
 
-- Estado: aceptada; la parte de specs por aprobar la supera [ADR 0015](0015-bandeja-lista-de-specs.md)
-- Fecha: 2026-10-30
-- Unidad: UW-27 · Código: `packages/web/src/pages/inbox.tsx`, `packages/web/src/lib/inbox.ts`, `packages/web/src/components/task/spec.tsx`, `packages/server/src/api/questions.ts` (`blockedRoutes`), `packages/server/src/runtime/runtime.ts`, `HerdrAdapter.focusAgent`
+- Status: accepted; the specs-to-approve part is superseded by [ADR 0015](0015-bandeja-lista-de-specs.md)
+- Date: 2026-10-30
+- Unit: UW-27 · Code: `packages/web/src/pages/inbox.tsx`, `packages/web/src/lib/inbox.ts`, `packages/web/src/components/task/spec.tsx`, `packages/server/src/api/questions.ts` (`blockedRoutes`), `packages/server/src/runtime/runtime.ts`, `HerdrAdapter.focusAgent`
 
-## Contexto
+## Context
 
-El criterio de UW-27 es que todo lo que espera al humano aparezca y se resuelva desde la bandeja. `docs/design.md` (§Aprobación de la spec, §Preguntas del agente y bloqueos, §Front end: vistas mínimas) pide tres cosas: specs por aprobar con su diff (aprobar, pedir cambios o editar y aprobar), Questions abiertas que se responden en el front end, y agentes bloqueados por permiso con un acceso que enfoca su pane en herdr. ADR uw-22-preguntas dejó a esta unidad decidir cómo la bandeja lleva al pane y si se agrega `agent focus` al adapter; ADR uw-21-front-end dejó editar y aprobar y la decisión de montar el stream de notificaciones.
+UW-27's criterion is that everything that waits for the human appears and is resolved from the Inbox. `docs/design.md` (§Spec approval, §Agent questions and blocks, §Front end: minimal views) asks for three things: specs to approve with their diff (approve, request changes or edit and approve), open Questions answered in the front end, and agents blocked by permission with an access that focuses their pane in herdr. ADR uw-22-preguntas left this unit to decide how the Inbox takes the user to the pane and whether `agent focus` is added to the adapter; ADR uw-21-front-end left edit and approve and the decision of mounting the notifications stream.
 
-## Decisión
+## Decision
 
-- **Una página, `/inbox`, con cuatro secciones**: «Specs por aprobar», «Tareas que necesitan atención», «Preguntas abiertas» y «Agentes bloqueados». Cada pendiente es un `article` con el intent de la tarea (enlace al detalle) y su proyecto. El menú muestra «Bandeja» con el total de pendientes.
-- **Specs por aprobar = tareas en `refined`.** Se derivan de `GET /api/tasks`, sin ruta nueva: en `refined` la última versión siempre está pendiente, porque aprobar o pedir cambios saca a la tarea de ese estado. *Superado por ADR 0015: la sección es solo una lista de enlaces al detalle de la tarea, donde vive el gate (versiones, contenido, diff y aprobar).*
-- **Tareas que necesitan atención = tareas en `needs_human`.** Se derivan de `GET /api/tasks`, igual que las specs. Sin esta sección, una tarea escalada (reintentos agotados, loop de verificación agotado, timeout de fase, fallo de entrega) no aparecía en la bandeja ni en el contador. Cada tarjeta enlaza al detalle de la tarea.
-- **Editar y aprobar** (`POST /api/tasks/:id/specs/:version/edit-and-approve`, UW-12) se suma al gate del detalle (en la bandeja hasta ADR 0015). El contenido se edita como JSON con formato. El cliente solo comprueba que parsea; `SpecContent` lo valida el servidor y la UI muestra sus issues (`ruta: mensaje`). Validar en el cliente metería zod en el bundle (ADR uw-21-front-end). Un editor por campos queda fuera de v1.
-- **Errores.**
-  - Una consulta que falla se muestra en su sección. «Nada espera por ti.» solo aparece con las tres consultas en éxito.
-  - En el gate de spec se muestra solo el error de la última acción: cada acción limpia el error de las otras.
-  - Un 409 del gate no refresca el panel, porque refrescarlo desmontaría el gate junto con el mensaje. El cambio que causó el 409 llega por `/api/stream`.
-  - Responder una pregunta o enfocar un bloqueo sí refresca la bandeja ante un error, para que la tarjeta vieja no quede activa.
-- **Preguntas**: `GET /api/questions?status=open` y `POST /api/questions/:id/answer` (UW-22). Tras responder se muestra a dónde fue la respuesta: al pane vivo o a un agente nuevo (`delivery`). Los 409 (`not_open`, `task_not_waiting`) se muestran tal cual.
-- **Acceso al pane de un bloqueo**:
-  - Se agrega `focusAgent(name)` a `HerdrAdapter` (`herdr agent focus <name>`, devuelve `agent_info`; `agent_not_found` si no existe), con fake y suite de contrato.
-  - `POST /api/blocked/:runId/focus` solo enfoca agentes que el `RunWatcher` ve bloqueados. Así la UI no puede mover la vista de herdr a un agente cualquiera. Respuestas: 204; 404 `not_blocked`; 409 `agent_gone` si herdr ya no tiene el agente; 502 `herdr_error` ante otro fallo; 503 `focus_unavailable` sin herdr (`createApp({ focus })`).
-  - La bandeja muestra además el comando `herdr agent focus <name>`, por si la UI corre en otra máquina que el herdr del humano.
-  - El permiso se responde en herdr. LunasQ no lo contesta (ADR uw-22-preguntas).
-- **Composición.** `startRuntime` no pasaba `questions` ni `blocked` a `createApp`, así que en el servidor real responder daba 503 y la lista de bloqueos salía vacía. Ahora pasa `orchestrator.questions`, `orchestrator.watcher.blocked()` y `herdr.focusAgent`.
-- **Actualización en vivo.**
-  - El stream de cambios (`/api/stream`) también invalida `["questions"]` y `["blocked"]`: una pregunta nueva o respondida deja eventos en el log de la tarea.
-  - Los bloqueos viven en memoria del `RunWatcher` y no dejan eventos. Por eso la consulta de bloqueos se refresca cada 5 s (`BLOCKED_REFRESH_MS`).
-  - La UI **no** monta el stream de notificaciones (`/api/notifications/stream`, ADR 0009). No aporta a la bandeja: `question_open` y `agent_blocked` se emiten a 1 minuto, cuando la pregunta ya llegó por `/api/stream` y el bloqueo por el refresco de 5 s. Y costaría una segunda conexión SSE por pestaña: el servidor es HTTP/1.1 y el navegador permite unas 6 conexiones por host entre todas las pestañas. Los avisos al humano siguen saliendo por herdr.
+- **One page, `/inbox`, with four sections**: «Specs por aprobar», «Tareas que necesitan atención», «Preguntas abiertas» and «Agentes bloqueados». Each pending item is an `article` with the task's intent (a link to the detail) and its project. The menu shows «Bandeja» with the total of pending items.
+- **Specs to approve = tasks in `refined`.** They are derived from `GET /api/tasks`, with no new route: in `refined` the latest version is always pending, because approving or requesting changes takes the task out of that state. *Superseded by ADR 0015: the section is only a list of links to the task detail, where the gate lives (versions, content, diff and approve).*
+- **Tasks that need attention = tasks in `needs_human`.** They are derived from `GET /api/tasks`, like the specs. Without this section, an escalated task (retries exhausted, verification loop exhausted, phase timeout, delivery failure) did not appear in the Inbox or in the counter. Each card links to the task detail.
+- **Edit and approve** (`POST /api/tasks/:id/specs/:version/edit-and-approve`, UW-12) is added to the detail's gate (in the Inbox until ADR 0015). The content is edited as formatted JSON. The client only checks that it parses; `SpecContent` is validated by the server and the UI shows its issues (`path: message`). Validating on the client would pull zod into the bundle (ADR uw-21-front-end). A per‑field editor is left out of v1.
+- **Errors.**
+  - A failing query is shown in its section. «Nada espera por ti.» appears only with the three queries successful.
+  - In the spec gate only the last action's error is shown: each action clears the error of the others.
+  - A 409 from the gate does not refresh the panel, because refreshing it would unmount the gate together with the message. The change that caused the 409 arrives through `/api/stream`.
+  - Answering a question or focusing a block does refresh the Inbox on an error, so the stale card does not stay active.
+- **Questions**: `GET /api/questions?status=open` and `POST /api/questions/:id/answer` (UW-22). After answering, where the answer went is shown: to the live pane or to a new agent (`delivery`). The 409s (`not_open`, `task_not_waiting`) are shown as they are.
+- **Access to a block's pane**:
+  - `focusAgent(name)` is added to `HerdrAdapter` (`herdr agent focus <name>`, returns `agent_info`; `agent_not_found` if it does not exist), with a fake and a contract suite.
+  - `POST /api/blocked/:runId/focus` only focuses agents that the `RunWatcher` sees as blocked. This way the UI cannot move herdr's view to an arbitrary agent. Responses: 204; 404 `not_blocked`; 409 `agent_gone` if herdr no longer has the agent; 502 `herdr_error` on any other failure; 503 `focus_unavailable` without herdr (`createApp({ focus })`).
+  - The Inbox also shows the command `herdr agent focus <name>`, in case the UI runs on a different machine than the human's herdr.
+  - The permission is answered in herdr. LunasQ does not answer it (ADR uw-22-preguntas).
+- **Composition.** `startRuntime` did not pass `questions` or `blocked` to `createApp`, so on the real server answering gave 503 and the blocks list came out empty. Now it passes `orchestrator.questions`, `orchestrator.watcher.blocked()` and `herdr.focusAgent`.
+- **Live updates.**
+  - The changes stream (`/api/stream`) also invalidates `["questions"]` and `["blocked"]`: a new or answered question leaves events in the task's log.
+  - The blocks live in the `RunWatcher`'s memory and leave no events. That is why the blocks query is refreshed every 5 s (`BLOCKED_REFRESH_MS`).
+  - The UI does **not** mount the notifications stream (`/api/notifications/stream`, ADR 0009). It adds nothing to the Inbox: `question_open` and `agent_blocked` are emitted at 1 minute, when the question has already arrived through `/api/stream` and the block through the 5 s refresh. And it would cost a second SSE connection per tab: the server is HTTP/1.1 and the browser allows about 6 connections per host across all tabs. The alerts to the human still go out through herdr.
 
-## Consecuencias
+## Consequences
 
-- Un bloqueo tarda hasta 5 s en aparecer o desaparecer de la bandeja. Si hiciera falta inmediatez, el `RunWatcher` tendría que publicar sus cambios en un stream.
-- Editar la spec como JSON exige conocer su forma. Los errores de validación del servidor guían la corrección, pero un editor estructurado sería más amable; queda para después del piloto (UW-29).
-- `FakeApi` (`packages/web/test/fake-api.ts`) responde las rutas de preguntas, bloqueos, foco y editar y aprobar, con los mismos rechazos del servidor. Valida el cuerpo con los esquemas de `@lunasq/schemas` (`QuestionAnswer`, `SpecEditAndApprove`, `SpecRequestChanges`) antes de buscar la entidad, en el mismo orden que el servidor, así los issues que ven los tests son los reales.
+- A block takes up to 5 s to appear in or disappear from the Inbox. If immediacy were needed, the `RunWatcher` would have to publish its changes on a stream.
+- Editing the spec as JSON requires knowing its shape. The server's validation errors guide the fix, but a structured editor would be friendlier; it is left for after the pilot (UW-29).
+- `FakeApi` (`packages/web/test/fake-api.ts`) answers the routes for questions, blocks, focus and edit and approve, with the same rejections as the server. It validates the body with the `@lunasq/schemas` schemas (`QuestionAnswer`, `SpecEditAndApprove`, `SpecRequestChanges`) before looking up the entity, in the same order as the server, so the issues the tests see are the real ones.

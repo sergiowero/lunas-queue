@@ -12,8 +12,8 @@ let outdir: string;
 let home: string;
 
 beforeAll(async () => {
-  // Dentro de packages/cli: el bundle resuelve better-sqlite3 desde su node_modules. El nombre es
-  // único: dos corridas en el mismo checkout no comparten directorio (.gitignore lo cubre).
+  // Inside packages/cli: the bundle resolves better-sqlite3 from its node_modules. The name is
+  // unique: two runs in the same checkout do not share a directory (.gitignore covers it).
   outdir = await buildPackage(
     join(import.meta.dirname, "..", `dist-test-${process.pid}-${randomUUID().slice(0, 8)}`),
   );
@@ -32,18 +32,18 @@ async function lunasq(...args: string[]) {
   );
 }
 
-describe("paquete npm", () => {
-  it("declara el binario lunasq y solo better-sqlite3 como dependencia", () => {
+describe("npm package", () => {
+  it("declares the lunasq binary and only better-sqlite3 as a dependency", () => {
     const pkg = JSON.parse(readFileSync(join(outdir, "package.json"), "utf8"));
     expect(pkg).toMatchObject({ name: "lunasq", bin: { lunasq: "bin/lunasq.js" } });
     expect(Object.keys(pkg.dependencies)).toEqual(["better-sqlite3"]);
   });
 
-  it("incluye el build del front end junto al binario", () => {
+  it("includes the front end build next to the binary", () => {
     expect(existsSync(join(outdir, "web", "index.html"))).toBe(true);
   });
 
-  it("el bundle corre, aplica las migraciones y encuentra los assets junto a sí", async () => {
+  it("the bundle runs, applies the migrations and finds the assets next to itself", async () => {
     expect((await lunasq("--version")).stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
     const { stdout } = await lunasq("doctor", "--json");
     const results = JSON.parse(stdout) as { id: string; status: string }[];

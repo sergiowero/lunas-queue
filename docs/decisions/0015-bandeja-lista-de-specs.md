@@ -1,22 +1,22 @@
-# 0015 — La bandeja lista las specs por aprobar y el gate vive en el detalle
+# 0015 — The Inbox lists the specs to approve and the gate lives in the detail
 
-- Estado: aceptada
-- Fecha: 2026-10-30
-- Supera: la decisión de [ADR uw-27-bandeja](uw-27-bandeja.md) de montar `SpecVersions` en la bandeja
-- Código: `packages/web/src/pages/inbox.tsx`, `packages/web/src/components/task/spec.tsx`
+- Status: accepted
+- Date: 2026-10-30
+- Supersedes: the decision in [ADR uw-27-bandeja](uw-27-bandeja.md) to mount `SpecVersions` in the Inbox
+- Code: `packages/web/src/pages/inbox.tsx`, `packages/web/src/components/task/spec.tsx`
 
-## Contexto
+## Context
 
-ADR uw-27-bandeja montaba en «Specs por aprobar» el panel completo de cada spec (versiones, contenido, diff y gate). Con varias tareas en `refined` la bandeja se vuelve una página larga y difícil de recorrer: el humano pidió que la sección sea solo una lista para elegir qué revisar.
+ADR uw-27-bandeja mounted each spec's full panel (versions, content, diff and gate) in «Specs por aprobar». With several tasks in `refined` the Inbox becomes a long page that is hard to scan: the human asked for the section to be just a list to choose what to review.
 
-## Decisión
+## Decision
 
-- **«Specs por aprobar» es una lista.** Una fila (`li`) por tarea en `refined`, ordenadas como antes (`updatedAt` ascendente), con el intent como enlace a `/tasks/$taskId` y el nombre del proyecto. Sin versiones, contenido, diff ni botones.
-- **El gate vive solo en el detalle de la tarea.** Aprobar, pedir cambios y editar y aprobar se hacen en la sección «Spec» del detalle, con el mismo `SpecVersions` y el mismo comportamiento (ADR 0013, uw-27-bandeja §Errores). Al salir de `refined` la tarea deja de aparecer en la lista.
-- **La bandeja no pide specs.** Como no monta `SpecVersions`, no hace `GET /api/tasks/:id/specs` por tarea; la lista sale de `GET /api/tasks`, como antes.
-- **Sin cambios** en los estados de carga, error y vacío de la sección, en el total del menú (sigue contando las tareas en `refined`) ni en las secciones de preguntas y bloqueos.
+- **«Specs por aprobar» is a list.** One row (`li`) per task in `refined`, ordered as before (`updatedAt` ascending), with the intent as a link to `/tasks/$taskId` and the project name. No versions, content, diff or buttons.
+- **The gate lives only in the task detail.** Approve, request changes and edit and approve are done in the detail's «Spec» section, with the same `SpecVersions` and the same behavior (ADR 0013, uw-27-bandeja §Errors). When the task leaves `refined` it stops appearing in the list.
+- **The Inbox does not request specs.** Since it does not mount `SpecVersions`, it does not do `GET /api/tasks/:id/specs` per task; the list comes from `GET /api/tasks`, as before.
+- **No changes** in the section's loading, error and empty states, in the menu total (it still counts the tasks in `refined`) or in the questions and blocks sections.
 
-## Consecuencias
+## Consequences
 
-- Revisar una spec desde la bandeja cuesta un clic más, a cambio de una bandeja que se recorre de un vistazo.
-- Los tests del gate (editar y aprobar, JSON inválido, issues del servidor, error de la última acción) viven en `task-detail.test.tsx`; `inbox.test.tsx` cubre la lista, la navegación al detalle y que la tarea sale de la bandeja tras decidir.
+- Reviewing a spec from the Inbox costs one more click, in exchange for an Inbox that can be scanned at a glance.
+- The gate's tests (edit and approve, invalid JSON, server issues, error of the last action) live in `task-detail.test.tsx`; `inbox.test.tsx` covers the list, the navigation to the detail and that the task leaves the Inbox after deciding.

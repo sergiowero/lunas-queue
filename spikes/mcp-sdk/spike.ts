@@ -15,13 +15,13 @@ const { tools } = await client.listTools();
 console.log("tools:", tools.map((t) => t.name).join(", "));
 console.log("echo inputSchema:", JSON.stringify(tools.find((t) => t.name === "echo")?.inputSchema));
 
-const echo = await client.callTool({ name: "echo", arguments: { text: "hola" } });
-assert.deepEqual(echo.content, [{ type: "text", text: "hola" }]);
+const echo = await client.callTool({ name: "echo", arguments: { text: "hello" } });
+assert.deepEqual(echo.content, [{ type: "text", text: "hello" }]);
 console.log("callTool echo: ok");
 
 const bad = await client.callTool({ name: "echo", arguments: { text: 42 } });
 assert.equal(bad.isError, true);
-console.log("input inválido -> isError:", JSON.stringify(bad.content).slice(0, 120));
+console.log("invalid input -> isError:", JSON.stringify(bad.content).slice(0, 120));
 
 const who = await client.callTool({ name: "whoami", arguments: {} });
 console.log("whoami:", JSON.stringify(who.content));

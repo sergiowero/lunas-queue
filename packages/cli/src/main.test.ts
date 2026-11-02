@@ -24,7 +24,7 @@ function setup(responses = healthyResponses()) {
 }
 
 describe("lunasq", () => {
-  it("--version y la ayuda salen con 0", async () => {
+  it("--version and help exit with 0", async () => {
     const { deps, out } = setup();
     expect(await main(["--version"], deps)).toBe(0);
     expect(out).toEqual([VERSION]);
@@ -32,42 +32,42 @@ describe("lunasq", () => {
     expect(out[1]).toContain("lunasq install");
   });
 
-  it("un comando o una opción desconocidos salen con 2", async () => {
+  it("an unknown command or option exits with 2", async () => {
     const { deps, err } = setup();
     expect(await main(["deploy"], deps)).toBe(2);
     expect(await main(["doctor", "--nope"], deps)).toBe(2);
     expect(await main(["install", "--port", "70000"], deps)).toBe(2);
-    expect(err.join("\n")).toContain("--port inválido");
+    expect(err.join("\n")).toContain("invalid --port");
   });
 
-  it("install deja doctor en verde y sale con 0", async () => {
+  it("install leaves doctor green and exits with 0", async () => {
     const { deps, out } = setup();
     expect(await main(["install", "--port", "8124"], deps)).toBe(0);
     expect(out.join("\n")).toContain("Instalado:");
     expect(await main(["doctor"], deps)).toBe(0);
-    expect(out.at(-1)).toContain("✓ LunasQ MCP registrado");
+    expect(out.at(-1)).toContain("✓ LunasQ MCP registered");
   });
 
-  it("install sin requisitos sale con 1 y explica qué falta", async () => {
+  it("install without requirements exits with 1 and explains what is missing", async () => {
     const { deps, err } = setup({ ...healthyResponses(), "gh auth status": { exitCode: 127 } });
     expect(await main(["install"], deps)).toBe(1);
-    expect(err.join("\n")).toContain("gh no está instalado");
+    expect(err.join("\n")).toContain("gh is not installed");
   });
 
-  it("doctor sale con 1 si algo falla y --json da los resultados", async () => {
+  it("doctor exits with 1 if something fails and --json gives the results", async () => {
     const { deps, out } = setup();
     expect(await main(["doctor", "--json"], deps)).toBe(1);
     const results = JSON.parse(out[0] ?? "[]") as { id: string; status: string }[];
     expect(results.find((r) => r.id === "config")?.status).toBe("fail");
   });
 
-  it("start sin instalar sale con 1", async () => {
+  it("start without installing exits with 1", async () => {
     const { deps, err } = setup();
     expect(await main(["start"], deps)).toBe(1);
     expect(err.join("\n")).toContain("lunasq install");
   });
 
-  it("start arranca con la configuración instalada y para al recibir la señal", async () => {
+  it("start starts with the installed configuration and stops on receiving the signal", async () => {
     const { deps, ctx, out } = setup();
     await install(ctx);
     await writeConfig(ctx.paths.config, { port: 8125, telemetry: false });
@@ -91,11 +91,11 @@ describe("lunasq", () => {
       copilotAgentsPath: ctx.paths.copilotAgents,
       telemetry: false,
     });
-    expect(out).toContain("LunasQ en http://127.0.0.1:8125");
+    expect(out).toContain("LunasQ at http://127.0.0.1:8125");
     expect(stop).toHaveBeenCalledOnce();
   });
 
-  it("start sirve el front end cuando la máquina tiene su build", async () => {
+  it("start serves the front end when the machine has its build", async () => {
     const { deps, ctx } = setup();
     await install(ctx);
     const startRuntime = vi.fn(
@@ -113,7 +113,7 @@ describe("lunasq", () => {
     expect(startRuntime.mock.calls[1]?.[0]).not.toHaveProperty("webRoot");
   });
 
-  it("un error inesperado sale con 1 y su mensaje", async () => {
+  it("an unexpected error exits with 1 and its message", async () => {
     const { deps, ctx, err } = setup();
     await install(ctx);
     const startRuntime = async (): Promise<Runtime> => {
@@ -125,7 +125,7 @@ describe("lunasq", () => {
 });
 
 describe("untilSignal", () => {
-  it("resuelve con la primera señal y quita sus dos listeners", async () => {
+  it("resolves with the first signal and removes its two listeners", async () => {
     const before = { int: process.listenerCount("SIGINT"), term: process.listenerCount("SIGTERM") };
     const waiting = untilSignal();
     process.emit("SIGINT");

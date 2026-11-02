@@ -60,7 +60,7 @@ function setup(runOverrides: Parameters<typeof insertRun>[2] = {}) {
 }
 
 describe("POST /v1/logs", () => {
-  it("guarda cada api_request en el Run del token y lo suma al usage de la tarea", async () => {
+  it("stores each api_request in the token's Run and adds it to the task's usage", async () => {
     const { run, post, usage } = setup();
     const res = await post(
       logs(run.id, [apiRequest("req_1", [], 10), apiRequest("req_2", [], 30)]),
@@ -79,7 +79,7 @@ describe("POST /v1/logs", () => {
     expect(body.byModel).toEqual([expect.objectContaining({ model: "claude-opus-5-5" })]);
   });
 
-  it("reenviar el lote no duplica el consumo", async () => {
+  it("resending the batch does not duplicate the consumption", async () => {
     const { run, post, usage } = setup();
     const batch = logs(run.id, [apiRequest("req_1")]);
     await post(batch);
@@ -87,14 +87,14 @@ describe("POST /v1/logs", () => {
     expect((await usage()).total.inputTokens).toBe(10);
   });
 
-  it("acepta el último lote de un Run ya cerrado", async () => {
+  it("accepts the last batch of an already closed Run", async () => {
     const { db, run, post, usage } = setup();
     new RunRepository(db).close(run.id, { result: "success" });
     await post(logs(run.id, [apiRequest("req_1")]));
     expect((await usage()).total.inputTokens).toBe(10);
   });
 
-  it("acepta el cuerpo comprimido con gzip", async () => {
+  it("accepts the gzip-compressed body", async () => {
     const { run, post, usage } = setup();
     const res = await post(gzipSync(JSON.stringify(logs(run.id, [apiRequest("req_1")]))), {
       headers: { "content-encoding": "gzip" },
@@ -103,7 +103,7 @@ describe("POST /v1/logs", () => {
     expect((await usage()).total.inputTokens).toBe(10);
   });
 
-  it("con token ausente o desconocido responde {} sin guardar nada", async () => {
+  it("with a missing or unknown token answers {} without storing anything", async () => {
     const { run, post, usage } = setup();
     for (const token of [null, "desconocido"]) {
       const res = await post(logs(run.id, [apiRequest("req_1")]), { token });
@@ -113,7 +113,7 @@ describe("POST /v1/logs", () => {
     expect((await usage()).byRun).toEqual([]);
   });
 
-  it("descarta lo que declara otro Run: un proceso que hereda el token no suma al Run ajeno", async () => {
+  it("discards what another Run declares: a process that inherits the token does not add to the foreign Run", async () => {
     const { db, run, post, usage } = setup();
     const other = insertRun(db, insertTask(db, insertProject(db).id).id, { phase: "verify" });
     await post(logs(other.id, [apiRequest("req_1")]));
@@ -125,7 +125,7 @@ describe("POST /v1/logs", () => {
     expect(run.id).not.toBe(other.id);
   });
 
-  it("con session id nativo solo cuenta la sesión del Run", async () => {
+  it("with a native session id it only counts the Run's session", async () => {
     const { run, post, usage } = setup({ agentSession: "s-1", agentSessionSource: "native" });
     await post(logs(run.id, [apiRequest("req_1")], [str("session.id", "s-otra")]));
     expect((await usage()).total.inputTokens).toBe(0);
@@ -133,7 +133,7 @@ describe("POST /v1/logs", () => {
     expect((await usage()).total.inputTokens).toBe(10);
   });
 
-  it("atribuye al revisor lo que llega con el agent_id que registraron los hooks de subagentes", async () => {
+  it("attributes to the reviewer what arrives with the agent_id the subagent hooks registered", async () => {
     const { db, run, post, usage } = setup();
     new RunSubagentRepository(db).recordStart(run.id, {
       agentId: "a1",
@@ -153,14 +153,14 @@ describe("POST /v1/logs", () => {
     expect(body.byReviewer[0]?.usage.inputTokens).toBe(20);
   });
 
-  it("un valor de atributo con tipo inesperado no tumba el lote", async () => {
+  it("an unexpected attribute value type does not take down the batch", async () => {
     const { run, post, usage } = setup();
     const odd = { key: "otro", value: { doubleValue: "NaN", intValue: { x: 1 } } };
     await post(logs(run.id, [apiRequest("req_1", [odd])]));
     expect((await usage()).total.inputTokens).toBe(10);
   });
 
-  it("valida el token antes de leer el cuerpo: sin token no se descomprime nada", async () => {
+  it("validates the token before reading the body: without a token nothing is decompressed", async () => {
     const { post } = setup();
     const bomb = gzipSync(Buffer.alloc(40 * 1024 * 1024));
     const res = await post(bomb, { token: null, headers: { "content-encoding": "gzip" } });
@@ -168,7 +168,7 @@ describe("POST /v1/logs", () => {
     expect(await res.json()).toEqual({});
   });
 
-  it("rechaza con 413 un cuerpo demasiado grande y un gzip que expande más del tope", async () => {
+  it("rejects with 413 a body that is too large and a gzip that expands beyond the cap", async () => {
     const { post, usage } = setup();
     const big = await post(Buffer.alloc(9 * 1024 * 1024, 32), {
       headers: { "content-length": String(9 * 1024 * 1024) },
@@ -181,7 +181,7 @@ describe("POST /v1/logs", () => {
     expect((await usage()).byRun).toEqual([]);
   });
 
-  it("responde 400 si el cuerpo no es JSON ni OTLP", async () => {
+  it("responds 400 if the body is neither JSON nor OTLP", async () => {
     const { post } = setup();
     expect((await post("no es json")).status).toBe(400);
     expect((await post({ resourceLogs: "x" })).status).toBe(400);
@@ -189,7 +189,7 @@ describe("POST /v1/logs", () => {
 });
 
 describe("POST /v1/metrics", () => {
-  it("lo acepta y no guarda nada: las métricas son delta y no traen request id", async () => {
+  it("accepts it and stores nothing: the metrics are delta and carry no request id", async () => {
     const { post, usage } = setup();
     const res = await post(
       { resourceMetrics: [{ scopeMetrics: [] }] },
@@ -202,7 +202,7 @@ describe("POST /v1/metrics", () => {
 });
 
 describe("feature flag telemetry", () => {
-  it("con telemetry: false no monta los endpoints OTLP", async () => {
+  it("with telemetry: false it does not mount the OTLP endpoints", async () => {
     const db = migratedDatabase();
     const app = createApp({ db, telemetry: false });
     for (const path of [OTLP_LOGS_PATH, OTLP_METRICS_PATH]) {

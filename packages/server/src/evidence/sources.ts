@@ -1,7 +1,7 @@
-// Origen de los transcripts del archivo de evidencia (docs/design.md §Archivo de evidencia, ADR
-// uw-24-archivo-evidencia). Claude Code guarda cada sesión en
-// `~/.claude/projects/<cwd con no-alfanuméricos → "-">/<session-id>.jsonl` y borra los
-// transcripts al vencer su retención; LunasQ los copia al cerrar el Run.
+// Source of the evidence file's transcripts (docs/design.md §Evidence file, ADR
+// uw-24-archivo-evidencia). Claude Code stores each session in
+// `~/.claude/projects/<cwd with non-alphanumerics → "-">/<session-id>.jsonl` and deletes the
+// transcripts when their retention expires; LunasQ copies them when the Run closes.
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, sep } from "node:path";
@@ -13,29 +13,29 @@ export type TranscriptRequest = {
   subagents: RunSubagentRow[];
 };
 
-/** `jsonl` es null si no se pudo leer; `note` dice por qué. */
+/** `jsonl` is null if it could not be read; `note` says why. */
 export type RawTranscript = { title: string; jsonl: string | null; note?: string };
 
 export interface TranscriptSource {
-  /** La sesión del agente primero y después un transcript por subagente. */
+  /** The agent's session first and then one transcript per subagent. */
   forRun(request: TranscriptRequest): Promise<RawTranscript[]>;
 }
 
-/** Sin transcripts: el archivo de evidencia queda sin esa parte. */
+/** Without transcripts: the evidence file is left without that part. */
 export class NoTranscripts implements TranscriptSource {
   async forRun(): Promise<RawTranscript[]> {
     return [];
   }
 }
 
-/** 32 MiB: un transcript más grande no cabe de forma útil en un PR. */
+/** 32 MiB: a larger transcript does not usefully fit in a PR. */
 export const DEFAULT_TRANSCRIPT_MAX_BYTES = 32 * 1024 * 1024;
 
-/** Nombre del directorio de proyecto que usa Claude Code para un cwd. */
+/** Name of the project directory Claude Code uses for a cwd. */
 export const projectDirName = (cwd: string) => cwd.replace(/[^A-Za-z0-9]/g, "-");
 
 export interface ClaudeTranscriptSourceOptions {
-  /** Por defecto `~/.claude`. */
+  /** By default `~/.claude`. */
   claudeDir?: string;
   maxBytes?: number;
 }
@@ -54,9 +54,9 @@ export class ClaudeTranscriptSource implements TranscriptSource {
   async forRun({ run, worktreePath, subagents }: TranscriptRequest): Promise<RawTranscript[]> {
     const out: RawTranscript[] = [await this.#session(run, worktreePath)];
     for (const sub of subagents) {
-      const title = `Subagente ${sub.agentType} (${sub.agentId})`;
+      const title = `Subagent ${sub.agentType} (${sub.agentId})`;
       if (!sub.transcriptPath) {
-        out.push({ title, jsonl: null, note: "sin transcript: el subagente no llegó a terminar" });
+        out.push({ title, jsonl: null, note: "no transcript: the subagent did not finish" });
         continue;
       }
       out.push({ title, ...(await this.#subagent(sub.transcriptPath, worktreePath)) });
@@ -65,29 +65,28 @@ export class ClaudeTranscriptSource implements TranscriptSource {
   }
 
   async #session(run: RunRow, worktreePath: string): Promise<RawTranscript> {
-    const title = "Sesión del agente";
-    if (!run.agentSession) return { title, jsonl: null, note: "Run sin sesión de agente" };
-    // Claude Code nombra el directorio con el cwd ya resuelto; el worktree puede venir por un symlink.
+    const title = "Agent session";
+    if (!run.agentSession) return { title, jsonl: null, note: "Run without an agent session" };
+    // Claude Code names the directory with the already resolved cwd; the worktree may come through a symlink.
     const cwds = [worktreePath, await realpath(worktreePath).catch(() => worktreePath)];
     for (const cwd of new Set(cwds)) {
       const path = join(this.#projectsDir, projectDirName(cwd), `${run.agentSession}.jsonl`);
       const read = await this.#read(path);
-      if (read.jsonl !== null || read.note.startsWith("demasiado grande"))
-        return { title, ...read };
+      if (read.jsonl !== null || read.note.startsWith("too large")) return { title, ...read };
     }
     return {
       title,
       jsonl: null,
-      note: `no se encontró el transcript de la sesión ${run.agentSession}`,
+      note: `transcript of session ${run.agentSession} not found`,
     };
   }
 
   async #subagent(path: string, worktreePath: string): Promise<Read> {
-    // La ruta la manda el hook SubagentStop: no se lee nada que no sea un transcript de este
-    // worktree dentro de ~/.claude/projects, ni siguiendo symlinks.
+    // The path is sent by the SubagentStop hook: nothing that is not a transcript of this
+    // worktree inside ~/.claude/projects is read, nor by following symlinks.
     const real = await realpath(path).catch(() => null);
     const base = await realpath(this.#projectsDir).catch(() => this.#projectsDir);
-    if (real === null) return { jsonl: null, note: `no se encontró ${path}` };
+    if (real === null) return { jsonl: null, note: `${path} not found` };
     const project = real.startsWith(base + sep)
       ? (real.slice(base.length + 1).split(sep)[0] ?? null)
       : null;
@@ -95,19 +94,19 @@ export class ClaudeTranscriptSource implements TranscriptSource {
       [worktreePath, await realpath(worktreePath).catch(() => worktreePath)].map(projectDirName),
     );
     if (project === null || !real.endsWith(".jsonl")) {
-      return { jsonl: null, note: "el transcript está fuera de ~/.claude/projects: no se lee" };
+      return { jsonl: null, note: "the transcript is outside ~/.claude/projects: not read" };
     }
     if (!own.has(project)) {
-      return { jsonl: null, note: "el transcript es de otro proyecto: no se lee" };
+      return { jsonl: null, note: "the transcript belongs to another project: not read" };
     }
     return this.#read(real);
   }
 
   async #read(path: string): Promise<Read> {
     const info = await stat(path).catch(() => null);
-    if (!info?.isFile()) return { jsonl: null, note: `no se encontró ${path}` };
+    if (!info?.isFile()) return { jsonl: null, note: `${path} not found` };
     if (info.size > this.#maxBytes) {
-      return { jsonl: null, note: `demasiado grande (${info.size} bytes): no se incluye` };
+      return { jsonl: null, note: `too large (${info.size} bytes): not included` };
     }
     return { jsonl: await readFile(path, "utf8") };
   }
@@ -129,18 +128,18 @@ export class CopilotReviewerTranscriptSource implements TranscriptSource {
 
     const out: RawTranscript[] = [
       {
-        title: "Sesión Copilot CLI",
+        title: "Copilot CLI session",
         jsonl: null,
-        note: "LunasQ captura por separado las ejecuciones y respuestas de cada revisor",
+        note: "LunasQ captures each reviewer's executions and answers separately",
       },
     ];
     for (const subagent of request.subagents) {
-      const title = `Subagente ${subagent.agentType} (${subagent.agentId})`;
+      const title = `Subagent ${subagent.agentType} (${subagent.agentId})`;
       if (!subagent.agentId.startsWith("copilot-") || !subagent.transcriptPath) {
         out.push({
           title,
           jsonl: null,
-          note: "sin transcript de una ejecución Copilot completada",
+          note: "no transcript for a completed Copilot execution",
         });
         continue;
       }
@@ -174,16 +173,16 @@ export class CopilotReviewerTranscriptSource implements TranscriptSource {
     ) {
       return {
         jsonl: null,
-        note: "el transcript Copilot está fuera del directorio privado del Run",
+        note: "the Copilot transcript is outside the Run's private directory",
       };
     }
     if (basename(realFile) !== `${agentId}.jsonl`) {
-      return { jsonl: null, note: "el nombre del transcript Copilot no coincide con el revisor" };
+      return { jsonl: null, note: "the Copilot transcript name does not match the reviewer" };
     }
     const info = await stat(realFile).catch(() => null);
-    if (!info?.isFile()) return { jsonl: null, note: `no se encontró ${path}` };
+    if (!info?.isFile()) return { jsonl: null, note: `${path} not found` };
     if (info.size > this.#maxBytes) {
-      return { jsonl: null, note: `demasiado grande (${info.size} bytes): no se incluye` };
+      return { jsonl: null, note: `too large (${info.size} bytes): not included` };
     }
     return { jsonl: await readFile(realFile, "utf8") };
   }

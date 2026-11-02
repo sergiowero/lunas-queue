@@ -1,4 +1,4 @@
-// HerdrPaneRunner contra FakeHerdr, que ejecuta de verdad lo que recibe con `runInPane`.
+// HerdrPaneRunner against FakeHerdr, which really runs what it receives with `runInPane`.
 import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,14 +34,14 @@ describe("HerdrPaneRunner", () => {
 
   const panes = async () => (await herdr.snapshot()).panes.map((p) => p.paneId);
 
-  it("devuelve exit code y salida, y cierra el pane al terminar", async () => {
+  it("returns exit code and output, and closes the pane when done", async () => {
     const res = await runner.run({ command: "echo hola; echo error >&2; exit 3", cwd: dir });
     expect(res).toEqual({ exitCode: 3, stdout: "hola\nerror\n", stderr: "", timedOut: false });
     expect(await panes()).toEqual([rootPaneId]);
     expect(readdirSync(stateDir)).toEqual([]);
   });
 
-  it("corre en el cwd dado con el env del pane", async () => {
+  it("runs in the given cwd with the pane's env", async () => {
     const res = await runner.run({
       command: `pwd; printf '%s\\n' "$LUNASQ_TASK_ID"`,
       cwd: dir,
@@ -51,7 +51,7 @@ describe("HerdrPaneRunner", () => {
     expect(res.stdout).toBe(`${dir}\nt-1\n`);
   });
 
-  it("con envAllowlist el comando no ve el resto del env del pane", async () => {
+  it("with envAllowlist the command does not see the rest of the pane's env", async () => {
     process.env.LUNASQ_TEST_SECRET = "no-debe-verse";
     process.env.LUNASQ_TEST_KEEP = "se queda";
     try {
@@ -68,32 +68,32 @@ describe("HerdrPaneRunner", () => {
     }
   });
 
-  it("rechaza nombres de la allowlist que no son de shell", async () => {
+  it("rejects allowlist names that are not shell names", async () => {
     await expect(runner.run({ command: "true", cwd: dir, envAllowlist: ["A;rm"] })).rejects.toThrow(
       /variable/,
     );
   });
 
-  it("el comando no lee la terminal: stdin es /dev/null", async () => {
+  it("the command does not read the terminal: stdin is /dev/null", async () => {
     const res = await runner.run({ command: "cat; echo fin", cwd: dir, timeoutMs: 2_000 });
     expect(res).toMatchObject({ exitCode: 0, stdout: "fin\n", timedOut: false });
   });
 
-  it("rechaza nombres de variable que no son de shell", async () => {
+  it("rejects variable names that are not shell names", async () => {
     await expect(runner.run({ command: "true", cwd: dir, env: { "A;rm": "x" } })).rejects.toThrow(
       /variable/,
     );
   });
 
-  it("el comando llega intacto aunque tenga comillas y metacaracteres", async () => {
+  it("the command arrives intact even with quotes and metacharacters", async () => {
     const res = await runner.run({ command: `printf '%s' "a 'b' \\$c; d"`, cwd: dir });
     expect(res.stdout).toBe("a 'b' $c; d");
   });
 
-  it("al vencer el timeout cierra el pane, que mata el comando", async () => {
+  it("on timeout it closes the pane, which kills the command", async () => {
     const started = Date.now();
-    // El timeout tiene margen para que el shell escriba "antes" aunque la máquina esté cargada;
-    // el comando dura mucho más, así que el timeout siempre gana.
+    // The timeout has margin for the shell to write "antes" even if the machine is loaded;
+    // the command lasts much longer, so the timeout always wins.
     const res = await runner.run({
       command: "echo antes; sleep 3; touch tarde",
       cwd: dir,
@@ -110,7 +110,7 @@ describe("HerdrPaneRunner", () => {
     expect(existsSync(join(dir, "tarde"))).toBe(false);
   }, 15_000);
 
-  it("si alguien cierra el pane antes de terminar, es un fallo", async () => {
+  it("if someone closes the pane before it finishes, it is a failure", async () => {
     const run = runner.run({ command: "sleep 2", cwd: dir });
     let pane: string | undefined;
     while (!pane) {
@@ -120,6 +120,6 @@ describe("HerdrPaneRunner", () => {
     await herdr.closePane(pane);
     const res = await run;
     expect(res).toMatchObject({ exitCode: PANE_CLOSED_EXIT_CODE, timedOut: false });
-    expect(res.stderr).toMatch(/pane se cerró/);
+    expect(res.stderr).toMatch(/pane was closed/);
   });
 });

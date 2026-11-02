@@ -7,7 +7,7 @@ const projectId = "9f3b2a1c-5d4e-4f60-8a7b-1c2d3e4f5a60";
 const now = new Date("2026-10-29T10:00:00Z");
 
 describe("RunView", () => {
-  it("no expone el run token", () => {
+  it("does not expose the run token", () => {
     const run = RunView.parse({
       id: runId,
       taskId,
@@ -32,7 +32,7 @@ describe("RunView", () => {
 });
 
 describe("TaskUsage", () => {
-  it("parte de totales en cero", () => {
+  it("starts from zero totals", () => {
     const empty = {
       total: EMPTY_USAGE,
       byRun: [],
@@ -50,7 +50,7 @@ describe("TaskUsage", () => {
     });
   });
 
-  it("desglosa por fase (con rework), agente, modelo y revisor", () => {
+  it("breaks down by phase (with rework), agent, model and reviewer", () => {
     const usage = TaskUsage.parse({
       total: EMPTY_USAGE,
       byRun: [],
@@ -67,7 +67,7 @@ describe("TaskUsage", () => {
 });
 
 describe("QueueEntry", () => {
-  it("lleva score solo cuando la tarea está en el ready set", () => {
+  it("only carries score when the task is in the ready set", () => {
     const task = {
       id: taskId,
       number: 1,
@@ -106,7 +106,7 @@ describe("QueueEntry", () => {
 });
 
 describe("TaskEvidence", () => {
-  it("guarda la ruta y el markdown", () => {
+  it("stores the path and the markdown", () => {
     expect(
       TaskEvidence.parse({ source: "worktree", path: "/w/lunasq/tasks/a.md", markdown: "# a" }),
     ).toEqual({

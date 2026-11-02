@@ -4,8 +4,8 @@ import { isHerdrError } from "./errors.ts";
 import { FakeHerdr } from "./fake.ts";
 import type { HerdrEvent } from "./types.ts";
 
-// Controles propios del fake, que usan las unidades que dependen del adapter (dispatcher,
-// reconciliación, notificaciones) para provocar lo que en herdr real hace el agente.
+// The fake's own controls, used by the units that depend on the adapter (dispatcher,
+// reconciliation, notifications) to cause what the agent does in real herdr.
 async function agentSetup(fake: FakeHerdr) {
   const { rootPaneId } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
   const pane = await fake.splitPane({ paneId: rootPaneId });
@@ -17,8 +17,8 @@ async function agentSetup(fake: FakeHerdr) {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe("FakeHerdr: controles de test", () => {
-  it("setAgentStatus emite el cambio y despierta a waitAgent", async () => {
+describe("FakeHerdr: test controls", () => {
+  it("setAgentStatus emits the change and wakes waitAgent", async () => {
     const fake = new FakeHerdr();
     const { pane, events } = await agentSetup(fake);
     const waiting = fake.waitAgent({ name: "t1-refine-1", until: ["blocked"], timeoutMs: 1_000 });
@@ -33,7 +33,7 @@ describe("FakeHerdr: controles de test", () => {
     });
   });
 
-  it("exitAgent deja el pane sin agente y emite pane_exited", async () => {
+  it("exitAgent leaves the pane without an agent and emits pane_exited", async () => {
     const fake = new FakeHerdr();
     const { pane, events } = await agentSetup(fake);
     fake.exitAgent("t1-refine-1");
@@ -47,7 +47,7 @@ describe("FakeHerdr: controles de test", () => {
     expect((await fake.snapshot()).panes.map((p) => p.paneId)).toContain(pane.paneId);
   });
 
-  it("startStatus blocked simula el arranque bloqueado por el diálogo de confianza", async () => {
+  it("startStatus blocked simulates the start blocked by the trust dialog", async () => {
     const fake = new FakeHerdr({ startStatus: "blocked" });
     const { rootPaneId } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
     const { agent, started } = await fake.startAgent({
@@ -60,7 +60,7 @@ describe("FakeHerdr: controles de test", () => {
     expect(await fake.readAgent({ name: "t1-refine-1" })).toContain(TRUST_DIALOG_MARKER);
   });
 
-  it("down enter acepta el diálogo de confianza y el agente queda idle", async () => {
+  it("down enter accepts the trust dialog and the agent ends up idle", async () => {
     const fake = new FakeHerdr({ startStatus: "blocked" });
     const { rootPaneId } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
     await fake.startAgent({ name: "t1-refine-1", kind: "claude", paneId: rootPaneId });
@@ -69,7 +69,7 @@ describe("FakeHerdr: controles de test", () => {
     expect(await fake.readAgent({ name: "t1-refine-1" })).not.toContain(TRUST_DIALOG_MARKER);
   });
 
-  it("enter a secas elige 'No, exit' y el agente termina, como Claude Code", async () => {
+  it("a bare enter picks 'No, exit' and the agent ends, like Claude Code", async () => {
     const fake = new FakeHerdr({ startStatus: "blocked" });
     const { rootPaneId } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
     await fake.startAgent({ name: "t1-refine-1", kind: "claude", paneId: rootPaneId });
@@ -77,7 +77,7 @@ describe("FakeHerdr: controles de test", () => {
     expect(await fake.getAgent("t1-refine-1")).toBeUndefined();
   });
 
-  it("guarda los args y las teclas recibidas para que los tests los inspeccionen", async () => {
+  it("stores the args and the keys received so tests can inspect them", async () => {
     const fake = new FakeHerdr();
     const { rootPaneId } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj", env: {} });
     const pane = await fake.splitPane({ paneId: rootPaneId, env: { A: "1" } });
@@ -88,7 +88,7 @@ describe("FakeHerdr: controles de test", () => {
     expect(fake.sentKeys("a")).toEqual([["enter"]]);
   });
 
-  it("setAgentSession publica la identidad de sesión del agente", async () => {
+  it("setAgentSession publishes the agent's session identity", async () => {
     const fake = new FakeHerdr();
     await agentSetup(fake);
     const session = { kind: "id", source: "herdr:claude", value: "uuid-1" };
@@ -96,7 +96,7 @@ describe("FakeHerdr: controles de test", () => {
     expect((await fake.getAgent("t1-refine-1"))?.session).toEqual(session);
   });
 
-  it("setAgentScreen fija lo que readAgent devuelve, hasta anularlo con undefined", async () => {
+  it("setAgentScreen sets what readAgent returns, until it is cleared with undefined", async () => {
     const fake = new FakeHerdr();
     await agentSetup(fake);
     fake.setAgentScreen("t1-refine-1", "Usage limit reached · limit resets 3:45pm");
@@ -109,7 +109,7 @@ describe("FakeHerdr: controles de test", () => {
     );
   });
 
-  it("los workspaces de proyecto no publican checkoutPath, como en herdr", async () => {
+  it("project workspaces do not publish checkoutPath, like in herdr", async () => {
     const fake = new FakeHerdr();
     const { workspace } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
     expect(workspace.checkoutPath).toBeUndefined();
@@ -125,7 +125,7 @@ describe("FakeHerdr: controles de test", () => {
     );
   });
 
-  it("las notificaciones están apagadas por defecto, como en herdr", async () => {
+  it("notifications are off by default, like in herdr", async () => {
     expect(await new FakeHerdr().notify({ title: "x" })).toEqual({
       shown: false,
       reason: "disabled",
@@ -135,14 +135,14 @@ describe("FakeHerdr: controles de test", () => {
     expect(fake.notifications).toEqual([{ title: "x", body: "y" }]);
   });
 
-  it("ensureWorktree sobre un workspace inexistente falla con workspace_not_found", async () => {
+  it("ensureWorktree on a nonexistent workspace fails with workspace_not_found", async () => {
     const err = await new FakeHerdr()
       .ensureWorktree({ workspaceId: "w9", branch: "b", base: "main" })
       .catch((e) => e);
     expect(isHerdrError(err, "workspace_not_found")).toBe(true);
   });
 
-  it("setWorktreeDirty exige force para removerlo, como herdr real", async () => {
+  it("setWorktreeDirty requires force to remove it, like real herdr", async () => {
     const fake = new FakeHerdr();
     const { workspace } = await fake.ensureWorkspace({ cwd: "/repo", label: "proj" });
     const input = { workspaceId: workspace.workspaceId, branch: "lunasq/t1", base: "main" };
@@ -155,7 +155,7 @@ describe("FakeHerdr: controles de test", () => {
 
     await fake.removeWorktree({ workspaceId: worktree.workspaceId, force: true });
     expect(await fake.listWorktrees(workspace.workspaceId)).toEqual([]);
-    // El checkout nuevo del mismo branch nace limpio.
+    // The new checkout of the same branch is born clean.
     const again = await fake.ensureWorktree(input);
     await fake.removeWorktree({ workspaceId: again.worktree.workspaceId });
   });

@@ -1,5 +1,5 @@
-// Suite de contrato del adapter de herdr: la misma corre contra el fake (pnpm test) y contra
-// herdr real (pnpm --filter @lunasq/adapters test:herdr). Criterio de terminado de UW-02.
+// Contract suite of the herdr adapter: the same one runs against the fake (pnpm test) and against
+// real herdr (pnpm --filter @lunasq/adapters test:herdr). Done criterion of UW-02.
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,14 +10,14 @@ import type { AgentStatus, HerdrAdapter, HerdrEvent, HerdrSubscription } from ".
 
 export interface HerdrContractHarness {
   adapter: HerdrAdapter;
-  /** Un repo git nuevo con un commit en `main`, para abrir el workspace del proyecto. */
+  /** A new git repo with a commit on `main`, to open the project's workspace. */
   newRepo(): Promise<string>;
-  /** Ruta donde crear el worktree `name` (fuera de `~/.herdr/worktrees`). */
+  /** Path where to create the worktree `name` (outside `~/.herdr/worktrees`). */
   worktreePath(name: string): string;
-  /** Kind y env del pane para que `agent start` levante un agente que responde a prompts. */
+  /** Kind and env of the pane so `agent start` brings up an agent that answers prompts. */
   agentKind: string;
   agentEnv: Record<string, string>;
-  /** Corta los streams de eventos abiertos, como cuando herdr cierra uno por backpressure. */
+  /** Cuts the open event streams, like when herdr closes one due to backpressure. */
   dropStreams(): void;
   cleanup(): Promise<void>;
 }
@@ -39,7 +39,7 @@ export function herdrContract(
 ): void {
   const timeout = opts.timeoutMs ?? 5_000;
 
-  describe(`contrato del adapter de herdr: ${name}`, { timeout }, () => {
+  describe(`herdr adapter contract: ${name}`, { timeout }, () => {
     let h: HerdrContractHarness;
     let herdr: HerdrAdapter;
     let seq = 0;
@@ -51,7 +51,7 @@ export function herdrContract(
     }, 30_000);
 
     const tempDirs: string[] = [];
-    /** Directorio real para comandos de `runInPane` (los repos del fake no existen en disco). */
+    /** Real directory for `runInPane` commands (the fake's repos do not exist on disk). */
     const tempDir = () => {
       const dir = realpathSync(mkdtempSync(join(tmpdir(), "lunasq-pane-")));
       tempDirs.push(dir);
@@ -88,7 +88,7 @@ export function herdrContract(
           }
         }
       });
-      // Espera un evento que cumpla `pred` posterior al índice `from` (por defecto, cualquiera).
+      // Waits for an event that meets `pred` after index `from` (by default, any).
       const next = (pred: (e: HerdrEvent) => boolean, from = 0) => {
         const seen = events.slice(from).find(pred);
         if (seen) return Promise.resolve(seen);
@@ -98,7 +98,7 @@ export function herdrContract(
           setTimeout(() => {
             if (!waiters.includes(w)) return;
             waiters.splice(waiters.indexOf(w), 1);
-            reject(new Error(`evento no recibido; recibidos: ${JSON.stringify(events)}`));
+            reject(new Error(`event not received; received: ${JSON.stringify(events)}`));
           }, timeout - 500);
         });
       };
@@ -106,7 +106,7 @@ export function herdrContract(
     }
 
     describe("workspaces", () => {
-      it("ensureWorkspace crea una vez y después reutiliza el mismo", async () => {
+      it("ensureWorkspace creates once and then reuses the same one", async () => {
         const cwd = await h.newRepo();
         const label = unique("proj-");
         const first = await herdr.ensureWorkspace({ cwd, label });
@@ -132,7 +132,7 @@ export function herdrContract(
         expect(ids.filter((id) => id === first.workspace.workspaceId)).toHaveLength(1);
       });
 
-      it("closeWorkspace es idempotente y un ensure posterior vuelve a crear", async () => {
+      it("closeWorkspace is idempotent and a later ensure creates again", async () => {
         const cwd = await h.newRepo();
         const label = unique("proj-");
         const { workspace } = await herdr.ensureWorkspace({ cwd, label });
@@ -152,7 +152,7 @@ export function herdrContract(
     });
 
     describe("worktrees", () => {
-      it("ensureWorktree crea la primera vez y reabre el mismo después", async () => {
+      it("ensureWorktree creates the first time and reopens the same one afterwards", async () => {
         const { workspace } = await projectWorkspace();
         const branch = `lunasq/${unique("t")}`;
         const path = h.worktreePath(branch.replace("/", "-"));
@@ -183,7 +183,7 @@ export function herdrContract(
         expect(ws?.linkedWorktree).toBe(true);
       });
 
-      it("removeWorktree cierra su workspace y conserva el branch", async () => {
+      it("removeWorktree closes its workspace and keeps the branch", async () => {
         const { workspace } = await projectWorkspace();
         const branch = `lunasq/${unique("t")}`;
         const path = h.worktreePath(branch.replace("/", "-"));
@@ -196,13 +196,13 @@ export function herdrContract(
         expect(snap.workspaces.map((w) => w.workspaceId)).not.toContain(worktree.workspaceId);
         expect(snap.workspaces.map((w) => w.workspaceId)).toContain(workspace.workspaceId);
 
-        // El branch sigue: volver a asegurar el worktree lo saca de ese mismo branch.
+        // The branch remains: ensuring the worktree again takes it from that same branch.
         const again = await herdr.ensureWorktree(input);
         expect(again.created).toBe(true);
         expect(again.worktree.branch).toBe(branch);
       });
 
-      it("removeWorktree es idempotente y rechaza el workspace del proyecto", async () => {
+      it("removeWorktree is idempotent and rejects the project's workspace", async () => {
         const { workspace } = await projectWorkspace();
         const branch = `lunasq/${unique("t")}`;
         const path = h.worktreePath(branch.replace("/", "-"));
@@ -220,7 +220,7 @@ export function herdrContract(
         ).rejects.toSatisfy((err) => isHerdrError(err, "not_linked_worktree"));
       });
 
-      it("listWorktrees da los worktrees enlazados, abiertos o no, y olvida los removidos", async () => {
+      it("listWorktrees gives the linked worktrees, open or not, and forgets the removed ones", async () => {
         const { workspace } = await projectWorkspace();
         const projectId = workspace.workspaceId;
         expect(await herdr.listWorktrees(projectId)).toEqual([]);
@@ -252,7 +252,7 @@ export function herdrContract(
         });
         expect(both.get(b.branch)?.workspaceId).toBe(b.workspaceId);
 
-        // Cerrar el workspace no borra el checkout: sigue listado, sin workspace abierto.
+        // Closing the workspace does not delete the checkout: it stays listed, without an open workspace.
         await herdr.closeWorkspace(a.workspaceId);
         expect((await byBranch()).get(a.branch)).toEqual({ branch: a.branch, path: a.path });
 
@@ -260,7 +260,7 @@ export function herdrContract(
         expect([...(await byBranch()).keys()]).toEqual([a.branch]);
       });
 
-      it("listWorktrees falla con un workspace inexistente", async () => {
+      it("listWorktrees fails with a nonexistent workspace", async () => {
         await expect(herdr.listWorktrees("w999999")).rejects.toSatisfy((err) =>
           isHerdrError(err, "workspace_not_found"),
         );
@@ -268,14 +268,14 @@ export function herdrContract(
     });
 
     describe("panes", () => {
-      it("cerrar el último pane cierra su workspace", async () => {
+      it("closing the last pane closes its workspace", async () => {
         const { workspace, rootPaneId } = await projectWorkspace();
         await herdr.closePane(rootPaneId);
         const snap = await herdr.snapshot();
         expect(snap.workspaces.map((w) => w.workspaceId)).not.toContain(workspace.workspaceId);
       });
 
-      it("splitPane abre un pane en el workspace y closePane es idempotente", async () => {
+      it("splitPane opens a pane in the workspace and closePane is idempotent", async () => {
         const { workspace, rootPaneId } = await projectWorkspace();
         const pane = await herdr.splitPane({ paneId: rootPaneId, env: { LUNASQ_RUN_TOKEN: "x" } });
         expect(pane.workspaceId).toBe(workspace.workspaceId);
@@ -290,7 +290,7 @@ export function herdrContract(
         expect(snap.panes.map((p) => p.paneId)).not.toContain(pane.paneId);
       });
 
-      it("runInPane corre el comando con el cwd y el env del pane, sin esperarlo", async () => {
+      it("runInPane runs the command with the pane's cwd and env, without waiting for it", async () => {
         const { rootPaneId } = await projectWorkspace();
         const cwd = tempDir();
         const pane = await herdr.splitPane({
@@ -303,11 +303,11 @@ export function herdrContract(
           command: 'printf %s "$LUNASQ_PROBE" > probe',
         });
         const out = join(cwd, "probe");
-        await until(() => existsSync(out) && readFileSync(out, "utf8") === "x1", "el comando");
+        await until(() => existsSync(out) && readFileSync(out, "utf8") === "x1", "the command");
         await herdr.closePane(pane.paneId);
       });
 
-      it("cerrar el pane mata el comando y runInPane sobre un pane inexistente falla", async () => {
+      it("closing the pane kills the command and runInPane on a nonexistent pane fails", async () => {
         const { rootPaneId } = await projectWorkspace();
         const cwd = tempDir();
         const pane = await herdr.splitPane({ paneId: rootPaneId, cwd });
@@ -322,8 +322,8 @@ export function herdrContract(
       });
     });
 
-    describe("HerdrPaneRunner sobre el adapter", () => {
-      it("da el exit code y la salida de un comando corrido en un pane nuevo", async () => {
+    describe("HerdrPaneRunner on top of the adapter", () => {
+      it("gives the exit code and output of a command run in a new pane", async () => {
         const { rootPaneId } = await projectWorkspace();
         const cwd = tempDir();
         const runner = new HerdrPaneRunner({
@@ -343,7 +343,7 @@ export function herdrContract(
         expect(snap.panes.filter((p) => p.paneId !== rootPaneId && p.cwd === cwd)).toEqual([]);
       });
 
-      it("con envAllowlist el comando solo ve esas variables y las de env", async () => {
+      it("with envAllowlist the command only sees those variables and those of env", async () => {
         const { rootPaneId } = await projectWorkspace();
         const runner = new HerdrPaneRunner({
           herdr,
@@ -362,8 +362,8 @@ export function herdrContract(
       });
     });
 
-    describe("agentes", () => {
-      it("startAgent es idempotente por nombre", async () => {
+    describe("agents", () => {
+      it("startAgent is idempotent by name", async () => {
         const { pane, name, agent } = await agentInNewPane();
         expect(agent.name).toBe(name);
         expect(agent.paneId).toBe(pane.paneId);
@@ -377,11 +377,11 @@ export function herdrContract(
         expect(snap.agents.filter((a) => a.name === name)).toHaveLength(1);
       });
 
-      it("getAgent devuelve undefined si el agente no existe", async () => {
+      it("getAgent returns undefined if the agent does not exist", async () => {
         expect(await herdr.getAgent(unique("nadie-"))).toBeUndefined();
       });
 
-      it("promptAgent con wait espera a que el agente termine y readAgent ve el prompt", async () => {
+      it("promptAgent with wait waits for the agent to finish and readAgent sees the prompt", async () => {
         const { name } = await agentInNewPane();
         const text = `hola ${unique("p")}`;
         const after = await herdr.promptAgent({ name, text, wait: { timeoutMs: timeout - 1_000 } });
@@ -392,7 +392,7 @@ export function herdrContract(
         expect(await herdr.readAgent({ name, lines: 20 })).toContain(text);
       });
 
-      it("sendKeys llega al agente y falla con agent_not_found si no existe", async () => {
+      it("sendKeys reaches the agent and fails with agent_not_found if it does not exist", async () => {
         const { name } = await agentInNewPane();
         await herdr.sendKeys({ name, keys: ["enter"] });
         await expect(herdr.sendKeys({ name: unique("nadie-"), keys: ["enter"] })).rejects.toSatisfy(
@@ -400,7 +400,7 @@ export function herdrContract(
         );
       });
 
-      it("focusAgent enfoca el pane del agente y falla con agent_not_found si no existe", async () => {
+      it("focusAgent focuses the agent's pane and fails with agent_not_found if it does not exist", async () => {
         const { pane, name } = await agentInNewPane();
         const focused = await herdr.focusAgent(name);
         expect(focused.name).toBe(name);
@@ -410,7 +410,7 @@ export function herdrContract(
         );
       });
 
-      it("waitAgent lanza timeout si el agente no llega al estado", async () => {
+      it("waitAgent throws timeout if the agent does not reach the state", async () => {
         const { name } = await agentInNewPane();
         await expect(
           herdr.waitAgent({ name, until: ["working"], timeoutMs: 500 }),
@@ -418,8 +418,8 @@ export function herdrContract(
       });
     });
 
-    describe("metadata, notificaciones y snapshot", () => {
-      it("reportMetadata publica título y tokens; el último reporte gana", async () => {
+    describe("metadata, notifications and snapshot", () => {
+      it("reportMetadata publishes title and tokens; the last report wins", async () => {
         const { pane, name } = await agentInNewPane();
         await herdr.reportMetadata({
           paneId: pane.paneId,
@@ -440,20 +440,20 @@ export function herdrContract(
         expect(snap.agents.find((a) => a.name === name)?.tokens).toMatchObject({ iter: "2" });
       });
 
-      it("notify responde si herdr mostró la notificación", async () => {
+      it("notify answers whether herdr showed the notification", async () => {
         const res = await herdr.notify({ title: "LunasQ", body: "contrato", sound: "none" });
         expect(typeof res.shown).toBe("boolean");
       });
 
-      it("snapshot reporta versión y protocol 22", async () => {
+      it("snapshot reports version and protocol 22", async () => {
         const snap = await herdr.snapshot();
         expect(snap.protocol).toBe(22);
         expect(snap.version).toMatch(/^\d+\.\d+\.\d+/);
       });
     });
 
-    describe("eventos", () => {
-      it("la suscripción por pane recibe los cambios de estado del agente", async () => {
+    describe("events", () => {
+      it("the per-pane subscription receives the agent's state changes", async () => {
         const { pane, name } = await agentInNewPane();
         const c = collect((on) => herdr.subscribe({ paneIds: [pane.paneId] }, on));
         try {
@@ -471,7 +471,7 @@ export function herdrContract(
         }
       });
 
-      it("la suscripción de ciclo de vida ve los panes cerrados", async () => {
+      it("the lifecycle subscription sees the closed panes", async () => {
         const { rootPaneId } = await projectWorkspace();
         const pane = await herdr.splitPane({ paneId: rootPaneId });
         const c = collect((on) => herdr.subscribe({ lifecycle: true }, on));
@@ -484,7 +484,7 @@ export function herdrContract(
         }
       });
 
-      it("si el stream se cierra emite events_lost, se re-suscribe y sigue recibiendo", async () => {
+      it("if the stream closes it emits events_lost, re-subscribes and keeps receiving", async () => {
         const { pane, name } = await agentInNewPane();
         const c = collect((on) => herdr.subscribe({ paneIds: [pane.paneId] }, on));
         try {
@@ -505,7 +505,7 @@ export function herdrContract(
         }
       });
 
-      it("suscribirse a un pane que no existe falla sin reintentar", async () => {
+      it("subscribing to a pane that does not exist fails without retrying", async () => {
         const { rootPaneId } = await projectWorkspace();
         const pane = await herdr.splitPane({ paneId: rootPaneId });
         await herdr.closePane(pane.paneId);
@@ -519,7 +519,7 @@ export function herdrContract(
         }
       });
 
-      it("close() detiene la suscripción sin events_lost", async () => {
+      it("close() stops the subscription without events_lost", async () => {
         const { pane, name } = await agentInNewPane();
         const c = collect((on) => herdr.subscribe({ paneIds: [pane.paneId] }, on));
         await c.next((e) => e.type === "subscribed");

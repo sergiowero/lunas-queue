@@ -42,8 +42,8 @@ function mcpSetup() {
   return { db, project, task, repo: new RunRepository(db) };
 }
 
-describe("RunRepository: lo que usa el LunasQ MCP", () => {
-  it("activeByToken solo encuentra Runs sin ended_at", () => {
+describe("RunRepository: what the LunasQ MCP uses", () => {
+  it("activeByToken only finds Runs without ended_at", () => {
     const { db, task, repo } = mcpSetup();
     const old = insertRun(db, task.id, {
       runToken: "viejo",
@@ -56,14 +56,14 @@ describe("RunRepository: lo que usa el LunasQ MCP", () => {
     expect(repo.activeByToken("desconocido")).toBeNull();
   });
 
-  it("byToken encuentra el Run aunque esté cerrado", () => {
+  it("byToken finds the Run even if it is closed", () => {
     const { db, task, repo } = mcpSetup();
     const old = insertRun(db, task.id, { endedAt: new Date(), result: "success" });
     expect(repo.byToken(old.runToken)?.id).toBe(old.id);
     expect(repo.byToken("desconocido")).toBeNull();
   });
 
-  it("markContextRead guarda la primera lectura y no la mueve al repetir", () => {
+  it("markContextRead stores the first read and does not move it on repeat", () => {
     const { db, task, repo } = mcpSetup();
     const run = insertRun(db, task.id);
     const first = repo.markContextRead(run.id);
@@ -73,7 +73,7 @@ describe("RunRepository: lo que usa el LunasQ MCP", () => {
     expect(repo.get(run.id)?.contextReadAt?.getTime()).toBe(first?.getTime());
   });
 
-  it("closeRun cierra una sola vez con resultado, motivo y handoff", () => {
+  it("closeRun closes only once with result, reason and handoff", () => {
     const { db, task, repo } = mcpSetup();
     const run = insertRun(db, task.id);
     const handoff = { phase: "implementation" };
@@ -83,14 +83,14 @@ describe("RunRepository: lo que usa el LunasQ MCP", () => {
     expect(repo.get(run.id)?.endedAt).toBeInstanceOf(Date);
   });
 
-  it("recordHandoff guarda el handoff y deja el Run abierto", () => {
+  it("recordHandoff stores the handoff and leaves the Run open", () => {
     const { db, task, repo } = mcpSetup();
     const run = insertRun(db, task.id, { phase: "verify" });
     repo.recordHandoff(run.id, { phase: "verification" });
     expect(repo.get(run.id)).toMatchObject({ handoff: { phase: "verification" }, endedAt: null });
   });
 
-  it("deliveryInProgress: solo con el Run del verificador abierto y su handoff guardado", () => {
+  it("deliveryInProgress: only with the verifier's Run open and its handoff saved", () => {
     const { db, task, repo } = mcpSetup();
     expect(repo.deliveryInProgress(task.id)).toBe(false);
     const run = insertRun(db, task.id, { phase: "verify" });
@@ -101,7 +101,7 @@ describe("RunRepository: lo que usa el LunasQ MCP", () => {
     expect(repo.deliveryInProgress(task.id)).toBe(false);
   });
 
-  it("latestHandoffs devuelve los handoffs de la fase, del más viejo al más nuevo", () => {
+  it("latestHandoffs returns the phase's handoffs, from oldest to newest", () => {
     const { db, task, repo } = mcpSetup();
     const first = insertRun(db, task.id, { phase: "verify", startedAt: new Date(1000) });
     closeRun(db, first.id, { result: "success", handoff: { n: 1 } });
@@ -113,7 +113,7 @@ describe("RunRepository: lo que usa el LunasQ MCP", () => {
     expect(repo.handoffs(task.id, "implement")).toEqual([]);
   });
 
-  it("latestHandoff devuelve el último Run de la fase con handoff, con su iteración", () => {
+  it("latestHandoff returns the phase's last Run with a handoff, with its iteration", () => {
     const { db, task, repo } = mcpSetup();
     expect(repo.latestHandoff(task.id, "verify")).toBeNull();
     const first = insertRun(db, task.id, {
@@ -137,7 +137,7 @@ describe("RunRepository: lo que usa el LunasQ MCP", () => {
     });
   });
 
-  it("previousRun es el último Run cerrado de la fase, sin contar el actual", () => {
+  it("previousRun is the phase's last closed Run, not counting the current one", () => {
     const { db, task, repo } = mcpSetup();
     const failed = insertRun(db, task.id, { startedAt: new Date(1000) });
     closeRun(db, failed.id, { result: "failure", failureReason: "no compila" });
@@ -151,7 +151,7 @@ describe("RunRepository: lo que usa el LunasQ MCP", () => {
 });
 
 describe("consecutiveFailures", () => {
-  it("cuenta los Runs fallidos seguidos de la fase hasta uno que no falló", () => {
+  it("counts the phase's consecutive failed Runs up to one that did not fail", () => {
     const { db, task } = mcpSetup();
     const ok = insertRun(db, task.id, { startedAt: new Date(1000) });
     closeRun(db, ok.id, { result: "success" });
@@ -165,7 +165,7 @@ describe("consecutiveFailures", () => {
     expect(consecutiveFailures(db, task.id, "verify")).toBe(1);
   });
 
-  it("un resume reinicia la cuenta", () => {
+  it("a resume resets the count", () => {
     const { db, project } = mcpSetup();
     const task = insertTask(db, project.id, { state: "in_progress", subState: "running" });
     const failed = insertRun(db, task.id, { startedAt: new Date(1000) });
@@ -186,8 +186,8 @@ describe("consecutiveFailures", () => {
   });
 });
 
-describe("Questions y checklist", () => {
-  it("createQuestion guarda la pregunta abierta y su evento", () => {
+describe("Questions and checklist", () => {
+  it("createQuestion stores the open question and its event", () => {
     const { db, task } = mcpSetup();
     const run = insertRun(db, task.id);
     const question = createQuestion(db, {
@@ -205,7 +205,7 @@ describe("Questions y checklist", () => {
     });
   });
 
-  it("createQuestion guarda las opciones en orden y sin ellas deja options nulo", () => {
+  it("createQuestion stores the options in order and without them leaves options null", () => {
     const { db, task } = mcpSetup();
     const run = insertRun(db, task.id);
     const plain = createQuestion(db, { taskId: task.id, runId: run.id, question: "¿Abierta?" });
@@ -222,7 +222,7 @@ describe("Questions y checklist", () => {
     expect(listed?.options).toEqual(options);
   });
 
-  it("latestChecklist es el último snapshot de la tarea", () => {
+  it("latestChecklist is the task's last snapshot", () => {
     const { db, task } = mcpSetup();
     const run = insertRun(db, task.id);
     expect(latestChecklist(db, task.id)).toBeNull();
@@ -254,13 +254,13 @@ const decisionFor = (
   expected: ClaimDecision["expected"] = { state: "draft", subState: "queued" },
 ): ClaimDecision => ({ taskId: task.id, projectId: task.projectId, phase, expected });
 
-describe("claimRun y switchAgentKind: límite global guardado en Settings", () => {
-  it("el claim revalida con el límite guardado después de planear y rechaza sin crear Run", () => {
+describe("claimRun and switchAgentKind: global limit saved in Settings", () => {
+  it("the claim revalidates with the limit saved after planning and rejects without creating a Run", () => {
     const { db, project, claim } = setup({ config: { globalConcurrency: 2 } });
     const otro = insertProject(db);
     expect(claim(decisionFor(insertTask(db, otro.id))).ok).toBe(true);
     const task = insertTask(db, project.id);
-    // El plan se hizo con límite 2 y un agente vivo; el humano baja el límite a 1 antes del claim.
+    // The plan was made with limit 2 and one live agent; the human lowers the limit to 1 before the claim.
     new SettingsRepository(db).saveConcurrency({ globalConcurrency: 1 });
 
     const res = claim(decisionFor(task));
@@ -270,7 +270,7 @@ describe("claimRun y switchAgentKind: límite global guardado en Settings", () =
     expect(new RunRepository(db).forTask(task.id)).toEqual([]);
   });
 
-  it("el claim acepta más agentes que el default si Settings sube el límite", () => {
+  it("the claim accepts more agents than the default if Settings raises the limit", () => {
     const { db, project, claim } = setup({ config: { globalConcurrency: 1 } });
     new SettingsRepository(db).saveConcurrency({ globalConcurrency: 2 });
     const otro = insertProject(db);
@@ -278,13 +278,13 @@ describe("claimRun y switchAgentKind: límite global guardado en Settings", () =
     expect(claim(decisionFor(insertTask(db, otro.id))).ok).toBe(true);
   });
 
-  it("switchAgentKind rechaza por falta de slot con el límite guardado, no con el default", () => {
+  it("switchAgentKind rejects for lack of a slot with the saved limit, not with the default", () => {
     const { db, project, claim, projects, config, runs } = setup();
     const otro = insertProject(db);
     const mine = claim(decisionFor(insertTask(db, project.id)));
     if (!mine.ok) throw new Error(mine.error.message);
     expect(claim(decisionFor(insertTask(db, otro.id))).ok).toBe(true);
-    // Con el default (5) cabría; el límite guardado ya está lleno por el otro agente vivo.
+    // With the default (5) it would fit; the saved limit is already full because of the other live agent.
     new SettingsRepository(db).saveConcurrency({ globalConcurrency: 1 });
 
     expect(runs.switchAgentKind(mine.run.id, "copilot", null, { projects, config })).toBe(
@@ -294,8 +294,8 @@ describe("claimRun y switchAgentKind: límite global guardado en Settings", () =
   });
 });
 
-describe("claimRun: proveedores habilitados", () => {
-  it("con todos los proveedores deshabilitados rechaza y la tarea sigue en queued sin Run", () => {
+describe("claimRun: enabled providers", () => {
+  it("with all providers disabled it rejects and the task stays in queued without a Run", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id);
     new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
@@ -309,7 +309,7 @@ describe("claimRun: proveedores habilitados", () => {
     expect(new RunRepository(db).forTask(task.id)).toEqual([]);
   });
 
-  it("con el primario deshabilitado crea el Run con el proveedor efectivo, sin el modelo del primario", () => {
+  it("with the primary disabled it creates the Run with the effective provider, without the primary's model", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id, { state: "in_progress" });
     new SettingsRepository(db).saveProviders({ claude: false, copilot: true });
@@ -320,7 +320,7 @@ describe("claimRun: proveedores habilitados", () => {
     expect(res.run).toMatchObject({ agentKind: "copilot", model: null });
   });
 
-  it("un agente vivo no se toca al deshabilitar su proveedor", () => {
+  it("a live agent is not touched when its provider is disabled", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id);
     const res = claim(decisionFor(task));
@@ -336,7 +336,7 @@ describe("claimRun: proveedores habilitados", () => {
 });
 
 describe("claimRun", () => {
-  it("mueve la tarea a running y crea el Run con token, iteración, nombre y sesión nativa", () => {
+  it("moves the task to running and creates the Run with token, iteration, name and native session", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id);
 
@@ -360,7 +360,7 @@ describe("claimRun", () => {
     expect(transitions).toHaveLength(1);
   });
 
-  it("toma el modelo del perfil de la fase y la iteración de la tarea", () => {
+  it("takes the model from the phase profile and the iteration from the task", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id, {
       state: "in_progress",
@@ -371,7 +371,7 @@ describe("claimRun", () => {
     expect(res.run).toMatchObject({ model: "opus", iteration: 2 });
   });
 
-  it("repetir el claim no crea otro Run: la tarea ya no está donde se vio", () => {
+  it("repeating the claim does not create another Run: the task is no longer where it was seen", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id);
     expect(claim(decisionFor(task)).ok).toBe(true);
@@ -382,7 +382,7 @@ describe("claimRun", () => {
     expect(new RunRepository(db).forTask(task.id)).toHaveLength(1);
   });
 
-  it("rechaza con no_slot si el límite del proyecto ya está lleno, sin escribir nada", () => {
+  it("rejects with no_slot if the project limit is already full, without writing anything", () => {
     const { db, project, claim } = setup({ concurrency: 1 });
     const a = insertTask(db, project.id);
     const b = insertTask(db, project.id);
@@ -395,8 +395,8 @@ describe("claimRun", () => {
     expect(new RunRepository(db).forTask(b.id)).toEqual([]);
   });
 
-  it("dos procesos con la misma decisión: solo uno reclama", () => {
-    // Otra conexión al mismo archivo, como la CLI junto al servidor.
+  it("two processes with the same decision: only one claims", () => {
+    // Another connection to the same file, like the CLI next to the server.
     const { db, file } = freshDatabase();
     migrateDatabase(db);
     const other = openDatabase(file);
@@ -420,7 +420,7 @@ describe("claimRun", () => {
     }
   });
 
-  it("rechaza con no_slot si el límite global está lleno", () => {
+  it("rejects with no_slot if the global limit is full", () => {
     const { db, project, claim } = setup({ config: { globalConcurrency: 1 } });
     const other = insertProject(db);
     expect(claim(decisionFor(insertTask(db, project.id))).ok).toBe(true);
@@ -430,7 +430,7 @@ describe("claimRun", () => {
     });
   });
 
-  it("rechaza con run_active si la tarea aún tiene un Run abierto", () => {
+  it("rejects with run_active if the task still has an open Run", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id, { state: "verification" });
     insertRun(db, task.id, { phase: "implement" });
@@ -441,7 +441,7 @@ describe("claimRun", () => {
     expect(db.select().from(tasks).where(eq(tasks.id, task.id)).get()?.subState).toBe("queued");
   });
 
-  it("el ordinal del nombre cuenta los Runs previos de la fase", () => {
+  it("the name ordinal counts the phase's previous Runs", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id);
     insertRun(db, task.id, { phase: "refine", endedAt: new Date(), result: "failure" });
@@ -453,7 +453,7 @@ describe("claimRun", () => {
     expect(res.run.herdrName).toBe(agentName(task.id, "refine", 2));
   });
 
-  it("rechaza una fase que no corresponde al estado de la tarea", () => {
+  it("rejects a phase that does not match the task's state", () => {
     const { db, project, claim } = setup();
     const task = insertTask(db, project.id);
     expect(claim(decisionFor(task, "verify"))).toMatchObject({
@@ -472,7 +472,7 @@ describe("RunRepository", () => {
     return { ...ctx, task, run: res.run };
   }
 
-  it("guarda pane y workspace y marca el lanzamiento una sola vez", () => {
+  it("stores pane and workspace and marks the launch only once", () => {
     const { runs, run } = claimed();
     runs.recordPane(run.id, { workspaceId: "w2", paneId: "w2:p2" });
     const first = runs.markLaunched(run.id);
@@ -482,14 +482,14 @@ describe("RunRepository", () => {
     expect(second?.launchedAt?.getTime()).toBe(first?.launchedAt?.getTime());
   });
 
-  it("byToken encuentra solo el Run activo", () => {
+  it("byToken finds only the active Run", () => {
     const { runs, run } = claimed();
     expect(runs.activeByToken(run.runToken)?.id).toBe(run.id);
     runs.close(run.id, { result: "success" });
     expect(runs.activeByToken(run.runToken)).toBeNull();
   });
 
-  it("close es idempotente: el primer cierre gana", () => {
+  it("close is idempotent: the first close wins", () => {
     const { runs, run } = claimed();
     const first = runs.close(run.id, {
       result: "success",
@@ -509,7 +509,7 @@ describe("RunRepository", () => {
     expect(runs.get(run.id)?.endedAt).toBeInstanceOf(Date);
   });
 
-  it("close sin session conserva la identidad guardada al despachar", () => {
+  it("close without session keeps the identity saved at dispatch", () => {
     const { runs, run } = claimed();
     runs.close(run.id, { result: "success" });
     expect(runs.get(run.id)).toMatchObject({
@@ -518,7 +518,7 @@ describe("RunRepository", () => {
     });
   });
 
-  it("active lista los Runs sin ended_at", () => {
+  it("active lists the Runs without ended_at", () => {
     const { runs, run } = claimed();
     expect(runs.active().map((r) => r.id)).toEqual([run.id]);
     runs.close(run.id, { result: "cancelled" });
@@ -540,7 +540,7 @@ describe("RunRepository.fail", () => {
     return { ...ctx, task, claimOnce };
   }
 
-  it("cierra el Run como failure y devuelve la tarea a queued con el intento contado", () => {
+  it("closes the Run as failure and returns the task to queued with the attempt counted", () => {
     const { db, runs, task, claimOnce } = claimedInProgress();
     const run = claimOnce();
 
@@ -554,18 +554,18 @@ describe("RunRepository.fail", () => {
     });
   });
 
-  it("pause cierra el Run como cancelled, devuelve la tarea a queued y no cuenta como fallo", () => {
+  it("pause closes the Run as cancelled, returns the task to queued and does not count as a failure", () => {
     const { db, runs, task, claimOnce } = claimedInProgress();
-    // Tres fallos previos: la pausa no suma el cuarto que escalaría a needs_human.
+    // Three previous failures: the pause does not add the fourth one that would escalate to needs_human.
     for (let i = 0; i < 3; i++) runs.fail(claimOnce().id, `fallo ${i}`);
     const run = claimOnce();
 
-    const res = runs.pause(run.id, "todos los proveedores están deshabilitados en Settings");
+    const res = runs.pause(run.id, "all providers are disabled in Settings");
 
     expect(res).toMatchObject({ closed: true, transitioned: true });
     expect(runs.get(run.id)).toMatchObject({
       result: "cancelled",
-      failureReason: "todos los proveedores están deshabilitados en Settings",
+      failureReason: "all providers are disabled in Settings",
     });
     expect(db.select().from(tasks).where(eq(tasks.id, task.id)).get()).toMatchObject({
       state: "in_progress",
@@ -574,7 +574,7 @@ describe("RunRepository.fail", () => {
     expect(runs.pause(run.id, "otra vez")).toEqual({ closed: false, transitioned: false });
   });
 
-  it("los fallos consecutivos agotan los reintentos y escalan a needs_human", () => {
+  it("consecutive failures use up the retries and escalate to needs_human", () => {
     const { db, runs, task, claimOnce } = claimedInProgress();
     for (let i = 0; i < 3; i++) runs.fail(claimOnce().id, `fallo ${i}`);
     runs.fail(claimOnce().id, "cuarto fallo");
@@ -582,7 +582,7 @@ describe("RunRepository.fail", () => {
     expect(row).toMatchObject({ state: "needs_human", subState: null });
   });
 
-  it("un Run exitoso o un resume reinician la cuenta", () => {
+  it("a successful Run or a resume resets the count", () => {
     const { db, runs, task, claimOnce } = claimedInProgress();
     runs.fail(claimOnce().id, "a");
     runs.fail(claimOnce().id, "b");
@@ -599,7 +599,7 @@ describe("RunRepository.fail", () => {
     expect(runs.consecutiveFailures(task.id, "implement")).toBe(0);
   });
 
-  it("el Run que falla cuenta aunque empiece en el mismo ms que el último resume", () => {
+  it("the failing Run counts even if it starts in the same ms as the last resume", () => {
     const { db, runs, task, claimOnce } = claimedInProgress();
     runs.fail(claimOnce().id, "a");
     transitionTask(db, {
@@ -619,7 +619,7 @@ describe("RunRepository.fail", () => {
     expect(db.select().from(tasks).where(eq(tasks.id, task.id)).get()?.subState).toBe("queued");
   });
 
-  it("es idempotente y no mueve una tarea que ya salió de running", () => {
+  it("is idempotent and does not move a task that already left running", () => {
     const { db, runs, task, claimOnce } = claimedInProgress();
     const run = claimOnce();
     transitionTask(db, {
@@ -654,7 +654,7 @@ describe("recordVerdict", () => {
     skippedReviewers: [],
   });
 
-  it("fija la etiqueta de riesgo de la tarea y publica el evento del veredicto", () => {
+  it("sets the task's risk label and publishes the verdict event", () => {
     const { db, task } = mcpSetup();
     const run = insertRun(db, task.id, { phase: "verify" });
     recordVerdict(db, task.id, payload(run.id));
@@ -665,7 +665,7 @@ describe("recordVerdict", () => {
     expect(queued.map((o) => o.eventId)).toContain(event?.id);
   });
 
-  it("rechaza un payload inválido sin escribir nada", () => {
+  it("rejects an invalid payload without writing anything", () => {
     const { db, task } = mcpSetup();
     expect(() =>
       recordVerdict(db, task.id, { ...payload("no-uuid"), riskLabel: "x" } as never),

@@ -1,5 +1,5 @@
 {
-  "description": "Refinamiento sin título de la tarea",
+  "description": "Refinement without a task title",
   "expectedErrors": [
     {
       "path": "body.title"
@@ -11,23 +11,23 @@
     "runId": "42-refinement-1",
     "phase": "refinement",
     "result": "completed",
-    "summary": "Spec para cancelar pedidos pendientes desde la vista del cliente.",
+    "summary": "Spec to cancel pending orders from the customer view.",
     "relevantFiles": ["src/orders/order.ts", "src/orders/cancel-order.ts"],
     "decisions": [
       {
-        "decision": "La cancelación es un comando del agregado Order",
-        "rationale": "La invariante de estado vive en el agregado",
-        "discarded": ["Servicio de aplicación que cambia el estado directo en la BD"]
+        "decision": "Cancellation is a command of the Order aggregate",
+        "rationale": "The state invariant lives in the aggregate",
+        "discarded": ["Application service that changes the state directly in the DB"]
       }
     ],
-    "knownRisks": ["Los pedidos ya facturados requieren reembolso, fuera de alcance"],
+    "knownRisks": ["Orders already invoiced require a refund, out of scope"],
     "body": {
       "domainModel": {
         "boundedContext": "Pedidos",
         "glossary": [
           {
-            "term": "Pedido pendiente",
-            "definition": "Pedido confirmado que aún no se envía"
+            "term": "Pending order",
+            "definition": "Confirmed order that has not shipped yet"
           }
         ],
         "aggregates": [
@@ -36,27 +36,27 @@
             "entities": ["OrderLine"]
           }
         ],
-        "invariants": ["Solo un pedido pendiente puede cancelarse"],
+        "invariants": ["Only a pending order can be cancelled"],
         "events": [
           {
             "name": "OrderCancelled",
-            "description": "El cliente canceló un pedido pendiente"
+            "description": "The customer cancelled a pending order"
           }
         ]
       },
-      "requirements": ["El cliente puede cancelar un pedido que aún no se envió"],
+      "requirements": ["The customer can cancel an order that has not shipped yet"],
       "criteria": [
         {
           "id": "AC-1",
-          "given": "un pedido pendiente",
-          "when": "el cliente lo cancela",
-          "outcome": "el pedido queda cancelado y se emite OrderCancelled"
+          "given": "a pending order",
+          "when": "the customer cancels it",
+          "outcome": "the order ends up cancelled and OrderCancelled is emitted"
         },
         {
           "id": "AC-2",
-          "given": "un pedido enviado",
-          "when": "el cliente intenta cancelarlo",
-          "outcome": "la cancelación se rechaza con un motivo"
+          "given": "a shipped order",
+          "when": "the customer tries to cancel it",
+          "outcome": "the cancellation is rejected with a reason"
         }
       ],
       "taskList": [
@@ -67,11 +67,11 @@
         },
         {
           "id": "T-2",
-          "title": "Botón de cancelar en la vista del cliente",
+          "title": "Cancel button in the customer view",
           "criterionIds": ["AC-1"]
         }
       ],
-      "assumptions": ["El cliente solo ve sus propios pedidos"]
+      "assumptions": ["The customer only sees their own orders"]
     }
   }
 }

@@ -39,7 +39,7 @@ async function start(opts: RuntimeOptions) {
   return runtime;
 }
 
-/** IPv4 de una interfaz externa de esta máquina; undefined si no hay red (p. ej. un sandbox). */
+/** IPv4 of an external interface of this machine; undefined if there is no network (e.g. a sandbox). */
 function lanAddress(): string | undefined {
   for (const list of Object.values(networkInterfaces())) {
     const found = list?.find((i) => i.family === "IPv4" && !i.internal);
@@ -48,7 +48,7 @@ function lanAddress(): string | undefined {
   return undefined;
 }
 
-/** PUT crudo con Host de localhost: fetch no deja elegir el origen de la conexión ni el Host. */
+/** Raw PUT with a localhost Host: fetch does not let you choose the connection's origin nor the Host. */
 function putProviders(host: string, port: number, body: object) {
   return new Promise<number>((resolve, reject) => {
     const req = request(
@@ -70,7 +70,7 @@ function putProviders(host: string, port: number, body: object) {
 }
 
 describe("telemetryEnv", () => {
-  it("activa la telemetría de Claude Code hacia el collector local por OTLP http/json", () => {
+  it("enables Claude Code's telemetry toward the local collector by OTLP http/json", () => {
     expect(telemetryEnv("http://127.0.0.1:7360")).toEqual({
       CLAUDE_CODE_ENABLE_TELEMETRY: "1",
       OTEL_METRICS_EXPORTER: "otlp",
@@ -83,7 +83,7 @@ describe("telemetryEnv", () => {
 });
 
 describe("prepareDatabase", () => {
-  it("crea la base con sus migraciones y repetirlo no cambia nada", () => {
+  it("creates the database with its migrations and repeating it changes nothing", () => {
     const { dbPath } = options();
     prepareDatabase(dbPath).$client.close();
     const db = prepareDatabase(dbPath);
@@ -96,7 +96,7 @@ describe("prepareDatabase", () => {
 });
 
 describe("startRuntime", () => {
-  it("sirve el build del front end desde la misma URL cuando recibe webRoot", async () => {
+  it("serves the front end build from the same URL when it gets webRoot", async () => {
     const opts = options();
     const webRoot = join(opts.dir, "web");
     mkdirSync(webRoot);
@@ -109,9 +109,9 @@ describe("startRuntime", () => {
     expect((await fetch(`${runtime.url}/api/projects`)).status).toBe(200);
   });
 
-  it("pasa la cadencia del poll de PRs y del scheduler: una inválida impide arrancar", async () => {
+  it("passes the PR poll and scheduler cadence: an invalid one prevents starting", async () => {
     await expect(startRuntime(options({ prPollIntervalMs: 10 }))).rejects.toThrow(
-      "intervalMs debe ser un entero >= 1000",
+      "intervalMs must be an integer >= 1000",
     );
     await expect(startRuntime(options({ scheduler: { tickIntervalMs: 10 } }))).rejects.toThrow();
     const runtime = await start(
@@ -120,12 +120,12 @@ describe("startRuntime", () => {
     expect((await fetch(`${runtime.url}/api/queue`)).status).toBe(200);
   });
 
-  it("sin webRoot no sirve estáticos", async () => {
+  it("without webRoot it serves no static files", async () => {
     const runtime = await start(options());
     expect((await fetch(`${runtime.url}/queue`)).status).toBe(404);
   });
 
-  it("sirve la API en localhost y escribe los archivos MCP y de hooks con su URL", async () => {
+  it("serves the API on localhost and writes the MCP and hooks files with its URL", async () => {
     const opts = options();
     const runtime = await start(opts);
 
@@ -140,7 +140,7 @@ describe("startRuntime", () => {
     expect(settings).toContain(`${runtime.url}${SUBAGENT_HOOK_PATH}`);
   });
 
-  it("pasa la telemetría al entorno de cada pane salvo que se desactive", async () => {
+  it("passes telemetry to each pane's environment unless it is turned off", async () => {
     const opts = options();
     const seed = prepareDatabase(opts.dbPath);
     const task = insertTask(seed, insertProject(seed).id);
@@ -158,7 +158,7 @@ describe("startRuntime", () => {
     const pane = runs.forTask(task.id)[0]?.herdrPane as string;
     expect(herdr.paneEnv(pane)).toMatchObject(telemetryEnv(on.url));
 
-    // El endpoint OTLP responde con el flag activo: un token desconocido no tiene efectos.
+    // The OTLP endpoint answers with the flag on: an unknown token has no effects.
     const logs = (url: string) => fetch(`${url}/v1/logs`, { method: "POST", body: "{}" });
     expect((await logs(on.url)).status).toBe(200);
 
@@ -167,7 +167,7 @@ describe("startRuntime", () => {
     expect((await logs(off.url)).status).toBe(404);
   });
 
-  it("monta el stream de notificaciones", async () => {
+  it("mounts the notifications stream", async () => {
     const runtime = await start(options());
     const controller = new AbortController();
     const res = await fetch(`${runtime.url}/api/notifications/stream`, {
@@ -178,7 +178,7 @@ describe("startRuntime", () => {
     controller.abort();
   });
 
-  it("conecta la bandeja: agentes bloqueados, su acceso en herdr y la respuesta a preguntas", async () => {
+  it("wires the inbox: blocked agents, their access in herdr and answering questions", async () => {
     const opts = options();
     const seed = prepareDatabase(opts.dbPath);
     const project = insertProject(seed);
@@ -223,7 +223,7 @@ describe("startRuntime", () => {
     expect(await answer.json()).toMatchObject({ delivery: "new_run" });
   });
 
-  it("enfoca en herdr el agente de un Run despachado desde la tabla de Runs", async () => {
+  it("focuses in herdr the agent of a Run dispatched from the Runs table", async () => {
     const opts = options();
     const seed = prepareDatabase(opts.dbPath);
     const task = insertTask(seed, insertProject(seed).id);
@@ -243,14 +243,14 @@ describe("startRuntime", () => {
     expect(herdr.focused).toBe(run?.herdrName);
   });
 
-  it("stop cierra el servidor y es idempotente", async () => {
+  it("stop closes the server and is idempotent", async () => {
     const runtime = await startRuntime(options());
     await runtime.stop();
     await runtime.stop();
     await expect(fetch(`${runtime.url}/api/projects`)).rejects.toThrow();
   });
 
-  it("si la composición falla, libera el puerto y la base", async () => {
+  it("if the composition fails, it frees the port and the database", async () => {
     const opts = options();
     const first = await start(options());
     const port = Number(new URL(first.url).port);
@@ -265,16 +265,16 @@ describe("startRuntime", () => {
     expect(again.url).toBe(first.url);
   });
 
-  it("falla si el puerto está ocupado", async () => {
+  it("fails if the port is busy", async () => {
     const first = await start(options());
     const port = Number(new URL(first.url).port);
     await expect(startRuntime(options({ port }))).rejects.toThrow(/EADDRINUSE/);
   });
 
-  // Pasa por el servidor real: app.request inyecta la conexión a mano y no prueba que el runtime
-  // la reenvíe a la guarda de loopback.
+  // It goes through the real server: app.request injects the connection by hand and does not prove the runtime
+  // forwards it to the loopback guard.
   it.skipIf(lanAddress() === undefined)(
-    "con el servidor en todas las interfaces, rechaza el PUT de settings que llega por la red aunque falsifique Host: localhost",
+    "with the server on all interfaces, it rejects the settings PUT that arrives over the network even if it forges Host: localhost",
     async () => {
       const runtime = await start(options({ hostname: "0.0.0.0" }));
       const port = Number(new URL(runtime.url).port);

@@ -1,23 +1,23 @@
-// Dónde vive cada archivo que instala o lee LunasQ. `LUNASQ_HOME`, `CLAUDE_CONFIG_DIR` (el mismo
-// que respeta Claude Code) y `HERDR_CONFIG_PATH` (el de herdr) cambian las rutas por defecto.
+// Where each file that LunasQ installs or reads lives. `LUNASQ_HOME`, `CLAUDE_CONFIG_DIR` (the same
+// one Claude Code respects) and `HERDR_CONFIG_PATH` (herdr's) change the default paths.
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 export interface Paths {
-  /** Directorio propio de LunasQ: configuración, base y archivos estables para Claude Code. */
+  /** LunasQ's own directory: configuration, database and stable files for Claude Code. */
   home: string;
   config: string;
   db: string;
-  /** Archivo MCP estable (ADR 0002). */
+  /** Stable MCP file (ADR 0002). */
   mcpConfig: string;
-  /** Settings con los hooks de subagentes (ADR uw-19-revisores). */
+  /** Settings with the subagent hooks (ADR uw-19-revisores). */
   hookSettings: string;
-  /** Destinos de assets que instaló LunasQ: solo esos se sobrescriben o se borran. */
+  /** Asset destinations that LunasQ installed: only those are overwritten or deleted. */
   manifest: string;
   claudeHome: string;
-  /** Skills de usuario de Claude Code; cada skill de fase va en su carpeta. */
+  /** Claude Code user skills; each phase skill goes in its own folder. */
   skills: string;
-  /** Subagentes revisores (docs/design.md §Verificación con subagentes). */
+  /** Reviewer subagents (docs/design.md §Verification with subagents). */
   agents: string;
   copilotHome: string;
   copilotMcpConfig: string;

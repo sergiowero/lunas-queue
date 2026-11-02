@@ -1,5 +1,5 @@
-// Lectura del estado que necesita el scheduler (ADR 0014): tareas vivas, las terminales de las que
-// dependen y las aristas de las vivas, en una sola transacción para que el snapshot sea coherente.
+// Reading the state the scheduler needs (ADR 0014): live tasks, the terminal ones they
+// depend on and the edges of the live ones, in a single transaction so the snapshot is coherent.
 import {
   pendingPhase,
   type RetryState,
@@ -31,18 +31,18 @@ const columns = {
 export class SchedulerStateRepository implements SchedulerStateReader {
   private readonly db: LunasqDatabase | Tx;
 
-  /** Acepta una transacción abierta: el claim del dispatcher lee el snapshot dentro de la suya. */
+  /** Accepts an open transaction: the dispatcher's claim reads the snapshot inside its own. */
   constructor(db: LunasqDatabase | Tx) {
     this.db = db;
   }
 
   /**
-   * readySince = lo más reciente entre la creación, la última transición de la tarea (también un
-   * reintento: vuelve a esperar desde ahí) y el último cambio de sus dependencias mergeadas (el
-   * merge de su PR). Editar la prioridad no reinicia el aging.
+   * readySince = the most recent of the creation, the task's last transition (also a
+   * retry: it waits again from there) and the last change of its merged dependencies (the
+   * merge of their PR). Editing the priority does not reset the aging.
    *
-   * retry = Runs fallidos seguidos de la fase pendiente de una tarea en queued y el fin del
-   * último: el scheduler espera el backoff antes de volver a despacharla.
+   * retry = consecutive failed Runs of the pending phase of a task in queued and the end of the
+   * last one: the scheduler waits for the backoff before dispatching it again.
    */
   snapshot(): SchedulerSnapshot {
     return this.db.transaction((tx) => {
@@ -79,7 +79,7 @@ export class SchedulerStateRepository implements SchedulerStateReader {
         ).map((row) => [row.taskId, row.at]),
       );
 
-      // El proveedor real de cada agente vivo: el del Run abierto (un fallback puede no ser el primario).
+      // The real provider of each live agent: the one of the open Run (a fallback may not be the primary).
       const openRunKind = new Map(
         (liveIds.length === 0
           ? []
@@ -92,8 +92,8 @@ export class SchedulerStateRepository implements SchedulerStateReader {
       );
 
       const rows = [...live, ...terminal];
-      // Solo las dependencias ya satisfechas (PR mergeado o completada con Resultado): lo que
-      // cambie en las demás no hace lista a la tarea.
+      // Only already satisfied dependencies (merged PR or completed with a Result): what
+      // changes in the others does not make the task ready.
       const mergedAt = new Map(
         rows
           .filter((t) => t.prState === "merged" || (t.state === "completed" && t.resultKind))
@@ -129,7 +129,7 @@ export class SchedulerStateRepository implements SchedulerStateReader {
   }
 }
 
-/** Fallos seguidos de la fase pendiente y cuándo terminó el último; undefined sin fallos. */
+/** Consecutive failures of the pending phase and when the last one ended; undefined without failures. */
 function retryState(tx: Tx, taskId: string, state: TaskState): RetryState | undefined {
   const phase = pendingPhase(state);
   if (!phase) return undefined;

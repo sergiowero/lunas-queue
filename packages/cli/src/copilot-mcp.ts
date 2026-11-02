@@ -22,19 +22,19 @@ async function readConfig(path: string): Promise<JsonObject> {
   try {
     parsed = JSON.parse(text);
   } catch (error) {
-    throw new Error(`la configuración MCP de Copilot no es JSON válido (${path})`, {
+    throw new Error(`the Copilot MCP configuration is not valid JSON (${path})`, {
       cause: error,
     });
   }
   if (!isObject(parsed))
-    throw new Error(`la configuración MCP de Copilot debe ser un objeto (${path})`);
+    throw new Error(`the Copilot MCP configuration must be an object (${path})`);
   return parsed;
 }
 
 function mergeConfig(existing: JsonObject, url: string): JsonObject {
   const servers = existing.mcpServers;
   if (servers !== undefined && !isObject(servers)) {
-    throw new Error("mcpServers en la configuración de Copilot debe ser un objeto");
+    throw new Error("mcpServers in the Copilot configuration must be an object");
   }
   return {
     ...existing,
@@ -42,7 +42,7 @@ function mergeConfig(existing: JsonObject, url: string): JsonObject {
   };
 }
 
-/** Registra solo el servidor LunasQ y conserva todas las demás opciones/entradas del usuario. */
+/** Registers only the LunasQ server and keeps all the user's other options/entries. */
 export async function ensureCopilotMcpConfig(
   path: string,
   url: string,

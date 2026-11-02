@@ -28,7 +28,7 @@ function setup() {
 }
 
 describe("TaskPrRepository.recordPrOpened", () => {
-  it("guarda URL y estado open con su evento publicado", () => {
+  it("stores URL and open state with its published event", () => {
     const { db, repo, task, row, prEvents } = setup();
     expect(repo.recordPrOpened(task.id, url)).toBe(true);
     expect(row()).toMatchObject({ prUrl: url, prState: "open" });
@@ -38,14 +38,14 @@ describe("TaskPrRepository.recordPrOpened", () => {
     expect(listPendingOutbox(db).map((m) => m.message.topic)).toContain(TASK_PR_OPENED);
   });
 
-  it("repetirlo no duplica el evento", () => {
+  it("repeating it does not duplicate the event", () => {
     const { repo, task, prEvents } = setup();
     repo.recordPrOpened(task.id, url);
     expect(repo.recordPrOpened(task.id, url)).toBe(false);
     expect(prEvents()).toHaveLength(1);
   });
 
-  it("un PR nuevo tras un cierre sin merge reemplaza al anterior", () => {
+  it("a new PR after a close without merge replaces the previous one", () => {
     const { repo, task, row, prEvents } = setup();
     repo.recordPrOpened(task.id, url);
     repo.recordPrState(task.id, { url, state: "closed", at: null });
@@ -54,7 +54,7 @@ describe("TaskPrRepository.recordPrOpened", () => {
     expect(TaskPrOpenedPayload.parse(prEvents().at(-1)?.payload).previousUrl).toBe(url);
   });
 
-  it("el mismo PR reabierto en GitHub vuelve a open", () => {
+  it("the same PR reopened on GitHub goes back to open", () => {
     const { repo, task, row } = setup();
     repo.recordPrOpened(task.id, url);
     repo.recordPrState(task.id, { url, state: "closed", at: null });
@@ -62,7 +62,7 @@ describe("TaskPrRepository.recordPrOpened", () => {
     expect(row()?.prState).toBe("open");
   });
 
-  it("rechaza abrir otro PR si el actual ya se mergeó o si la tarea no existe", () => {
+  it("rejects opening another PR if the current one was already merged or if the task does not exist", () => {
     const { repo, task } = setup();
     repo.recordPrOpened(task.id, url);
     repo.recordPrState(task.id, { url, state: "merged", at: mergedAt });
@@ -74,7 +74,7 @@ describe("TaskPrRepository.recordPrOpened", () => {
     );
   });
 
-  it("rechaza otro PR mientras el actual sigue abierto", () => {
+  it("rejects another PR while the current one is still open", () => {
     const { repo, task, row } = setup();
     repo.recordPrOpened(task.id, url);
     expect(() => repo.recordPrOpened(task.id, otherUrl)).toThrow(
@@ -83,7 +83,7 @@ describe("TaskPrRepository.recordPrOpened", () => {
     expect(row()?.prUrl).toBe(url);
   });
 
-  it("rechaza una URL inválida sin escribir nada", () => {
+  it("rejects an invalid URL without writing anything", () => {
     const { repo, task, row } = setup();
     expect(() => repo.recordPrOpened(task.id, "no-es-url")).toThrow();
     expect(row()?.prUrl).toBeNull();
@@ -91,7 +91,7 @@ describe("TaskPrRepository.recordPrOpened", () => {
 });
 
 describe("TaskPrRepository.recordPrState", () => {
-  it("registra el merge con su hora, una sola vez, y lo publica", () => {
+  it("records the merge with its time, only once, and publishes it", () => {
     const { db, repo, task, row, prEvents } = setup();
     repo.recordPrOpened(task.id, url);
     expect(repo.recordPrState(task.id, { url, state: "merged", at: mergedAt })).toBe(true);
@@ -110,12 +110,12 @@ describe("TaskPrRepository.recordPrState", () => {
     expect(prEvents()).toHaveLength(2);
   });
 
-  it("ignora lo que no es un cambio válido del PR actual", () => {
+  it("ignores what is not a valid change of the current PR", () => {
     const { repo, task, row, prEvents } = setup();
     expect(repo.recordPrState(task.id, { url, state: "merged", at: null })).toBe(false);
     repo.recordPrOpened(task.id, url);
     expect(repo.recordPrState(task.id, { url, state: "open", at: null })).toBe(false);
-    // Otro PR (p. ej. uno viejo de la tarea) no toca el actual.
+    // Another PR (e.g. an old one of the task) does not touch the current one.
     expect(repo.recordPrState(task.id, { url: otherUrl, state: "merged", at: null })).toBe(false);
     repo.recordPrState(task.id, { url, state: "merged", at: mergedAt });
     expect(repo.recordPrState(task.id, { url, state: "closed", at: null })).toBe(false);
@@ -124,7 +124,7 @@ describe("TaskPrRepository.recordPrState", () => {
     expect(repo.recordPrState(crypto.randomUUID(), { url, state: "merged", at: null })).toBe(false);
   });
 
-  it("el merge actualiza updatedAt, que el scheduler usa como readySince", () => {
+  it("the merge updates updatedAt, which the scheduler uses as readySince", () => {
     const { db, repo, task, row } = setup();
     repo.recordPrOpened(task.id, url);
     const old = new Date("2020-01-01T00:00:00.000Z");
@@ -135,7 +135,7 @@ describe("TaskPrRepository.recordPrState", () => {
 });
 
 describe("TaskPrRepository.listOpen", () => {
-  it("lista solo las tareas con PR abierto", () => {
+  it("lists only the tasks with an open PR", () => {
     const { db, project, repo, task } = setup();
     const merged = insertTask(db, project.id);
     const sinPr = insertTask(db, project.id);
@@ -148,7 +148,7 @@ describe("TaskPrRepository.listOpen", () => {
 });
 
 describe("TaskPrRepository.recordPrConflict", () => {
-  it("regresa la tarea completed a in_progress con el conflicto publicado", () => {
+  it("sends the completed task back to in_progress with the conflict published", () => {
     const { db, project, repo, task, row } = setup();
     const verifier = insertRun(db, task.id, { phase: "verify" });
     repo.recordPrOpened(task.id, url);
@@ -165,7 +165,7 @@ describe("TaskPrRepository.recordPrConflict", () => {
     expect(listPendingOutbox(db).map((m) => m.message.topic)).toContain(DELIVERY_CONFLICT);
   });
 
-  it("repetirlo mientras el PR sigue en conflicto no reabre ni duplica el evento", () => {
+  it("repeating it while the PR is still in conflict neither reopens nor duplicates the event", () => {
     const { db, repo, task } = setup();
     insertRun(db, task.id, { phase: "verify" });
     repo.recordPrOpened(task.id, url);
@@ -174,7 +174,7 @@ describe("TaskPrRepository.recordPrConflict", () => {
     expect(listEvents(db, task.id).filter((e) => e.type === DELIVERY_CONFLICT)).toHaveLength(1);
   });
 
-  it("no toca una tarea que no está completed, ni un PR que no es el abierto de la tarea", () => {
+  it("does not touch a task that is not completed, nor a PR that is not the task's open one", () => {
     const { db, project, repo, task, row } = setup();
     insertRun(db, task.id, { phase: "verify" });
     repo.recordPrOpened(task.id, url);
@@ -191,13 +191,13 @@ describe("TaskPrRepository.recordPrConflict", () => {
 });
 
 describe("TaskPrRepository.recordPrCiFailure", () => {
-  it("regresa a implementación una tarea completed cuyo PR abierto tiene CI fallido", () => {
+  it("sends back to implementation a completed task whose open PR has failed CI", () => {
     const { db, project, repo, task, row } = setup();
     const verifier = insertRun(db, task.id, { phase: "verify" });
     repo.recordPrOpened(task.id, url);
 
     expect(
-      repo.recordPrCiFailure(task.id, url, "build falló: https://github.com/o/r/actions/1"),
+      repo.recordPrCiFailure(task.id, url, "build failed: https://github.com/o/r/actions/1"),
     ).toBe(true);
     expect(row()).toMatchObject({ state: "in_progress", subState: "queued", prState: "open" });
     expect(
@@ -207,24 +207,24 @@ describe("TaskPrRepository.recordPrCiFailure", () => {
       reason: "ci_failed",
       baseBranch: project.baseBranch,
       files: [],
-      output: "build falló: https://github.com/o/r/actions/1",
+      output: "build failed: https://github.com/o/r/actions/1",
     });
     expect(listPendingOutbox(db).map((message) => message.message.topic)).toContain(
       DELIVERY_CONFLICT,
     );
   });
 
-  it("no repite el rework ni afecta otro PR o tareas fuera de completed", () => {
+  it("does not repeat the rework nor affect another PR or tasks outside completed", () => {
     const { db, project, repo, task } = setup();
     insertRun(db, task.id, { phase: "verify" });
     repo.recordPrOpened(task.id, url);
-    expect(repo.recordPrCiFailure(task.id, otherUrl, "build falló")).toBe(false);
-    expect(repo.recordPrCiFailure(task.id, url, "build falló")).toBe(true);
-    expect(repo.recordPrCiFailure(task.id, url, "build falló")).toBe(false);
+    expect(repo.recordPrCiFailure(task.id, otherUrl, "build failed")).toBe(false);
+    expect(repo.recordPrCiFailure(task.id, url, "build failed")).toBe(true);
+    expect(repo.recordPrCiFailure(task.id, url, "build failed")).toBe(false);
 
     const inProgress = insertTask(db, project.id, { state: "in_progress", subState: "queued" });
     insertRun(db, inProgress.id, { phase: "verify" });
     repo.recordPrOpened(inProgress.id, otherUrl);
-    expect(repo.recordPrCiFailure(inProgress.id, otherUrl, "build falló")).toBe(false);
+    expect(repo.recordPrCiFailure(inProgress.id, otherUrl, "build failed")).toBe(false);
   });
 });

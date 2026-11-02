@@ -1,5 +1,5 @@
-// Rutas de solo lectura del front end (UW-21, ADR uw-21-front-end): cola global con el score del
-// scheduler y, por tarea, Runs, Event log, usage y archivo de evidencia.
+// Read-only routes for the front end (UW-21, ADR uw-21-front-end): global queue with the
+// scheduler's score and, per task, Runs, Event log, usage and evidence file.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type GitAdapter, isGitError } from "@lunasq/adapters";
@@ -33,7 +33,7 @@ export interface ViewDeps {
   now: () => Date;
 }
 
-/** Ruta del archivo de evidencia dentro del repo (UW-24 lo escribe y lo commitea). */
+/** Path of the evidence file inside the repo (UW-24 writes and commits it). */
 export function evidenceFile(taskId: string): string {
   return `lunasq/tasks/${taskId}.md`;
 }
@@ -48,10 +48,10 @@ async function readWorktree(worktreePath: string, taskId: string): Promise<strin
 }
 
 /**
- * Evidencia de la tarea: del worktree mientras existe; si no, de su branch y, tras el merge (la
- * branch puede haberse borrado), de la rama base. Lee refs ya presentes en el repo del proyecto,
- * sin fetch: una lectura de la UI no toca la red. Un ref ausente o un repo inaccesible cuentan
- * como «no está».
+ * Task evidence: from the worktree while it exists; otherwise from its branch and, after the merge (the
+ * branch may have been deleted), from the base branch. Reads refs already present in the project repo,
+ * without fetch: a UI read does not touch the network. A missing ref or an inaccessible repo counts
+ * as "not there".
  */
 async function findEvidence(deps: ViewDeps, task: Task): Promise<TaskEvidence | null> {
   const file = evidenceFile(task.id);
@@ -84,11 +84,11 @@ async function findEvidence(deps: ViewDeps, task: Task): Promise<TaskEvidence | 
 }
 
 /**
- * Ready set primero, en el orden y con el score del scheduler; después las demás tareas vivas en
- * el orden del listado (prioridad, antigüedad). Las terminales no están en la cola.
+ * Ready set first, in the scheduler's order and with its score; then the other live tasks in
+ * the listing order (priority, age). Terminal ones are not in the queue.
  */
 function queue(deps: ViewDeps, projectId: string | undefined): QueueEntry[] {
-  // Una sola transacción: el ready set y el estado de cada tarea salen de la misma lectura.
+  // A single transaction: the ready set and each task's state come from the same read.
   const { snapshot, usage, listed } = deps.db.transaction(() => ({
     snapshot: deps.state.snapshot(),
     usage: deps.views.usageByTask(),
@@ -118,7 +118,7 @@ function queue(deps: ViewDeps, projectId: string | undefined): QueueEntry[] {
           position: Number.POSITIVE_INFINITY,
         };
   });
-  // sort es estable: las que no están en el ready set conservan el orden del listado.
+  // sort is stable: those not in the ready set keep the listing order.
   return entries
     .sort((a, b) => (a.position === b.position ? 0 : a.position - b.position))
     .map(({ position: _, ...entry }) => entry);
@@ -132,7 +132,7 @@ export function queueRoutes(deps: ViewDeps): Hono {
   });
 }
 
-/** Se monta bajo /api/tasks junto a taskRoutes. */
+/** Mounted under /api/tasks next to taskRoutes. */
 export function taskViewRoutes(deps: ViewDeps): Hono {
   return new Hono()
     .get("/:id/runs", (c) => {

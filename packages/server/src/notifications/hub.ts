@@ -1,5 +1,5 @@
-// Canal de la UI: reparte notificaciones a las conexiones SSE vivas. Guarda las últimas
-// en un buffer para que una reconexión con Last-Event-ID reciba solo lo que no vio.
+// UI channel: distributes notifications to the live SSE connections. It keeps the latest
+// in a buffer so a reconnection with Last-Event-ID receives only what it did not see.
 import type { Notification } from "@lunasq/schemas";
 
 export type NotificationListener = (notification: Notification) => void;
@@ -24,8 +24,8 @@ export class NotificationHub {
   }
 
   /**
-   * Con `lastEventId` reenvía lo publicado después de ese id. Si ya salió del buffer,
-   * todo lo que queda es posterior y se reenvía completo.
+   * With `lastEventId` it resends what was published after that id. If it already left the buffer,
+   * everything remaining is later and is resent in full.
    */
   subscribe(listener: NotificationListener, opts: { lastEventId?: string } = {}): () => void {
     if (opts.lastEventId) {
@@ -43,6 +43,6 @@ function safeCall(listener: NotificationListener, notification: Notification): v
   try {
     listener(notification);
   } catch {
-    // Un suscriptor roto (p. ej. una conexión cerrándose) no afecta a los demás.
+    // A broken subscriber (e.g. a closing connection) does not affect the others.
   }
 }

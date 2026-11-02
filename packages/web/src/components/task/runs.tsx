@@ -1,11 +1,12 @@
-// Runs de la tarea (docs/design.md §Auditoría): cada intento por fase, con su motivo de fallo y
-// el handoff que entregó el agente.
+// Task Runs (docs/design.md §Audit): each attempt per phase, with its failure reason and
+// the handoff the agent delivered.
 import type { RunView } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Json } from "../../lib/api.ts";
-import { formatAgent, formatDate, PHASE_LABEL, RESULT_LABEL } from "../../lib/format.ts";
+import { formatAgent, formatDate } from "../../lib/format.ts";
+import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
 import { DataTable } from "../data-table.tsx";
 import { PAGE_SIZE, Pagination } from "../pagination.tsx";
@@ -20,59 +21,77 @@ type Run = Json<RunView>;
 const column = createColumnHelper<Run>();
 
 function HandoffCell({ handoff }: { handoff: Run["handoff"] }) {
+  const t = useT();
   const [isOpen, setIsOpen] = useState(false);
   if (handoff === null || handoff === undefined) return null;
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setIsOpen(true)}>
-        Abrir handoff
+        {t.runs.openHandoff}
       </Button>
       {isOpen && <HandoffDialog handoff={handoff} onClose={() => setIsOpen(false)} />}
     </>
   );
 }
 
-const columns = [
-  column.accessor((r) => PHASE_LABEL[r.phase], { id: "phase", header: "Fase" }),
-  column.accessor("iteration", { header: "Iteración" }),
-  column.accessor(formatAgent, { id: "agent", header: "Agente" }),
-  column.display({
-    id: "pane",
-    header: "Pane",
-    cell: (c) => <PaneFocusButton run={c.row.original} />,
-  }),
-  column.accessor((r) => formatDate(r.startedAt), { id: "started", header: "Inicio" }),
-  column.accessor((r) => formatDate(r.endedAt), { id: "ended", header: "Fin" }),
-  column.accessor("result", {
-    header: "Resultado",
-    cell: (c) => {
-      const result = c.getValue();
-      if (!result) return <Badge variant="outline">en curso</Badge>;
-      return (
-        <Badge variant={result === "failure" ? "destructive" : "secondary"}>
-          {RESULT_LABEL[result]}
-        </Badge>
-      );
-    },
-  }),
-  column.accessor("failureReason", {
-    header: "Motivo del fallo",
-    cell: (c) => <span className="whitespace-pre-wrap">{c.getValue() ?? ""}</span>,
-  }),
-  column.accessor("handoff", {
-    header: "Handoff",
-    cell: (c) => <HandoffCell handoff={c.getValue()} />,
-  }),
-];
-
 export function RunsPanel({ taskId }: { taskId: string }) {
+  const t = useT();
+  const columns = useMemo(
+    () => [
+      // Display columns for language-dependent values: TanStack Table caches an accessor's
+      // value per row while `data` does not change, so it would keep the old language.
+      column.display({
+        id: "phase",
+        header: t.runs.phase,
+        cell: (c) => t.phase[c.row.original.phase],
+      }),
+      column.accessor("iteration", { header: t.runs.iteration }),
+      column.accessor(formatAgent, { id: "agent", header: t.runs.agent }),
+      column.display({
+        id: "pane",
+        header: t.runs.pane,
+        cell: (c) => <PaneFocusButton run={c.row.original} />,
+      }),
+      column.display({
+        id: "started",
+        header: t.runs.started,
+        cell: (c) => formatDate(c.row.original.startedAt),
+      }),
+      column.display({
+        id: "ended",
+        header: t.runs.ended,
+        cell: (c) => formatDate(c.row.original.endedAt),
+      }),
+      column.accessor("result", {
+        header: t.runs.result,
+        cell: (c) => {
+          const result = c.getValue();
+          if (!result) return <Badge variant="outline">{t.runs.inProgress}</Badge>;
+          return (
+            <Badge variant={result === "failure" ? "destructive" : "secondary"}>
+              {t.runResult[result]}
+            </Badge>
+          );
+        },
+      }),
+      column.accessor("failureReason", {
+        header: t.runs.failureReason,
+        cell: (c) => <span className="whitespace-pre-wrap">{c.getValue() ?? ""}</span>,
+      }),
+      column.accessor("handoff", {
+        header: t.runs.handoff,
+        cell: (c) => <HandoffCell handoff={c.getValue()} />,
+      }),
+    ],
+    [t],
+  );
   const runs = useQuery(queries.runs(taskId));
   const [selectedPage, setSelectedPage] = useState<number | null>(null);
   const data = runs.data ?? [];
   const pageCount = Math.ceil(data.length / PAGE_SIZE);
   const page = Math.min(selectedPage ?? Math.max(0, pageCount - 1), Math.max(0, pageCount - 1));
   return (
-    <Section title="Runs">
+    <Section title={t.runs.title}>
       {runs.error ? (
         <QueryError error={runs.error} />
       ) : runs.isPending ? (
@@ -83,7 +102,7 @@ export function RunsPanel({ taskId }: { taskId: string }) {
             columns={columns}
             data={data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)}
             getRowId={(r) => r.id}
-            empty="Todavía no hay Runs."
+            empty={t.runs.empty}
           />
           <Pagination
             page={page}

@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 
-// Los tests de git, procesos y pane reales superan los 5 s por defecto cuando varios gates corren a
-// la vez (ADR verdict-git-rework). Vitest no hereda el testTimeout de la raíz hacia los proyectos.
+// Real git, process and pane tests exceed the default 5 s when several gates run at
+// once (ADR verdict-git-rework). Vitest does not inherit the root testTimeout into the projects.
 export default defineConfig({
   test: {
     testTimeout: 20_000,

@@ -1,6 +1,6 @@
-// Respuesta del humano a una Question (docs/design.md §Preguntas del agente y bloqueos,
-// ADR uw-22-preguntas). Si el agente sigue vivo en su pane, la respuesta entra como prompt nuevo;
-// si no, la tarea vuelve a queued y la respuesta llega en `get_task_context` del Run siguiente.
+// The human's answer to a Question (docs/design.md §Agent questions and blocks,
+// ADR uw-22-preguntas). If the agent is still alive in its pane, the answer enters as a new prompt;
+// if not, the task goes back to queued and the answer arrives in `get_task_context` of the next Run.
 import type { HerdrAdapter } from "@lunasq/adapters";
 import {
   type AnswerQuestionErrorCode,
@@ -27,7 +27,7 @@ export interface QuestionServiceOptions {
   herdr: Pick<HerdrAdapter, "getAgent" | "promptAgent">;
   dispatcher: Pick<PhaseDispatcher, "closeRun">;
   escalator: Pick<Escalator, "resolve">;
-  /** Tras confirmar la respuesta: despierta al scheduler para despachar el Run nuevo. */
+  /** After confirming the answer: wakes the scheduler to dispatch the new Run. */
   onAnswered?: () => void;
   onError?: (error: Error, questionId: string) => void;
 }
@@ -41,7 +41,7 @@ export class QuestionService {
   private readonly escalator: QuestionServiceOptions["escalator"];
   private readonly onAnswered: () => void;
   private readonly onError: (error: Error, questionId: string) => void;
-  // Una respuesta a la vez por pregunta: dos clientes no mandan dos prompts al mismo agente.
+  // One answer at a time per question: two clients do not send two prompts to the same agent.
   private readonly locks = new KeyedLock();
 
   constructor(opts: QuestionServiceOptions) {
@@ -70,8 +70,8 @@ export class QuestionService {
     const run = question.runId ? this.runs.get(question.runId) : null;
     const phase = pendingPhase(task.state);
 
-    // Primero el prompt: si herdr lo rechaza, la respuesta va en un Run nuevo sin perderse. El
-    // prompt llega antes que la transición a running, pero el agente tarda más en actuar.
+    // The prompt first: if herdr rejects it, the answer goes in a new Run without being lost. The
+    // prompt arrives before the transition to running, but the agent takes longer to act.
     const prompted =
       run && phase
         ? await this.prompt(run, phase, task.id, question.question, input.answer, id)
@@ -90,10 +90,10 @@ export class QuestionService {
         await this.dispatcher.closeRun(run.id, {
           result: "cancelled",
           failureReason:
-            "question_answered: el agente ya no estaba vivo; la respuesta llega en un Run nuevo",
+            "question_answered: the agent was no longer alive; the answer arrives in a new Run",
         });
       } catch (error) {
-        // La reconciliación cierra el Run de una tarea que ya no está en su fase.
+        // Reconciliation closes the Run of a task that is no longer in its phase.
         this.onError(asError(error), id);
       }
     }
@@ -101,7 +101,7 @@ export class QuestionService {
     return { ok: true, question: result.question, delivery: prompted ? "pane" : "new_run" };
   }
 
-  /** Manda la respuesta al pane del Run. false si el agente ya no está o herdr no lo acepta. */
+  /** Sends the answer to the Run's pane. false if the agent is no longer there or herdr does not accept it. */
   private async prompt(
     run: RunRow,
     phase: SchedulablePhase,
@@ -128,17 +128,17 @@ export class QuestionService {
 
 const notFound = (id: string): AnswerOutcome => ({
   ok: false,
-  error: { code: "not_found", message: `no existe la pregunta ${id}` },
+  error: { code: "not_found", message: `question ${id} does not exist` },
 });
 const notOpen = (id: string, status: string): AnswerOutcome => ({
   ok: false,
-  error: { code: "not_open", message: `la pregunta ${id} está ${status}` },
+  error: { code: "not_open", message: `question ${id} is ${status}` },
 });
 const taskNotWaiting = (id: string, position: string): AnswerOutcome => ({
   ok: false,
   error: {
     code: "task_not_waiting",
-    message: `la tarea de la pregunta ${id} no espera al humano (${position})`,
+    message: `the task of question ${id} is not waiting for the human (${position})`,
   },
 });
 
@@ -147,5 +147,5 @@ function asError(error: unknown): Error {
 }
 
 function defaultError(error: Error, questionId: string): void {
-  console.error(`[preguntas] fallo en la pregunta ${questionId}: ${error.message}`);
+  console.error(`[questions] failure in question ${questionId}: ${error.message}`);
 }

@@ -1,5 +1,5 @@
-// Workspace de herdr de cada proyecto (ADR uw-16-dispatcher). No es configuración del proyecto:
-// lo escribe el dispatcher al asegurar el workspace y solo sirve como pista para reencontrarlo.
+// herdr workspace of each project (ADR uw-16-dispatcher). It is not project configuration:
+// the dispatcher writes it when ensuring the workspace and it only serves as a hint to find it again.
 import type { ProjectWorkspaceStore } from "@lunasq/domain";
 import { eq } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";

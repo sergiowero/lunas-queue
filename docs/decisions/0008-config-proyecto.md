@@ -1,26 +1,26 @@
-# 0008 — Configuración de proyecto
+# 0008 — Project configuration
 
-- Estado: aceptada
-- Fecha: 2026-10-29
-- Unidad: UW-05 · Código: `packages/schemas/src/project.ts`, `packages/domain/src/project-config.ts`, `packages/db/src/projects.ts`, `packages/server/src/api/projects.ts`
+- Status: accepted
+- Date: 2026-10-29
+- Unit: UW-05 · Code: `packages/schemas/src/project.ts`, `packages/domain/src/project-config.ts`, `packages/db/src/projects.ts`, `packages/server/src/api/projects.ts`
 
-## Contexto
+## Context
 
-UW-01 dejó `agent_profiles` y `limits` como JSON libre (ADR 0005) y asignó su forma a UW-05. El diseño pide perfil de agente por fase (kind, modelo, args), límite de concurrencia por proyecto, timeout por fase con default de 30 minutos (`docs/design.md` §Concurrencia y §Timeout de fase) y que el perfil de verificación valide `kind = claude` (§Verificación con subagentes).
+UW-01 left `agent_profiles` and `limits` as free JSON (ADR 0005) and assigned their shape to UW-05. The design asks for an agent profile per phase (kind, model, args), a concurrency limit per project, a per‑phase timeout with a default of 30 minutes (`docs/design.md` §Concurrency and §Phase timeout) and that the verification profile validate `kind = claude` (§Verification with subagents).
 
-## Decisión
+## Decision
 
-- **Perfiles.** `agentProfiles` tiene una clave por `Phase` (`refine`, `implement`, `verify`, `deliver`); cada perfil es `{ kind, model?, args }`. Una fase sin perfil se rellena con `{ kind: "claude", args: [] }`, así una fila antigua con `{}` sigue siendo válida. El default no trae los args del modo Auto ni el modelo Sonnet del approver (`docs/design.md` §Decisiones tomadas y §Verificación): se configuran en el perfil de cada proyecto, y UW-16 decide si el dispatcher exige o inyecta los args del modo Auto antes de despachar. Las fases y los campos desconocidos se rechazan.
-- **Verify atado a claude.** El perfil de `verify` usa `z.literal("claude")` y no `AgentKind`: cuando v2 agregue otros kinds, la verificación seguirá exigiendo Claude Code hasta que otro agente tenga un equivalente a sus subagentes.
-- **Límites.** `limits = { concurrency?, phaseTimeoutMinutes?, maxVerificationIterations? }`, enteros ≥ 1; el tope de iteraciones (de 1 a 20, default 3 con `DEFAULT_MAX_ITERATIONS`) lo agregó UW-23 ([ADR uw-23-verificacion](uw-23-verificacion.md)); el timeout tiene tope de una semana (`MAX_PHASE_TIMEOUT_MINUTES`), porque `setTimeout` trata más de 2^31‑1 ms como 1 ms. Sin `concurrency` solo aplica el límite global; una fase sin timeout usa `DEFAULT_PHASE_TIMEOUT_MINUTES` (30). El default se resuelve al leer (`phaseTimeoutMs`), no se guarda, para que cambiarlo no requiera migrar filas.
-- **Campos.** `repo` es `owner/name` (lo que recibe `gh --repo`; el owner admite `_` por las cuentas EMU y el nombre no puede ser `.` ni `..`); `localPath` es absoluta y se normaliza (sin `//`, `.`, `..` ni `/` final, a mano porque schemas no importa `node:path`) para que la unicidad no se salte con variantes de la misma ruta; la raíz `/` se rechaza. No se comprueba en disco que exista ni que sea un repo git: eso es de quien lo usa (worktrees, `lunasq doctor`). `testCommand` y `bootstrap` son comandos opcionales.
-- **PATCH.** Cada campo presente reemplaza al guardado, salvo `agentProfiles`, que se mezcla por fase: enviar solo `verify` conserva las demás. `null` borra `testCommand` o `bootstrap`. El update corre en una transacción y valida la fila resultante; si no es válida se revierte, y un PATCH puede corregir la fase inválida de una fila.
-- **Lectura sin base.** El dominio define el puerto `ProjectConfigReader` (`get`, `list`) y las funciones `phaseProfile` y `phaseTimeoutMs`. Dispatcher, gate de tests y hooks dependen del puerto; `ProjectRepository` (db) lo implementa e `InMemoryProjectConfigReader` sirve en tests. Una suite de contrato (`@lunasq/domain/testing`) corre contra ambos. Los readers devuelven copias.
-- **Validación en las dos direcciones.** El repositorio parsea con Zod lo que escribe y lo que lee; una fila con JSON inválido da `invalid_row` en vez de un objeto a medias. `list` también falla si alguna fila es inválida: nadie despacha con una lista parcial.
-- **Errores HTTP.** 400 `invalid_json` o `invalid_input` (con los issues de Zod), 404 `not_found`, 409 `conflict` (con `field`: `name` o `localPath`) o `has_tasks` al borrar un proyecto con tareas, y 500 en JSON (`invalid_row` o `internal`) para lo demás vía `app.onError`. `ON DELETE RESTRICT` falla en SQLite con `SQLITE_CONSTRAINT_TRIGGER`, así que se detecta por el mensaje `FOREIGN KEY`.
+- **Profiles.** `agentProfiles` has one key per `Phase` (`refine`, `implement`, `verify`, `deliver`); each profile is `{ kind, model?, args }`. A phase without a profile is filled with `{ kind: "claude", args: [] }`, so an old row with `{}` is still valid. The default does not bring the Auto mode args or the approver's Sonnet model (`docs/design.md` §Decisions made and §Verification): they are configured in each project's profile, and UW-16 decides whether the dispatcher requires or injects the Auto mode args before dispatching. Unknown phases and fields are rejected.
+- **Verify tied to claude.** The `verify` profile uses `z.literal("claude")` and not `AgentKind`: when v2 adds other kinds, verification will still require Claude Code until another agent has an equivalent to its subagents.
+- **Limits.** `limits = { concurrency?, phaseTimeoutMinutes?, maxVerificationIterations? }`, integers ≥ 1; the iteration cap (from 1 to 20, default 3 with `DEFAULT_MAX_ITERATIONS`) was added by UW-23 ([ADR uw-23-verificacion](uw-23-verificacion.md)); the timeout has a one‑week cap (`MAX_PHASE_TIMEOUT_MINUTES`), because `setTimeout` treats more than 2^31‑1 ms as 1 ms. Without `concurrency` only the global limit applies; a phase without a timeout uses `DEFAULT_PHASE_TIMEOUT_MINUTES` (30). The default is resolved on read (`phaseTimeoutMs`), not stored, so changing it does not require migrating rows.
+- **Fields.** `repo` is `owner/name` (what `gh --repo` receives; the owner allows `_` for EMU accounts and the name cannot be `.` or `..`); `localPath` is absolute and normalized (no `//`, `.`, `..` or trailing `/`, by hand because schemas does not import `node:path`) so uniqueness cannot be bypassed with variants of the same path; the root `/` is rejected. It is not checked on disk that it exists or that it is a git repo: that belongs to whoever uses it (worktrees, `lunasq doctor`). `testCommand` and `bootstrap` are optional commands.
+- **PATCH.** Each present field replaces the stored one, except `agentProfiles`, which is merged per phase: sending only `verify` keeps the others. `null` clears `testCommand` or `bootstrap`. The update runs in a transaction and validates the resulting row; if it is not valid it is rolled back, and a PATCH can fix a row's invalid phase.
+- **Reading without the database.** The domain defines the port `ProjectConfigReader` (`get`, `list`) and the functions `phaseProfile` and `phaseTimeoutMs`. Dispatcher, test gate and hooks depend on the port; `ProjectRepository` (db) implements it and `InMemoryProjectConfigReader` serves in tests. A contract suite (`@lunasq/domain/testing`) runs against both. The readers return copies.
+- **Validation in both directions.** The repository parses with Zod what it writes and what it reads; a row with invalid JSON gives `invalid_row` instead of a half object. `list` also fails if any row is invalid: nobody dispatches with a partial list.
+- **HTTP errors.** 400 `invalid_json` or `invalid_input` (with Zod's issues), 404 `not_found`, 409 `conflict` (with `field`: `name` or `localPath`) or `has_tasks` when deleting a project with tasks, and 500 in JSON (`invalid_row` or `internal`) for the rest via `app.onError`. `ON DELETE RESTRICT` fails in SQLite with `SQLITE_CONSTRAINT_TRIGGER`, so it is detected by the `FOREIGN KEY` message.
 
-## Consecuencias
+## Consequences
 
-- `hono` entra como dependencia de `server` (ya estaba en `docs/tech-stack.md`). No se usa `@hono/zod-validator`: `safeParse` a mano basta.
-- `@lunasq/db` exporta `./test-helpers` y `@lunasq/domain` exporta `./testing` para que otros paquetes reutilicen fixtures y contrato; ambos declaran `vitest` como devDependency.
-- `docs/design.md` dice que el id del workspace de herdr se guarda en Project; esa columna no existe y queda para UW-16.
+- `hono` enters as a dependency of `server` (it was already in `docs/tech-stack.md`). `@hono/zod-validator` is not used: a manual `safeParse` is enough.
+- `@lunasq/db` exports `./test-helpers` and `@lunasq/domain` exports `./testing` so other packages reuse fixtures and the contract; both declare `vitest` as a devDependency.
+- `docs/design.md` says the herdr workspace id is stored in Project; that column does not exist and is left for UW-16.

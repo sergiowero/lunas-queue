@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { AgentProviderRegistry, agentProviders, packageName } from "./index.ts";
 
 describe("@lunasq/adapters", () => {
-  it("exporta su nombre de paquete", () => {
+  it("exports its package name", () => {
     expect(packageName).toBe("@lunasq/adapters");
   });
 
-  it("construye argumentos específicos de cada CLI y ordena el fallback con el primario primero", () => {
+  it("builds CLI-specific arguments and orders the fallback with the primary first", () => {
     const context = {
       mcpConfigPath: "/cfg/mcp.json",
       settingsPath: "/cfg/settings.json",
@@ -63,7 +63,7 @@ describe("@lunasq/adapters", () => {
     ]);
   });
 
-  it("rechaza flags que compiten con opciones fijas por proveedor", () => {
+  it("rejects flags that compete with fixed per-provider options", () => {
     expect(() =>
       agentProviders.get("copilot").args(
         { kind: "copilot", args: ["--session-id=x"] },
@@ -73,7 +73,7 @@ describe("@lunasq/adapters", () => {
           sessionId: "id",
         },
       ),
-    ).toThrow(/lo fija LunasQ/);
+    ).toThrow(/LunasQ sets it/);
     expect(() =>
       agentProviders.get("claude").args(
         { kind: "claude", effort: "high", args: ["--effort=low"] },
@@ -83,10 +83,10 @@ describe("@lunasq/adapters", () => {
           sessionId: "id",
         },
       ),
-    ).toThrow(/deja uno/);
+    ).toThrow(/keep one/);
   });
 
-  it("lanza Copilot en autopilot aunque el perfil no traiga model, effort ni args", () => {
+  it("launches Copilot in autopilot even if the profile brings no model, effort or args", () => {
     const args = agentProviders
       .get("copilot")
       .args(
@@ -96,25 +96,25 @@ describe("@lunasq/adapters", () => {
     expect(args.filter((arg) => arg === "--autopilot")).toEqual(["--autopilot"]);
   });
 
-  it("reserva --autopilot, --mode y --plan para Copilot", () => {
+  it("reserves --autopilot, --mode and --plan for Copilot", () => {
     const context = { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" };
     for (const args of [["--autopilot"], ["--mode", "autopilot"], ["--mode=plan"], ["--plan"]]) {
       expect(() => agentProviders.get("copilot").args({ kind: "copilot", args }, context)).toThrow(
-        /lo fija LunasQ/,
+        /LunasQ sets it/,
       );
     }
   });
 
-  it("rechaza el terminador -- en los args de Copilot para que no anule los flags fijos", () => {
+  it("rejects the -- terminator in Copilot args so it does not cancel the fixed flags", () => {
     const context = { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" };
     expect(() =>
       agentProviders.get("copilot").args({ kind: "copilot", args: ["--", "x"] }, context),
-    ).toThrow(/no puede traer --/);
+    ).toThrow(/cannot carry --/);
   });
 
-  it("no pasa flags de autopilot a Claude ni reserva los de Copilot", () => {
+  it("does not pass autopilot flags to Claude nor reserve Copilot's", () => {
     const context = { mcpConfigPath: "/mcp", settingsPath: "/settings", sessionId: "id" };
-    // Contraste: el mismo perfil vacío lleva --autopilot en Copilot y no en Claude.
+    // Contrast: the same empty profile carries --autopilot in Copilot and not in Claude.
     expect(agentProviders.get("copilot").args({ kind: "copilot", args: [] }, context)).toContain(
       "--autopilot",
     );
@@ -127,7 +127,7 @@ describe("@lunasq/adapters", () => {
       "--session-id",
       "id",
     ]);
-    // --mode y --plan solo están reservados para Copilot: Claude los deja pasar tal cual.
+    // --mode and --plan are only reserved for Copilot: Claude lets them through as is.
     expect(
       agentProviders
         .get("claude")
@@ -146,12 +146,12 @@ describe("@lunasq/adapters", () => {
     ]);
   });
 
-  it("rechaza providers duplicados en el registry", () => {
+  it("rejects duplicate providers in the registry", () => {
     const claude = agentProviders.get("claude");
-    expect(() => new AgentProviderRegistry([claude, claude])).toThrow(/duplicados/);
+    expect(() => new AgentProviderRegistry([claude, claude])).toThrow(/duplicate/);
   });
 
-  it("expresa el mecanismo de evidencia de revisores que usa cada proveedor", () => {
+  it("expresses the reviewer evidence mechanism each provider uses", () => {
     expect(agentProviders.get("claude").capabilities.reviewerExecution).toBe("native-hooks");
     expect(agentProviders.get("copilot").capabilities.reviewerExecution).toBe("lunasq-runner");
   });

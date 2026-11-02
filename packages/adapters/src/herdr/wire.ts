@@ -1,6 +1,6 @@
-// Esquemas Zod de las respuestas y eventos de herdr (protocol 22) que el adapter usa.
-// Objetos laxos: solo se validan los campos que se leen, para tolerar campos nuevos de herdr.
-// Referencia: spikes/herdr/outputs/api-schema.json y las salidas reales del spike (ADR 0004).
+// Zod schemas of the herdr responses and events (protocol 22) that the adapter uses.
+// Loose objects: only the fields that are read are validated, to tolerate new herdr fields.
+// Reference: spikes/herdr/outputs/api-schema.json and the spike's real outputs (ADR 0004).
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { z } from "zod";
@@ -71,9 +71,9 @@ export const notificationWire = z.looseObject({
   reason: z.string().nullish(),
 });
 
-// herdr detecta agentes que el usuario abrió a mano y no tienen `name`, o panes recién creados
-// que aún no identifican `agent`: LunasQ no puede direccionarlos, así que el snapshot los tolera
-// y `toSnapshot` los descarta.
+// herdr detects agents the user opened by hand that have no `name`, or newly created panes
+// that do not identify `agent` yet: LunasQ cannot address them, so the snapshot tolerates them
+// and `toSnapshot` drops them.
 const snapshotAgentWire = agentWire.extend({
   name: z.string().nullish(),
   agent: z.string().nullish(),
@@ -89,7 +89,7 @@ export const snapshotWire = z.looseObject({
   }),
 });
 
-// Líneas del stream de `events.subscribe`: respuesta inicial, error o evento.
+// Lines of the `events.subscribe` stream: initial response, error or event.
 export const subscriptionStartedWire = z.looseObject({
   result: z.looseObject({ type: z.literal("subscription_started") }),
 });
@@ -99,8 +99,8 @@ export const streamErrorWire = z.looseObject({
 export const streamEventWire = z.looseObject({ event: z.string(), data: z.unknown() });
 
 /**
- * Ruta canónica para comparar con lo que reporta herdr: expande el `~` con que colapsa el home y
- * resuelve symlinks (herdr devuelve a veces la ruta pedida y a veces la real, p. ej. `/private/var`).
+ * Canonical path to compare with what herdr reports: expands the `~` herdr collapses the home into and
+ * resolves symlinks (herdr sometimes returns the requested path and sometimes the real one, e.g. `/private/var`).
  */
 export function normalizePath(path: string): string {
   const expanded =
@@ -187,7 +187,7 @@ const workspaceEventData = z.looseObject({
   workspace: z.looseObject({ workspace_id: z.string().optional() }).optional(),
 });
 
-/** Traduce un evento de herdr; devuelve undefined para los que el adapter no expone. */
+/** Translates a herdr event; returns undefined for those the adapter does not expose. */
 export function toEvent(event: string, data: unknown): HerdrEvent | undefined {
   switch (event) {
     case "pane.agent_status_changed":

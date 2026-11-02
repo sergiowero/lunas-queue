@@ -1,15 +1,15 @@
-// Criterio de terminado de UW-06: una notificación llega por ambos canales sin duplicarse.
+// UW-06 done criterion: a notification arrives through both channels without duplicating.
 import { FakeHerdr } from "@lunasq/adapters";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNotifications } from "./index.ts";
 import { notification, readSseEvents } from "./test-helpers.ts";
 
-describe("notificaciones de punta a punta", () => {
+describe("end-to-end notifications", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("una pregunta abierta 1 minuto llega una vez por herdr y una vez por SSE", async () => {
+  it("a question open for 1 minute arrives once through herdr and once through SSE", async () => {
     vi.useFakeTimers({
       now: new Date("2026-10-29T12:00:00.000Z"),
       toFake: ["setTimeout", "clearTimeout", "Date"],
@@ -22,7 +22,7 @@ describe("notificaciones de punta a punta", () => {
     const { createdAt: _, ...pending } = notification();
 
     notifications.escalator.watch(pending);
-    // Vigilar de nuevo (p. ej. una señal repetida) y notificar directo no duplican nada.
+    // Watching again (e.g. a repeated signal) and notifying directly duplicate nothing.
     notifications.escalator.watch(pending);
     await vi.advanceTimersByTimeAsync(60_000);
     await notifications.service.notify({ ...pending, createdAt: new Date().toISOString() });
@@ -42,7 +42,7 @@ describe("notificaciones de punta a punta", () => {
     ]);
   });
 
-  it("un aviso directo antes del escalamiento tampoco se duplica", async () => {
+  it("a direct notice before escalation is not duplicated either", async () => {
     vi.useFakeTimers({
       now: new Date("2026-10-29T12:00:00.000Z"),
       toFake: ["setTimeout", "clearTimeout", "Date"],
@@ -67,7 +67,7 @@ describe("notificaciones de punta a punta", () => {
     expect(herdr.notifications).toHaveLength(1);
   });
 
-  it("los errores del escalador llegan al handler inyectado", async () => {
+  it("the escalator's errors reach the injected handler", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const onEscalationError = vi.fn();
     const notifications = createNotifications({
@@ -75,7 +75,7 @@ describe("notificaciones de punta a punta", () => {
       onChannelError: () => {},
       onEscalationError,
     });
-    // Un id inválido pasa el watch (no valida) y falla al notificar: el servicio lo rechaza.
+    // An invalid id passes watch (it does not validate) and fails on notify: the service rejects it.
     const { createdAt: _, ...pending } = notification({ id: "id inválido" });
     notifications.escalator.watch(pending);
     await vi.advanceTimersByTimeAsync(60_000);

@@ -2,17 +2,17 @@ import { describe, expect, it } from "vitest";
 import { prStateChange } from "./pull-requests.ts";
 
 describe("prStateChange", () => {
-  it("un PR abierto avanza a merged o closed", () => {
+  it("an open PR advances to merged or closed", () => {
     expect(prStateChange("open", "merged")).toBe("merged");
     expect(prStateChange("open", "closed")).toBe("closed");
   });
 
-  it("sin cambio o sin PR registrado no hay transición", () => {
+  it("without a change or without a registered PR there is no transition", () => {
     expect(prStateChange("open", "open")).toBeNull();
     expect(prStateChange(null, "merged")).toBeNull();
   });
 
-  it("un dato viejo nunca revierte un merge ni un cierre", () => {
+  it("stale data never reverts a merge or a close", () => {
     expect(prStateChange("merged", "open")).toBeNull();
     expect(prStateChange("merged", "closed")).toBeNull();
     expect(prStateChange("closed", "open")).toBeNull();

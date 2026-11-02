@@ -16,8 +16,8 @@ function fixture() {
   return createFixture(root);
 }
 
-describe("fixture del piloto", () => {
-  it("deja main en el origin con los hooks por fase y una suite que corre", () => {
+describe("pilot fixture", () => {
+  it("leaves main on the origin with the per-phase hooks and a suite that runs", () => {
     const { origin, repo } = fixture();
     expect(git(origin, "ls-tree", "-r", "--name-only", "main").split("\n")).toEqual(
       expect.arrayContaining([
@@ -30,7 +30,7 @@ describe("fixture del piloto", () => {
     expect(git(repo, "ls-files", "-s", "test.sh")).toMatch(/^100755/);
   });
 
-  it("mergeIntoMain avanza main del origin hasta la rama de la tarea", () => {
+  it("mergeIntoMain advances the origin's main to the task branch", () => {
     const fx = fixture();
     git(fx.repo, "checkout", "-b", "lunasq/t1");
     git(fx.repo, "commit", "--allow-empty", "-m", "feat: t1");
@@ -39,7 +39,7 @@ describe("fixture del piloto", () => {
     expect(git(fx.origin, "rev-parse", "main")).toBe(git(fx.repo, "rev-parse", "HEAD"));
   });
 
-  it("mergeIntoMain rechaza una rama que no descende de main", () => {
+  it("mergeIntoMain rejects a branch that does not descend from main", () => {
     const fx = fixture();
     git(fx.repo, "checkout", "-b", "lunasq/t1");
     git(fx.repo, "commit", "--allow-empty", "-m", "feat: t1");
@@ -47,6 +47,6 @@ describe("fixture del piloto", () => {
     git(fx.repo, "checkout", "main");
     git(fx.repo, "commit", "--allow-empty", "-m", "feat: otro");
     git(fx.repo, "push", "--quiet", "origin", "main");
-    expect(() => mergeIntoMain(fx, "lunasq/t1")).toThrow("no es mergeable");
+    expect(() => mergeIntoMain(fx, "lunasq/t1")).toThrow("not mergeable");
   });
 });

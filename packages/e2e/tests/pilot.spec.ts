@@ -1,6 +1,6 @@
-// Piloto end-to-end (UW-29): tres tareas con dependencias (A ← B ← C) sobre un repo git real,
-// con un rework, una pregunta y hooks por fase. Los humanos hacen desde la UI lo que les toca
-// (crear, responder, aprobar la spec); el merge lo hace el test, como lo haría GitHub.
+// End-to-end pilot (UW-29): three tasks with dependencies (A ← B ← C) on a real git repo,
+// with a rework, a question and per-phase hooks. Humans do from the UI what falls to them
+// (create, answer, approve the spec); the merge is done by the test, as GitHub would.
 import { expect, type Page, test } from "@playwright/test";
 
 const CONTROL = `http://127.0.0.1:${process.env.E2E_CONTROL_PORT ?? 7462}`;
@@ -32,14 +32,14 @@ async function tasks(page: Page): Promise<TaskView[]> {
 
 async function taskId(page: Page, intent: string): Promise<string> {
   const task = (await tasks(page)).find((t) => t.intent === intent);
-  if (!task) throw new Error(`no existe la tarea «${intent}»`);
+  if (!task) throw new Error(`task «${intent}» does not exist`);
   return task.id;
 }
 
 async function createTask(page: Page, intent: string, dependsOn: string[] = []) {
   await page.goto("/tasks/new");
   await page.getByLabel("Proyecto").selectOption({ label: "Piloto" });
-  await page.getByLabel("Intent").fill(intent);
+  await page.getByLabel("Intención").fill(intent);
   for (const dependency of dependsOn) {
     await page.getByLabel("Depende de").selectOption({ value: await taskId(page, dependency) });
     await expect(
@@ -53,7 +53,7 @@ async function createTask(page: Page, intent: string, dependsOn: string[] = []) 
   await expect(page.getByRole("heading", { level: 1, name: intent })).toBeVisible();
 }
 
-/** Aprueba desde el detalle de la tarea la spec que entregó el refinamiento; la bandeja solo enlaza. */
+/** From the task detail, approves the spec the refinement delivered; the inbox only links. */
 async function approveSpec(page: Page, intent: string) {
   const id = await taskId(page, intent);
   await page.goto("/inbox");
@@ -65,7 +65,7 @@ async function approveSpec(page: Page, intent: string) {
   await expect(page.getByRole("link", { name: intent })).toBeHidden();
 }
 
-/** La tarea espera su dependencia: tras varios ticks del scheduler sigue en draft y sin Runs. */
+/** The task waits for its dependency: after several scheduler ticks it is still in draft and without Runs. */
 async function expectBlocked(page: Page, id: string) {
   await page.waitForTimeout(3_500);
   const task = (await tasks(page)).find((t) => t.id === id) as TaskView;
@@ -82,7 +82,7 @@ async function waitForState(page: Page, id: string, predicate: (t: TaskView) => 
       })
       .toBe(true);
   } catch (error) {
-    // Sin esto un fallo de CI solo dice «false»: se agrega dónde quedó la tarea y qué registró el servidor.
+    // Without this a CI failure only says «false»: add where the task ended up and what the server recorded.
     const task = (await tasks(page)).find((t) => t.id === id);
     const { errors } = await control<{ errors: string[] }>("/state");
     const events = (await (await page.request.get(`/api/tasks/${id}/events`)).json()) as {
@@ -100,8 +100,10 @@ async function waitForState(page: Page, id: string, predicate: (t: TaskView) => 
 
 test.describe.configure({ mode: "serial" });
 
-test.describe("piloto", () => {
-  test("crea tareas con dependencias desde la UI y las muestra en detalle", async ({ page }) => {
+test.describe("pilot", () => {
+  test("creates tasks with dependencies from the UI and shows them in the detail", async ({
+    page,
+  }) => {
     await createTask(page, A);
     await createTask(page, B, [A]);
     await createTask(page, C, [B]);
@@ -112,7 +114,7 @@ test.describe("piloto", () => {
     await expect(page.getByRole("link", { name: A })).toBeVisible();
   });
 
-  test("A: el refinamiento pregunta, el humano responde y aprueba la spec", async ({ page }) => {
+  test("A: refinement asks, the human answers and approves the spec", async ({ page }) => {
     await page.goto("/inbox");
     const question = page.getByRole("article", { name: A });
     await expect(
@@ -124,13 +126,13 @@ test.describe("piloto", () => {
     await approveSpec(page, A);
     const a = await taskId(page, A);
     await page.goto(`/tasks/${a}`);
-    // La pregunta y su respuesta quedan en el Event log de la tarea.
+    // The question and its answer stay in the task's Event log.
     const log = page.getByRole("region", { name: "Event log" });
     await expect(log).toContainText("question.created");
     await expect(log).toContainText("question.answered");
   });
 
-  test("A: se implementa, verifica y entrega como PR", async ({ page }) => {
+  test("A: is implemented, verified and delivered as a PR", async ({ page }) => {
     const a = await taskId(page, A);
     await waitForState(page, a, (t) => t.state === "completed" && t.prUrl !== null);
 
@@ -143,29 +145,29 @@ test.describe("piloto", () => {
         page.getByRole("region", { name: "Runs" }).getByText(phase).first(),
       ).toBeVisible();
     }
-    // El archivo de evidencia lleva el veredicto del verificador y los criterios.
+    // The evidence file carries the verifier's verdict and the criteria.
     const evidence = page.getByRole("region", { name: "Evidencia" });
     await evidence.getByRole("button", { name: "Evidencia" }).click();
     await expect(evidence).toContainText(`lunasq/tasks/${a}.md`);
-    await expect(evidence).toContainText("Veredicto: pass");
+    await expect(evidence).toContainText("Verdict: pass");
     await expect(evidence).toContainText("AC-1");
   });
 
-  test("los hooks por fase de A quedan en la vista de hooks", async ({ page }) => {
+  test("A's per-phase hooks show up in the hooks view", async ({ page }) => {
     await page.goto("/projects");
     await page.getByRole("link", { name: "Piloto" }).click();
     await page.getByRole("link", { name: /Hooks/ }).click();
 
     const prepare = page.getByLabel("10-prepare.sh");
     await expect(prepare).toContainText("exit 0");
-    await expect(prepare).toContainText("preparando");
+    await expect(prepare).toContainText("preparing");
     await expect(prepare).toContainText("lunasq/");
-    // `warn`: el lint falla (exit 1) pero la fase sigue: A ya llegó a completed en el test anterior.
+    // `warn`: lint fails (exit 1) but the phase continues: A already reached completed in the previous test.
     await expect(page.getByLabel("10-lint.sh")).toContainText("exit 1");
     await expect(page.getByLabel("10-lint.sh")).toContainText("warn");
   });
 
-  test("B espera el merge de A y luego pasa por un rework", async ({ page }) => {
+  test("B waits for A's merge and then goes through a rework", async ({ page }) => {
     const [a, b] = await Promise.all([taskId(page, A), taskId(page, B)]);
     await expectBlocked(page, b);
 
@@ -176,14 +178,14 @@ test.describe("piloto", () => {
     await waitForState(page, b, (t) => t.state === "completed" && t.prUrl !== null);
 
     await page.goto(`/tasks/${b}`);
-    // El primer veredicto fue reject: una iteración de verificación y dos Runs de implementación.
+    // The first verdict was reject: one verification iteration and two implementation Runs.
     await expect(page.getByText("Iteración de verificación").locator("..")).toContainText("1");
     const runs = page.getByRole("region", { name: "Runs" });
     await expect(runs.getByRole("cell", { name: "Implementación", exact: true })).toHaveCount(2);
     await expect(runs.getByRole("cell", { name: "Verificación", exact: true })).toHaveCount(2);
   });
 
-  test("C llega al final y todo queda mergeado", async ({ page }) => {
+  test("C reaches the end and everything ends up merged", async ({ page }) => {
     const [b, c] = await Promise.all([taskId(page, B), taskId(page, C)]);
     await expectBlocked(page, c);
     await control(`/merge/${b}`, "POST");
@@ -195,7 +197,7 @@ test.describe("piloto", () => {
       await waitForState(page, id, (t) => t.state === "completed" && t.prState === "merged");
     }
 
-    // after_merge corrió una vez por PR mergeado: cada tarea lo deja en su Event log.
+    // after_merge ran once per merged PR: each task leaves it in its Event log.
     for (const id of await Promise.all([A, B, C].map((intent) => taskId(page, intent)))) {
       await expect
         .poll(async () => {
@@ -209,7 +211,7 @@ test.describe("piloto", () => {
     }
     const { projectId } = await control<{ projectId: string }>("/state");
     await page.goto(`/projects/${projectId}/hooks`);
-    await expect(page.getByLabel("10-announce.sh")).toContainText("mergeado https://github.com/");
+    await expect(page.getByLabel("10-announce.sh")).toContainText("merged https://github.com/");
 
     await page.goto("/queue");
     await expect(page.getByRole("heading", { name: "Cola global" })).toBeVisible();

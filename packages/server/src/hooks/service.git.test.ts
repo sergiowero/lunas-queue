@@ -1,5 +1,5 @@
-// HookService con git y procesos reales: repo remoto bare, checkout del proyecto y worktree de la
-// tarea en su branch. Prueba el criterio de UW-10 sin fakes en lo que decide qué se ejecuta.
+// HookService with real git and processes: bare remote repo, project checkout and the task's
+// worktree on its branch. It tests UW-10's criterion without fakes in what decides what runs.
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
@@ -36,7 +36,7 @@ function write(root: string, path: string, content: string, executable = false) 
   chmodSync(full, executable ? 0o755 : 0o644);
 }
 
-/** Cada hook agrega una línea a order.log del worktree: deja cambios que LunasQ commitea. */
+/** Each hook appends a line to the worktree's order.log: it leaves changes LunasQ commits. */
 const appender = (label: string) => `#!/bin/sh\necho ${label} >> "$LUNASQ_WORKTREE/order.log"\n`;
 
 async function setup() {
@@ -93,8 +93,8 @@ async function setup() {
   return { root, seed, wtPath, task, service };
 }
 
-describe("HookService con git real", { timeout: 30_000 }, () => {
-  it("los hooks corren en orden y lo que dejan se commitea con los trailers", async () => {
+describe("HookService with real git", { timeout: 30_000 }, () => {
+  it("the hooks run in order and what they leave is committed with the trailers", async () => {
     const { wtPath, task, service } = await setup();
 
     const res = await service.run({ taskId: task.id, point: "before_delivery", runId: "run-1" });
@@ -109,11 +109,11 @@ describe("HookService con git real", { timeout: 30_000 }, () => {
     expect(git(wtPath, "status", "--porcelain")).toBe("");
   });
 
-  it("un hook modificado o agregado en el branch de la tarea nunca se ejecuta", async () => {
+  it("a hook modified or added on the task's branch never runs", async () => {
     const { root, wtPath, task, service } = await setup();
     const pwned = join(root, "pwned");
     const evil = `#!/bin/sh\ntouch ${pwned}\necho evil >> "$LUNASQ_WORKTREE/order.log"\n`;
-    // El agente cambia hooks y config en su branch y los commitea...
+    // The agent changes hooks and config on its branch and commits them...
     write(wtPath, "lunasq/hooks/before_delivery/10-first", evil, true);
     write(wtPath, "lunasq/hooks/before_delivery/05-added", evil, true);
     write(
@@ -123,7 +123,7 @@ describe("HookService con git real", { timeout: 30_000 }, () => {
     );
     git(wtPath, "add", "--all");
     git(wtPath, "commit", "--quiet", "-m", "cambio hooks");
-    // ...y deja otro cambio sin commit.
+    // ...and leaves another change uncommitted.
     write(wtPath, "lunasq/hooks/before_delivery/20-second", evil, true);
 
     const res = await service.run({ taskId: task.id, point: "before_delivery" });
@@ -134,11 +134,11 @@ describe("HookService con git real", { timeout: 30_000 }, () => {
       ["20-second", "warn"],
     ]);
     expect(readFileSync(join(wtPath, "order.log"), "utf8")).toBe("first\nsecond\n");
-    // El worktree tenía cambios sin commit antes de los hooks: no se mezclan en un commit.
+    // The worktree had uncommitted changes before the hooks: they are not mixed into a commit.
     expect(res).toMatchObject({ outcome: "warned", commit: null, commitSkipped: true });
   });
 
-  it("un cambio de hook entra en vigor cuando llega a la rama base", async () => {
+  it("a hook change takes effect when it reaches the base branch", async () => {
     const { seed, wtPath, task, service } = await setup();
     write(seed, "lunasq/hooks/before_delivery/10-first", appender("first-v2"), true);
     git(seed, "commit", "--quiet", "-am", "hook v2");
@@ -149,7 +149,7 @@ describe("HookService con git real", { timeout: 30_000 }, () => {
     expect(readFileSync(join(wtPath, "order.log"), "utf8")).toBe("first-v2\nsecond\n");
   });
 
-  it("after_merge corre en el commit mergeado aunque el checkout del proyecto esté atrasado", async () => {
+  it("after_merge runs on the merged commit even if the project checkout is behind", async () => {
     const { seed, root, task, service } = await setup();
     const out = join(root, "deployed");
     write(seed, "lunasq/hooks/after_merge/10-deploy", `#!/bin/sh\ncat VERSION > ${out}\n`, true);

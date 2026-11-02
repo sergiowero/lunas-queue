@@ -1,7 +1,7 @@
-// Configuración global (docs/decisions/settings-proveedores.md): el humano habilita o deshabilita
-// cada AgentKind y fija el límite global de agentes concurrentes desde el panel de Settings. Sin
-// configuración guardada, todos los proveedores están habilitados y rige el default de
-// SchedulerConfig para la concurrencia.
+// Global configuration (docs/decisions/settings-proveedores.md): the human enables or disables
+// each AgentKind and sets the global limit of concurrent agents from the Settings panel. Without
+// saved configuration, all providers are enabled and the default of
+// SchedulerConfig applies for concurrency.
 import { z } from "zod";
 import { AgentKind } from "./enums.ts";
 
@@ -14,8 +14,8 @@ export const AgentProviderSettings = z.strictObject(
 export type AgentProviderSettings = z.infer<typeof AgentProviderSettings>;
 
 /**
- * Cambio parcial de la configuración: solo los proveedores que trae. Cada interruptor de la UI
- * envía solo el suyo, así dos pestañas no se pisan el cambio del otro proveedor.
+ * Partial change of the configuration: only the providers it carries. Each switch of the UI
+ * sends only its own, so two tabs do not overwrite the other provider's change.
  */
 export const AgentProviderPatch = z.strictObject(
   Object.fromEntries(AgentKind.options.map((kind) => [kind, z.boolean().optional()])) as Record<
@@ -27,7 +27,7 @@ export type AgentProviderPatch = z.infer<typeof AgentProviderPatch>;
 
 export const MAX_GLOBAL_CONCURRENCY = 50;
 
-/** Límite global de agentes vivos guardado en Settings: entero de 1 a 50. */
+/** Global limit of live agents saved in Settings: integer from 1 to 50. */
 export const ConcurrencySettings = z.strictObject({
   globalConcurrency: z.int().min(1).max(MAX_GLOBAL_CONCURRENCY),
 });
@@ -35,7 +35,7 @@ export type ConcurrencySettings = z.infer<typeof ConcurrencySettings>;
 
 export const SETTINGS_UPDATED = "settings.updated";
 
-/** Lo que cambió: los proveedores, el límite de concurrencia o ambos (al menos uno). */
+/** What changed: the providers, the concurrency limit or both (at least one). */
 export const SettingsUpdatedPayload = z
   .strictObject({
     providers: AgentProviderSettings.optional(),

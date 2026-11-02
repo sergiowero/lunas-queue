@@ -1,6 +1,6 @@
-// Proceso de LunasQ (ADR uw-28-instalador): la base, los adapters reales, el servidor HTTP en
-// localhost y los módulos en proceso (outbox, orquestador, polling de PRs). `lunasq start` lo
-// arranca; los tests pasan fakes en `adapters`.
+// LunasQ process (ADR uw-28-instalador): the database, the real adapters, the HTTP server on
+// localhost and the in-process modules (outbox, orchestrator, PR polling). `lunasq start`
+// starts it; the tests pass fakes in `adapters`.
 import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -37,29 +37,29 @@ import { OutboxPublisher } from "../outbox/publisher.ts";
 import { SUBAGENT_HOOK_PATH } from "../subagents/routes.ts";
 import { PaneTestGate } from "../test-gate/gate.ts";
 
-/** Solo localhost: el LunasQ MCP y los hooks se autentican con el run token, la API no. */
+/** Localhost only: the LunasQ MCP and the hooks authenticate with the run token, the API does not. */
 export const DEFAULT_HOSTNAME = "127.0.0.1";
 
 export interface RuntimeOptions {
   dbPath: string;
-  /** 0 elige un puerto libre. */
+  /** 0 picks a free port. */
   port: number;
   hostname?: string;
-  /** Archivo MCP estable (ADR 0002) y settings con los hooks de subagentes (ADR uw-19-revisores). */
+  /** Stable MCP file (ADR 0002) and settings with the subagent hooks (ADR uw-19-revisores). */
   mcpConfigPath: string;
   hookSettingsPath: string;
   copilotAgentsPath?: string;
   /**
-   * Feature flag del usage collector (ADR uw-20-usage-collector): telemetría de Claude Code hacia
-   * los endpoints OTLP locales; activa por defecto. `false` quita las variables OTEL de los panes
-   * y no monta los endpoints.
+   * Usage collector feature flag (ADR uw-20-usage-collector): Claude Code telemetry toward
+   * the local OTLP endpoints; on by default. `false` removes the OTEL variables from the panes
+   * and does not mount the endpoints.
    */
   telemetry?: boolean;
-  /** Build del front end (`packages/web/dist/app`); sin él el servidor solo expone la API. */
+  /** Front end build (`packages/web/dist/app`); without it the server only exposes the API. */
   webRoot?: string;
-  /** Cada cuánto se consultan en GitHub los PR abiertos (por defecto 60 s). */
+  /** How often GitHub is queried for open PRs (60 s by default). */
   prPollIntervalMs?: number;
-  /** Límites y cadencia del scheduler; sin esto, los defaults de ADR 0014. */
+  /** Scheduler limits and cadence; without this, the defaults of ADR 0014. */
   scheduler?: SchedulerConfigInput;
   adapters?: {
     herdr?: HerdrAdapter;
@@ -71,17 +71,17 @@ export interface RuntimeOptions {
 }
 
 export interface Runtime {
-  /** `http://<host>:<puerto>`, sin `/` final. */
+  /** `http://<host>:<port>`, without a trailing `/`. */
   url: string;
-  /** Variables extra que el dispatcher pone en cada pane de agente. */
+  /** Extra variables the dispatcher puts on each agent pane. */
   paneEnv: Record<string, string>;
   stop(): Promise<void>;
 }
 
 /**
- * Variables con las que Claude Code exporta métricas y eventos al collector propio
- * (docs/tech-stack.md, Variables que el dispatcher pasa a cada pane). Los atributos por Run y el
- * header de autenticación (`telemetryRunEnv`) los agrega el dispatcher.
+ * Variables with which Claude Code exports metrics and events to the own collector
+ * (docs/tech-stack.md, Variables the dispatcher passes to each pane). The per-Run attributes and the
+ * authentication header (`telemetryRunEnv`) are added by the dispatcher.
  */
 export function telemetryEnv(baseUrl: string): Record<string, string> {
   return {
@@ -94,12 +94,12 @@ export function telemetryEnv(baseUrl: string): Record<string, string> {
   };
 }
 
-/** URLs del LunasQ MCP y del endpoint de hooks que van en los archivos estables de Claude Code. */
+/** URLs of the LunasQ MCP and the hooks endpoint that go in Claude Code's stable files. */
 export function runtimeUrls(baseUrl: string): { mcp: string; hooks: string } {
   return { mcp: `${baseUrl}/mcp`, hooks: `${baseUrl}${SUBAGENT_HOOK_PATH}` };
 }
 
-/** Abre la base (la crea si falta) y aplica las migraciones pendientes; idempotente. */
+/** Opens the database (creates it if missing) and applies the pending migrations; idempotent. */
 export function prepareDatabase(path: string): LunasqDatabase {
   const db = openDatabase(path);
   try {
@@ -127,12 +127,12 @@ function listen(
 function close(server: ServerType) {
   return new Promise<void>((resolve) => {
     server.close(() => resolve());
-    // Un cliente SSE abierto no debe impedir que el proceso termine.
+    // An open SSE client must not keep the process from ending.
     if ("closeAllConnections" in server) server.closeAllConnections();
   });
 }
 
-/** Arma los módulos en proceso sobre la base y la URL ya conocidas; no arranca nada. */
+/** Builds the in-process modules over the database and the URL already known; it starts nothing. */
 function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m: string) => void) {
   const herdr = opts.adapters?.herdr ?? new RealHerdr();
   const github = opts.adapters?.github ?? new RealGitHub();
@@ -174,7 +174,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     onDispatchError: (error, runId) => log(`dispatcher: run ${runId}: ${error.message}`),
     onSchedulerError: (error) => log(`scheduler: ${error.message}`),
     onReconcileError: (error, subject) =>
-      log(`reconciliación: ${subject ?? "-"}: ${error.message}`),
+      log(`reconciliation: ${subject ?? "-"}: ${error.message}`),
   });
   const hooks = new HookService({
     db,
@@ -194,7 +194,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     testGate,
     phaseHooks: hooks,
     hooks,
-    // Bandeja (ADR uw-27-bandeja): responder preguntas, listar bloqueos y enfocar su pane.
+    // Inbox (ADR uw-27-bandeja): answering questions, listing blocks and focusing their pane.
     questions: orchestrator.questions,
     blocked: () => orchestrator.watcher.blocked(),
     focus: (name) => herdr.focusAgent(name),
@@ -215,7 +215,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     onError: (error, taskId) => log(`after_merge: ${taskId}: ${error.message}`),
   });
 
-  // La entrega corre dentro del Run del verificador cuando éste registra un pass (ADR uw-26-entrega).
+  // Delivery runs inside the verifier's Run when it records a pass (ADR uw-26-entrega).
   const delivery = new DeliveryService({
     db,
     git,
@@ -249,7 +249,7 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
   const hostname = opts.hostname ?? DEFAULT_HOSTNAME;
   const db = prepareDatabase(opts.dbPath);
 
-  // Se escucha antes de componer: la URL (con el puerto real) va en los archivos de Claude Code.
+  // Listening happens before composing: the URL (with the real port) goes in Claude Code's files.
   let handler: ((req: Request, env: unknown) => Response | Promise<Response>) | undefined;
   let listening: Awaited<ReturnType<typeof listen>>;
   try {
@@ -267,7 +267,7 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
   try {
     parts = compose(opts, db, url, log);
   } catch (err) {
-    // Sin esto el servidor, ya escuchando, mantendría vivo el proceso.
+    // Without this the server, already listening, would keep the process alive.
     await close(server);
     db.$client.close();
     throw err;
@@ -282,7 +282,7 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
     unsubscribeAfterMerge,
     unsubscribeDelivery,
   } = parts;
-  // env trae la conexión (incoming): sin reenviarlo, la guarda de loopback no ve al par.
+  // env carries the connection (incoming): without forwarding it, the loopback guard does not see the peer.
   handler = (req, env) => app.fetch(req, env);
 
   let stopping: Promise<void> | undefined;
@@ -303,7 +303,7 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
     await orchestrator.start();
     await publisher.start();
     await poller.start();
-    // Una entrega que un reinicio dejó a medias se retoma sin frenar el arranque.
+    // A delivery a restart left half done is resumed without holding back the start.
     void delivery
       .recover()
       .catch((error: unknown) =>

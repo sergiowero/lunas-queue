@@ -1,6 +1,6 @@
-// Reglas puras de la entrega (docs/design.md §Entrega, ADR uw-26-entrega): los hechos que exige
-// `verdict_pass`, los trailers de cada commit y el título, el cuerpo y la etiqueta del PR. Rebase,
-// push y `gh` son del adapter; orquestarlos es de `DeliveryService` (server).
+// Pure delivery rules (docs/design.md §Delivery, ADR uw-26-entrega): the facts that
+// `verdict_pass` requires, the trailers of each commit and the title, body and label of the PR.
+// Rebase, push and `gh` belong to the adapter; orchestrating them belongs to `DeliveryService` (server).
 import {
   COMMIT_TRAILER_RUN,
   COMMIT_TRAILER_TASK,
@@ -15,7 +15,7 @@ export interface DeliveryCriterion {
   outcome: string;
 }
 
-/** Lo del veredicto del verificador que usa la entrega. */
+/** The part of the verifier's verdict that delivery uses. */
 export interface DeliveryVerdict {
   verdict: "pass" | "reject";
   criteriaVerdicts: { criterionId: string; verdict: "pass" | "fail"; evidence: string }[];
@@ -31,9 +31,9 @@ export interface DeliveryFacts {
 }
 
 /**
- * Los hechos que la máquina de estados exige para `verdict_pass` además del gate y del PR: el
- * veredicto es pass, todo criterio de la spec tiene al menos un test en el handoff de
- * implementación y todo criterio pasó en el veredicto.
+ * The facts the state machine requires for `verdict_pass` besides the gate and the PR: the
+ * verdict is pass, every criterion of the spec has at least one test in the implementation
+ * handoff and every criterion passed in the verdict.
  */
 export function deliveryFacts(input: {
   criteria: readonly { id: string }[];
@@ -58,10 +58,10 @@ export function deliveryFacts(input: {
 }
 
 /**
- * Trailers de cada commit de la tarea (por sha): la tarea y el Run de implementación que estaba
- * vivo cuando se escribió. Un commit anterior a todo Run usa el primero; sin Runs de
- * implementación, `fallbackRunId`. Un commit que ya trae los trailers (los de los hooks) conserva
- * los suyos: el adapter no repite una clave.
+ * Trailers of each commit of the task (by sha): the task and the implementation Run that was
+ * alive when it was written. A commit before every Run uses the first one; without
+ * implementation Runs, `fallbackRunId`. A commit that already carries the trailers (those of the
+ * hooks) keeps its own: the adapter does not repeat a key.
  */
 export function commitTrailers(input: {
   taskId: string;
@@ -86,14 +86,14 @@ export function commitTrailers(input: {
 const MAX_TITLE_CHARS = 72;
 
 /**
- * Título del PR: el de la tarea y, mientras no tenga, la primera línea del intent, en una línea
- * y de hasta 72 caracteres.
+ * PR title: the task's and, while it has none, the first line of the intent, on one line
+ * and up to 72 characters.
  */
 export function prTitle(intent: string, title?: string | null): string {
   const line = [title ?? "", ...intent.split("\n")]
     .map((l) => l.replace(/\s+/g, " ").trim())
     .find((l) => l !== "");
-  if (!line) return "Tarea de LunasQ";
+  if (!line) return "LunasQ task";
   return line.length <= MAX_TITLE_CHARS ? line : `${line.slice(0, MAX_TITLE_CHARS - 1)}…`;
 }
 
@@ -101,28 +101,28 @@ const RISK_LABELS: Record<RiskLabel, { name: string; color: string; description:
   low: {
     name: "lunasq:risk-low",
     color: "0e8a16",
-    description: "Riesgo bajo según el verificador",
+    description: "Low risk according to the verifier",
   },
   medium: {
     name: "lunasq:risk-medium",
     color: "fbca04",
-    description: "Riesgo medio según el verificador",
+    description: "Medium risk according to the verifier",
   },
   high: {
     name: "lunasq:risk-high",
     color: "b60205",
-    description: "Riesgo alto según el verificador",
+    description: "High risk according to the verifier",
   },
 };
 
-/** Etiqueta de GitHub del riesgo que asignó el approver, para priorizar la revisión. */
+/** GitHub label for the risk the approver assigned, to prioritize the review. */
 export function riskPrLabel(risk: RiskLabel) {
   return RISK_LABELS[risk];
 }
 
-const RISK_TEXT: Record<RiskLabel, string> = { low: "bajo", medium: "medio", high: "alto" };
+const RISK_TEXT: Record<RiskLabel, string> = { low: "low", medium: "medium", high: "high" };
 
-/** Límite de GitHub para el cuerpo de un PR es 65 536; queda margen. */
+/** GitHub's limit for a PR body is 65,536; some margin is left. */
 export const MAX_PR_BODY_CHARS = 60_000;
 
 const MAX_EVIDENCE_CHARS = 1_500;
@@ -131,8 +131,8 @@ const clip = (text: string, limit: number) =>
   text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
 
 /**
- * Descripción del PR: intent, criterios con su evidencia, etiqueta de riesgo, revisión y los
- * trailers de trazabilidad (docs/design.md §Entrega). Sale de los handoffs: la entrega no tiene
+ * PR description: intent, criteria with their evidence, risk label, review and the
+ * traceability trailers (docs/design.md §Delivery). It comes from the handoffs: delivery has no
  * agente (ADR uw-18-skills-fase).
  */
 export function prBody(input: {
@@ -150,29 +150,27 @@ export function prBody(input: {
     const verdict = verdicts.get(c.id);
     const mark = verdict?.verdict === "pass" ? "✅" : "❌";
     return [
-      `- ${mark} **${c.id}** — dado ${c.given}, cuando ${c.when}, entonces ${c.outcome}.`,
-      verdict
-        ? `  - Evidencia: ${clip(verdict.evidence, MAX_EVIDENCE_CHARS)}`
-        : "  - Sin veredicto.",
+      `- ${mark} **${c.id}** — given ${c.given}, when ${c.when}, then ${c.outcome}.`,
+      verdict ? `  - Evidencia: ${clip(verdict.evidence, MAX_EVIDENCE_CHARS)}` : "  - No verdict.",
     ].join("\n");
   });
   const reviewers = Object.entries(input.verification.reviewers).map(([name, report]) =>
     report.status === "ran"
-      ? `- \`${name}\`: revisó`
-      : `- \`${name}\`: omitido — ${report.justification ?? "sin justificación"}`,
+      ? `- \`${name}\`: reviewed`
+      : `- \`${name}\`: skipped — ${report.justification ?? "no justification"}`,
   );
   const refuted = input.verification.refuted.length;
   const sections = [
     `## Intent\n\n${input.intent.trim()}`,
-    `## Criterios de aceptación (spec v${input.specVersion})\n\n${criteria.join("\n")}`,
-    `## Riesgo\n\nRiesgo: **${RISK_TEXT[input.verification.riskLabel]}** (etiqueta \`${RISK_LABELS[input.verification.riskLabel].name}\`), según el verificador.`,
-    `## Verificación\n\n${reviewers.join("\n")}\n\n${refuted} hallazgo${refuted === 1 ? "" : "s"} refutado${refuted === 1 ? "" : "s"} por el approver. Rama integrada con \`${input.baseBranch}\` y suite de tests en verde antes del push.`,
-    `## Trazabilidad\n\nEvidencia completa de cada Run: \`${input.evidencePath}\`.`,
+    `## Acceptance criteria (spec v${input.specVersion})\n\n${criteria.join("\n")}`,
+    `## Risk\n\nRisk: **${RISK_TEXT[input.verification.riskLabel]}** (label \`${RISK_LABELS[input.verification.riskLabel].name}\`), according to the verifier.`,
+    `## Verification\n\n${reviewers.join("\n")}\n\n${refuted} finding${refuted === 1 ? "" : "s"} refuted by the approver. Branch integrated with \`${input.baseBranch}\` and test suite green before the push.`,
+    `## Traceability\n\nFull evidence of each Run: \`${input.evidencePath}\`.`,
   ];
   const trailers = `\n\n---\n\n${COMMIT_TRAILER_TASK}: ${input.taskId}\n${COMMIT_TRAILER_RUN}: ${input.runId}\n`;
   const body = sections.join("\n\n");
   const room = MAX_PR_BODY_CHARS - trailers.length;
   return body.length <= room
     ? `${body}${trailers}`
-    : `${body.slice(0, room - 40)}\n\n… (recortado)${trailers}`;
+    : `${body.slice(0, room - 40)}\n\n… (truncated)${trailers}`;
 }

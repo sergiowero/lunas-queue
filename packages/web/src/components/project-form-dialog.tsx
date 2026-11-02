@@ -1,7 +1,7 @@
-// Alta (ProjectCreate) y edición (ProjectUpdate) de proyectos, ADR 0008. La validación es la del
-// servidor; aquí solo se muestran sus issues. Al crear, los campos vacíos no se envían para que
-// apliquen los defaults del servidor; al editar se envía todo, porque PATCH reemplaza cada campo
-// presente y `null` borra los comandos opcionales.
+// Creation (ProjectCreate) and editing (ProjectUpdate) of projects, ADR 0008. Validation is the
+// server's; here only its issues are shown. On create, empty fields are not sent so that
+// the server defaults apply; on edit everything is sent, because PATCH replaces each present
+// field and `null` clears the optional commands.
 import {
   type AgentKind,
   EFFORT_LEVELS,
@@ -14,6 +14,9 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { ApiError, api, type Json } from "../lib/api.ts";
+import type { Dictionary } from "../lib/dictionary/index.ts";
+import { errorText } from "../lib/error-text.ts";
+import { useT } from "../lib/i18n.ts";
 import { Button } from "./ui/button.tsx";
 import { Dialog } from "./ui/dialog.tsx";
 import { Input, Label, Select, Textarea } from "./ui/input.tsx";
@@ -28,14 +31,14 @@ type PhaseFields = {
   timeout: string;
 };
 
-function describe(error: Error): string {
+function describe(error: Error, t: Dictionary): string {
   if (error instanceof ApiError && error.issues.length > 0) {
-    return error.issues.map((i) => `${i.path.join(".") || "(cuerpo)"}: ${i.message}`).join("; ");
+    return error.issues.map((i) => `${i.path.join(".") || t.common.body}: ${i.message}`).join("; ");
   }
-  return error.message;
+  return errorText(error, t);
 }
 
-/** Un argumento por línea, para no depender de comillas ni de espacios dentro de un argumento. */
+/** One argument per line, so as not to depend on quotes or spaces inside an argument. */
 function parseArgs(text: string): string[] {
   return text
     .split("\n")
@@ -122,10 +125,11 @@ export function ProjectFormDialog({
   project,
   onClose,
 }: {
-  /** Con proyecto, el formulario edita; sin él, crea. */
+  /** With a project, the form edits; without it, it creates. */
   project?: Json<Project>;
   onClose: () => void;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [name, setName] = useState(project?.name ?? "");
   const [repo, setRepo] = useState(project?.repo ?? "");
@@ -172,10 +176,10 @@ export function ProjectFormDialog({
   };
 
   return (
-    <Dialog title={project ? "Editar proyecto" : "Nuevo proyecto"} onClose={onClose}>
+    <Dialog title={project ? t.projectForm.editTitle : t.projectForm.newTitle} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <Label htmlFor="project-name">Nombre</Label>
+          <Label htmlFor="project-name">{t.projectForm.name}</Label>
           <Input
             id="project-name"
             required
@@ -186,7 +190,7 @@ export function ProjectFormDialog({
         </div>
         <div className="flex gap-4">
           <div className="flex flex-1 flex-col gap-1">
-            <Label htmlFor="project-repo">Repositorio</Label>
+            <Label htmlFor="project-repo">{t.projectForm.repo}</Label>
             <Input
               id="project-repo"
               required
@@ -196,7 +200,7 @@ export function ProjectFormDialog({
             />
           </div>
           <div className="flex w-40 flex-col gap-1">
-            <Label htmlFor="project-base-branch">Rama base</Label>
+            <Label htmlFor="project-base-branch">{t.projectForm.baseBranch}</Label>
             <Input
               id="project-base-branch"
               required
@@ -206,17 +210,17 @@ export function ProjectFormDialog({
           </div>
         </div>
         <div className="flex flex-col gap-1">
-          <Label htmlFor="project-local-path">Ruta local</Label>
+          <Label htmlFor="project-local-path">{t.projectForm.localPath}</Label>
           <Input
             id="project-local-path"
             required
             value={localPath}
             onChange={(e) => setLocalPath(e.target.value)}
-            placeholder="/ruta/absoluta/al/repo"
+            placeholder={t.projectForm.localPathPlaceholder}
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label htmlFor="project-test-command">Comando de tests</Label>
+          <Label htmlFor="project-test-command">{t.projectForm.testCommand}</Label>
           <Input
             id="project-test-command"
             value={testCommand}
@@ -225,7 +229,7 @@ export function ProjectFormDialog({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label htmlFor="project-bootstrap">Bootstrap del worktree</Label>
+          <Label htmlFor="project-bootstrap">{t.projectForm.bootstrap}</Label>
           <Input
             id="project-bootstrap"
             value={bootstrap}
@@ -235,10 +239,10 @@ export function ProjectFormDialog({
         </div>
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="text-sm font-medium">Límites</legend>
+          <legend className="text-sm font-medium">{t.projectForm.limits}</legend>
           <div className="flex gap-4">
             <div className="flex flex-1 flex-col gap-1">
-              <Label htmlFor="project-concurrency">Concurrencia</Label>
+              <Label htmlFor="project-concurrency">{t.projectForm.concurrency}</Label>
               <Input
                 id="project-concurrency"
                 type="number"
@@ -246,11 +250,11 @@ export function ProjectFormDialog({
                 step={1}
                 value={concurrency}
                 onChange={(e) => setConcurrency(e.target.value)}
-                placeholder="solo el límite global"
+                placeholder={t.projectForm.concurrencyPlaceholder}
               />
             </div>
             <div className="flex flex-1 flex-col gap-1">
-              <Label htmlFor="project-max-iterations">Iteraciones de verificación</Label>
+              <Label htmlFor="project-max-iterations">{t.projectForm.maxIterations}</Label>
               <Input
                 id="project-max-iterations"
                 type="number"
@@ -266,12 +270,12 @@ export function ProjectFormDialog({
         </fieldset>
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="text-sm font-medium">Agente por fase</legend>
+          <legend className="text-sm font-medium">{t.projectForm.agentByPhase}</legend>
           {PHASES.map((phase) => (
             <div key={phase} className="flex flex-col gap-2 rounded-md border border-border p-3">
               <h3 className="text-xs font-medium uppercase text-muted-foreground">{phase}</h3>
               <div className="flex flex-col gap-1">
-                <Label htmlFor={`project-agent-${phase}`}>Proveedor de {phase}</Label>
+                <Label htmlFor={`project-agent-${phase}`}>{t.projectForm.provider(phase)}</Label>
                 <Select
                   id={`project-agent-${phase}`}
                   value={phases[phase].kind}
@@ -285,7 +289,7 @@ export function ProjectFormDialog({
               </div>
               <div className="flex gap-4">
                 <div className="flex flex-1 flex-col gap-1">
-                  <Label htmlFor={`project-model-${phase}`}>Modelo de {phase}</Label>
+                  <Label htmlFor={`project-model-${phase}`}>{t.projectForm.model(phase)}</Label>
                   <Input
                     id={`project-model-${phase}`}
                     value={phases[phase].model}
@@ -293,13 +297,13 @@ export function ProjectFormDialog({
                   />
                 </div>
                 <div className="flex w-40 flex-col gap-1">
-                  <Label htmlFor={`project-effort-${phase}`}>Esfuerzo de {phase}</Label>
+                  <Label htmlFor={`project-effort-${phase}`}>{t.projectForm.effort(phase)}</Label>
                   <Select
                     id={`project-effort-${phase}`}
                     value={phases[phase].effort}
                     onChange={(e) => setPhase(phase, { effort: e.target.value })}
                   >
-                    <option value="">Predeterminado</option>
+                    <option value="">{t.projectForm.effortDefault}</option>
                     {EFFORT_LEVELS.map((level) => (
                       <option key={level} value={level}>
                         {level}
@@ -308,7 +312,7 @@ export function ProjectFormDialog({
                   </Select>
                 </div>
                 <div className="flex w-40 flex-col gap-1">
-                  <Label htmlFor={`project-timeout-${phase}`}>Timeout de {phase} (min)</Label>
+                  <Label htmlFor={`project-timeout-${phase}`}>{t.projectForm.timeout(phase)}</Label>
                   <Input
                     id={`project-timeout-${phase}`}
                     type="number"
@@ -322,14 +326,15 @@ export function ProjectFormDialog({
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor={`project-args-${phase}`}>
-                  Argumentos de CLI para {phases[phase].kind === "claude" ? "Claude" : "Copilot"} en{" "}
-                  {phase} (uno por línea)
+                  {t.projectForm.argsLabel(
+                    phases[phase].kind === "claude" ? "Claude" : "Copilot",
+                    phase,
+                  )}
                 </Label>
                 <p id={`project-args-help-${phase}`} className="text-xs text-muted-foreground">
-                  Flags que LunasQ pasa al comando{" "}
-                  <code>{phases[phase].kind === "claude" ? "claude" : "copilot"}</code> al arrancar
-                  esta fase. El esfuerzo va en su propio campo, no aquí. No escribas aquí un prompt
-                  ni texto suelto: el CLI lo toma como prompt inicial.
+                  {t.projectForm.argsHelp.before}
+                  <code>{phases[phase].kind === "claude" ? "claude" : "copilot"}</code>
+                  {t.projectForm.argsHelp.after}
                 </p>
                 <Textarea
                   id={`project-args-${phase}`}
@@ -345,15 +350,17 @@ export function ProjectFormDialog({
 
         {save.error && (
           <p role="alert" className="text-sm text-destructive">
-            No se pudo {project ? "guardar" : "crear"} el proyecto: {describe(save.error)}
+            {project
+              ? t.projectForm.saveFailed(describe(save.error, t))
+              : t.projectForm.createFailed(describe(save.error, t))}
           </p>
         )}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
-            Cancelar
+            {t.common.cancel}
           </Button>
           <Button type="submit" disabled={save.isPending}>
-            {project ? "Guardar cambios" : "Crear proyecto"}
+            {project ? t.projectForm.saveChanges : t.projectForm.create}
           </Button>
         </div>
       </form>

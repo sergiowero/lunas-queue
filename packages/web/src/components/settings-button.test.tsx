@@ -8,8 +8,8 @@ async function settingsButton() {
   return screen.findByRole("link", { name: "Settings" });
 }
 
-describe("botón de Settings del header", () => {
-  it.each(PAGES)("en %s, el nav de pestañas no contiene Settings", async (path) => {
+describe("header Settings button", () => {
+  it.each(PAGES)("on %s, the tab nav does not contain Settings", async (path) => {
     renderApp(path);
     await settingsButton();
     const nav = within(screen.getByRole("navigation"));
@@ -34,11 +34,13 @@ describe("botón de Settings del header", () => {
     },
   );
 
-  it("queda justo antes del selector de tema, que es el último elemento del header, y después de Nueva tarea", async () => {
+  it("sits right before the theme toggle, which is the header's last element, and after New task", async () => {
     renderApp("/queue");
     const link = await settingsButton();
+    const language = await screen.findByRole("button", { name: "Cambiar a inglés" });
     const theme = await screen.findByRole("button", { name: /^Cambiar a tema/ });
-    expect(link.nextElementSibling).toBe(theme);
+    expect(link.nextElementSibling).toBe(language);
+    expect(language.nextElementSibling).toBe(theme);
     expect(theme.parentElement?.lastElementChild).toBe(theme);
     expect(link.parentElement).toBe(theme.parentElement);
     expect(link.className).not.toContain("ml-auto");
@@ -47,7 +49,7 @@ describe("botón de Settings del header", () => {
     );
   });
 
-  it("un click desde /queue navega a /settings y muestra la página", async () => {
+  it("a click from /queue navigates to /settings and shows the page", async () => {
     const { user, router } = renderApp("/queue");
     const link = await settingsButton();
     expect(screen.getByRole("navigation").contains(link)).toBe(false);
@@ -58,7 +60,7 @@ describe("botón de Settings del header", () => {
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeTruthy();
   });
 
-  it("en /settings muestra el estado activo y ninguna pestaña del nav aparece activa", async () => {
+  it("on /settings it shows the active state and no nav tab appears active", async () => {
     renderApp("/settings");
     const link = await settingsButton();
     expect(link.getAttribute("aria-current")).toBe("page");
@@ -70,13 +72,13 @@ describe("botón de Settings del header", () => {
     }
   });
 
-  it("fuera de /settings no está activo", async () => {
+  it("outside /settings it is not active", async () => {
     renderApp("/queue");
     const link = await settingsButton();
     expect(link.getAttribute("aria-current")).toBeNull();
   });
 
-  it("muestra el tooltip nativo «Settings» y conserva el estilo del selector de tema", async () => {
+  it("shows the native tooltip «Settings» and keeps the theme toggle's style", async () => {
     renderApp("/queue");
     const link = await settingsButton();
     expect(link.getAttribute("title")).toBe("Settings");

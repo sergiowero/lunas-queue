@@ -1,24 +1,24 @@
-// Lo que LunasQ sabe de la TUI de Claude Code para operarla desde herdr. Es comportamiento externo,
-// por eso vive en adapters junto al de herdr. Captura en spikes/herdr/outputs/09-agent-read-blocked.txt.
+// What LunasQ knows about Claude Code's TUI to operate it from herdr. It is external behavior,
+// so it lives in adapters next to herdr's. Capture in spikes/herdr/outputs/09-agent-read-blocked.txt.
 
-/** Opción del diálogo de confianza de carpeta que lo distingue de otros `blocked` (permisos). */
+/** Option of the folder trust dialog that distinguishes it from other `blocked` (permissions). */
 export const TRUST_DIALOG_MARKER = "Yes, I trust this folder";
 
 /**
- * Teclas que aceptan el diálogo: el cursor arranca en "No, exit", así que un Enter a secas
- * cerraría Claude Code (ADR 0004).
+ * Keys that accept the dialog: the cursor starts on "No, exit", so a bare Enter
+ * would close Claude Code (ADR 0004).
  */
 export const TRUST_ACCEPT_KEYS = ["down", "enter"] as const;
 
 /** Copilot's interactive workspace-trust dialog selects "1. Yes" by default. */
 export const COPILOT_TRUST_ACCEPT_KEYS = ["enter"] as const;
 
-/** Si la pantalla del agente muestra el diálogo de confianza de carpeta. */
+/** Whether the agent's screen shows the folder trust dialog. */
 export function showsTrustDialog(screen: string): boolean {
   return screen.includes(TRUST_DIALOG_MARKER) && screen.includes("No, exit");
 }
 
-/** Si Copilot CLI muestra su diálogo interactivo de confianza de carpeta. */
+/** Whether Copilot CLI shows its interactive folder trust dialog. */
 export function showsCopilotTrustDialog(screen: string): boolean {
   return (
     screen.includes("Confirm folder trust") &&
@@ -28,12 +28,12 @@ export function showsCopilotTrustDialog(screen: string): boolean {
 }
 
 /**
- * La TUI del agente cuando se agota el uso: el aviso queda en pantalla y reintentar no sirve hasta
- * que se restablece. Textos vistos del CLI: `Usage limit reached · limit resets 3:45pm`,
- * `Usage limit reached · wrapping up`, `5-hour limit reached · resets <hora>`, el pie de la
- * espera `Continuing automatically at 3:45pm · Esc to cancel` y el corte
- * `Automatic continue stopped after repeated usage-limit hits`. herdr no conoce ese UI (su
- * manifiesto de detección no tiene regla para él), así que LunasQ lo reconoce aquí.
+ * The agent's TUI when usage runs out: the notice stays on screen and retrying is useless until
+ * it resets. Texts seen from the CLI: `Usage limit reached · limit resets 3:45pm`,
+ * `Usage limit reached · wrapping up`, `5-hour limit reached · resets <time>`, the footer of the
+ * wait `Continuing automatically at 3:45pm · Esc to cancel` and the cutoff
+ * `Automatic continue stopped after repeated usage-limit hits`. herdr does not know that UI (its
+ * detection manifest has no rule for it), so LunasQ recognizes it here.
  */
 export const USAGE_LIMIT_PATTERN = new RegExp(
   [
@@ -50,14 +50,14 @@ export const USAGE_LIMIT_PATTERN = new RegExp(
   "i",
 );
 
-/** Si la pantalla del agente muestra el aviso de límite de uso. */
+/** Whether the agent's screen shows the usage-limit notice. */
 export function showsUsageLimit(screen: string): boolean {
   return USAGE_LIMIT_PATTERN.test(screen);
 }
 
 /**
- * El aviso como lo dibuja Claude, para la nota del escalamiento: la última línea que lo menciona
- * con su tanda contigua de a lo más tres líneas (el aviso y su pie con la hora del reset).
+ * The notice as Claude draws it, for the escalation note: the last line that mentions it
+ * with its contiguous run of at most three lines (the notice and its footer with the reset time).
  */
 export function usageLimitMessage(screen: string): string {
   const lines = screen.split("\n").map((line) => line.trim());

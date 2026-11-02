@@ -1,7 +1,7 @@
-// Gate de tests (docs/design.md §Prácticas de ingeniería, ADR uw-11-gate-tests). LunasQ corre el
-// comando de tests del proyecto en un pane de herdr abierto desde el worktree de la tarea, sin
-// credenciales del entorno, y deja cada ejecución en el Event log con `test_gate.executed`. Lo que
-// el agente diga de sus tests no cuenta: solo el exit code de esta ejecución.
+// Test gate (docs/design.md §Engineering practices, ADR uw-11-gate-tests). LunasQ runs the
+// project's test command in a herdr pane opened from the task's worktree, without
+// environment credentials, and leaves each run in the Event log with `test_gate.executed`. What
+// the agent says about its tests does not count: only this run's exit code.
 import {
   type GitAdapter,
   type HerdrAdapter,
@@ -27,8 +27,8 @@ import type { EnsuredWorktree } from "../worktrees/service.ts";
 import { stripAnsi } from "./ansi.ts";
 
 /**
- * Variables del pane que llegan a la suite; el resto (`GH_TOKEN`, claves de API) no. Lo justo
- * para encontrar las herramientas y escribir en el home y el tmpdir.
+ * Pane variables that reach the suite; the rest (`GH_TOKEN`, API keys) do not. Just enough
+ * to find the tools and write to the home and the tmpdir.
  */
 export const GATE_ENV_ALLOWLIST = [
   "PATH",
@@ -46,9 +46,9 @@ export const GATE_ENV_ALLOWLIST = [
 export interface PaneTestGateDeps {
   db: LunasqDatabase;
   git: Pick<GitAdapter, "resolveCommit">;
-  /** Asegura el worktree de la tarea (WorktreeService.ensure); el pane se abre desde su raíz. */
+  /** Ensures the task's worktree (WorktreeService.ensure); the pane is opened from its root. */
   worktrees: { ensure(taskId: string): Promise<EnsuredWorktree> };
-  /** Por defecto, HerdrPaneRunner sobre `herdr`. */
+  /** HerdrPaneRunner over `herdr` by default. */
   runnerFor?: (parentPaneId: string) => ProcessRunner;
   herdr?: HerdrAdapter;
   timeoutMs?: number;
@@ -78,26 +78,26 @@ export class PaneTestGate implements TestGate {
     this.runnerFor =
       deps.runnerFor ??
       ((parentPaneId) => {
-        if (!herdr) throw new Error("PaneTestGate necesita herdr o runnerFor");
+        if (!herdr) throw new Error("PaneTestGate needs herdr or runnerFor");
         return new HerdrPaneRunner({ herdr, parentPaneId });
       });
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_GATE_TIMEOUT_MS;
   }
 
   async run(input: TestGateInput): Promise<TestGateResult> {
-    // Un comando vacío cuenta como sin comando.
+    // An empty command counts as no command.
     const command = input.command?.trim() ? input.command : null;
     const execution = command
       ? await this.execute(input, command)
       : {
           headSha: null,
           result: null,
-          error: "el proyecto no tiene comando de tests configurado",
+          error: "the project has no test command configured",
           durationMs: 0,
         };
     const { result, error } = execution;
     const passed = error === null && result !== null && result.exitCode === 0 && !result.timedOut;
-    // Sin secuencias ANSI: el Event log es para leerse, no para reproducir colores.
+    // No ANSI sequences: the Event log is meant to be read, not to reproduce colors.
     const output = stripAnsi(result ? `${result.stdout}${result.stderr}` : "");
 
     appendEvent(
@@ -122,8 +122,8 @@ export class PaneTestGate implements TestGate {
       { publish: true },
     );
 
-    // Al agente le llega la cola de la salida y, al final, por qué no hubo resultado.
-    const notes = [result?.timedOut ? "el gate de tests excedió su tiempo límite" : null, error];
+    // The agent receives the tail of the output and, at the end, why there was no result.
+    const notes = [result?.timedOut ? "the test gate exceeded its time limit" : null, error];
     const shown = notes.reduce<string>(
       (text, note) =>
         note === null ? text : `${text}${text === "" || text.endsWith("\n") ? "" : "\n"}${note}\n`,
@@ -134,15 +134,15 @@ export class PaneTestGate implements TestGate {
 
   private async execute(input: TestGateInput, command: string): Promise<Execution> {
     const started = Date.now();
-    // El sha es evidencia, no condición: si no se puede leer, la suite corre igual.
+    // The sha is evidence, not a condition: if it cannot be read, the suite runs anyway.
     const headSha = await this.git
       .resolveCommit({ cwd: input.worktreePath, ref: "HEAD" })
       .catch(() => null);
     try {
-      // ensure es idempotente: con el worktree ya listo solo devuelve su pane raíz.
+      // ensure is idempotent: with the worktree already ready it only returns its root pane.
       const worktree = await this.worktrees.ensure(input.taskId);
       if (worktree.path !== input.worktreePath) {
-        throw new Error(`el worktree de la tarea es ${worktree.path}, no ${input.worktreePath}`);
+        throw new Error(`the task worktree is ${worktree.path}, not ${input.worktreePath}`);
       }
       const { rootPaneId } = worktree;
       const result = await this.runnerFor(rootPaneId).run({
@@ -157,16 +157,16 @@ export class PaneTestGate implements TestGate {
       return {
         headSha,
         result: null,
-        error: `no se pudo correr el gate de tests: ${message(err)}`,
+        error: `could not run the test gate: ${message(err)}`,
         durationMs: Date.now() - started,
       };
     }
   }
 }
 
-/** Gate de un servidor armado sin herdr (p. ej. solo la API): ninguna verificación pasa. */
+/** Gate of a server built without herdr (e.g. API only): no verification passes. */
 export class UnavailableTestGate implements TestGate {
   async run(_input: TestGateInput): Promise<TestGateResult> {
-    return { passed: false, output: "el gate de tests no está disponible en este servidor" };
+    return { passed: false, output: "the test gate is not available on this server" };
   }
 }

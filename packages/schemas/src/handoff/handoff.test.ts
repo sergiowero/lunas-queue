@@ -26,7 +26,7 @@ function readExamples<T>(kind: "valid" | "invalid"): [string, T][] {
 
 function expectErrors(input: unknown): HandoffError[] {
   const result = parseHandoff(input);
-  if (result.success) throw new Error("se esperaba un handoff inválido");
+  if (result.success) throw new Error("an invalid handoff was expected");
   return result.errors;
 }
 
@@ -34,25 +34,25 @@ function validExample(name: string): Record<string, unknown> {
   return JSON.parse(readFileSync(join(examplesDir, "valid", `${name}.json`), "utf8"));
 }
 
-describe("handoff v1: ejemplos válidos", () => {
+describe("handoff v1: valid examples", () => {
   const examples = readExamples<unknown>("valid");
 
-  it("hay al menos un ejemplo por fase", () => {
+  it("there is at least one example per phase", () => {
     const phases = new Set(examples.map(([, h]) => (h as { phase: string }).phase));
     expect([...phases].sort()).toEqual(["implementation", "refinement", "verification"]);
   });
 
-  it.each(examples)("acepta %s", (_file, handoff) => {
+  it.each(examples)("accepts %s", (_file, handoff) => {
     const result = parseHandoff(handoff);
     expect(result.success ? [] : result.errors).toEqual([]);
     expect(result.success && result.data).toEqual(handoff);
   });
 });
 
-describe("handoff v1: ejemplos inválidos", () => {
-  it.each(readExamples<InvalidExample>("invalid"))("rechaza %s", (_file, example) => {
+describe("handoff v1: invalid examples", () => {
+  it.each(readExamples<InvalidExample>("invalid"))("rejects %s", (_file, example) => {
     const errors = expectErrors(example.handoff);
-    // Cada ejemplo falla solo por la razón que declara.
+    // Each example fails only for the reason it declares.
     expect(errors.map((e) => e.path).sort(), example.description).toEqual(
       example.expectedErrors.map((e) => e.path).sort(),
     );
@@ -68,8 +68,8 @@ describe("handoff v1: ejemplos inválidos", () => {
   });
 });
 
-describe("handoff: errores claros", () => {
-  it("cada error trae ruta legible y mensaje en español", () => {
+describe("handoff: clear errors", () => {
+  it("each error carries a readable path and a message in English", () => {
     const handoff = validExample("refinement");
     (handoff.body as { criteria: { id: string }[] }).criteria[0] = { id: "x" } as never;
     const errors = expectErrors(handoff);
@@ -79,17 +79,17 @@ describe("handoff: errores claros", () => {
     });
     expect(errors).toContainEqual({
       path: "body.criteria[0].given",
-      message: expect.stringMatching(/se esperaba texto/i),
+      message: expect.stringMatching(/expected string/i),
     });
   });
 
-  it("rechaza entradas que no son objeto", () => {
-    expect(expectErrors("hola")).toEqual([
-      { path: "(raíz)", message: expect.stringContaining("objeto") },
+  it("rejects inputs that are not an object", () => {
+    expect(expectErrors("hello")).toEqual([
+      { path: "(root)", message: expect.stringContaining("JSON object") },
     ]);
   });
 
-  it("explica qué estados admite un revisor", () => {
+  it("explains which statuses a reviewer admits", () => {
     const handoff = validExample("verification-pass");
     (handoff.body as { reviewers: Record<string, unknown> }).reviewers["lunasq-ui-reviewer"] = {
       status: "bogus",
@@ -97,51 +97,51 @@ describe("handoff: errores claros", () => {
     expect(expectErrors(handoff)).toEqual([
       {
         path: "body.reviewers.lunasq-ui-reviewer.status",
-        message: expect.stringContaining("ran o skipped"),
+        message: expect.stringContaining("ran or skipped"),
       },
     ]);
   });
 
-  it("distingue una versión escrita como texto", () => {
+  it("distinguishes a version written as text", () => {
     const handoff = { ...validExample("implementation"), schemaVersion: "1" };
     expect(expectErrors(handoff)).toEqual([
       { path: "schemaVersion", message: expect.stringContaining('"1"') },
     ]);
   });
 
-  it("devuelve errores en vez de lanzar con entradas no serializables", () => {
+  it("returns errors instead of throwing on non-serializable inputs", () => {
     const handoff: Record<string, unknown> = validExample("implementation");
     handoff.self = handoff;
     expect(expectErrors(handoff)).toEqual([
-      { path: "(raíz)", message: expect.stringContaining("serializable") },
+      { path: "(root)", message: expect.stringContaining("serializable") },
     ]);
   });
 
-  it("rechaza un handoff sin versión de esquema", () => {
+  it("rejects a handoff without a schema version", () => {
     const { schemaVersion: _, ...rest } = validExample("implementation");
     expect(expectErrors(rest)).toEqual([
-      { path: "schemaVersion", message: expect.stringContaining("soportadas: 1") },
+      { path: "schemaVersion", message: expect.stringContaining("supported versions: 1") },
     ]);
   });
 });
 
-describe("handoff: tamaño acotado", () => {
-  it(`mide en bytes UTF-8 y rechaza un handoff de más de ${HANDOFF_MAX_BYTES} bytes`, () => {
+describe("handoff: bounded size", () => {
+  it(`measures in UTF-8 bytes and rejects a handoff of more than ${HANDOFF_MAX_BYTES} bytes`, () => {
     const handoff = validExample("implementation");
     handoff.knownRisks = Array.from({ length: 20 }, () => "ñ".repeat(1000));
     expect(JSON.stringify(handoff).length).toBeLessThan(HANDOFF_MAX_BYTES);
     expect(expectErrors(handoff)).toEqual([
-      { path: "(raíz)", message: expect.stringContaining(`${HANDOFF_MAX_BYTES} bytes`) },
+      { path: "(root)", message: expect.stringContaining(`${HANDOFF_MAX_BYTES} bytes`) },
     ]);
   });
 });
 
-describe("handoff: versiones", () => {
-  it("la versión vigente es 1", () => {
+describe("handoff: versions", () => {
+  it("the current version is 1", () => {
     expect(CURRENT_HANDOFF_VERSION).toBe(1);
   });
 
-  it("el veredicto exige exactamente los 4 revisores", () => {
+  it("the verdict requires exactly the 4 reviewers", () => {
     expect(REVIEWER_NAMES).toEqual([
       "lunasq-security-reviewer",
       "lunasq-ux-reviewer",

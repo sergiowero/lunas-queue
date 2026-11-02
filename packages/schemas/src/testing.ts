@@ -1,31 +1,31 @@
-// Datos de ejemplo para tests de otros paquetes. Cada llamada devuelve una copia nueva.
+// Sample data for tests of other packages. Each call returns a new copy.
 import type { SpecContent } from "./spec.ts";
 
 export function specContentExample(): SpecContent {
   return {
     domainModel: {
       boundedContext: "Pedidos",
-      glossary: [{ term: "Pedido pendiente", definition: "Pedido confirmado que aún no se envía" }],
+      glossary: [{ term: "Pending order", definition: "Confirmed order that has not shipped yet" }],
       aggregates: [{ name: "Order", entities: ["OrderLine"] }],
-      invariants: ["Solo un pedido pendiente puede cancelarse"],
-      events: [{ name: "OrderCancelled", description: "El cliente canceló un pedido pendiente" }],
+      invariants: ["Only a pending order can be cancelled"],
+      events: [{ name: "OrderCancelled", description: "The customer cancelled a pending order" }],
     },
     requirements: [
-      "El cliente puede cancelar un pedido pendiente desde su vista de pedidos",
-      "Un pedido enviado no se puede cancelar",
+      "The customer can cancel a pending order from their orders view",
+      "A shipped order cannot be cancelled",
     ],
     criteria: [
       {
         id: "AC-1",
-        given: "un pedido pendiente",
-        when: "el cliente lo cancela",
-        outcome: "el pedido queda cancelado y se emite OrderCancelled",
+        given: "a pending order",
+        when: "the customer cancels it",
+        outcome: "the order ends up cancelled and OrderCancelled is emitted",
       },
       {
         id: "AC-2",
-        given: "un pedido enviado",
-        when: "el cliente intenta cancelarlo",
-        outcome: "la cancelación se rechaza con un motivo",
+        given: "a shipped order",
+        when: "the customer tries to cancel it",
+        outcome: "the cancellation is rejected with a reason",
       },
     ],
     taskList: [

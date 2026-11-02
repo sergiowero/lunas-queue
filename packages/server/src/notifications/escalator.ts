@@ -1,6 +1,6 @@
-// Escalamiento a 1 minuto (docs/design.md §Señales): un agente `blocked` o una Question
-// abierta se notifica si sigue así pasado el plazo. Quien detecta la situación llama
-// `watch`; quien la ve resuelta llama `resolve`.
+// Escalation at 1 minute (docs/design.md §Signals): a `blocked` agent or an open
+// Question is notified if it stays that way past the deadline. Whoever detects the situation calls
+// `watch`; whoever sees it resolved calls `resolve`.
 import type { Notification } from "@lunasq/schemas";
 
 export const ESCALATION_DELAY_MS = 60_000;
@@ -12,7 +12,7 @@ export class Escalator {
   private readonly onError: (error: Error, notification: Notification) => void;
   private readonly delayMs: number;
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
-  // Ya escalados y sin resolver: un `watch` repetido (p. ej. al reconciliar) no hace nada.
+  // Already escalated and unresolved: a repeated `watch` (e.g. when reconciling) does nothing.
   private readonly fired = new Set<string>();
 
   constructor(opts: {
@@ -26,14 +26,14 @@ export class Escalator {
   }
 
   /**
-   * Programa la notificación a `delayMs` desde `since` (por defecto, ahora). `since` permite
-   * re-armar el plazo tras un reinicio desde la BD. Repetir con un id vigilado o ya escalado
-   * (y sin resolver) no hace nada.
+   * Schedules the notification at `delayMs` from `since` (by default, now). `since` allows
+   * re-arming the deadline after a restart from the DB. Repeating with a watched or already escalated id
+   * (and unresolved) does nothing.
    */
   watch(pending: PendingNotification, opts: { since?: Date } = {}): void {
     if (this.timers.has(pending.id) || this.fired.has(pending.id)) return;
     const since = opts.since?.getTime() ?? Date.now();
-    if (Number.isNaN(since)) throw new Error(`since inválido para ${pending.id}`);
+    if (Number.isNaN(since)) throw new Error(`invalid since for ${pending.id}`);
     const wait = Math.max(0, since + this.delayMs - Date.now());
     const timer = setTimeout(() => this.fire(pending), wait);
     this.timers.set(pending.id, timer);
@@ -47,12 +47,12 @@ export class Escalator {
     this.timers.delete(id);
   }
 
-  /** Ids con el plazo corriendo. */
+  /** Ids with the deadline running. */
   pending(): string[] {
     return [...this.timers.keys()];
   }
 
-  /** Ids ya escalados que siguen sin resolverse. */
+  /** Ids already escalated that are still unresolved. */
   escalated(): string[] {
     return [...this.fired];
   }
@@ -78,5 +78,5 @@ export class Escalator {
 }
 
 function defaultError(error: Error, notification: Notification): void {
-  console.warn(`[notificaciones] no se pudo escalar ${notification.id}: ${error.message}`);
+  console.warn(`[notifications] could not escalate ${notification.id}: ${error.message}`);
 }

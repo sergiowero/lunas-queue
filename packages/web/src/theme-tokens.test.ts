@@ -1,5 +1,5 @@
-// El tema oscuro redefine cada token de color del claro (AC-8): un token sin su par oscuro
-// dejaría ese color fijo del tema claro en pantalla.
+// The dark theme redefines each color token of the light one (AC-8): a token without its dark pair
+// would leave that fixed light-theme color on screen.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,8 +8,8 @@ import { buttonVariants } from "./components/ui/button.tsx";
 
 const css = readFileSync(join(import.meta.dirname, "index.css"), "utf8");
 
-// MoonlightQ usa el mismo valor en ambos temas para estos tokens (texto blanco sobre el relleno
-// sólido, el rojo de peligro): lo que importa es que el oscuro los declare.
+// MoonlightQ uses the same value in both themes for these tokens (white text over the solid
+// fill, the danger red): what matters is that the dark one declares them.
 const SAME_IN_BOTH_THEMES = new Set([
   "--color-primary-fg",
   "--color-danger",
@@ -30,8 +30,8 @@ function block(selector: string): string {
   return css.slice(start, css.indexOf("}", start));
 }
 
-describe("tokens del tema oscuro", () => {
-  it("el tema oscuro redefine cada token de color del tema claro con otro valor", () => {
+describe("dark theme tokens", () => {
+  it("the dark theme redefines each color token of the light theme with another value", () => {
     const light = tokens(block("@theme"));
     const dark = tokens(block(".dark"));
     expect(light.size).toBeGreaterThan(0);
@@ -42,12 +42,12 @@ describe("tokens del tema oscuro", () => {
     }
   });
 
-  it("la variante dark de Tailwind depende de la clase dark de <html>", () => {
+  it("Tailwind's dark variant depends on the <html> class", () => {
     expect(css).toMatch(/@custom-variant dark \(&:where\(\.dark, \.dark \*\)\);/);
   });
 });
 
-// Luminancia relativa (WCAG) de un `#rrggbb` o un `oklch(L C h)` opaco, vía OKLab → sRGB lineal.
+// Relative luminance (WCAG) of an opaque `#rrggbb` or `oklch(L C h)`, via OKLab → sRGB lineal.
 function luminance(color: string): number {
   const hex = color.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
   if (hex) {
@@ -76,7 +76,7 @@ function contrast(fg: string, bg: string): number {
   return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
 }
 
-describe("contraste de las variantes destructivas", () => {
+describe("contrast of the destructive variants", () => {
   it.each([
     ["claro", "@theme"],
     ["oscuro", ".dark"],
@@ -88,7 +88,7 @@ describe("contraste de las variantes destructivas", () => {
     expect(contrast(fg ?? "", bg ?? "")).toBeGreaterThanOrEqual(4.5);
   });
 
-  it("el badge y el botón destructivos usan el texto del token, no un blanco fijo", () => {
+  it("the destructive badge and button use the token's text, not a fixed white", () => {
     for (const classes of [
       badgeVariants({ variant: "destructive" }),
       buttonVariants({ variant: "destructive" }),
@@ -99,7 +99,7 @@ describe("contraste de las variantes destructivas", () => {
   });
 });
 
-// Mezcla `fg` con opacidad `alpha` sobre `bg` (ambos `#rrggbb`), como pinta `bg-success/10`.
+// Mixes `fg` with opacity `alpha` over `bg` (both `#rrggbb`), as `bg-success/10` paints it.
 function over(fg: string, alpha: number, bg: string): string {
   const ch = (hex: string, i: number) => Number.parseInt(hex.slice(1 + 2 * i, 3 + 2 * i), 16);
   const mixed = [0, 1, 2].map((i) =>
@@ -110,7 +110,7 @@ function over(fg: string, alpha: number, bg: string): string {
   return `#${mixed.join("")}`;
 }
 
-describe("contraste de la variante success del Badge", () => {
+describe("contrast of the Badge's success variant", () => {
   it.each([
     ["claro", "@theme"],
     ["oscuro", ".dark"],
@@ -125,8 +125,8 @@ describe("contraste de la variante success del Badge", () => {
   });
 });
 
-describe("variante success del Badge", () => {
-  it("usa los tokens success, que existen en el tema claro y en el oscuro", () => {
+describe("Badge success variant", () => {
+  it("uses the success tokens, which exist in the light and the dark theme", () => {
     const classes = badgeVariants({ variant: "success" });
     for (const cls of ["bg-success/10", "text-success-text", "ring-success/20"]) {
       expect(classes).toContain(cls);

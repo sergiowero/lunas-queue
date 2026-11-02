@@ -1,7 +1,7 @@
-// Specs versionadas y su aprobación (docs/design.md §Human-in-the-loop, ADR 0013). Cada
-// escritura corre en una transacción IMMEDIATE que guarda la versión, su evento y la transición
-// de la tarea juntos: si la máquina de estados la rechaza, no queda nada escrito. Los payloads
-// se validan con su esquema antes de entrar al Event log.
+// Versioned specs and their approval (docs/design.md §Human-in-the-loop, ADR 0013). Each
+// write runs in an IMMEDIATE transaction that saves the version, its event and the task
+// transition together: if the state machine rejects it, nothing is left written. The payloads
+// are validated with their schema before entering the Event log.
 import { diffSpecContent, isEmptyDiff } from "@lunasq/domain";
 import {
   type Actor,
@@ -30,9 +30,9 @@ import {
 export type SpecErrorCode =
   | TransitionTaskErrorCode
   | "spec_not_found"
-  // La versión no es la última de la tarea: el humano revisó una versión superada.
+  // The version is not the task's latest: the human reviewed a superseded version.
   | "stale_version"
-  // La versión ya se aprobó o ya se pidieron cambios.
+  // The version was already approved or changes were already requested.
   | "spec_not_pending";
 
 export type SpecResult =
@@ -52,7 +52,7 @@ export class SpecRepositoryError extends Error {
   }
 }
 
-// Revierte la transacción de una escritura rechazada y lleva el rechazo a quien llama.
+// Rolls back the transaction of a rejected write and carries the rejection to the caller.
 class Rejected extends Error {
   readonly result: Failure;
 
@@ -86,7 +86,7 @@ function toSpec(row: Row): Spec {
     createdAt: row.createdAt,
   });
   if (!result.success) {
-    throw new SpecRepositoryError(`spec inválida en ${row.id}`, { cause: result.error });
+    throw new SpecRepositoryError(`invalid spec in ${row.id}`, { cause: result.error });
   }
   return result.data;
 }
@@ -129,8 +129,8 @@ export class SpecRepository {
   }
 
   /**
-   * El refinador entrega una versión nueva (submit_spec): draft/running → refined. Valida
-   * `content` (lanza ZodError si no cumple); la transición recibe el hecho specComplete.
+   * The refiner delivers a new version (submit_spec): draft/running → refined. Validates
+   * `content` (throws ZodError if it does not comply); the transition receives the specComplete fact.
    */
   submit(taskId: string, content: SpecContent): SpecResult {
     const parsed = SpecContent.parse(content);
@@ -138,21 +138,21 @@ export class SpecRepository {
   }
 
   /**
-   * Como submit, dentro de una transacción IMMEDIATE que ya abrió quien llama: el LunasQ MCP
-   * cierra el Run del refinador en la misma transacción. Un rechazo no escribe la transición,
-   * pero la versión sí: quien llama debe revertir la transacción.
+   * Like submit, inside an IMMEDIATE transaction already opened by the caller: the LunasQ MCP
+   * closes the refiner's Run in the same transaction. A rejection does not write the transition,
+   * but the version is written: the caller must roll the transaction back.
    */
   applySubmit(tx: Tx, taskId: string, content: SpecContent): SpecResult {
     return this.#submit(tx, taskId, SpecContent.parse(content));
   }
 
   #submit(tx: Tx, taskId: string, content: SpecContent): SpecResult {
-    if (!taskExists(tx, taskId)) return fail("task_not_found", `no existe la tarea ${taskId}`);
+    if (!taskExists(tx, taskId)) return fail("task_not_found", `task ${taskId} does not exist`);
     const spec = this.#insertVersion(tx, taskId, content, "agent", null);
     return this.#transition(tx, taskId, "agent", { type: "submit_spec", specComplete: true }, spec);
   }
 
-  /** El humano aprueba la última versión: refined → in_progress. */
+  /** The human approves the latest version: refined → in_progress. */
   approve(taskId: string, version: number): SpecResult {
     return this.#write((tx) => {
       const pending = this.#pendingLatest(tx, taskId, version);
@@ -162,7 +162,7 @@ export class SpecRepository {
     });
   }
 
-  /** El humano pide cambios con comentarios: refined → draft, para otra ronda de refinamiento. */
+  /** The human requests changes with comments: refined → draft, for another refinement round. */
   requestChanges(taskId: string, version: number, comments: string): SpecResult {
     const trimmed = comments.trim();
     return this.#write((tx) => {
@@ -174,10 +174,10 @@ export class SpecRepository {
         .where(eq(specs.id, pending.row.id))
         .returning()
         .all();
-      if (!row) throw new Error("update de spec sin fila");
+      if (!row) throw new Error("spec update without a row");
       const command = { type: "request_changes", hasComments: trimmed.length > 0 } as const;
-      // Sin comentarios no hay evento que escribir: la máquina de estados rechaza con
-      // guard_failed y la transacción se revierte.
+      // Without comments there is no event to write: the state machine rejects with
+      // guard_failed and the transaction is rolled back.
       if (command.hasComments) {
         const payload = SpecChangesRequestedPayload.parse({
           specId: row.id,
@@ -191,8 +191,8 @@ export class SpecRepository {
   }
 
   /**
-   * El humano edita la última versión y la aprueba en un paso: se crea la versión siguiente
-   * con autor humano, ya aprobada. La versión base queda pending y superada.
+   * The human edits the latest version and approves it in one step: the next version is created
+   * with human author, already approved. The base version stays pending and superseded.
    */
   editAndApprove(taskId: string, baseVersion: number, content: SpecContent): SpecResult {
     const parsed = SpecContent.parse(content);
@@ -205,7 +205,7 @@ export class SpecRepository {
     });
   }
 
-  /** Versiones de la tarea, de la primera a la última. null si la tarea no existe. */
+  /** Versions of the task, from first to last. null if the task does not exist. */
   list(taskId: string): Spec[] | null {
     return this.db.transaction((tx) => {
       if (!taskExists(tx, taskId)) return null;
@@ -224,7 +224,7 @@ export class SpecRepository {
     return row ? toSpec(row) : null;
   }
 
-  /** La versión aprobada: la que leen implementación y verificación. */
+  /** The approved version: the one implementation and verification read. */
   approved(taskId: string): Spec | null {
     const row = this.db
       .select()
@@ -235,8 +235,8 @@ export class SpecRepository {
   }
 
   /**
-   * Cambios de `against` (por defecto la versión anterior) a `version`. Sin versión anterior
-   * todo aparece como agregado. null si alguna de las dos no existe.
+   * Changes from `against` (by default the previous version) to `version`. Without a previous version
+   * everything appears as added. null if either of the two does not exist.
    */
   diff(taskId: string, version: number, against?: number): SpecDiff | null {
     return this.db.transaction((tx) => {
@@ -251,15 +251,15 @@ export class SpecRepository {
   }
 
   #pendingLatest(tx: Tx, taskId: string, version: number): { ok: true; row: Row } | Failure {
-    if (!taskExists(tx, taskId)) return fail("task_not_found", `no existe la tarea ${taskId}`);
+    if (!taskExists(tx, taskId)) return fail("task_not_found", `task ${taskId} does not exist`);
     const row = findVersion(tx, taskId, version);
-    if (!row) return fail("spec_not_found", `la tarea ${taskId} no tiene la versión ${version}`);
+    if (!row) return fail("spec_not_found", `task ${taskId} does not have version ${version}`);
     const latest = latestVersion(tx, taskId);
     if (version !== latest) {
-      return fail("stale_version", `la versión ${version} fue superada por la ${latest}`);
+      return fail("stale_version", `version ${version} was superseded by ${latest}`);
     }
     if (row.approval !== "pending") {
-      return fail("spec_not_pending", `la versión ${version} ya está en ${row.approval}`);
+      return fail("spec_not_pending", `version ${version} is already ${row.approval}`);
     }
     return { ok: true, row };
   }
@@ -281,7 +281,7 @@ export class SpecRepository {
       })
       .returning()
       .all();
-    if (!row) throw new Error("insert de spec sin fila");
+    if (!row) throw new Error("spec insert without a row");
     const payload = SpecVersionCreatedPayload.parse({
       specId: row.id,
       version: row.version,
@@ -298,7 +298,7 @@ export class SpecRepository {
       .where(eq(specs.id, specId))
       .returning()
       .all();
-    if (!row) throw new Error("update de spec sin fila");
+    if (!row) throw new Error("spec update without a row");
     const payload = SpecApprovedPayload.parse({ specId: row.id, version: row.version });
     appendEvent(tx, { taskId: row.taskId, type: SPEC_APPROVED, actor: "human", payload });
     return toSpec(row);

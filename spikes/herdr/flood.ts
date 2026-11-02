@@ -1,5 +1,5 @@
-// Spike UW-00/d: genera N eventos workspace.metadata_updated vía workspace.report_metadata para provocar backpressure.
-// El socket atiende una request por conexión, así que abre una conexión por request (de a `batch`).
+// Spike UW-00/d: generates N workspace.metadata_updated events via workspace.report_metadata to cause backpressure.
+// The socket serves one request per connection, so it opens one connection per request (in groups of `batch`).
 import { createConnection } from "node:net";
 
 const [socketPath, target = "w1", n = "5000", batch = "50"] = process.argv.slice(2);
@@ -19,7 +19,7 @@ function request(i: number): Promise<void> {
   });
 }
 
-// herdr descarta updates cuyo seq no supera el último visto por source: source único por corrida.
+// herdr discards updates whose seq does not exceed the last one seen per source: a unique source per run.
 const source = `flood-${Date.now()}`;
 const t0 = Date.now();
 for (let i = 0; i < Number(n); i += Number(batch)) {

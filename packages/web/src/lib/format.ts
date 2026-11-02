@@ -1,23 +1,17 @@
-import type {
-  Phase,
-  ResultKind,
-  RunResult,
-  SubState,
-  TaskState,
-  UsageTotals,
-} from "@lunasq/schemas";
+import type { TaskState, UsageTotals } from "@lunasq/schemas";
+import { currentLanguage, LOCALE } from "./i18n.ts";
 
-/** Nombre de una tarea en la UI: su título y, mientras el refinamiento no lo genera, el intent. */
+/** Name of a task in the UI: its title and, until refinement generates it, the intent. */
 export function taskLabel(task: { title: string | null; intent: string }): string {
   return task.title ?? task.intent;
 }
 
-/** Agente de un Run: su tipo y, si lo hay, su modelo («claude · opus»). */
+/** A Run's agent: its kind and, if any, its model («claude · opus»). */
 export function formatAgent(run: { agentKind: string; model?: string | null }): string {
   return run.model ? `${run.agentKind} · ${run.model}` : run.agentKind;
 }
 
-/** Orden de las columnas del tablero: el flujo de la máquina de estados. */
+/** Order of the board columns: the state machine's flow. */
 export const BOARD_STATES: TaskState[] = [
   "draft",
   "refined",
@@ -29,90 +23,84 @@ export const BOARD_STATES: TaskState[] = [
   "cancelled",
 ];
 
-export const STATE_LABEL: Record<TaskState, string> = {
-  draft: "Draft",
-  refined: "Refined",
-  in_progress: "In progress",
-  verification: "Verification",
-  needs_human: "Needs human",
-  paused: "Paused",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
-export const SUB_STATE_LABEL: Record<SubState, string> = {
-  queued: "en cola",
-  running: "corriendo",
-  waiting_human: "esperando humano",
-};
-
-export const PHASE_LABEL: Record<Phase, string> = {
-  refine: "Refinamiento",
-  implement: "Implementación",
-  verify: "Verificación",
-  deliver: "Entrega",
-};
-
-export const RESULT_LABEL: Record<RunResult, string> = {
-  success: "éxito",
-  failure: "fallo",
-  cancelled: "cancelado",
-};
-
-/** Tipo de Resultado de una tarea completada sin código (submit_result). */
-export const RESULT_KIND_LABEL: Record<ResultKind, string> = {
-  research: "Investigación",
-  already_implemented: "Ya implementada",
-  not_resolvable: "Sin resolución",
-};
-
 export function isTerminal(state: TaskState): boolean {
   return state === "completed" || state === "cancelled";
 }
 
-/** Estados desde los que el humano puede pausar (espejo de la máquina de estados). */
+/** States from which the human can pause (mirror of the state machine). */
 export function canPause(state: TaskState): boolean {
   return (
     state === "draft" || state === "refined" || state === "in_progress" || state === "verification"
   );
 }
 
-/** Estados que el humano devuelve al flujo con resume. */
+/** States the human returns to the flow with resume. */
 export function canResume(state: TaskState): boolean {
   return state === "paused" || state === "needs_human";
 }
 
-const dateTime = new Intl.DateTimeFormat("es", { dateStyle: "short", timeStyle: "medium" });
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+const numberFormats = new Map<string, Intl.NumberFormat>();
 
-export function formatDate(iso: string | null): string {
-  return iso ? dateTime.format(new Date(iso)) : "—";
+/** Locale of the effective language: dates and numbers follow it. */
+function locale(): string {
+  return LOCALE[currentLanguage()];
 }
 
-const integer = new Intl.NumberFormat("es");
+export function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  const key = locale();
+  let format = dateFormats.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat(key, { dateStyle: "short", timeStyle: "medium" });
+    dateFormats.set(key, format);
+  }
+  return format.format(new Date(iso));
+}
+
+function integer(value: number): string {
+  const key = locale();
+  let format = numberFormats.get(key);
+  if (!format) {
+    format = new Intl.NumberFormat(key);
+    numberFormats.set(key, format);
+  }
+  return format.format(value);
+}
 
 export function formatTokens(usage: UsageTotals): string {
   const total =
     usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
-  return integer.format(total);
+  return integer(total);
 }
 
+const costFormats = new Map<string, Intl.NumberFormat>();
+
+/** Cost in US dollars; the separators follow the locale of the effective language. */
 export function formatCost(cost: number | null): string {
-  return cost === null ? "—" : `$${cost.toFixed(2)}`;
+  if (cost === null) return "—";
+  const key = locale();
+  let format = costFormats.get(key);
+  if (!format) {
+    format = new Intl.NumberFormat(key, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    costFormats.set(key, format);
+  }
+  return `$${format.format(cost)}`;
 }
 
-/** Duración legible: milisegundos, segundos o minutos. */
+/** Readable duration: milliseconds, seconds or minutes. */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms} ms`;
-  if (ms < 60_000) return `${(Math.round(ms / 100) / 10).toLocaleString("es")} s`;
+  if (ms < 60_000) return `${(Math.round(ms / 100) / 10).toLocaleString(locale())} s`;
   return `${Math.round(ms / 60_000)} min`;
 }
 
-/** Un timeout es un ajuste, no una medida: se muestra exacto, sin redondear a minutos. */
+/** A timeout is a setting, not a measurement: shown exactly, without rounding to minutes. */
 export function formatTimeout(seconds: number): string {
   return seconds >= 60 && seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds} s`;
 }
 
-// Quita secuencias ANSI de salidas guardadas antes de que el servidor las limpiara.
+// Strips ANSI sequences from saved outputs from before the server cleaned them.
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(
   `${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^\\u0007${ESC}]*(?:\\u0007|${ESC}\\\\)|${ESC}[@-Z\\\\-_]`,

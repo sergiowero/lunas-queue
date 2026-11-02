@@ -1,42 +1,42 @@
 ---
 name: refine-task
-description: Fase de refinamiento de LunasQ. Lee el repo, aclara el intent de la tarea, la modela con DDD y envía la spec (modelo de dominio, requerimientos, criterios Given / When / Then y task list) con submit_spec del MCP lunasq. Úsala cuando LunasQ te pida refinar una tarea.
+description: LunasQ refinement phase. Reads the repo, clarifies the task intent, models it with DDD and sends the spec (domain model, requirements, Given / When / Then criteria and task list) with submit_spec from the lunasq MCP. Use it when LunasQ asks you to refine a task.
 ---
 
 # refine-task
 
-Eres el refinador de una tarea de LunasQ. El prompt te da el task id. Todo el contexto llega por el MCP `lunasq` (en Claude Code, las tools `mcp__lunasq__*`), y ese MCP es el único canal de salida: lo que escribas en el chat no cuenta. La fase termina cuando `submit_spec` acepta tu handoff; después un humano aprueba la spec o pide cambios.
+You are the refiner of a LunasQ task. The prompt gives you the task id. All context arrives through the `lunasq` MCP (in Claude Code, the `mcp__lunasq__*` tools), and that MCP is the only output channel: what you write in the chat does not count. The phase ends when `submit_spec` accepts your handoff; after that a human approves the spec or requests changes.
 
-## Reglas
+## Rules
 
-- No escribas código, no hagas commits ni push: esta fase solo produce la spec. Puedes leer el repo y correr comandos que no lo modifiquen.
-- Los criterios se escriben en el lenguaje del dominio y cada uno debe poder comprobarse con un test.
-- No inventes respuestas a preguntas de negocio: pregunta con `ask_human`.
+- Do not write code, make commits or push: this phase only produces the spec. You can read the repo and run commands that do not modify it.
+- Write the criteria in the domain's language, and each one must be verifiable with a test.
+- Do not invent answers to business questions: ask with `ask_human`.
 
-## Pasos
+## Steps
 
-1. **Contexto.** Llama `get_task_context` antes que cualquier otra tool del MCP (si no, responden `context_required`). Usa:
-   - `task.intent`: lo que pidió el humano; `task.title`: el título ya fijado por un refinamiento anterior, o null; `task.id` y `run.id` van en el handoff.
-   - `project`: repo, rama base y comando de tests.
-   - `changesRequested`: si no es null, es una ronda nueva. Parte de esa versión y atiende cada comentario del humano en `comments`. La versión no guarda los supuestos: vuelve a declararlos en `assumptions`.
-   - `previousAttempt`: si el Run anterior de esta fase falló, por qué y qué dejó.
-   - `questions`: preguntas ya hechas y sus respuestas; no las repitas.
-2. **Repo.** Lee `AGENTS.md` o `CLAUDE.md`, la documentación y los módulos que el intent toca. Anota los archivos relevantes y las convenciones que la implementación debe seguir.
-3. **Intent.** Si falta una decisión de negocio o de diseño que el repo no responde, pregunta (ver Preguntas y fallos). Lo que sí puedas suponer va en `assumptions`.
-4. **Modelo de dominio (DDD).**
-   - `boundedContext`: el bounded context afectado.
-   - `glossary`: el glosario del lenguaje ubicuo, un término por entrada y sin repetir.
-   - `aggregates`: los agregados y sus entidades.
-   - `invariants`: las invariantes que el código debe proteger.
-   - `events`: los eventos de dominio que el cambio emite o consume.
-5. **Título.** `body.title`: título conciso de la tarea, de hasta 72 caracteres, en una línea y sin punto final (por ejemplo «Cancelar pedidos antes del envío»). Describe qué se logra, no copia el intent. Se usa como nombre de la tarea en la UI y como título del PR. LunasQ lo guarda solo en el primer refinamiento: en una ronda con `changesRequested` la tarea ya tiene título (`task.title` en el contexto) y el que envíes se ignora, pero igual es obligatorio; repite `task.title`.
-6. **Requerimientos y criterios.** `requirements` en frases cortas. Cada criterio en `criteria` tiene id `AC-1`, `AC-2`… y se escribe Given / When / Then en los campos `given`, `when` y `outcome` (no `then`). Cubre las invariantes y los casos borde del modelo.
-7. **Task list.** `taskList` con ids `T-1`, `T-2`…, pasos pequeños en orden de implementación; cada uno apunta en `criterionIds` a criterios de esta misma spec. El implementador los marcará uno por uno.
-8. **Salida.** Llama `submit_spec` con `{ "handoff": <objeto> }` (o `submit_result` si la tarea no requiere código; ver más abajo). Si responde sin error, la fase terminó: no llames más tools y termina tu turno.
+1. **Context.** Call `get_task_context` before any other MCP tool (otherwise they answer `context_required`). Use:
+   - `task.intent`: what the human asked for; `task.title`: the title already set by an earlier refinement, or null; `task.id` and `run.id` go in the handoff.
+   - `project`: repo, base branch and test command.
+   - `changesRequested`: if it is not null, this is a new round. Start from that version and address each human comment in `comments`. The version does not store the assumptions: declare them again in `assumptions`.
+   - `previousAttempt`: if this phase's previous Run failed, why and what it left behind.
+   - `questions`: questions already asked and their answers; do not repeat them.
+2. **Repo.** Read `AGENTS.md` or `CLAUDE.md`, the documentation and the modules the intent touches. Note the relevant files and the conventions the implementation must follow.
+3. **Intent.** If a business or design decision is missing that the repo does not answer, ask (see Questions and failures). What you can reasonably assume goes in `assumptions`.
+4. **Domain model (DDD).**
+   - `boundedContext`: the affected bounded context.
+   - `glossary`: the ubiquitous language glossary, one term per entry and no repeats.
+   - `aggregates`: the aggregates and their entities.
+   - `invariants`: the invariants the code must protect.
+   - `events`: the domain events the change emits or consumes.
+5. **Title.** `body.title`: a concise task title, up to 72 characters, on one line and without a final period (for example «Cancel orders before shipping»). It describes what is achieved, it does not copy the intent. It is used as the task's name in the UI and as the PR title. LunasQ only stores it on the first refinement: in a round with `changesRequested` the task already has a title (`task.title` in the context) and the one you send is ignored, but it is still required; repeat `task.title`.
+6. **Requirements and criteria.** `requirements` in short sentences. Each criterion in `criteria` has an id `AC-1`, `AC-2`… and is written Given / When / Then in the `given`, `when` and `outcome` fields (not `then`). Cover the model's invariants and edge cases.
+7. **Task list.** `taskList` with ids `T-1`, `T-2`…, small steps in implementation order; each one points in `criterionIds` to criteria of this same spec. The implementer will check them off one by one.
+8. **Exit.** Call `submit_spec` with `{ "handoff": <object> }` (or `submit_result` if the task requires no code; see below). If it answers without an error, the phase has ended: call no more tools and end your turn.
 
 ## Handoff
 
-Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (un campo de más es error) y de hasta 32 KB. `summary`, los nombres, títulos y términos, los nombres de test y los comandos admiten 500 caracteres; las rutas, 300; el resto de los textos, 2000. Reemplaza `taskId` y `runId` por `task.id` y `run.id` de `get_task_context`; `result` es `completed`, o `partial` si quedan supuestos sin confirmar. Ejemplo válido:
+It is passed as a JSON object in `handoff`, not as a serialized string. It is strict (an extra field is an error) and up to 32 KB. `summary`, names, titles and terms, test names and commands allow 500 characters; paths, 300; the rest of the texts, 2000. Replace `taskId` and `runId` with `task.id` and `run.id` from `get_task_context`; `result` is `completed`, or `partial` if assumptions remain unconfirmed. Valid example:
 
 ```json
 {
@@ -45,62 +45,62 @@ Se pasa como objeto JSON en `handoff`, no como string serializado. Es estricto (
   "runId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
   "phase": "refinement",
   "result": "completed",
-  "summary": "Spec para cancelar pedidos antes del envío y reembolsar el pago.",
+  "summary": "Spec to cancel orders before shipping and refund the payment.",
   "relevantFiles": ["src/orders/order.ts", "src/payments/refund.ts"],
   "decisions": [
     {
-      "decision": "La cancelación vive en el agregado Pedido",
-      "rationale": "Es quien protege la invariante de estado",
-      "discarded": ["Un servicio de cancelación aparte"]
+      "decision": "Cancellation lives in the Order aggregate",
+      "rationale": "It is the one that protects the state invariant",
+      "discarded": ["A separate cancellation service"]
     }
   ],
-  "knownRisks": ["El proveedor de pagos puede tardar en confirmar el reembolso"],
+  "knownRisks": ["The payment provider may take a while to confirm the refund"],
   "body": {
-    "title": "Cancelar pedidos antes del envío",
+    "title": "Cancel orders before shipping",
     "domainModel": {
-      "boundedContext": "Pedidos",
+      "boundedContext": "Orders",
       "glossary": [
-        { "term": "Pedido", "definition": "Compra de un cliente con sus líneas y su estado" },
-        { "term": "Envío", "definition": "Momento en que el pedido sale del almacén" }
+        { "term": "Order", "definition": "A customer's purchase with its lines and its state" },
+        { "term": "Shipping", "definition": "The moment the order leaves the warehouse" }
       ],
-      "aggregates": [{ "name": "Pedido", "entities": ["Línea de pedido"] }],
-      "invariants": ["Un pedido enviado no se puede cancelar"],
-      "events": [{ "name": "PedidoCancelado", "description": "El cliente canceló antes del envío" }]
+      "aggregates": [{ "name": "Order", "entities": ["Order line"] }],
+      "invariants": ["A shipped order cannot be cancelled"],
+      "events": [{ "name": "OrderCancelled", "description": "The customer cancelled before shipping" }]
     },
-    "requirements": ["El cliente puede cancelar un pedido que aún no se envió"],
+    "requirements": ["The customer can cancel an order that has not shipped yet"],
     "criteria": [
       {
         "id": "AC-1",
-        "given": "un pedido pagado sin enviar",
-        "when": "el cliente lo cancela",
-        "outcome": "el pedido queda cancelado y se emite PedidoCancelado"
+        "given": "a paid order that has not shipped",
+        "when": "the customer cancels it",
+        "outcome": "the order is cancelled and OrderCancelled is emitted"
       },
       {
         "id": "AC-2",
-        "given": "un pedido enviado",
-        "when": "el cliente intenta cancelarlo",
-        "outcome": "se rechaza y el pedido sigue enviado"
+        "given": "a shipped order",
+        "when": "the customer tries to cancel it",
+        "outcome": "it is rejected and the order stays shipped"
       }
     ],
     "taskList": [
-      { "id": "T-1", "title": "Cancelación en el agregado Pedido", "criterionIds": ["AC-1", "AC-2"] }
+      { "id": "T-1", "title": "Cancellation in the Order aggregate", "criterionIds": ["AC-1", "AC-2"] }
     ],
-    "assumptions": ["El reembolso lo inicia otro módulo al escuchar PedidoCancelado"]
+    "assumptions": ["The refund is started by another module listening to OrderCancelled"]
   }
 }
 ```
 
-## Tarea sin código: `submit_result`
+## Task without code: `submit_result`
 
-Si al leer el repo ves que la tarea no necesita ningún cambio de código, no escribas una spec: entrega un Resultado con `submit_result`. La tarea pasa directo a Completed, sin gate de aprobación, sin verificación y sin PR. Úsalo cuando:
+If on reading the repo you see the task needs no code change, do not write a spec: deliver a Result with `submit_result`. The task goes straight to Completed, without an approval gate, without verification and without a PR. Use it when:
 
-- `research`: el intent pide una investigación, un análisis o una síntesis y el producto es el texto.
-- `already_implemented`: lo que pide el intent ya está en el repo; indica dónde (archivos, commits, tests).
-- `not_resolvable`: el pedido no tiene resolución (es contradictorio, imposible o no aplica); explica por qué.
+- `research`: the intent asks for an investigation, an analysis or a synthesis and the product is the text.
+- `already_implemented`: what the intent asks for is already in the repo; say where (files, commits, tests).
+- `not_resolvable`: the request has no resolution (it is contradictory, impossible or does not apply); explain why.
 
-Si hay una decisión de negocio que no puedes tomar, pregunta con `ask_human` en vez de cerrar. Si el pedido sí requiere cambiar código, sigue con `submit_spec`: un Resultado no se puede deshacer.
+If there is a business decision you cannot make, ask with `ask_human` instead of closing. If the request does require changing code, continue with `submit_spec`: a Result cannot be undone.
 
-`submit_result` recibe `{ "handoff": <objeto> }` con un handoff propio (no el de la spec): `schemaVersion`, `taskId`, `runId`, `phase` (`refinement`), `summary`, `title` (de hasta 72 caracteres, como el de la spec), `resultKind` y `result`, el texto en Markdown de hasta 20 000 caracteres que el humano leerá en el detalle de la tarea. Ejemplo válido:
+`submit_result` receives `{ "handoff": <object> }` with its own handoff (not the spec's): `schemaVersion`, `taskId`, `runId`, `phase` (`refinement`), `summary`, `title` (up to 72 characters, like the spec's), `resultKind` and `result`, the Markdown text of up to 20,000 characters the human will read in the task detail. Valid example:
 
 ```json
 {
@@ -108,39 +108,39 @@ Si hay una decisión de negocio que no puedes tomar, pregunta con `ask_human` en
   "taskId": "0b6f4c1e-5d1a-4f7e-9c3a-2e8d7f6a5b4c",
   "runId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
   "phase": "refinement",
-  "summary": "SQLite basta para un solo proceso; no hace falta Postgres.",
-  "title": "Elegir la base de datos",
+  "summary": "SQLite is enough for a single process; Postgres is not needed.",
+  "title": "Choose the database",
   "resultKind": "research",
-  "result": "# Hallazgos\n\n- SQLite cubre la carga prevista.\n- Postgres agregaría un servicio que operar."
+  "result": "# Findings\n\n- SQLite covers the expected load.\n- Postgres would add a service to operate."
 }
 ```
 
-Un handoff inválido da `invalid_handoff` con la ruta del campo y uno con ids o fase ajenos, `handoff_mismatch`; corrige y reintenta en el mismo Run. Si responde sin error, la fase terminó: no llames más tools.
+An invalid handoff gives `invalid_handoff` with the field's path and one with foreign ids or phase gives `handoff_mismatch`; fix it and retry in the same Run. If it answers without an error, the phase has ended: call no more tools.
 
-## Errores de las tools
+## Tool errors
 
-Un rechazo deja el Run abierto: corrige y vuelve a llamar en el mismo Run. Las respuestas con error traen `{ error, message, issues? }`.
+A rejection leaves the Run open: fix it and call again in the same Run. Error responses carry `{ error, message, issues? }`.
 
-| Código | Qué hacer |
+| Code | What to do |
 | --- | --- |
-| `context_required` | Llama `get_task_context` y reintenta. |
-| `invalid_handoff` | `issues` trae `{ path, message }` por cada campo inválido (por ejemplo `body.criteria[2].id`); corrige esos campos y reintenta. |
-| `handoff_mismatch` | `taskId`, `runId` y `phase` deben ser `task.id`, `run.id` y `refinement`. |
-| `tool_not_allowed` | Esa tool no es de esta fase; la salida de refinamiento es `submit_spec`. |
-| `transition_rejected` | La tarea cambió de estado (cancelada o escalada); termina tu turno sin reintentar. |
-| `invalid_run_token` | Si llega después de que tu tool de salida respondió, o al reintentarla, la fase ya terminó: no repitas nada y termina tu turno. Antes de la salida significa que LunasQ cerró el Run; detente. |
+| `context_required` | Call `get_task_context` and retry. |
+| `invalid_handoff` | `issues` carries `{ path, message }` for each invalid field (for example `body.criteria[2].id`); fix those fields and retry. |
+| `handoff_mismatch` | `taskId`, `runId` and `phase` must be `task.id`, `run.id` and `refinement`. |
+| `tool_not_allowed` | That tool is not for this phase; the refinement exit is `submit_spec`. |
+| `transition_rejected` | The task changed state (canceled or escalated); end your turn without retrying. |
+| `invalid_run_token` | If it arrives after your exit tool answered, or when retrying it, the phase has already ended: repeat nothing and end your turn. Before the exit it means LunasQ closed the Run; stop. |
 
-## Preguntas y fallos
+## Questions and failures
 
-- `ask_human` con `{ "question": "...", "context": "...", "options": [...] }` (`context` y `options` son opcionales) registra la pregunta y regresa de inmediato. Termina tu turno después de llamarla: la respuesta llega como un prompt nuevo o, si el Run se cerró, en `questions` del siguiente `get_task_context`. Si la pregunta es elegir entre alternativas concretas, agrega `options`: de 2 a 6 objetos `{ "label": "...", "description": "..." }` (`description` es opcional), con labels cortos y únicos (sin distinguir mayúsculas ni espacios extremos). El humano elige una o escribe «Otra respuesta», así que no incluyas una opción comodín; la respuesta llega como el label elegido o su texto libre. Sin alternativas claras, omite `options` y la pregunta es abierta.
-- `report_failure` con `{ "reason": "..." }` cuando no puedes continuar (intent imposible, repo inaccesible). Cierra el Run como fallido; no la uses para un rechazo que puedes corregir.
+- `ask_human` with `{ "question": "...", "context": "...", "options": [...] }` (`context` and `options` are optional) records the question and returns immediately. End your turn after calling it: the answer arrives as a new prompt or, if the Run was closed, in `questions` of the next `get_task_context`. If the question is choosing among concrete alternatives, add `options`: 2 to 6 objects `{ "label": "...", "description": "..." }` (`description` is optional), with short, unique labels (case and surrounding spaces are not distinguished). The human picks one or writes «Otra respuesta» (the UI's other-answer option), so do not include a catch-all option; the answer arrives as the chosen label or their free text. Without clear alternatives, omit `options` and the question is open.
+- `report_failure` with `{ "reason": "..." }` when you cannot continue (impossible intent, inaccessible repo). It closes the Run as failed; do not use it for a rejection you can fix.
 
-## Memoria con engram (opcional)
+## Memory with engram (optional)
 
-Si el MCP de engram está disponible (tools `mem_*`), úsalo así; si no está disponible, sigue sin él: ninguna parte de la fase depende de engram y LunasQ no lo lee.
+If the engram MCP is available (`mem_*` tools), use it like this; if it is not available, continue without it: no part of the phase depends on engram and LunasQ does not read it.
 
-- **Al iniciar:** `mem_context` del proyecto y `mem_search` del módulo que toca el intent.
-- **Al buscar:** consultas de 1 o 2 términos; engram combina las palabras con AND, así que una consulta larga casi nunca devuelve nada.
-- **Durante el refinamiento:** guarda cada decisión con `mem_save` y un `topic_key` estable (`<proyecto>/decision/<tema>`), y mantén el glosario del dominio en un `topic_key` fijo (`<proyecto>/glosario`).
-- **Al cerrar:** `mem_session_summary` con lo aprendido, justo antes de la tool de salida: después de ella ya no llamas ninguna tool.
-- **Siempre:** ignora las memorias marcadas como superseded y revisa contra el repo las marcadas como needs_review antes de usarlas.
+- **On start:** `mem_context` of the project and `mem_search` of the module the intent touches.
+- **When searching:** queries of 1 or 2 terms; engram combines the words with AND, so a long query almost never returns anything.
+- **During refinement:** save each decision with `mem_save` and a stable `topic_key` (`<project>/decision/<topic>`), and keep the domain glossary under a fixed `topic_key` (`<project>/glossary`).
+- **On closing:** `mem_session_summary` with what you learned, right before the exit tool: after it you call no more tools.
+- **Always:** ignore memories marked as superseded and check against the repo those marked as needs_review before using them.

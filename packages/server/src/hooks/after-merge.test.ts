@@ -28,7 +28,7 @@ function setup() {
 }
 
 describe("subscribeAfterMergeHooks", () => {
-  it("un merge registrado corre los hooks after_merge de la tarea con la URL del PR", async () => {
+  it("a recorded merge runs the task's after_merge hooks with the PR URL", async () => {
     const { task, publisher, run, prChanged } = setup();
     subscribeAfterMergeHooks({ publisher, hooks: { run } });
 
@@ -38,7 +38,7 @@ describe("subscribeAfterMergeHooks", () => {
     expect(run).toHaveBeenCalledWith({ taskId: task.id, point: "after_merge", prUrl: url });
   });
 
-  it("un PR cerrado sin merge no los corre; desuscrito, tampoco", async () => {
+  it("a PR closed without merge does not run them; unsubscribed, neither", async () => {
     const { publisher, run, prChanged } = setup();
     const unsubscribe = subscribeAfterMergeHooks({ publisher, hooks: { run } });
 
@@ -51,7 +51,7 @@ describe("subscribeAfterMergeHooks", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
-  it("un fallo de los hooks se reporta sin frenar al publicador", async () => {
+  it("a failure of the hooks is reported without holding back the publisher", async () => {
     const { task, publisher, run, prChanged } = setup();
     run.mockRejectedValue(new Error("sin worktree"));
     const onError = vi.fn();

@@ -1,7 +1,7 @@
-// Receptor OTLP/HTTP JSON del usage collector (ADR uw-20-usage-collector). Claude Code exporta aquí
-// sus logs y métricas con el run token en el header (`OTEL_EXPORTER_OTLP_HEADERS` del pane). Como
-// en los hooks de subagentes, un token desconocido responde {} sin efectos: el exportador
-// reintenta lo que no es 2xx, y una sesión vieja no tiene nada que corregir.
+// OTLP/HTTP JSON receiver of the usage collector (ADR uw-20-usage-collector). Claude Code exports here
+// its logs and metrics with the run token in the header (the pane's `OTEL_EXPORTER_OTLP_HEADERS`). As
+// in the subagent hooks, an unknown token answers {} with no effects: the exporter
+// retries what is not 2xx, and an old session has nothing to correct.
 import { gunzipSync } from "node:zlib";
 import type { LunasqDatabase } from "@lunasq/db";
 import { RunRepository, type RunRow, UsageRepository } from "@lunasq/db";
@@ -17,7 +17,7 @@ import { apiRequests } from "./otlp.ts";
 
 export { OTLP_LOGS_PATH, OTLP_METRICS_PATH };
 
-/** Tope del cuerpo recibido y, si viene en gzip, del descomprimido: un lote real pesa unos KB. */
+/** Cap on the received body and, if gzipped, on the decompressed one: a real batch weighs a few KB. */
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const MAX_DECODED_BYTES = 32 * 1024 * 1024;
 
@@ -34,7 +34,7 @@ export function usageRoutes(db: LunasqDatabase): Hono<{ Variables: { run: RunRow
   return new Hono<{ Variables: { run: RunRow } }>()
     .post(
       OTLP_LOGS_PATH,
-      // El token se valida antes de leer el cuerpo: sin un Run válido no se paga ni la lectura.
+      // The token is validated before reading the body: without a valid Run not even the read is paid for.
       async (c, next) => {
         const token = c.req.header(RUN_TOKEN_HEADER);
         const run = token ? runs.byToken(token) : null;
@@ -53,8 +53,8 @@ export function usageRoutes(db: LunasqDatabase): Hono<{ Variables: { run: RunRow
         if (!parsed.success) {
           return c.json({ error: "invalid_otlp", message: parsed.error.message }, 400);
         }
-        // Solo cuenta lo que el pane declara de este Run y, con session id nativo fijado en el
-        // claim, de su sesión: otro `claude` que herede el token no suma consumo al Run.
+        // Only what the pane declares for this Run counts and, with the native session id fixed at the
+        // claim, from its session: another `claude` that inherits the token adds no consumption to the Run.
         const own = apiRequests(parsed.data).filter(
           (r) =>
             r.runId === run.id &&

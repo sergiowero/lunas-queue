@@ -1,12 +1,12 @@
-// Reglas del DAG de dependencias (docs/design.md §Scheduler, ADR 0010). TypeScript puro: quien
-// llama carga las aristas; aquí se detectan ciclos y se calculan ancestros y descendientes.
+// Rules of the dependency DAG (docs/design.md §Scheduler, ADR 0010). Pure TypeScript: the
+// caller loads the edges; here cycles are detected and ancestors and descendants are computed.
 
-/** `taskId` depende de `dependsOnId`: no está lista hasta que la dependencia se entregue. */
+/** `taskId` depends on `dependsOnId`: it is not ready until the dependency is delivered. */
 export type DependencyEdge = { taskId: string; dependsOnId: string };
 
-/** Grafo inmutable; todos los métodos devuelven arreglos nuevos. */
+/** Immutable graph; every method returns new arrays. */
 export class DependencyGraph {
-  // taskId → sus dependencias, y dependsOnId → sus dependientes, en orden de inserción.
+  // taskId → its dependencies, and dependsOnId → its dependents, in insertion order.
   readonly #dependencies = new Map<string, Set<string>>();
   readonly #dependents = new Map<string, Set<string>>();
 
@@ -35,23 +35,23 @@ export class DependencyGraph {
     return [...(this.#dependents.get(taskId) ?? [])];
   }
 
-  /** Todas las tareas de las que depende, directa o transitivamente, de la más cercana a la más lejana. */
+  /** Every task it depends on, directly or transitively, from the nearest to the farthest. */
   ancestors(taskId: string): string[] {
     return [...walk(this.#dependencies, taskId).keys()];
   }
 
-  /** Todas las tareas que bloquea, directa o transitivamente: el boost del scheduler. */
+  /** Every task it blocks, directly or transitively: the scheduler boost. */
   descendants(taskId: string): string[] {
     return [...walk(this.#dependents, taskId).keys()];
   }
 
   /**
-   * Si agregar `edge` cerraría un ciclo, devuelve el camino más corto que lo cierra, empezando y
-   * terminando en `edge.taskId` (`[a, a]` para una tarea que depende de sí misma); si no, null.
+   * If adding `edge` would close a cycle, returns the shortest path that closes it, starting and
+   * ending at `edge.taskId` (`[a, a]` for a task that depends on itself); otherwise null.
    */
   findCycle({ taskId, dependsOnId }: DependencyEdge): string[] | null {
     if (taskId === dependsOnId) return [taskId, taskId];
-    // Hay ciclo si dependsOnId ya depende, directa o transitivamente, de taskId.
+    // There is a cycle if dependsOnId already depends, directly or transitively, on taskId.
     const parents = walk(this.#dependencies, dependsOnId);
     if (!parents.has(taskId)) return null;
     const path = [taskId];
@@ -72,8 +72,8 @@ function link(map: Map<string, Set<string>>, from: string, to: string): void {
 }
 
 /**
- * BFS desde `start` sin incluirlo. Devuelve cada nodo alcanzado, en orden de visita, con el nodo
- * desde el que se llegó (undefined para los vecinos de `start`).
+ * BFS from `start` without including it. Returns every node reached, in visit order, with the node
+ * it was reached from (undefined for the neighbours of `start`).
  */
 function walk(adjacency: Map<string, Set<string>>, start: string): Map<string, string | undefined> {
   const parents = new Map<string, string | undefined>();
@@ -89,12 +89,12 @@ function walk(adjacency: Map<string, Set<string>>, start: string): Map<string, s
   return parents;
 }
 
-/** Puerto de lectura del DAG: el scheduler toma un snapshot por tick y calcula sobre él. */
+/** Read port of the DAG: the scheduler takes a snapshot per tick and computes on it. */
 export interface DependencyGraphReader {
   snapshot(): DependencyGraph;
 }
 
-/** Reader en memoria para tests de los módulos que consumen el DAG. */
+/** In-memory reader for tests of the modules that consume the DAG. */
 export class InMemoryDependencyGraphReader implements DependencyGraphReader {
   readonly #edges: DependencyEdge[];
 

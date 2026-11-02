@@ -1,8 +1,8 @@
-// Aviso de una Question abierta (docs/design.md §Señales y §Preguntas del agente y bloqueos,
-// ADR uw-22-preguntas): la pregunta aparece de inmediato en la bandeja (consulta a la base) y,
-// si sigue abierta a 1 minuto, se notifica por herdr y por la UI. Se arma desde el outbox
-// (`task.transitioned`) y se re-arma desde la base al arrancar. También cancela las preguntas
-// que quedan abiertas cuando la tarea sale de waiting_human sin que nadie las responda.
+// Notice of an open Question (docs/design.md §Signals and §Agent questions and blocks,
+// ADR uw-22-preguntas): the question shows up immediately in the inbox (database query) and,
+// if still open at 1 minute, is notified through herdr and the UI. It is built from the outbox
+// (`task.transitioned`) and re-armed from the database on start. It also cancels the questions
+// that stay open when the task leaves waiting_human without anyone answering them.
 import {
   type LunasqDatabase,
   QuestionRepository,
@@ -31,7 +31,7 @@ export class QuestionEscalations {
     this.escalator = opts.escalator;
   }
 
-  /** Transición de una tarea (outbox): idempotente, porque el outbox entrega al menos una vez. */
+  /** Transition of a task (outbox): idempotent, because the outbox delivers at least once. */
   onTransition(message: OutboxMessage): void {
     if (message.topic !== TASK_TRANSITIONED || message.taskId === null) return;
     const payload = TaskTransitionedPayload.safeParse(message.payload);
@@ -52,8 +52,8 @@ export class QuestionEscalations {
   }
 
   /**
-   * Al arrancar: re-arma el plazo de cada pregunta abierta desde su fecha de creación (el reloj
-   * vive en memoria) y cancela las que ya no corresponden a una tarea en waiting_human.
+   * On start: re-arms the deadline of each open question from its creation date (the clock
+   * lives in memory) and cancels those that no longer correspond to a task in waiting_human.
    */
   rearm(): void {
     for (const question of this.questions.list({ status: "open" })) {
@@ -71,7 +71,7 @@ export class QuestionEscalations {
         kind: "question_open",
         taskId: question.taskId,
         ...(question.runId ? { runId: question.runId } : {}),
-        title: `Pregunta abierta en ${taskLabel(task.number)}`,
+        title: `Open question in ${taskLabel(task.number)}`,
         body: question.question,
       },
       { since: question.createdAt },
@@ -79,8 +79,8 @@ export class QuestionEscalations {
   }
 
   /**
-   * La tarea dejó waiting_human: lo que sigue abierto se cancela y ningún aviso queda vigente,
-   * tampoco el de una pregunta que se respondió por otra vía.
+   * The task left waiting_human: what remains open is canceled and no notice stays in force,
+   * not even that of a question answered by another route.
    */
   private leave(taskId: string, reason: QuestionCancelledPayload["reason"]): void {
     this.questions.cancelOpen(taskId, reason);

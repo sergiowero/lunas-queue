@@ -1,5 +1,5 @@
-// Configuración del scheduler (docs/design.md §Scheduler, ADR 0014): límites de concurrencia
-// global, por fase y por tipo de agente, y los pesos del score. El límite por proyecto vive en
+// Scheduler configuration (docs/design.md §Scheduler, ADR 0014): concurrency limits
+// global, per phase and per agent kind, and the score weights. The per-project limit lives in
 // ProjectLimits.concurrency.
 import { z } from "zod";
 import { AgentKind, Phase } from "./enums.ts";
@@ -8,24 +8,24 @@ export const DEFAULT_GLOBAL_CONCURRENCY = 5;
 
 const positiveInt = z.int().min(1);
 
-/** Fases que el scheduler agenda: la entrega corre dentro del Run del verificador (ADR 0007). */
+/** Phases the scheduler schedules: delivery runs inside the verifier Run (ADR 0007). */
 export const SchedulablePhase = Phase.exclude(["deliver"]);
 export type SchedulablePhase = z.infer<typeof SchedulablePhase>;
 
 export const SchedulerConfig = z.strictObject({
-  // Agentes vivos en total.
+  // Live agents in total.
   globalConcurrency: positiveInt.default(DEFAULT_GLOBAL_CONCURRENCY),
   phaseConcurrency: z.partialRecord(SchedulablePhase, positiveInt).default(() => ({})),
   agentKindConcurrency: z.partialRecord(AgentKind, positiveInt).default(() => ({})),
-  // En las mismas unidades que la prioridad: puntos por hora en ready.
+  // In the same units as the priority: points per hour in ready.
   agingPointsPerHour: z.number().min(0).default(10),
-  // Puntos por cada tarea no terminal que la tarea bloquea, directa o transitivamente.
+  // Points for each non-terminal task that the task blocks, directly or transitively.
   boostPerDescendant: z.number().min(0).default(25),
-  // Tick periódico: recoge el aging y los cambios que no pasan por el outbox. Mínimo 1 s para
-  // que no se vuelva un bucle ocupado.
+  // Periodic tick: picks up aging and the changes that do not go through the outbox. Minimum 1 s so
+  // that it does not become a busy loop.
   tickIntervalMs: z.int().min(1000).default(30_000),
-  // Backoff de reintentos tras un Run fallido: base·2^(fallos-1), con tope (docs/design.md
-  // §Señales). Cuenta desde el último fallo; el tick del scheduler la recoge al vencer.
+  // Retry backoff after a failed Run: base·2^(failures-1), with a cap (docs/design.md
+  // §Signals). It counts from the last failure; the scheduler tick picks it up when it expires.
   retryBackoffMs: z.int().min(0).default(30_000),
   maxRetryBackoffMs: z
     .int()

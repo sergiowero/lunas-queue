@@ -22,7 +22,7 @@ function setup(state: "draft" | "paused" = "draft") {
 }
 
 describe("PauseTaskButton", () => {
-  it("variante texto: icono de pausa, nombre Pausar tarea y texto visible", () => {
+  it("text variant: pause icon, name Pausar tarea and visible text", () => {
     const s = setup();
     const { container } = s.render(s.ui("text", PauseTaskButton));
     const button = screen.getByRole("button", { name: "Pausar tarea" });
@@ -30,7 +30,7 @@ describe("PauseTaskButton", () => {
     expect(container.querySelector('svg[data-icon="pause"]')).not.toBeNull();
   });
 
-  it("variante icono: sin texto visible y con el nombre de la tarea en el aria-label", () => {
+  it("icon variant: no visible text and with the task's name in the aria-label", () => {
     const s = setup();
     s.render(s.ui("icon", PauseTaskButton));
     const button = screen.getByRole("button", { name: "Pausar tarea Migrar" });
@@ -38,7 +38,7 @@ describe("PauseTaskButton", () => {
     expect(button.querySelector('svg[data-icon="pause"]')).not.toBeNull();
   });
 
-  it("al pulsarlo pide la pausa e invalida task, queue y tasks", async () => {
+  it("on click it asks for the pause and invalidates task, queue and tasks", async () => {
     const s = setup();
     s.render(s.ui("icon", PauseTaskButton));
     await s.user.click(screen.getByRole("button", { name: "Pausar tarea Migrar" }));
@@ -54,7 +54,7 @@ describe("PauseTaskButton", () => {
     );
   });
 
-  it("queda deshabilitado mientras la petición está pendiente", async () => {
+  it("it is disabled while the request is pending", async () => {
     const s = setup();
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => {
@@ -72,19 +72,19 @@ describe("PauseTaskButton", () => {
     await waitFor(() => expect(s.fake.task(s.task.id).state).toBe("paused"));
   });
 
-  it("si la API rechaza la pausa muestra el error con role alert y vuelve a habilitarse", async () => {
+  it("if the API rejects the pause it shows the error with role alert and enables again", async () => {
     const s = setup();
     s.fake.transition(s.task.id, "completed", null);
     s.render(s.ui("icon", PauseTaskButton));
     const button = screen.getByRole("button", { name: "Pausar tarea Migrar" });
     await s.user.click(button);
-    expect((await screen.findByRole("alert")).textContent).toContain("pause no aplica");
+    expect((await screen.findByRole("alert")).textContent).toContain("pause does not apply");
     await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
   });
 });
 
 describe("ResumeTaskButton", () => {
-  it("variante texto: icono de reanudar y nombre Reanudar tarea", () => {
+  it("text variant: resume icon and name Reanudar tarea", () => {
     const s = setup("paused");
     const { container } = s.render(s.ui("text", ResumeTaskButton));
     const button = screen.getByRole("button", { name: "Reanudar tarea" });
@@ -92,14 +92,14 @@ describe("ResumeTaskButton", () => {
     expect(container.querySelector('svg[data-icon="resume"]')).not.toBeNull();
   });
 
-  it("variante icono: sin texto visible y con el nombre de la tarea", () => {
+  it("icon variant: no visible text and with the task's name", () => {
     const s = setup("paused");
     s.render(s.ui("icon", ResumeTaskButton));
     const button = screen.getByRole("button", { name: "Reanudar tarea Migrar" });
     expect(button.textContent).toBe("");
   });
 
-  it("al pulsarlo reanuda la tarea e invalida task, queue y tasks", async () => {
+  it("on click it resumes the task and invalidates task, queue and tasks", async () => {
     const s = setup("draft");
     s.fake.transition(s.task.id, "paused", null, {}, "pause");
     s.render(s.ui("icon", ResumeTaskButton));
@@ -113,7 +113,7 @@ describe("ResumeTaskButton", () => {
     );
   });
 
-  it("si la API rechaza la reanudación muestra el error con role alert", async () => {
+  it("if the API rejects the resume it shows the error with role alert", async () => {
     const s = setup("draft");
     s.render(s.ui("icon", ResumeTaskButton));
     await s.user.click(screen.getByRole("button", { name: "Reanudar tarea Migrar" }));

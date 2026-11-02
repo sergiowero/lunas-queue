@@ -1,7 +1,7 @@
-// `lunasq install`: deja la máquina lista en un solo comando (ADR uw-28-instalador). Verifica
-// herdr, Claude Code y gh (no los instala), instala la integración de herdr para Claude Code,
-// copia skills y subagentes, escribe la configuración y los archivos estables para Claude Code,
-// crea la base y termina con `doctor`. Repetirlo no cambia nada que ya esté al día.
+// `lunasq install`: leaves the machine ready in a single command (ADR uw-28-instalador). It verifies
+// herdr, Claude Code and gh (it does not install them), installs the herdr integration for Claude Code,
+// copies skills and subagents, writes the configuration and the stable files for Claude Code,
+// creates the database and ends with `doctor`. Repeating it changes nothing that is already up to date.
 import { mkdir, rm } from "node:fs/promises";
 import { ensureHookSettings, ensureMcpConfig, prepareDatabase, runtimeUrls } from "@lunasq/server";
 import { assetTargets, isForeign, mirror, readManifest, retired, writeManifest } from "./assets.ts";
@@ -24,14 +24,14 @@ import {
 } from "./doctor.ts";
 
 export interface InstallOptions {
-  /** Cambia el puerto guardado; sin él se conserva el actual (o el default en la primera vez). */
+  /** Changes the saved port; without it the current one is kept (or the default the first time). */
   port?: number;
 }
 
 export interface InstallResult {
-  /** `prerequisites`: faltan herramientas y no se tocó nada; `done`: se instaló y corrió doctor. */
+  /** `prerequisites`: tools are missing and nothing was touched; `done`: it was installed and doctor ran. */
   stage: "prerequisites" | "done";
-  /** Qué cambió, en orden; vacío si todo ya estaba al día. */
+  /** What changed, in order; empty if everything was already up to date. */
   changes: string[];
   checks: CheckResult[];
   ok: boolean;
@@ -43,52 +43,52 @@ export async function install(
 ): Promise<InstallResult> {
   const prereqs = await checkPrerequisites(ctx);
   if (!isGreen(prereqs)) return { stage: "prerequisites", changes: [], checks: prereqs, ok: false };
-  // Antes de escribir nada: una configuración rota no deja la instalación a medias.
+  // Before writing anything: a broken configuration does not leave the installation half done.
   let current: LunasqConfig | undefined;
   try {
     current = await readConfig(ctx.paths.config);
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
-    throw new Error(`configuración inválida en ${ctx.paths.config}: ${err.message}`);
+    throw new Error(`invalid configuration in ${ctx.paths.config}: ${err.message}`);
   }
 
   const changes: string[] = [];
 
   const claudeCheck = prereqs.find((check) => check.id === "claude");
   if (claudeCheck?.status === "ok" && !(await claudeIntegrationState(ctx))?.startsWith("current")) {
-    // herdr instala en `CLAUDE_CONFIG_DIR` (o ~/.claude) y falla si el directorio no existe.
+    // herdr installs into `CLAUDE_CONFIG_DIR` (or ~/.claude) and fails if the directory does not exist.
     await mkdir(ctx.paths.claudeHome, { recursive: true });
     const res = await run(ctx, "herdr integration install claude");
     if (res.exitCode !== 0) {
       throw new Error(
-        `\`herdr integration install claude\` falló: ${res.stderr.trim() || res.stdout.trim()}`,
+        `\`herdr integration install claude\` failed: ${res.stderr.trim() || res.stdout.trim()}`,
       );
     }
-    changes.push("integración de herdr para Claude Code");
+    changes.push("herdr integration for Claude Code");
   }
 
   const targets = await assetTargets(ctx.assetsRoot, ctx.paths);
   const manifest = await readManifest(ctx.paths.manifest);
   const installed = new Set(manifest);
   for (const target of targets) {
-    // Una carpeta ajena con el mismo nombre no se toca: doctor la reporta.
+    // A foreign folder with the same name is not touched: doctor reports it.
     if (await isForeign(target, manifest)) continue;
     const changed = await mirror(target.src, target.dest);
     installed.add(target.dest);
     if (changed.length > 0) {
       const label =
         target.kind === "agents"
-          ? "subagentes revisores"
+          ? "reviewer subagents"
           : target.kind === "copilot-agents"
-            ? "subagentes revisores de Copilot CLI"
-            : `skill ${target.name}${target.kind === "copilot-skill" ? " de Copilot" : ""}`;
+            ? "reviewer subagents for Copilot CLI"
+            : `skill ${target.name}${target.kind === "copilot-skill" ? " for Copilot" : ""}`;
       changes.push(`${label} → ${target.dest}`);
     }
   }
   for (const dest of retired(targets, manifest)) {
     await rm(dest, { recursive: true, force: true });
     installed.delete(dest);
-    changes.push(`asset retirado borrado: ${dest}`);
+    changes.push(`retired asset removed: ${dest}`);
   }
   const sorted = [...installed].sort();
   if (sorted.join("\n") !== [...manifest].sort().join("\n")) {
@@ -101,7 +101,7 @@ export async function install(
   };
   if (!current || current.port !== config.port) {
     await writeConfig(ctx.paths.config, config);
-    changes.push(`configuración → ${ctx.paths.config}`);
+    changes.push(`configuration → ${ctx.paths.config}`);
   }
 
   const urls = runtimeUrls(baseUrl(config));
@@ -112,7 +112,7 @@ export async function install(
     changes.push(`LunasQ MCP → ${ctx.paths.copilotMcpConfig}`);
   }
   if ((await ensureHookSettings(ctx.paths.hookSettings, urls.hooks)).written) {
-    changes.push(`hooks de subagentes → ${ctx.paths.hookSettings}`);
+    changes.push(`subagent hooks → ${ctx.paths.hookSettings}`);
   }
 
   await mkdir(ctx.paths.home, { recursive: true });

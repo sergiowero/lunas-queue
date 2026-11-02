@@ -2,8 +2,8 @@ import { homedir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { normalizePath, snapshotWire, toAgent, toEvent, toSnapshot } from "./wire.ts";
 
-describe("traducción del protocolo de herdr", () => {
-  it("traduce los eventos de ciclo de vida con sus dos formas de payload", () => {
+describe("herdr protocol translation", () => {
+  it("translates the lifecycle events with their two payload shapes", () => {
     expect(
       toEvent("pane_closed", { pane_id: "w2:p2", type: "pane_closed", workspace_id: "w2" }),
     ).toEqual({ type: "pane_closed", paneId: "w2:p2", workspaceId: "w2" });
@@ -22,15 +22,15 @@ describe("traducción del protocolo de herdr", () => {
     });
   });
 
-  it("ignora los eventos que el adapter no expone", () => {
+  it("ignores the events the adapter does not expose", () => {
     expect(toEvent("workspace_metadata_updated", { workspace_id: "w1" })).toBeUndefined();
   });
 
-  it("expande el ~ con que herdr colapsa el home", () => {
+  it("expands the ~ that herdr collapses the home into", () => {
     expect(normalizePath("~/.herdr/no-existe")).toBe(`${homedir()}/.herdr/no-existe`);
   });
 
-  it("descarta tokens nulos y conserva la identidad de sesión del agente", () => {
+  it("drops null tokens and keeps the agent's session identity", () => {
     const agent = toAgent({
       name: "t1-refine-1",
       agent: "claude",
@@ -45,7 +45,7 @@ describe("traducción del protocolo de herdr", () => {
     expect(agent.title).toBeUndefined();
   });
 
-  it("el snapshot descarta los agentes sin nombre que el usuario abrió a mano", () => {
+  it("the snapshot drops the unnamed agents the user opened by hand", () => {
     const agent = { agent: "claude", pane_id: "w1:p1", workspace_id: "w1", agent_status: "idle" };
     const snapshot = toSnapshot(
       snapshotWire.parse({
@@ -61,7 +61,7 @@ describe("traducción del protocolo de herdr", () => {
     expect(snapshot.agents.map((a) => a.name)).toEqual(["t1-refine-1"]);
   });
 
-  it("el snapshot tolera agentes que herdr aún no identificó (sin `agent`)", () => {
+  it("the snapshot tolerates agents herdr has not identified yet (without `agent`)", () => {
     const named = {
       name: "t1-refine-1",
       agent: "claude",

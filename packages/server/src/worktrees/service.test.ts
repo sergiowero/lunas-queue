@@ -32,14 +32,14 @@ function setup(opts: { bootstrap?: string | null } = {}) {
 async function rejection(promise: Promise<unknown>) {
   return promise.then(
     () => {
-      throw new Error("no lanzó");
+      throw new Error("did not throw");
     },
     (err: unknown) => err,
   );
 }
 
 describe("WorktreeService.ensure", () => {
-  it("crea worktree y branch desde la rama base remota, corre el bootstrap y lo guarda", async () => {
+  it("creates the worktree and branch from the remote base branch, runs the bootstrap and saves it", async () => {
     const { db, project, herdr, processes, tasks, service, bootstraps } = setup();
     const task = insertTask(db, project.id);
     const create = vi.spyOn(herdr, "ensureWorktree");
@@ -77,7 +77,7 @@ describe("WorktreeService.ensure", () => {
     expect(tasks.get(task.id)).toMatchObject({ branch: res.branch, worktreePath: res.path });
   });
 
-  it("dos tareas del mismo repo trabajan en paralelo sin compartir branch ni worktree", async () => {
+  it("two tasks of the same repo work in parallel without sharing branch or worktree", async () => {
     const { db, project, herdr, tasks, service, bootstraps } = setup();
     const a = insertTask(db, project.id);
     const b = insertTask(db, project.id);
@@ -94,7 +94,7 @@ describe("WorktreeService.ensure", () => {
     ).toEqual([ra.path, rb.path].sort());
     expect(tasks.get(a.id)?.worktreePath).toBe(ra.path);
     expect(tasks.get(b.id)?.worktreePath).toBe(rb.path);
-    // Un solo workspace de proyecto, con los dos worktrees agrupados.
+    // A single project workspace, with both worktrees grouped.
     const snap = await herdr.snapshot();
     expect(snap.workspaces.filter((w) => !w.linkedWorktree)).toHaveLength(1);
     expect(snap.workspaces.filter((w) => w.linkedWorktree)).toHaveLength(2);
@@ -114,7 +114,7 @@ describe("WorktreeService.ensure", () => {
     expect(bootstraps()).toHaveLength(1);
   });
 
-  it("dos ensure concurrentes de la misma tarea crean un solo worktree", async () => {
+  it("two concurrent ensures of the same task create a single worktree", async () => {
     const { db, project, herdr, service, bootstraps, projectWorkspace } = setup();
     const task = insertTask(db, project.id);
 
@@ -126,7 +126,7 @@ describe("WorktreeService.ensure", () => {
     expect(bootstraps()).toHaveLength(1);
   });
 
-  it("reabre el mismo worktree si su workspace se cerró, sin volver a correr el bootstrap", async () => {
+  it("reopens the same worktree if its workspace was closed, without running the bootstrap again", async () => {
     const { db, project, herdr, processes, service, bootstraps } = setup();
     const task = insertTask(db, project.id);
     const first = await service.ensure(task.id);
@@ -143,7 +143,7 @@ describe("WorktreeService.ensure", () => {
     expect(bootstraps()).toHaveLength(1);
   });
 
-  it("si el bootstrap falla no guarda el worktree y el siguiente ensure lo reintenta", async () => {
+  it("if the bootstrap fails it does not save the worktree and the next ensure retries it", async () => {
     const { db, project, processes, tasks, service, bootstraps } = setup();
     const task = insertTask(db, project.id);
     processes.respond((c) => (isFetch(c) ? {} : { exitCode: 1, stderr: "ERR_PNPM" }));
@@ -160,11 +160,11 @@ describe("WorktreeService.ensure", () => {
     expect(tasks.get(task.id)?.worktreePath).toBe(res.path);
   });
 
-  it("si el checkout cambió de ruta y el bootstrap falla, la ruta vieja no queda como lista", async () => {
+  it("if the checkout changed path and the bootstrap fails, the old path is not left as ready", async () => {
     const { db, project, herdr, processes, tasks, service } = setup();
     const task = insertTask(db, project.id);
     const first = await service.ensure(task.id);
-    // El checkout desaparece por fuera de LunasQ; la BD aún tiene su ruta.
+    // The checkout disappears outside LunasQ; the DB still has its path.
     await herdr.removeWorktree({ workspaceId: first.workspaceId });
     tasks.recordWorktree(task.id, { branch: first.branch, worktreePath: "/ruta/vieja" });
     processes.respond((c) => (isFetch(c) ? {} : { exitCode: 1 }));
@@ -175,7 +175,7 @@ describe("WorktreeService.ensure", () => {
     expect(tasks.get(task.id)?.worktreePath).toBeNull();
   });
 
-  it("un bootstrap que vence su timeout cuenta como fallo", async () => {
+  it("a bootstrap that exceeds its timeout counts as a failure", async () => {
     const { db, project, processes, service } = setup();
     const task = insertTask(db, project.id);
     processes.respond((c) => (isFetch(c) ? {} : { exitCode: 137, timedOut: true }));
@@ -183,7 +183,7 @@ describe("WorktreeService.ensure", () => {
     expect(isWorktreeError(err, "bootstrap_failed")).toBe(true);
   });
 
-  it("sin bootstrap configurado no corre nada en el worktree", async () => {
+  it("without a configured bootstrap nothing runs in the worktree", async () => {
     const { db, project, tasks, service, bootstraps } = setup({ bootstrap: null });
     const task = insertTask(db, project.id);
     const res = await service.ensure(task.id);
@@ -191,7 +191,7 @@ describe("WorktreeService.ensure", () => {
     expect(tasks.get(task.id)?.worktreePath).toBe(res.path);
   });
 
-  it("si el fetch de la rama base falla no crea nada", async () => {
+  it("if the base branch fetch fails it creates nothing", async () => {
     const { db, project, herdr, processes, tasks, service, projectWorkspace } = setup();
     const task = insertTask(db, project.id);
     processes.respond(() => ({ exitCode: 128, stderr: "Could not resolve host" }));
@@ -203,7 +203,7 @@ describe("WorktreeService.ensure", () => {
     expect(tasks.get(task.id)?.branch).toBeNull();
   });
 
-  it("rechaza tareas inexistentes y tareas que ya liberaron su worktree", async () => {
+  it("rejects nonexistent tasks and tasks that already released their worktree", async () => {
     const { db, project, service } = setup();
     const cancelled = insertTask(db, project.id, { state: "cancelled" });
     const merged = insertTask(db, project.id, { state: "completed", prState: "merged" });
@@ -215,7 +215,7 @@ describe("WorktreeService.ensure", () => {
     }
   });
 
-  it("una tarea completed con el PR abierto conserva y reabre su worktree", async () => {
+  it("a completed task with an open PR keeps and reopens its worktree", async () => {
     const { db, project, service } = setup();
     const task = insertTask(db, project.id);
     const first = await service.ensure(task.id);
@@ -224,8 +224,8 @@ describe("WorktreeService.ensure", () => {
   });
 });
 
-describe("WorktreeService: workspace del proyecto", () => {
-  it("guarda el id del workspace y lo reutiliza aunque el proyecto cambie de nombre", async () => {
+describe("WorktreeService: project workspace", () => {
+  it("saves the workspace id and reuses it even if the project is renamed", async () => {
     const db = migratedDatabase();
     const project = insertProject(db);
     const herdr = new FakeHerdr();
@@ -253,7 +253,7 @@ describe("WorktreeService: workspace del proyecto", () => {
     expect(workspaces.get(project.id)).toBe(stored);
   });
 
-  it("no adopta un id guardado que ahora es de otro proyecto (herdr reutiliza ids)", async () => {
+  it("does not adopt a stored id that now belongs to another project (herdr reuses ids)", async () => {
     const db = migratedDatabase();
     const project = insertProject(db);
     const herdr = new FakeHerdr();
@@ -274,7 +274,7 @@ describe("WorktreeService: workspace del proyecto", () => {
     expect(await herdr.listWorktrees(other.workspace.workspaceId)).toEqual([]);
   });
 
-  it("si el workspace guardado ya no existe, guarda el nuevo", async () => {
+  it("if the stored workspace no longer exists, it saves the new one", async () => {
     const db = migratedDatabase();
     const project = insertProject(db);
     const herdr = new FakeHerdr();
@@ -294,7 +294,7 @@ describe("WorktreeService: workspace del proyecto", () => {
 });
 
 describe("WorktreeService.remove", () => {
-  it("borra el checkout, limpia la ruta y conserva el branch; repetirlo no hace nada", async () => {
+  it("deletes the checkout, clears the path and keeps the branch; repeating it does nothing", async () => {
     const { db, project, herdr, tasks, service, projectWorkspace } = setup();
     const task = insertTask(db, project.id);
     const { branch } = await service.ensure(task.id);
@@ -306,7 +306,7 @@ describe("WorktreeService.remove", () => {
     expect(await service.remove(task.id)).toEqual({ removed: false });
   });
 
-  it("remueve un worktree cuyo workspace estaba cerrado", async () => {
+  it("removes a worktree whose workspace was closed", async () => {
     const { db, project, herdr, service, projectWorkspace } = setup();
     const task = insertTask(db, project.id);
     const { workspaceId } = await service.ensure(task.id);
@@ -316,7 +316,7 @@ describe("WorktreeService.remove", () => {
     expect(await herdr.listWorktrees(await projectWorkspace())).toEqual([]);
   });
 
-  it("con cambios sin commit exige force", async () => {
+  it("with uncommitted changes it requires force", async () => {
     const { db, project, herdr, tasks, service } = setup();
     const task = insertTask(db, project.id);
     const { path } = await service.ensure(task.id);
@@ -329,7 +329,7 @@ describe("WorktreeService.remove", () => {
     expect(await service.remove(task.id, { force: true })).toEqual({ removed: true });
   });
 
-  it("no espera a un ensure de otra tarea, pero sí al de la misma", async () => {
+  it("does not wait for another task's ensure, but does for the same task's", async () => {
     const { db, project, processes, service } = setup();
     const task = insertTask(db, project.id);
     let release = () => {};
@@ -344,12 +344,12 @@ describe("WorktreeService.remove", () => {
     const removing = service.remove(task.id);
     release();
     await ensuring;
-    // remove corrió después del ensure: encontró el worktree y lo borró.
+    // remove ran after the ensure: it found the worktree and deleted it.
     expect(await removing).toEqual({ removed: true });
   });
 });
 
-describe("WorktreeService: huérfanos", () => {
+describe("WorktreeService: orphans", () => {
   async function scenario() {
     const s = setup({ bootstrap: null });
     const { db, project, herdr, service, projectWorkspace } = s;
@@ -372,7 +372,7 @@ describe("WorktreeService: huérfanos", () => {
     return { ...s, active, openPr, cancelled, merged, gone, workspaceId };
   }
 
-  it("detecta los worktrees sin tarea activa y no toca los ajenos", async () => {
+  it("detects worktrees without an active task and does not touch foreign ones", async () => {
     const { project, service, cancelled, merged, gone } = await scenario();
     const orphans = await service.findOrphans(project.id);
     expect(orphans.map((o) => [o.taskId, o.reason]).sort()).toEqual(
@@ -384,7 +384,7 @@ describe("WorktreeService: huérfanos", () => {
     );
   });
 
-  it("cleanupOrphans los remueve, limpia la ruta y repetirlo no hace nada", async () => {
+  it("cleanupOrphans removes them, clears the path and repeating it does nothing", async () => {
     const { project, herdr, tasks, service, active, openPr, cancelled, workspaceId } =
       await scenario();
 
@@ -398,7 +398,7 @@ describe("WorktreeService: huérfanos", () => {
     expect(await service.cleanupOrphans(project.id)).toEqual({ removed: [], failed: [] });
   });
 
-  it("un huérfano con cambios sin commit se reporta y no se borra", async () => {
+  it("an orphan with uncommitted changes is reported and not deleted", async () => {
     const { project, herdr, service, cancelled, workspaceId } = await scenario();
     const dirty = (await herdr.listWorktrees(workspaceId)).find(
       (w) => w.branch === taskBranch(cancelled.id),
@@ -421,7 +421,7 @@ describe("WorktreeService: huérfanos", () => {
     );
   });
 
-  it("no toma por huérfano el worktree de una tarea activa de otro proyecto del mismo repo", async () => {
+  it("does not treat an active task's worktree from another project of the same repo as an orphan", async () => {
     const { db, project, herdr, service, workspaceId } = await scenario();
     const other = insertProject(db);
     const foreign = insertTask(db, other.id);
@@ -430,7 +430,7 @@ describe("WorktreeService: huérfanos", () => {
     expect(orphans.map((o) => o.taskId)).not.toContain(foreign.id);
   });
 
-  it("findOrphans de un proyecto inexistente falla con project_not_found", async () => {
+  it("findOrphans of a nonexistent project fails with project_not_found", async () => {
     const { service } = setup();
     const err = await rejection(service.findOrphans(randomUUID()));
     expect(isWorktreeError(err, "project_not_found")).toBe(true);

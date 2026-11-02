@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # Usa la versión de packageManager en package.json (pnpm 11).
+      # Uses the packageManager version in package.json (pnpm 11).
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -21,7 +21,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
 
-  # Check aparte (UW-29): la suite de Playwright contra el servidor completo con herdr y GitHub falsos.
+  # Separate check (UW-29): the Playwright suite against the full server with fake herdr and GitHub.
   e2e:
     runs-on: ubuntu-latest
     steps:

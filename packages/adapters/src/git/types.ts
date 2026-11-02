@@ -1,56 +1,56 @@
-// Adapter de git (UW-10): lo que LunasQ lee de la rama base y el commit de los cambios que dejan
-// los hooks. El resto del sistema depende solo de esta interfaz; RealGit y FakeGit cumplen la misma
-// suite de contrato. Los worktrees los maneja herdr (ADR 0012).
+// Git adapter (UW-10): what LunasQ reads from the base branch and the commit of the changes the
+// hooks leave. The rest of the system depends only on this interface; RealGit and FakeGit pass the same
+// contract suite. Worktrees are handled by herdr (ADR 0012).
 
 export interface GitFile {
-  /** Nombre del archivo dentro del directorio listado. */
+  /** Name of the file inside the listed directory. */
   name: string;
-  /** Modo 100755 en el commit. */
+  /** Mode 100755 in the commit. */
   executable: boolean;
 }
 
 export interface GitCommitInfo {
   sha: string;
-  /** Mensaje completo, con trailers. */
+  /** Full message, with trailers. */
   message: string;
-  /** Primera línea del mensaje. */
+  /** First line of the message. */
   subject: string;
-  /** Fecha del autor: el rebase no la cambia, así que ubica el commit en el tiempo. */
+  /** Author date: the rebase does not change it, so it places the commit in time. */
   authoredAt: Date;
 }
 
 export type RebaseResult =
-  /** La rama ya contenía `onto`: no se tocó nada. */
+  /** The branch already contained `onto`: nothing was touched. */
   | { status: "up_to_date"; head: string }
   | { status: "rebased"; head: string }
-  /** Un commit chocó con la base. El rebase se aborta: el worktree queda en el HEAD de antes. */
+  /** A commit clashed with the base. The rebase is aborted: the worktree stays at the previous HEAD. */
   | { status: "conflict"; files: string[] };
 
 export interface GitAdapter {
   /**
-   * Trae `<branch>` de `<remote>` (actualiza `<remote>/<branch>`) y devuelve el sha que tiene en
-   * el remoto, sin releer el ref local, que otro checkout del repo podría mover.
+   * Fetches `<branch>` from `<remote>` (updates `<remote>/<branch>`) and returns the sha it has on
+   * the remote, without re-reading the local ref, which another checkout of the repo could move.
    */
   fetch(input: { cwd: string; remote: string; branch: string }): Promise<string>;
-  /** Sha del commit al que apunta `ref`; `ref_not_found` si no existe. */
+  /** Sha of the commit `ref` points to; `ref_not_found` if it does not exist. */
   resolveCommit(input: { cwd: string; ref: string }): Promise<string>;
   /**
-   * Archivos regulares directamente dentro de `dir` en el commit `commit`, sin entrar a
-   * subdirectorios. Symlinks y submódulos no cuentan. Sin el directorio, `[]`. Nunca mira el
+   * Regular files directly inside `dir` at commit `commit`, without entering
+   * subdirectories. Symlinks and submodules do not count. Without the directory, `[]`. It never looks at the
    * working tree.
    */
   listFiles(input: { cwd: string; commit: string; dir: string }): Promise<GitFile[]>;
-  /** Contenido de `path` en el commit `commit`; undefined si no existe o no es un archivo. */
+  /** Content of `path` at commit `commit`; undefined if it does not exist or is not a file. */
   readFile(input: { cwd: string; commit: string; path: string }): Promise<Buffer | undefined>;
   /**
-   * true si el working tree tiene cambios sin commit, incluidos archivos no rastreados. Ignora
-   * `lunasq/tasks/`: ahí LunasQ deja el archivo de evidencia sin commitear (ADR
+   * true if the working tree has uncommitted changes, including untracked files. Ignores
+   * `lunasq/tasks/`: there LunasQ leaves the evidence file uncommitted (ADR
    * uw-24-archivo-evidencia).
    */
   isDirty(cwd: string): Promise<boolean>;
   /**
-   * `add -A` y commit con los trailers (`Clave: valor`). Devuelve el sha, o null si no había
-   * cambios: repetirlo no crea commits vacíos. No incluye `lunasq/tasks/`; eso lo commitea
+   * `add -A` and commit with the trailers (`Key: value`). Returns the sha, or null if there were no
+   * changes: repeating it does not create empty commits. It does not include `lunasq/tasks/`; that is committed by
    * `commitPaths`.
    */
   commitAll(input: {
@@ -59,9 +59,9 @@ export interface GitAdapter {
     trailers: Record<string, string>;
   }): Promise<string | null>;
   /**
-   * Commit solo de `paths` (relativas al worktree, también si están ignoradas), con los trailers.
-   * Lo demás que haya en el índice o el working tree queda como estaba. Devuelve el sha, o null
-   * si esas rutas no tenían cambios.
+   * Commit only `paths` (relative to the worktree, also if they are ignored), with the trailers.
+   * Anything else in the index or the working tree stays as it was. Returns the sha, or null
+   * if those paths had no changes.
    */
   commitPaths(input: {
     cwd: string;
@@ -70,17 +70,17 @@ export interface GitAdapter {
     trailers: Record<string, string>;
   }): Promise<string | null>;
   /**
-   * Rebase de la rama del worktree sobre `onto` (p. ej. `origin/main`). Con conflictos lo aborta y
-   * devuelve los archivos en conflicto; un fallo que no sea de conflicto (worktree sucio, ref
-   * inexistente) lanza `git_failed`.
+   * Rebase of the worktree's branch onto `onto` (e.g. `origin/main`). On conflicts it aborts and
+   * returns the conflicting files; a failure that is not a conflict (dirty worktree, nonexistent
+   * ref) throws `git_failed`.
    */
   rebase(input: { cwd: string; onto: string }): Promise<RebaseResult>;
-  /** Commits de `base..HEAD`, del más viejo al más nuevo. */
+  /** Commits of `base..HEAD`, from oldest to newest. */
   listCommits(input: { cwd: string; base: string }): Promise<GitCommitInfo[]>;
   /**
-   * Agrega trailers a commits de `base..HEAD` (clave: sha actual) reescribiéndolos con su autor y
-   * fecha; los descendientes cambian de sha. Un trailer cuya clave el commit ya trae no se repite,
-   * así que repetirlo no cambia nada. Devuelve el sha del HEAD nuevo.
+   * Adds trailers to commits of `base..HEAD` (key: current sha) rewriting them with their author and
+   * date; descendants change sha. A trailer whose key the commit already carries is not repeated,
+   * so repeating it changes nothing. Returns the new HEAD's sha.
    */
   addTrailers(input: {
     cwd: string;
@@ -88,12 +88,12 @@ export interface GitAdapter {
     trailers: Record<string, Record<string, string>>;
   }): Promise<string>;
   /**
-   * Publica HEAD como `<remote>/<branch>` con `--force-with-lease`: tras un rebase la historia
-   * cambia, pero no pisa un push ajeno. Lanza `git_failed` si el remoto lo rechaza.
+   * Publishes HEAD as `<remote>/<branch>` with `--force-with-lease`: after a rebase the history
+   * changes, but it does not overwrite someone else's push. Throws `git_failed` if the remote rejects it.
    */
   push(input: { cwd: string; remote: string; branch: string }): Promise<void>;
-  /** Checkout temporal en HEAD detached en `commit`, enlazado al repo de `cwd`. */
+  /** Temporary checkout at a detached HEAD at `commit`, linked to the repo of `cwd`. */
   addDetachedWorktree(input: { cwd: string; path: string; commit: string }): Promise<void>;
-  /** Borra el checkout enlazado `path`, con cambios o sin ellos. Idempotente. */
+  /** Deletes the linked checkout `path`, with or without changes. Idempotent. */
   removeWorktree(input: { cwd: string; path: string }): Promise<void>;
 }

@@ -1,18 +1,18 @@
-// Trailers de git de un mensaje de commit (docs/design.md §Trazabilidad del código). Lo comparten
-// RealGit y FakeGit para que ambos produzcan el mismo mensaje.
+// Git trailers of a commit message (docs/design.md §Code traceability). Shared by
+// RealGit and FakeGit so both produce the same message.
 
 const TRAILER_LINE = /^([A-Za-z][\w-]*):[ \t]+\S/;
 
 /**
- * Agrega `trailers` al final del mensaje, en el bloque de trailers si ya hay uno y si no en un
- * párrafo propio (con `git commit --trailer`, un asunto con `: ` se toma como bloque de trailers y
- * quedan pegados). Una clave que el mensaje ya trae no se repite, aunque el valor sea distinto:
- * repetir la entrega no duplica trailers.
+ * Adds `trailers` at the end of the message, in the trailer block if there is one and otherwise in its own
+ * paragraph (with `git commit --trailer`, a subject with `: ` is taken as a trailer block and
+ * they end up glued). A key the message already carries is not repeated, even if the value differs:
+ * repeating the delivery does not duplicate trailers.
  */
 export function withTrailers(message: string, trailers: Record<string, string>): string {
   const body = message.replace(/\s+$/, "");
   const lines = body.split("\n");
-  // Párrafo final: las líneas posteriores a la última línea en blanco.
+  // Final paragraph: the lines after the last blank line.
   const blank = lines.lastIndexOf("");
   const last = lines.slice(blank + 1);
   const inTrailerBlock = blank > 0 && last.every((line) => TRAILER_LINE.test(line));

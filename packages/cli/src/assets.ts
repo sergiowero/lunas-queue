@@ -1,37 +1,37 @@
-// Skills de fase y subagentes revisores que `install` copia a Claude Code (ADR uw-18-skills-fase,
-// ADR uw-19-revisores). Cada destino queda como espejo exacto de su origen: un archivo que ya no
-// está en los assets se borra, así una versión nueva no deja instrucciones viejas. Un manifiesto
-// en `~/.lunasq/` registra qué destinos son de LunasQ: una carpeta ajena con el mismo nombre no se
-// toca, y la de un asset retirado se borra.
+// Phase skills and reviewer subagents that `install` copies to Claude Code (ADR uw-18-skills-fase,
+// ADR uw-19-revisores). Each destination is left as an exact mirror of its source: a file that is no longer
+// in the assets is deleted, so a new version does not leave old instructions. A manifest
+// in `~/.lunasq/` records which destinations belong to LunasQ: a foreign folder with the same name is not
+// touched, and that of a retired asset is deleted.
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Paths } from "./paths.ts";
 
-/** `assets/` del monorepo, visto desde `packages/cli/src`. */
+/** The monorepo's `assets/`, seen from `packages/cli/src`. */
 export function repoAssetsRoot(): string {
   return fileURLToPath(new URL("../../../assets/", import.meta.url));
 }
 
 /**
- * En el paquete publicado los assets van junto al binario (`bin/../assets`); en el repo, en la
- * raíz del monorepo.
+ * In the published package the assets sit next to the binary (`bin/../assets`); in the repo, at the
+ * monorepo root.
  */
 export function findAssetsRoot(): string {
   const candidates = [fileURLToPath(new URL("../assets/", import.meta.url)), repoAssetsRoot()];
   const found = candidates.find((dir) => existsSync(join(dir, "skills")));
-  if (!found) throw new Error(`no encuentro los assets de LunasQ en ${candidates.join(" ni en ")}`);
+  if (!found) throw new Error(`cannot find the LunasQ assets in ${candidates.join(" or in ")}`);
   return found;
 }
 
 /**
- * Build del front end: junto al binario en el paquete publicado (`bin/../web`) o en
- * `packages/web/dist/app` del repo. Sin build, `start` sirve solo la API.
+ * Front end build: next to the binary in the published package (`bin/../web`) or in
+ * `packages/web/dist/app` of the repo. Without a build, `start` serves only the API.
  */
 export function findWebRoot(): string | undefined {
   const candidates = [fileURLToPath(new URL("../web/", import.meta.url))];
-  // Solo en el repo: en un paquete instalado `../../web` sería de otro paquete.
+  // Only in the repo: in an installed package `../../web` would belong to another package.
   const repoWeb = fileURLToPath(new URL("../../web/", import.meta.url));
   if (existsSync(join(repoWeb, "vite.config.ts"))) candidates.push(join(repoWeb, "dist", "app"));
   return candidates.find((dir) => existsSync(join(dir, "index.html")));
@@ -44,7 +44,7 @@ export interface AssetTarget {
   dest: string;
 }
 
-/** Cada skill es una carpeta con `SKILL.md`; los revisores van juntos en `agents/lunasq/`. */
+/** Each skill is a folder with `SKILL.md`; the reviewers go together in `agents/lunasq/`. */
 export async function assetTargets(root: string, paths: Paths): Promise<AssetTarget[]> {
   const skillsRoot = join(root, "skills");
   const entries = await readdir(skillsRoot, { withFileTypes: true });
@@ -89,7 +89,7 @@ async function sameContent(a: string, b: string): Promise<boolean> {
   return y !== undefined && x.equals(y);
 }
 
-/** Archivos que faltan, cambiaron o sobran en `dest`, relativos a la carpeta. */
+/** Files that are missing, changed or left over in `dest`, relative to the folder. */
 export async function drift(src: string, dest: string): Promise<string[]> {
   const [want, have] = await Promise.all([files(src), files(dest)]);
   const changed: string[] = [];
@@ -100,7 +100,7 @@ export async function drift(src: string, dest: string): Promise<string[]> {
   return [...changed, ...extra].sort();
 }
 
-/** Deja `dest` igual a `src`; devuelve lo que tuvo que cambiar (vacío si ya estaba al día). */
+/** Leaves `dest` equal to `src`; returns what it had to change (empty if it was already up to date). */
 export async function mirror(src: string, dest: string): Promise<string[]> {
   const changes = await drift(src, dest);
   const want = new Set(await files(src));
@@ -116,7 +116,7 @@ export async function mirror(src: string, dest: string): Promise<string[]> {
   return changes;
 }
 
-/** Destinos que instaló LunasQ (rutas absolutas); vacío si nunca instaló. */
+/** Destinations LunasQ installed (absolute paths); empty if it never installed. */
 export async function readManifest(path: string): Promise<string[]> {
   const text = await readFile(path, "utf8").catch(() => undefined);
   if (text === undefined) return [];
@@ -138,15 +138,15 @@ export async function writeManifest(path: string, installed: string[]): Promise<
 }
 
 /**
- * `foreign`: el destino existe, LunasQ no lo instaló y no es idéntico a los assets (p. ej. una
- * skill propia del usuario con el mismo nombre). Uno idéntico se adopta.
+ * `foreign`: the destination exists, LunasQ did not install it and it is not identical to the assets (e.g. a
+ * user's own skill with the same name). An identical one is adopted.
  */
 export async function isForeign(target: AssetTarget, manifest: string[]): Promise<boolean> {
   if (manifest.includes(target.dest) || !existsSync(target.dest)) return false;
   return (await drift(target.src, target.dest)).length > 0;
 }
 
-/** Destinos del manifiesto que ya no corresponden a ningún asset (una skill retirada). */
+/** Manifest destinations that no longer match any asset (a retired skill). */
 export function retired(targets: AssetTarget[], manifest: string[]): string[] {
   const current = new Set(targets.map((t) => t.dest));
   return manifest.filter((dest) => !current.has(dest));

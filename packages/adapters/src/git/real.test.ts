@@ -1,4 +1,4 @@
-// La suite de contrato contra git real corre en `pnpm test`: solo usa repos temporales.
+// The contract suite against real git runs in `pnpm test`: it only uses temporary repos.
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
@@ -33,7 +33,7 @@ function writeTree(dir: string, files: RepoFiles) {
   }
 }
 
-/** Un remoto bare con `files` en main, un clon de trabajo para empujar y el checkout a probar. */
+/** A bare remote with `files` on main, a working clone to push from and the checkout to test. */
 function newRepo(files: RepoFiles) {
   const base = join(root, `r${++repos}`);
   const origin = join(base, "origin.git");
@@ -45,7 +45,7 @@ function newRepo(files: RepoFiles) {
   git(pusher, "remote", "add", "origin", origin);
   commitTree(pusher, files);
   execFileSync("git", ["clone", "--quiet", origin, checkout]);
-  // El commit de los hooks usa la identidad del repo, como en un checkout real configurado.
+  // The hooks commit uses the repo's identity, like in a really configured checkout.
   git(checkout, "config", "user.name", "LunasQ Test");
   git(checkout, "config", "user.email", "test@lunasq.local");
   return checkout;
@@ -80,7 +80,7 @@ gitContract("git real", async () => ({
 describe("RealGit", () => {
   const adapter = new RealGit();
 
-  it("listFiles no cuenta symlinks: podrían apuntar al worktree de la tarea", async () => {
+  it("listFiles does not count symlinks: they could point to the task's worktree", async () => {
     const cwd = newRepo({
       "lunasq/hooks/after_merge/10-ok": { content: "#!/bin/sh\n", executable: true },
     });
@@ -99,7 +99,7 @@ describe("RealGit", () => {
     ).toBeUndefined();
   });
 
-  it("git replace desde un worktree no cambia lo que se lee de la base", async () => {
+  it("git replace from a worktree does not change what is read from the base", async () => {
     const cwd = newRepo({
       "lunasq/hooks/after_merge/10-ok": { content: "ok\n", executable: true },
     });
@@ -120,7 +120,7 @@ describe("RealGit", () => {
     expect(content?.toString("utf8")).toBe("ok\n");
   });
 
-  it("fetch devuelve el sha del remoto aunque otro checkout mueva el ref local", async () => {
+  it("fetch returns the remote's sha even if another checkout moves the local ref", async () => {
     const cwd = newRepo({ "a.txt": { content: "a" } });
     const remoteSha = git(cwd, "rev-parse", "origin/main").trim();
     git(cwd, "commit", "--quiet", "--allow-empty", "-m", "local");
@@ -130,10 +130,10 @@ describe("RealGit", () => {
     expect(fetched).toBe(remoteSha);
   });
 
-  it("fetch repite cuando otro fetch del mismo ref le gana la carrera", async () => {
+  it("fetch retries when another fetch of the same ref wins the race", async () => {
     const cwd = newRepo({ "a.txt": { content: "a" } });
     const remoteSha = git(cwd, "rev-parse", "origin/main").trim();
-    // git que falla el primer `fetch` como lo hace uno que pierde la carrera por el ref.
+    // git that fails the first `fetch` the way one that loses the race for the ref does.
     const dir = join(dirname(cwd), "bin");
     mkdirSync(dir);
     const flag = join(dir, "failed-once");
@@ -148,13 +148,13 @@ describe("RealGit", () => {
     expect(existsSync(flag)).toBe(true);
   });
 
-  it("fetch no repite un fallo que no es la carrera", async () => {
+  it("fetch does not retry a failure that is not the race", async () => {
     const cwd = newRepo({ "a.txt": { content: "a" } });
     git(cwd, "remote", "set-url", "origin", join(dirname(cwd), "no-existe"));
     await expect(adapter.fetch({ cwd, remote: "origin", branch: "main" })).rejects.toThrow();
   });
 
-  it("commitAll no corre los hooks de git del repo y, si el commit falla, deja el índice limpio", async () => {
+  it("commitAll does not run the repo's git hooks and, if the commit fails, leaves the index clean", async () => {
     const cwd = newRepo({ "a.txt": { content: "a" } });
     const marker = join(dirname(cwd), "hook-ran");
     writeTree(cwd, {
@@ -165,7 +165,7 @@ describe("RealGit", () => {
     expect(sha).toMatch(/^[0-9a-f]{40}$/);
     expect(existsSync(marker)).toBe(false);
 
-    // Un commit que falla (el ref de la rama está bloqueado) no deja nada preparado.
+    // A commit that fails (the branch ref is locked) leaves nothing staged.
     writeFileSync(join(cwd, ".git/refs/heads/main.lock"), "");
     writeTree(cwd, { "b.txt": { content: "b" } });
     await expect(adapter.commitAll({ cwd, message: "y", trailers: {} })).rejects.toSatisfy((err) =>
@@ -174,13 +174,13 @@ describe("RealGit", () => {
     expect(git(cwd, "diff", "--cached", "--name-only")).toBe("");
   });
 
-  it("un cwd inexistente es git_unavailable", async () => {
+  it("a nonexistent cwd is git_unavailable", async () => {
     await expect(adapter.isDirty(join(root, "no-existe"))).rejects.toSatisfy((err) =>
       isGitError(err, "git_unavailable"),
     );
   });
 
-  it("un ref con forma de opción no se interpreta como opción", async () => {
+  it("a ref shaped like an option is not interpreted as an option", async () => {
     const cwd = newRepo({ "a.txt": { content: "a" } });
     await expect(adapter.resolveCommit({ cwd, ref: "--all" })).rejects.toSatisfy((err) =>
       isGitError(err, "ref_not_found"),

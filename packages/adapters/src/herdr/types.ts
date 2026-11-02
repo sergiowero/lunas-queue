@@ -1,6 +1,6 @@
-// Interfaz del adapter de herdr (UW-02). El resto del sistema depende solo de esto;
-// la implementación real (CLI + socket) y el fake en memoria cumplen la misma suite de contrato.
-// Comportamiento de herdr 0.9.5 (protocol 22) en docs/decisions/0004-herdr-version-y-cli.md.
+// herdr adapter interface (UW-02). The rest of the system depends only on this;
+// the real implementation (CLI + socket) and the in-memory fake pass the same contract suite.
+// herdr 0.9.5 (protocol 22) behavior in docs/decisions/0004-herdr-version-y-cli.md.
 
 export type AgentStatus = "idle" | "working" | "blocked" | "done" | "unknown";
 
@@ -8,28 +8,28 @@ export interface HerdrWorkspace {
   workspaceId: string;
   label: string;
   /**
-   * Checkout del repo que abre el workspace, si herdr lo reporta: siempre en worktrees, no en
-   * workspaces creados con `workspace create` (ADR 0004, adenda). No sirve para buscar proyectos.
+   * Checkout of the repo that opens the workspace, if herdr reports it: always on worktrees, not on
+   * workspaces created with `workspace create` (ADR 0004, addendum). Not usable to look up projects.
    */
   checkoutPath?: string;
-  /** true si el workspace abre un worktree enlazado (tarea), false si es el checkout principal. */
+  /** true if the workspace opens a linked worktree (task), false if it is the main checkout. */
   linkedWorktree: boolean;
 }
 
 export interface HerdrWorktree {
-  /** Workspace en el que herdr tiene abierto el worktree. */
+  /** Workspace in which herdr has the worktree open. */
   workspaceId: string;
   branch: string;
   path: string;
   rootPaneId: string;
 }
 
-/** Un worktree enlazado del repo, según `worktree list`; puede no estar abierto en herdr. */
+/** A linked worktree of the repo, per `worktree list`; it may not be open in herdr. */
 export interface HerdrWorktreeEntry {
-  /** Ausente si el checkout está en HEAD detached. */
+  /** Absent if the checkout is at a detached HEAD. */
   branch?: string;
   path: string;
-  /** Workspace en el que está abierto, si lo está. */
+  /** Workspace in which it is open, if it is. */
   workspaceId?: string;
 }
 
@@ -50,7 +50,7 @@ export interface HerdrAgent {
   status: AgentStatus;
   title?: string;
   tokens: Record<string, string>;
-  /** Identidad de sesión que reporta la integración del agente (`agent_session`). */
+  /** Session identity reported by the agent's integration (`agent_session`). */
   session?: AgentSessionInfo;
 }
 
@@ -63,14 +63,14 @@ export interface HerdrSnapshot {
 }
 
 export type HerdrEvent =
-  /** Una suscripción quedó activa (al abrirla y tras cada reconexión). */
+  /** A subscription became active (on opening it and after each reconnection). */
   | { type: "subscribed" }
   /**
-   * El stream se cerró sin que el consumidor lo pidiera. herdr 0.9.5 no manda `events_lost`
-   * (ADR 0004): todo cierre cuenta como pérdida y quien consume debe reconciliar con `snapshot`.
+   * The stream closed without the consumer asking for it. herdr 0.9.5 does not send `events_lost`
+   * (ADR 0004): every close counts as a loss and the consumer must reconcile with `snapshot`.
    */
   | { type: "events_lost"; reason: string }
-  /** herdr rechazó la suscripción (p. ej. el pane ya no existe). Es terminal: no se reintenta. */
+  /** herdr rejected the subscription (e.g. the pane no longer exists). It is terminal: no retry. */
   | { type: "subscription_failed"; code: string; message: string }
   | { type: "agent_status_changed"; paneId: string; workspaceId: string; status: AgentStatus }
   | { type: "pane_closed"; paneId: string; workspaceId: string }
@@ -80,26 +80,26 @@ export type HerdrEvent =
   | { type: "worktree_removed"; workspaceId: string };
 
 export interface HerdrSubscription {
-  /** Cierra la suscripción a propósito: no emite `events_lost` ni reconecta. */
+  /** Closes the subscription on purpose: it neither emits `events_lost` nor reconnects. */
   close(): Promise<void>;
 }
 
 export interface SubscribeInput {
   /**
-   * Panes cuyo `pane.agent_status_changed` se escucha (herdr exige suscripción por pane). Si uno
-   * no existe, herdr rechaza la suscripción completa (`subscription_failed`), también al
-   * re‑suscribir tras una pérdida: conviene una suscripción por pane.
+   * Panes whose `pane.agent_status_changed` is listened to (herdr requires a per-pane subscription). If one
+   * does not exist, herdr rejects the whole subscription (`subscription_failed`), also when
+   * re-subscribing after a loss: one subscription per pane is advisable.
    */
   paneIds?: string[];
-  /** Eventos globales de ciclo de vida: panes cerrados o terminados, workspaces y worktrees. */
+  /** Global lifecycle events: panes closed or finished, workspaces and worktrees. */
   lifecycle?: boolean;
 }
 
 export interface HerdrAdapter {
   /**
-   * Usa `workspaceId` si sigue vivo; si no, el workspace principal (no worktree) con ese `label`;
-   * si no, lo crea en `cwd`. Se busca por label porque herdr no reporta el checkout de un
-   * workspace creado con `workspace create`; LunasQ controla los labels de sus proyectos.
+   * Uses `workspaceId` if it is still alive; otherwise the main workspace (not a worktree) with that `label`;
+   * otherwise it creates it in `cwd`. It is looked up by label because herdr does not report the checkout of a
+   * workspace created with `workspace create`; LunasQ controls its projects' labels.
    */
   ensureWorkspace(input: {
     cwd: string;
@@ -107,10 +107,10 @@ export interface HerdrAdapter {
     workspaceId?: string;
     env?: Record<string, string>;
   }): Promise<{ workspace: HerdrWorkspace; rootPaneId: string; created: boolean }>;
-  /** Idempotente: cerrar un workspace que ya no existe no falla. */
+  /** Idempotent: closing a workspace that no longer exists does not fail. */
   closeWorkspace(workspaceId: string): Promise<void>;
 
-  /** `worktree list` → `open` si el branch ya tiene worktree, `create` si no (ADR 0004). */
+  /** `worktree list` → `open` if the branch already has a worktree, `create` if not (ADR 0004). */
   ensureWorktree(input: {
     workspaceId: string;
     branch: string;
@@ -119,36 +119,36 @@ export interface HerdrAdapter {
     label?: string;
   }): Promise<{ worktree: HerdrWorktree; created: boolean }>;
   /**
-   * Worktrees enlazados del repo del workspace `workspaceId`; el checkout principal no se
-   * incluye. Un worktree removido ya no aparece aunque su branch siga.
+   * Linked worktrees of the repo of workspace `workspaceId`; the main checkout is not
+   * included. A removed worktree no longer appears even if its branch remains.
    */
   listWorktrees(workspaceId: string): Promise<HerdrWorktreeEntry[]>;
   /**
-   * Borra el checkout y cierra su workspace; conserva el branch. Idempotente: si el workspace ya
-   * no existe no falla. Sobre un workspace que no es worktree lanza `not_linked_worktree`; con
-   * cambios sin commit y sin `force`, `dirty_worktree_requires_force` (ADR 0012).
+   * Deletes the checkout and closes its workspace; keeps the branch. Idempotent: if the workspace no
+   * longer exists it does not fail. On a workspace that is not a worktree it throws `not_linked_worktree`; with
+   * uncommitted changes and without `force`, `dirty_worktree_requires_force` (ADR 0012).
    */
   removeWorktree(input: { workspaceId: string; force?: boolean }): Promise<void>;
 
-  /** El env del Run se fija aquí: `agent start` no lo acepta (ADR 0004). */
+  /** The Run's env is set here: `agent start` does not accept it (ADR 0004). */
   splitPane(input: {
     paneId: string;
     direction?: "right" | "down";
     cwd?: string;
     env?: Record<string, string>;
   }): Promise<HerdrPane>;
-  /** Idempotente: cerrar un pane que ya no existe no falla. Cerrar el último pane cierra su workspace. */
+  /** Idempotent: closing a pane that no longer exists does not fail. Closing the last pane closes its workspace. */
   closePane(paneId: string): Promise<void>;
   /**
-   * Escribe `command` en el shell del pane y lo ejecuta (`pane run`); no espera a que termine ni
-   * informa su exit code. Corre con el cwd y el env del pane; cerrar el pane lo mata.
-   * `pane_not_found` si el pane no existe.
+   * Writes `command` into the pane's shell and runs it (`pane run`); it does not wait for it to finish nor
+   * report its exit code. It runs with the pane's cwd and env; closing the pane kills it.
+   * `pane_not_found` if the pane does not exist.
    */
   runInPane(input: { paneId: string; command: string }): Promise<void>;
 
   /**
-   * Idempotente por nombre: si ya hay un agente con ese nombre lo devuelve con `started: false`.
-   * Si el agente arranca bloqueado (p. ej. diálogo de confianza) devuelve su estado `blocked`.
+   * Idempotent by name: if an agent with that name already exists it returns it with `started: false`.
+   * If the agent starts blocked (e.g. trust dialog) it returns its `blocked` state.
    */
   startAgent(input: {
     name: string;
@@ -159,8 +159,8 @@ export interface HerdrAdapter {
   }): Promise<{ agent: HerdrAgent; started: boolean }>;
   getAgent(name: string): Promise<HerdrAgent | undefined>;
   /**
-   * Con `wait`, herdr lanza `agent_prompt_stalled` si no ve `working`/`blocked` en 5 s y
-   * `timeout` si no llega a `until` a tiempo.
+   * With `wait`, herdr throws `agent_prompt_stalled` if it does not see `working`/`blocked` in 5 s and
+   * `timeout` if it does not reach `until` in time.
    */
   promptAgent(input: {
     name: string;
@@ -168,7 +168,7 @@ export interface HerdrAdapter {
     wait?: { timeoutMs: number; until?: AgentStatus[] };
   }): Promise<HerdrAgent>;
   /**
-   * Lanza `HerdrError` con code `timeout` si no llega a ninguno de los estados. Sin `timeoutMs`
+   * Throws `HerdrError` with code `timeout` if it reaches none of the states. Without `timeoutMs`
    * espera indefinidamente.
    */
   waitAgent(input: {
@@ -178,17 +178,17 @@ export interface HerdrAdapter {
   }): Promise<HerdrAgent>;
   readAgent(input: { name: string; lines?: number }): Promise<string>;
   /**
-   * Teclas a la TUI del agente (`agent send-keys`), con los nombres de herdr: `enter`, `down`,
-   * `esc`… Sirve para aceptar el diálogo de confianza de carpeta (ADR 0004).
+   * Keys to the agent's TUI (`agent send-keys`), with herdr's names: `enter`, `down`,
+   * `esc`… Useful to accept the folder trust dialog (ADR 0004).
    */
   sendKeys(input: { name: string; keys: string[] }): Promise<void>;
   /**
-   * Lleva la vista del humano al pane del agente (`agent focus`): así responde un permiso en la
-   * TUI. `agent_not_found` si el agente no existe.
+   * Brings the human's view to the agent's pane (`agent focus`): this is how a permission in the
+   * TUI is answered. `agent_not_found` if the agent does not exist.
    */
   focusAgent(name: string): Promise<HerdrAgent>;
 
-  /** Título y tokens del sidebar (task id, fase, iteración). */
+  /** Title and tokens of the sidebar (task id, phase, iteration). */
   reportMetadata(input: {
     paneId: string;
     title?: string;
@@ -201,8 +201,8 @@ export interface HerdrAdapter {
   }): Promise<{ shown: boolean; reason?: string }>;
   snapshot(): Promise<HerdrSnapshot>;
   /**
-   * Abre un stream de eventos. Si se cierra sin `close()`, emite `events_lost`, reconecta,
-   * vuelve a suscribirse y emite `subscribed`.
+   * Opens an event stream. If it closes without `close()`, it emits `events_lost`, reconnects,
+   * re-subscribes and emits `subscribed`.
    */
   subscribe(input: SubscribeInput, onEvent: (event: HerdrEvent) => void): HerdrSubscription;
 }

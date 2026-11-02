@@ -38,7 +38,7 @@ function setup() {
 }
 
 describe("POST /api/tasks", () => {
-  it("crea la tarea en draft y responde 201", async () => {
+  it("creates the task in draft and answers 201", async () => {
     const { create, project } = setup();
     const task = await create({ tags: ["auth"] });
     expect(task).toMatchObject({
@@ -53,7 +53,7 @@ describe("POST /api/tasks", () => {
     });
   });
 
-  it("responde 400 con JSON inválido o entrada inválida", async () => {
+  it("answers 400 with invalid JSON or invalid input", async () => {
     const { send, project } = setup();
     expect((await send("POST", "/api/tasks", "{")).status).toBe(400);
     const res = await send("POST", "/api/tasks", {
@@ -71,7 +71,7 @@ describe("POST /api/tasks", () => {
     ["project_not_found", { projectId: missing }],
     ["dependency_not_found", { dependsOn: [missing] }],
     ["caused_by_not_found", { causedBy: missing }],
-  ])("responde 422 %s si una referencia no existe", async (code, overrides) => {
+  ])("answers 422 %s if a reference does not exist", async (code, overrides) => {
     const { send, project } = setup();
     const res = await send("POST", "/api/tasks", {
       projectId: project.id,
@@ -85,7 +85,7 @@ describe("POST /api/tasks", () => {
 });
 
 describe("GET /api/tasks", () => {
-  it("lista ordenado por prioridad y filtra por proyecto y estado", async () => {
+  it("lists ordered by priority and filters by project and state", async () => {
     const { send, create, db } = setup();
     const other = insertProject(db);
     const low = await create({ priority: 1 });
@@ -100,15 +100,15 @@ describe("GET /api/tasks", () => {
     expect(await ids("?state=cancelled")).toEqual([low.id]);
   });
 
-  it("responde 400 con un filtro inválido", async () => {
+  it("answers 400 with an invalid filter", async () => {
     const { send } = setup();
     expect((await send("GET", "/api/tasks?state=nuevo")).status).toBe(400);
     expect((await send("GET", "/api/tasks?projectId=p1")).status).toBe(400);
   });
 });
 
-describe("GET y PATCH /api/tasks/:id", () => {
-  it("devuelve la tarea o 404", async () => {
+describe("GET and PATCH /api/tasks/:id", () => {
+  it("returns the task or 404", async () => {
     const { send, create } = setup();
     const task = await create();
     expect(await (await send("GET", `/api/tasks/${task.id}`)).json()).toMatchObject({
@@ -117,7 +117,7 @@ describe("GET y PATCH /api/tasks/:id", () => {
     expect((await send("GET", `/api/tasks/${missing}`)).status).toBe(404);
   });
 
-  it("AC-11: una tarea sin Resultado devuelve resultKind y result nulos", async () => {
+  it("AC-11: a task without a Result returns null resultKind and result", async () => {
     const { send, create } = setup();
     const task = await create();
     expect(await (await send("GET", `/api/tasks/${task.id}`)).json()).toMatchObject({
@@ -128,7 +128,7 @@ describe("GET y PATCH /api/tasks/:id", () => {
     expect(listed[0]).toMatchObject({ resultKind: null, result: null });
   });
 
-  it("una tarea completada con Resultado devuelve su tipo y su texto, sin PR", async () => {
+  it("a task completed with a Result returns its type and text, without a PR", async () => {
     const { send, db, project } = setup();
     const task = insertTask(db, project.id, {
       state: "completed",
@@ -148,7 +148,7 @@ describe("GET y PATCH /api/tasks/:id", () => {
     expect(listed[0]).toMatchObject({ resultKind: "already_implemented" });
   });
 
-  it("actualiza intent, tags y prioridad", async () => {
+  it("updates intent, tags and priority", async () => {
     const { send, create } = setup();
     const task = await create();
     const res = await send("PATCH", `/api/tasks/${task.id}`, { priority: 900, tags: ["ui"] });
@@ -156,7 +156,7 @@ describe("GET y PATCH /api/tasks/:id", () => {
     expect(await res.json()).toMatchObject({ priority: 900, tags: ["ui"] });
   });
 
-  it("responde 400 si intenta cambiar el estado, 404 si no existe y 409 si es terminal", async () => {
+  it("answers 400 if it tries to change the state, 404 if it does not exist and 409 if it is terminal", async () => {
     const { send, create } = setup();
     const task = await create();
     expect((await send("PATCH", `/api/tasks/${task.id}`, { state: "completed" })).status).toBe(400);
@@ -169,7 +169,7 @@ describe("GET y PATCH /api/tasks/:id", () => {
 });
 
 describe("POST /api/tasks/:id/pause", () => {
-  it("pausa una tarea pausable, responde 200 y registra el evento", async () => {
+  it("pauses a pausable task, answers 200 and records the event", async () => {
     const { db, send, create } = setup();
     const task = await create();
     const res = await send("POST", `/api/tasks/${task.id}/pause`);
@@ -182,7 +182,7 @@ describe("POST /api/tasks/:id/pause", () => {
     });
   });
 
-  it("responde 404 si no existe y 409 con el código si no es pausable", async () => {
+  it("answers 404 if it does not exist and 409 with the code if it is not pausable", async () => {
     const { send, create } = setup();
     const task = await create();
     await send("POST", `/api/tasks/${task.id}/cancel`);
@@ -192,7 +192,7 @@ describe("POST /api/tasks/:id/pause", () => {
     expect((await send("POST", `/api/tasks/${missing}/pause`)).status).toBe(404);
   });
 
-  it("responde 409 guard_failed si la entrega está en curso y no cambia la tarea", async () => {
+  it("answers 409 guard_failed if the delivery is in progress and does not change the task", async () => {
     const { db, project, send } = setup();
     const task = insertTask(db, project.id, { state: "verification", subState: "running" });
     const run = insertRun(db, task.id, { phase: "verify" });
@@ -207,7 +207,7 @@ describe("POST /api/tasks/:id/pause", () => {
     expect(listEvents(db, task.id)).toEqual([]);
   });
 
-  it("pausa una verificación en curso sin pass guardado", async () => {
+  it("pauses a verification in progress without a saved pass", async () => {
     const { db, project, send } = setup();
     const task = insertTask(db, project.id, { state: "verification", subState: "running" });
     insertRun(db, task.id, { phase: "verify" });
@@ -216,7 +216,7 @@ describe("POST /api/tasks/:id/pause", () => {
 });
 
 describe("POST /api/tasks/:id/resume", () => {
-  it("reanuda una tarea escalada hacia su estado previo y registra el evento", async () => {
+  it("resumes an escalated task to its previous state and records the event", async () => {
     const { db, send, create } = setup();
     const task = await create();
     transitionTask(db, {
@@ -234,7 +234,7 @@ describe("POST /api/tasks/:id/resume", () => {
     });
   });
 
-  it("reanuda una tarea pausada hacia su estado previo", async () => {
+  it("resumes a paused task to its previous state", async () => {
     const { db, send, create } = setup();
     const task = await create();
     await send("POST", `/api/tasks/${task.id}/pause`);
@@ -244,7 +244,7 @@ describe("POST /api/tasks/:id/resume", () => {
     expect(listEvents(db, task.id).at(-1)).toMatchObject({ payload: { command: "resume" } });
   });
 
-  it("responde 409 fuera de needs_human y paused, y 404 si no existe", async () => {
+  it("answers 409 outside needs_human and paused, and 404 if it does not exist", async () => {
     const { send, create } = setup();
     const task = await create();
     expect((await send("POST", `/api/tasks/${task.id}/resume`)).status).toBe(409);
@@ -253,7 +253,7 @@ describe("POST /api/tasks/:id/resume", () => {
 });
 
 describe("POST /api/tasks/:id/cancel", () => {
-  it("cancela con nota opcional y registra el evento", async () => {
+  it("cancels with an optional note and records the event", async () => {
     const { db, send, create } = setup();
     const task = await create();
     const res = await send("POST", `/api/tasks/${task.id}/cancel`, { note: "ya no aplica" });
@@ -265,7 +265,7 @@ describe("POST /api/tasks/:id/cancel", () => {
     });
   });
 
-  it("acepta un cuerpo vacío", async () => {
+  it("accepts an empty body", async () => {
     const { db, project } = setup();
     const task = insertTask(db, project.id);
     const res = await createApp({ db }).request(`/api/tasks/${task.id}/cancel`, {
@@ -274,7 +274,7 @@ describe("POST /api/tasks/:id/cancel", () => {
     expect(res.status).toBe(200);
   });
 
-  it("responde 409 si ya está cancelada, 404 si no existe y 400 con nota inválida", async () => {
+  it("answers 409 if already canceled, 404 if it does not exist and 400 with an invalid note", async () => {
     const { send, create } = setup();
     const task = await create();
     expect((await send("POST", `/api/tasks/${task.id}/cancel`, { note: "" })).status).toBe(400);
@@ -286,8 +286,8 @@ describe("POST /api/tasks/:id/cancel", () => {
   });
 });
 
-describe("dependencias", () => {
-  it("PUT agrega la arista (201) y repetirla responde 200 sin duplicar", async () => {
+describe("dependencies", () => {
+  it("PUT adds the edge (201) and repeating it answers 200 without duplicating", async () => {
     const { send, create } = setup();
     const a = await create();
     const b = await create();
@@ -301,7 +301,7 @@ describe("dependencias", () => {
     expect(deps.dependents).toEqual([]);
   });
 
-  it("responde 409 cycle con el camino si la arista cierra un ciclo", async () => {
+  it("answers 409 cycle with the path if the edge closes a cycle", async () => {
     const { send, create } = setup();
     const a = await create();
     const b = await create({ dependsOn: [a.id] });
@@ -313,7 +313,7 @@ describe("dependencias", () => {
     expect(await self.json()).toMatchObject({ error: "cycle", cycle: [a.id, a.id] });
   });
 
-  it("responde 404 si la tarea no existe y 422 si la dependencia no existe", async () => {
+  it("answers 404 if the task does not exist and 422 if the dependency does not exist", async () => {
     const { send, create } = setup();
     const a = await create();
     expect((await send("PUT", `/api/tasks/${missing}/dependencies/${a.id}`)).status).toBe(404);
@@ -323,7 +323,7 @@ describe("dependencias", () => {
     expect((await send("GET", `/api/tasks/${missing}/dependencies`)).status).toBe(404);
   });
 
-  it("responde 409 si la tarea no está en draft o la dependencia está cancelada", async () => {
+  it("answers 409 if the task is not in draft or the dependency is canceled", async () => {
     const { send, create } = setup();
     const a = await create();
     const b = await create();
@@ -335,7 +335,7 @@ describe("dependencias", () => {
     expect(await notDraft.json()).toMatchObject({ error: "task_not_draft" });
   });
 
-  it("cada error del repositorio responde con su código HTTP", async () => {
+  it("each repository error answers with its HTTP code", async () => {
     const { send, create } = setup();
     const cancelled = await create();
     await send("POST", `/api/tasks/${cancelled.id}/cancel`);
@@ -360,7 +360,7 @@ describe("dependencias", () => {
     }
   });
 
-  it("DELETE quita la arista (204) y responde 404 si no existía", async () => {
+  it("DELETE removes the edge (204) and answers 404 if it did not exist", async () => {
     const { send, create } = setup();
     const a = await create();
     const b = await create({ dependsOn: [a.id] });

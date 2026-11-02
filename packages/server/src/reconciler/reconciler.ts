@@ -1,15 +1,15 @@
-// Loop de reconciliación (docs/design.md §Loop de reconciliación, ADR uw-17-reconciliacion). Cada
-// N segundos, al arrancar y cuando se pierden eventos de herdr: toma `session.snapshot`, lo compara
-// con los Runs abiertos en la base y corrige. La base es la verdad y herdr es efímero, así que cada
-// corrección es idempotente: repetir una pasada no duplica efectos.
-// - Run lanzado sin su agente en herdr → Run fallido (reintento con backoff o needs_human).
-// - Run reclamado sin lanzar → el dispatcher lo retoma.
-// - Run abierto de una tarea que salió de su fase (cancelada, pausada, reanudada tras un timeout) → se
-//   cierra como cancelled y se libera su pane.
-// - Run vivo que nadie observa (tras un reinicio) → se vuelve a observar.
-// - Agente con nombre de LunasQ sin Run abierto → se cierra su pane (huérfano).
-// - Tarea cancelada o mergeada que conserva su worktree → se remueve; y cada tanto, los worktrees
-//   huérfanos de cada proyecto (ADR 0012).
+// Reconciliation loop (docs/design.md §Reconciliation loop, ADR uw-17-reconciliacion). Every
+// N seconds, on start and when herdr events are lost: takes `session.snapshot`, compares it
+// with the open Runs in the database and corrects. The database is the truth and herdr is ephemeral, so each
+// correction is idempotent: repeating a pass does not duplicate effects.
+// - Launched Run without its agent in herdr → failed Run (retry with backoff or needs_human).
+// - Claimed Run not launched → the dispatcher resumes it.
+// - Open Run of a task that left its phase (canceled, paused, resumed after a timeout) → it is
+//   closed as cancelled and its pane is released.
+// - Live Run nobody watches (after a restart) → it is watched again.
+// - Agent with a LunasQ name without an open Run → its pane is closed (orphan).
+// - Canceled or merged task that keeps its worktree → it is removed; and every so often, the orphan
+//   worktrees of each project (ADR 0012).
 import type { HerdrAdapter, HerdrAgent } from "@lunasq/adapters";
 import {
   type LunasqDatabase,
@@ -31,19 +31,19 @@ import type { WorktreeService } from "../worktrees/service.ts";
 import type { RunWatcher } from "./watcher.ts";
 
 export const DEFAULT_RECONCILE_INTERVAL_MS = 60_000;
-/** Cada cuántas pasadas se buscan worktrees huérfanos: cada búsqueda lista el repo en herdr. */
+/** Every how many passes orphan worktrees are looked for: each search lists the repo in herdr. */
 export const DEFAULT_ORPHAN_WORKTREES_EVERY = 10;
 
 export type ReconcileResult = {
-  /** Runs dados por fallidos porque su agente ya no está en herdr. */
+  /** Runs given as failed because their agent is no longer in herdr. */
   failed: string[];
-  /** Runs cerrados porque su tarea salió de la fase. */
+  /** Runs closed because their task left the phase. */
   closed: string[];
-  /** Runs vivos que se volvieron a observar. */
+  /** Live Runs that were observed again. */
   watched: string[];
-  /** Panes cerrados por tener un agente de LunasQ sin Run. */
+  /** Panes closed for having a LunasQ agent without a Run. */
   orphanPanes: string[];
-  /** Tareas cuyo worktree se removió. */
+  /** Tasks whose worktree was removed. */
   removedWorktrees: string[];
 };
 
@@ -56,7 +56,7 @@ export interface ReconcilerOptions {
   watcher: Pick<RunWatcher, "watch" | "watching">;
   worktrees: Pick<WorktreeService, "remove" | "cleanupOrphans">;
   projects?: ProjectConfigReader;
-  /** Se cerraron Runs: el scheduler puede despachar ya lo reanudado (`resume` tras un timeout). */
+  /** Runs were closed: the scheduler can dispatch what was resumed right away (`resume` after a timeout). */
   onRunsClosed?: () => void;
   intervalMs?: number;
   orphanWorktreesEvery?: number;
@@ -81,7 +81,7 @@ export class Reconciler {
   private stopped = false;
   private passes = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
-  /** Worktrees que no se pudieron remover (p. ej. con cambios): se reporta una vez. */
+  /** Worktrees that could not be removed (e.g. with changes): reported once. */
   private readonly reported = new Set<string>();
 
   constructor(opts: ReconcilerOptions) {
@@ -99,7 +99,7 @@ export class Reconciler {
     this.taskWorktrees = new TaskWorktreeRepository(opts.db);
   }
 
-  /** Una pasada (o se une a la que corre y pide otra), como el scheduler. */
+  /** One pass (or joins the one running and asks for another), like the scheduler. */
   run(): Promise<ReconcileResult> {
     if (this.running) {
       this.rerun = true;
@@ -114,7 +114,7 @@ export class Reconciler {
     return this.running;
   }
 
-  /** Pide una pasada sin esperarla: al perder eventos de herdr o al ver una transición. */
+  /** Requests a pass without waiting for it: on losing herdr events or on seeing a transition. */
   wake(): void {
     this.run().catch((error: unknown) => this.onError(asError(error), null));
   }
@@ -133,8 +133,8 @@ export class Reconciler {
   }
 
   /**
-   * Outbox: una cancelación, una pausa, una reanudación, un Resultado o un merge piden pasada ya, sin esperar
-   * al tick (detener el agente de una tarea cancelada o pausada, ADR 0010; remover su worktree, ADR 0012).
+   * Outbox: a cancellation, pause, resumption, Result or merge request a pass right away, without waiting
+   * for the tick (stopping the agent of a canceled or paused task, ADR 0010; removing its worktree, ADR 0012).
    */
   onMessage(message: OutboxMessage): void {
     if (message.topic === TASK_TRANSITIONED) {
@@ -169,23 +169,23 @@ export class Reconciler {
     this.passes += 1;
     const result = emptyResult();
     const snap = await this.herdr.snapshot();
-    // Después del snapshot: todo agente del snapshot fue arrancado por un Run que ya existe aquí.
+    // After the snapshot: every agent in the snapshot was started by a Run that already exists here.
     const active = this.runs.active();
     const watching = new Set(this.watcher.watching());
 
     for (const listed of active) {
       await this.guard(listed.id, async () => {
-        // Se relee: las correcciones anteriores de la pasada esperan a herdr y el Run pudo
-        // cerrarse o guardar su handoff entretanto.
+        // It is re-read: the pass's earlier corrections wait on herdr and the Run may have
+        // closed or saved its handoff in the meantime.
         const run = this.runs.get(listed.id);
         const task = run && this.tasks.get(run.taskId);
-        // Con handoff guardado el verificador dio pass y la entrega corre con su Run abierto:
-        // no es un Run caído (ADR 0007).
+        // With a saved handoff the verifier gave a pass and the delivery runs with its Run open:
+        // it is not a fallen Run (ADR 0007).
         if (!run || run.endedAt !== null || !task || run.handoff !== null) return;
         const inPhase =
           pendingPhase(task.state) === run.phase &&
           (task.subState === "running" || task.subState === "waiting_human");
-        // needs_human (p. ej. timeout): el agente sigue vivo a propósito para el humano.
+        // needs_human (e.g. timeout): the agent stays alive on purpose for the human.
         if (task.state === "needs_human") {
           if (run.launchedAt === null) return;
           const agent = snap.agents.find((a) => a.name === run.herdrName);
@@ -195,17 +195,17 @@ export class Reconciler {
           return;
         }
         if (!inPhase) {
-          // También un Run reclamado sin lanzar: su lanzamiento se detiene en el siguiente paso.
+          // Also a claimed Run that never launched: its launch stops at the next step.
           await this.dispatcher.closeRun(run.id, {
             result: "cancelled",
-            failureReason: `task_left_phase: la tarea está en ${task.state}/${task.subState ?? "-"}`,
+            failureReason: `task_left_phase: the task is in ${task.state}/${task.subState ?? "-"}`,
           });
           result.closed.push(run.id);
           return;
         }
         if (run.launchedAt === null) return;
         const listedAgent = snap.agents.find((a) => a.name === run.herdrName);
-        // El snapshot pudo tomarse antes de que el lanzamiento arrancara el agente: se confirma.
+        // The snapshot may have been taken before the launch started the agent: it is confirmed.
         const agent =
           listedAgent?.paneId === run.herdrPane
             ? listedAgent
@@ -216,16 +216,16 @@ export class Reconciler {
           if (!watching.has(run.id)) this.rewatch(run, agent, result);
           return;
         }
-        // waiting_human ocupa su slot a propósito (ADR 0014); la respuesta relanza (UW-22).
+        // waiting_human occupies its slot on purpose (ADR 0014); the answer relaunches (UW-22).
         if (task.subState === "waiting_human") return;
         const res = await this.dispatcher.failRun(
           run.id,
-          `agent_lost: el agente ${run.herdrName ?? "?"} no está en herdr (pane ${run.herdrPane ?? "?"})`,
+          `agent_lost: agent ${run.herdrName ?? "?"} is not in herdr (pane ${run.herdrPane ?? "?"})`,
         );
         if (res.closed) result.failed.push(run.id);
       });
     }
-    // Después de cerrar los Runs de tareas que salieron de su fase: así no se relanzan.
+    // After closing the Runs of tasks that left their phase: this way they are not relaunched.
     await this.dispatcher.recover();
 
     const owned = new Set(active.map((r) => r.herdrName).filter((n) => n !== null));
@@ -238,7 +238,7 @@ export class Reconciler {
     }
 
     for (const task of this.taskWorktrees.releasable()) {
-      // Con un Run todavía abierto (un lanzamiento que se está deteniendo) se espera otra pasada.
+      // With a Run still open (a launch that is stopping) another pass is waited for.
       if (this.runs.latestForTask(task.id)?.endedAt === null) continue;
       await this.guard(task.id, async () => {
         try {
@@ -272,7 +272,7 @@ export class Reconciler {
     r.watched.push(run.id);
   }
 
-  /** Un fallo en un elemento se reporta y no detiene la pasada. */
+  /** A failure in an element is reported and does not stop the pass. */
   private async guard(subject: string, fn: () => Promise<void>): Promise<void> {
     try {
       await fn();

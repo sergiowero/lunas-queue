@@ -1,7 +1,7 @@
-// Alta de tareas: intent, tags, prioridad y dependencias iniciales (TaskCreate, ADR 0010). La
-// validación es la del servidor; aquí solo se muestran sus issues. Las dependencias se agregan una a
-// una con un selector y quedan en una lista de elegidas, en el orden en que se agregaron. Pueden ser
-// de cualquier proyecto; las de otro se marcan como riesgo, igual que en el detalle.
+// Task creation: intent, tags, priority and initial dependencies (TaskCreate, ADR 0010). The
+// validation is the server's; here only its issues are shown. Dependencies are added one by
+// one with a selector and end up in a list of chosen ones, in the order they were added. They can be
+// from any project; those from another are flagged as a risk, like in the detail.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
@@ -11,7 +11,10 @@ import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Input, Label, Select, Textarea } from "../components/ui/input.tsx";
 import { ApiError, api } from "../lib/api.ts";
+import type { Dictionary } from "../lib/dictionary/index.ts";
+import { errorText } from "../lib/error-text.ts";
 import { isTerminal, taskLabel } from "../lib/format.ts";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/tasks/new");
@@ -25,14 +28,15 @@ function parseTags(text: string): string[] {
     .filter((tag) => tag !== "");
 }
 
-function describe(error: Error): string {
+function describe(error: Error, t: Dictionary): string {
   if (error instanceof ApiError && error.issues.length > 0) {
-    return error.issues.map((i) => `${i.path.join(".") || "(cuerpo)"}: ${i.message}`).join("; ");
+    return error.issues.map((i) => `${i.path.join(".") || t.common.body}: ${i.message}`).join("; ");
   }
-  return error.message;
+  return errorText(error, t);
 }
 
 export function NewTaskPage() {
+  const t = useT();
   const search = route.useSearch();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -70,23 +74,23 @@ export function NewTaskPage() {
 
   if (projects.error) return <QueryError error={projects.error} />;
   if (!projects.data) return <Loading />;
-  const live = (candidates.data ?? []).filter((t) => !isTerminal(t.state));
-  // El proyecto elegido primero; después los demás en el orden del listado de proyectos.
+  const live = (candidates.data ?? []).filter((c) => !isTerminal(c.state));
+  // The chosen project first; then the others in the order of the project list.
   const groups = [...projects.data]
     .sort((a, b) => Number(b.id === projectId) - Number(a.id === projectId))
     .map((project) => ({
       project,
-      tasks: live.filter((t) => t.projectId === project.id && !dependsOn.includes(t.id)),
+      tasks: live.filter((c) => c.projectId === project.id && !dependsOn.includes(c.id)),
     }))
     .filter((group) => group.tasks.length > 0);
   const projectName = new Map(projects.data.map((p) => [p.id, p.name]));
-  const chosen = dependsOn.flatMap((id) => (candidates.data ?? []).filter((t) => t.id === id));
+  const chosen = dependsOn.flatMap((id) => (candidates.data ?? []).filter((c) => c.id === id));
 
   return (
     <form onSubmit={submit} className="flex max-w-2xl flex-col gap-4">
-      <h1 className="text-xl font-semibold">Nueva tarea</h1>
+      <h1 className="text-xl font-semibold">{t.newTask.title}</h1>
       <div className="flex flex-col gap-1">
-        <Label htmlFor="task-project">Proyecto</Label>
+        <Label htmlFor="task-project">{t.newTask.project}</Label>
         <Select
           id="task-project"
           required
@@ -97,7 +101,7 @@ export function NewTaskPage() {
           }}
         >
           <option value="" disabled>
-            Elige un proyecto
+            {t.newTask.chooseProject}
           </option>
           {projects.data.map((p) => (
             <option key={p.id} value={p.id}>
@@ -107,19 +111,19 @@ export function NewTaskPage() {
         </Select>
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor="task-intent">Intent</Label>
+        <Label htmlFor="task-intent">{t.newTask.intent}</Label>
         <Textarea
           id="task-intent"
           required
           rows={5}
           value={intent}
           onChange={(e) => setIntent(e.target.value)}
-          placeholder="Qué debe lograr la tarea y por qué"
+          placeholder={t.newTask.intentPlaceholder}
         />
       </div>
       <div className="flex gap-4">
         <div className="flex flex-1 flex-col gap-1">
-          <Label htmlFor="task-tags">Tags</Label>
+          <Label htmlFor="task-tags">{t.newTask.tags}</Label>
           <Input
             id="task-tags"
             value={tags}
@@ -128,7 +132,7 @@ export function NewTaskPage() {
           />
         </div>
         <div className="flex w-40 flex-col gap-1">
-          <Label htmlFor="task-priority">Prioridad</Label>
+          <Label htmlFor="task-priority">{t.newTask.priority}</Label>
           <Input
             id="task-priority"
             type="number"
@@ -142,16 +146,18 @@ export function NewTaskPage() {
       </div>
       {(groups.length > 0 || chosen.length > 0) && (
         <div className="flex flex-col gap-2">
-          <Label htmlFor="task-depends-on">Depende de</Label>
+          <Label htmlFor="task-depends-on">{t.newTask.dependsOn}</Label>
           {groups.length > 0 && (
-            // Controlado con value="": al elegir una tarea se agrega y el selector vuelve al placeholder.
+            // Controlled with value="": choosing a task adds it and the selector goes back to the placeholder.
             <Select id="task-depends-on" value="" onChange={(e) => add(e.target.value)}>
-              <option value="">Agregar una dependencia…</option>
+              <option value="">{t.newTask.addDependency}</option>
               {groups.map(({ project, tasks }) => (
                 <optgroup
                   key={project.id}
                   label={
-                    project.id === projectId ? project.name : `${project.name} · otro proyecto`
+                    project.id === projectId
+                      ? project.name
+                      : t.dependencies.otherProjectGroup(project.name)
                   }
                 >
                   {tasks.map((task) => (
@@ -164,7 +170,7 @@ export function NewTaskPage() {
             </Select>
           )}
           {chosen.length > 0 && (
-            <ul aria-label="Dependencias elegidas" className="flex flex-col gap-1 text-sm">
+            <ul aria-label={t.newTask.chosenDependencies} className="flex flex-col gap-1 text-sm">
               {chosen.map((task) => (
                 <li
                   key={task.id}
@@ -176,16 +182,16 @@ export function NewTaskPage() {
                   </span>
                   {task.projectId !== projectId && (
                     <Badge variant="destructive" title={projectName.get(task.projectId)}>
-                      otro proyecto
+                      {t.newTask.otherProject}
                     </Badge>
                   )}
                   <Button
                     variant="ghost"
                     size="sm"
-                    aria-label={`Quitar ${task.intent}`}
+                    aria-label={t.newTask.removeAria(task.intent)}
                     onClick={() => remove(task.id)}
                   >
-                    Quitar
+                    {t.newTask.remove}
                   </Button>
                 </li>
               ))}
@@ -195,12 +201,12 @@ export function NewTaskPage() {
       )}
       {create.error && (
         <p role="alert" className="text-sm text-destructive">
-          No se pudo crear la tarea: {describe(create.error)}
+          {t.newTask.createFailed(describe(create.error, t))}
         </p>
       )}
       <div>
         <Button type="submit" disabled={create.isPending || projectId === ""}>
-          Crear tarea
+          {t.newTask.create}
         </Button>
       </div>
     </form>

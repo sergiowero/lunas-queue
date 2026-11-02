@@ -1,10 +1,10 @@
-// Contrato entre el dispatcher, el pane del agente y el LunasQ MCP (ADR 0002, docs/tech-stack.md
-// §Variables de entorno). El token solo vive en el entorno del pane; el archivo MCP lo referencia.
+// Contract between the dispatcher, the agent pane and the LunasQ MCP (ADR 0002, docs/tech-stack.md
+// §Environment variables). The token only lives in the pane's environment; the MCP file references it.
 
-/** Header con el que Claude Code manda el run token en cada request al LunasQ MCP. */
+/** Header with which Claude Code sends the run token on each request to the LunasQ MCP. */
 export const RUN_TOKEN_HEADER = "X-LunasQ-Run-Token";
 
-/** Variables que el dispatcher fija en el pane de cada Run. */
+/** Variables the dispatcher sets in the pane of each Run. */
 export const RUN_ENV = {
   runToken: "LUNASQ_RUN_TOKEN",
   taskId: "LUNASQ_TASK_ID",

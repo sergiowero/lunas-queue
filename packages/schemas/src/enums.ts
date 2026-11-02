@@ -1,5 +1,5 @@
-// Enums del dominio (docs/design.md §Modelo de dominio y §Máquina de estados).
-// Son la fuente única: db los usa para sus CHECK y el resto de paquetes para validar.
+// Domain enums (docs/design.md §Domain model and §State machine).
+// They are the single source: db uses them for its CHECKs and the rest of the packages to validate.
 import { z } from "zod";
 
 export const TaskState = z.enum([
@@ -36,8 +36,8 @@ export const RiskLabel = z.enum(["low", "medium", "high"]);
 export type RiskLabel = z.infer<typeof RiskLabel>;
 
 /**
- * Tipo de Resultado de una tarea sin código (ADR 0007): una investigación o síntesis, un pedido
- * que ya está implementado en el repo o uno que no tiene resolución.
+ * Result type of a task without code (ADR 0007): research or synthesis, a request
+ * that is already implemented in the repo or one that has no resolution.
  */
 export const ResultKind = z.enum(["research", "already_implemented", "not_resolvable"]);
 export type ResultKind = z.infer<typeof ResultKind>;
@@ -48,8 +48,8 @@ export type RunResult = z.infer<typeof RunResult>;
 export const SpecApproval = z.enum(["pending", "approved", "changes_requested"]);
 export type SpecApproval = z.infer<typeof SpecApproval>;
 
-// De dónde salió la identidad de sesión de un Run (docs/design.md §Identidad de sesión por Run):
-// session id nativo fijado al arrancar, el que reporta herdr en `agent_session`, o solo el nombre.
+// Where the identity of a Run's session came from (docs/design.md §Session identity per Run):
+// native session id set at startup, the one herdr reports in `agent_session`, or just the name.
 export const SessionSource = z.enum(["native", "herdr", "name"]);
 export type SessionSource = z.infer<typeof SessionSource>;
 

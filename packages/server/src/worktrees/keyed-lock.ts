@@ -1,5 +1,5 @@
-// Mutex por clave en proceso: las tareas de una misma clave corren en orden, las de claves
-// distintas en paralelo. Un fallo no bloquea a las siguientes.
+// Per-key mutex in process: tasks of the same key run in order, those of different
+// keys in parallel. A failure does not block the following ones.
 export class KeyedLock {
   private readonly tails = new Map<string, Promise<unknown>>();
 

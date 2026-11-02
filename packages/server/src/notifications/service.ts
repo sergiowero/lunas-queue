@@ -1,5 +1,5 @@
-// Punto único para avisar al humano: deduplica por id y entrega por cada canal
-// (toast de herdr y SSE hacia la UI). Un canal que falla no impide a los demás.
+// Single point to notify the human: deduplicates by id and delivers through each channel
+// (herdr toast and SSE to the UI). A channel that fails does not prevent the others.
 import type { HerdrAdapter } from "@lunasq/adapters";
 import { Notification } from "@lunasq/schemas";
 import type { NotificationHub } from "./hub.ts";
@@ -18,7 +18,7 @@ export type ChannelErrorHandler = (
 export class NotificationService {
   private readonly channels: readonly NotificationChannel[];
   private readonly onChannelError: ChannelErrorHandler;
-  // En memoria (ADR 0009): tras un reinicio una notificación puede repetirse una vez.
+  // In memory (ADR 0009): after a restart a notification may repeat once.
   private readonly sent = new Set<string>();
 
   constructor(opts: {
@@ -32,7 +32,7 @@ export class NotificationService {
   async notify(input: Notification): Promise<{ delivered: boolean }> {
     const notification = Notification.parse(input);
     if (this.sent.has(notification.id)) return { delivered: false };
-    // Se marca antes de esperar a los canales para que una llamada concurrente no duplique.
+    // It is marked before waiting for the channels so a concurrent call does not duplicate.
     this.sent.add(notification.id);
     const results = await Promise.all(
       this.channels.map(async (channel) => {
@@ -45,7 +45,7 @@ export class NotificationService {
         }
       }),
     );
-    // Si ningún canal entregó, se libera el id para que un aviso posterior reintente.
+    // If no channel delivered, the id is released so a later notice retries.
     if (!results.includes(true)) {
       this.sent.delete(notification.id);
       return { delivered: false };
@@ -63,9 +63,9 @@ export function herdrChannel(herdr: Pick<HerdrAdapter, "notify">): NotificationC
         body: notification.body,
         sound: "request",
       });
-      // Con `[ui.toast] delivery = "off"` (default de herdr) no se muestra nada (ADR 0004).
+      // With `[ui.toast] delivery = "off"` (herdr's default) nothing is shown (ADR 0004).
       if (!res.shown)
-        throw new Error(`herdr no mostró la notificación: ${res.reason ?? "sin motivo"}`);
+        throw new Error(`herdr did not show the notification: ${res.reason ?? "no reason"}`);
     },
   };
 }
@@ -80,7 +80,9 @@ export function hubChannel(hub: NotificationHub): NotificationChannel {
 }
 
 function defaultChannelError(channel: string, error: Error, notification: Notification): void {
-  console.warn(`[notificaciones] canal ${channel} falló para ${notification.id}: ${error.message}`);
+  console.warn(
+    `[notifications] channel ${channel} failed for ${notification.id}: ${error.message}`,
+  );
 }
 
 function toError(error: unknown): Error {

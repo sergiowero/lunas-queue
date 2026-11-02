@@ -1,42 +1,42 @@
-# UW-29 — Piloto end-to-end y suite e2e
+# UW-29 — End-to-end pilot and e2e suite
 
-- Estado: aceptada
-- Fecha: 2026-10-30
-- Unidad: UW-29 · Código: `packages/e2e/` (`harness/`, `tests/`, `playwright.config.ts`), `packages/server/src/runtime/`, `packages/cli/`
+- Status: accepted
+- Date: 2026-10-30
+- Unit: UW-29 · Code: `packages/e2e/` (`harness/`, `tests/`, `playwright.config.ts`), `packages/server/src/runtime/`, `packages/cli/`
 
-## Contexto
+## Context
 
-UW-29 pide dos cosas: un piloto en un proyecto real (3 tareas con dependencias, un rework, una pregunta y un hook) y una suite e2e de la UI que corra en CI contra un servidor con el fake de herdr. El piloto real necesita herdr, Claude Code y `gh` de una máquina concreta y gasta tokens, así que no corre en CI. La suite automatiza el mismo guion con todo lo que sí se puede reproducir.
+UW-29 asks for two things: a pilot on a real project (3 tasks with dependencies, a rework, a question and a hook) and a UI e2e suite that runs in CI against a server with herdr's fake. The real pilot needs herdr, Claude Code and `gh` of a specific machine and spends tokens, so it does not run in CI. The suite automates the same script with everything that can be reproduced.
 
-## Decisión
+## Decision
 
-- **Un servidor completo, con fakes solo donde está lo externo.** `packages/e2e/harness/main.ts` arranca `startRuntime` (base SQLite, API, MCP, scheduler, dispatcher, reconciliación, entrega, hooks, PR poller y front end) con `FakeGitHub` y un herdr falso. Todo lo demás es real: git contra un `origin` bare en un directorio temporal, worktrees reales, el gate de tests (`sh test.sh` en un pane) y los hooks leídos de `origin/main`.
-- **Agente guionado en vez de Claude Code.** `ScriptedHerdr` extiende `FakeHerdr`: crea los worktrees con `git worktree add` y, por cada prompt que recibe un agente, corre un guion (`harness/agent.ts`) que habla con el LunasQ MCP real con el run token del pane (`get_task_context`, `ask_human`, `submit_spec`, `update_checklist`, `submit_for_verification`, `submit_verdict`), hace un commit real en el worktree y reporta los hooks `SubagentStart/Stop` de los revisores. El turno termina con el agente en `done`. El guion lo decide la fase y el intent: `[pregunta]` hace que el refinamiento pregunte y `[rework]` que el primer veredicto sea reject. Prueba el servidor, no a Claude Code; lo que depende del modelo real lo cubre el piloto manual (`docs/pilot.md`) y los `test:claude` de cada paquete.
-- **Los humanos son el navegador.** Playwright crea las tareas (con sus dependencias), responde la pregunta y aprueba las specs desde la UI. El merge lo hace el test por un servidor de control (`POST /merge/:taskId`), como lo haría GitHub: marca el PR del fake como mergeado y avanza `main` del origin, y solo si la rama es un avance directo de `main` (la entrega la rebasó); un PR que no lo sea falla el piloto, porque no sería mergeable.
-- **Criterio «PR mergeable» comprobable.** Las tres tareas terminan en `completed`, con PR mergeado en el fake y `main` del origin avanzado por cada una. B depende de A y C de B: B y C permanecen en `draft` y sin Runs durante varios ticks del scheduler mientras su dependencia no está mergeada, y su worktree nace de la base ya mergeada.
-- **Seams en `startRuntime`.** Para componer el servidor del piloto sin copiar el runtime, `RuntimeOptions` suma `webRoot` (estáticos del front end), `prPollIntervalMs` y `scheduler` (`tickIntervalMs`). `lunasq start` pasa `webRoot` cuando encuentra el build (`bin/../web` en el paquete publicado o `packages/web/dist/app` en el repo) y `buildPackage` arma el front end de nuevo e incluye el resultado en `dist/web`.
-- **Cierre ordenado.** El `webServer` usa `gracefulShutdown` (SIGTERM) para que el harness cierre el runtime y borre su directorio temporal; el harness fija una identidad de committer de git y aísla la config global, porque la entrega reescribe commits y CI no tiene identidad.
-- **Playwright es dependencia de desarrollo de `packages/e2e`** (`@playwright/test`, ya listado en `docs/tech-stack.md`). `pnpm e2e` arma el front end y corre la suite en serie (`mode: serial`, un worker, sin reintentos): los tests comparten el servidor, la base y el DAG, así que dependen del orden y no se corren sueltos con `--grep`; el job de CI instala Chromium y sube el reporte si falla. `packages/e2e` entra a la matriz de fronteras (`server`, `adapters`, `schemas`; nadie lo importa) en `tooling/boundaries.test.ts`, `biome.json` y `docs/tech-stack.md`. Vitest solo corre `harness/**/*.test.ts`.
+- **A complete server, with fakes only where the external stuff is.** `packages/e2e/harness/main.ts` starts `startRuntime` (SQLite database, API, MCP, scheduler, dispatcher, reconciliation, delivery, hooks, PR poller and front end) with `FakeGitHub` and a fake herdr. Everything else is real: git against a bare `origin` in a temporary directory, real worktrees, the test gate (`sh test.sh` in a pane) and the hooks read from `origin/main`.
+- **Scripted agent instead of Claude Code.** `ScriptedHerdr` extends `FakeHerdr`: it creates the worktrees with `git worktree add` and, for each prompt an agent receives, runs a script (`harness/agent.ts`) that talks to the real LunasQ MCP with the pane's run token (`get_task_context`, `ask_human`, `submit_spec`, `update_checklist`, `submit_for_verification`, `submit_verdict`), makes a real commit in the worktree and reports the reviewers' `SubagentStart/Stop` hooks. The turn ends with the agent in `done`. The script is decided by the phase and the intent: `[pregunta]` makes refinement ask and `[rework]` makes the first verdict a reject. It tests the server, not Claude Code; what depends on the real model is covered by the manual pilot (`docs/pilot.md`) and each package's `test:claude`.
+- **The humans are the browser.** Playwright creates the tasks (with their dependencies), answers the question and approves the specs from the UI. The merge is done by the test through a control server (`POST /merge/:taskId`), as GitHub would: it marks the fake's PR as merged and advances the origin's `main`, and only if the branch is a direct advance of `main` (delivery rebased it); a PR that is not fails the pilot, because it would not be mergeable.
+- **Verifiable "mergeable PR" criterion.** The three tasks end in `completed`, with a merged PR in the fake and the origin's `main` advanced by each one. B depends on A and C on B: B and C stay in `draft` and without Runs for several scheduler ticks while their dependency is not merged, and their worktree is born from the already merged base.
+- **Seams in `startRuntime`.** To compose the pilot's server without copying the runtime, `RuntimeOptions` adds `webRoot` (front end static files), `prPollIntervalMs` and `scheduler` (`tickIntervalMs`). `lunasq start` passes `webRoot` when it finds the build (`bin/../web` in the published package or `packages/web/dist/app` in the repo) and `buildPackage` builds the front end again and includes the result in `dist/web`.
+- **Orderly shutdown.** The `webServer` uses `gracefulShutdown` (SIGTERM) so the harness closes the runtime and deletes its temporary directory; the harness sets a git committer identity and isolates the global config, because delivery rewrites commits and CI has no identity.
+- **Playwright is a development dependency of `packages/e2e`** (`@playwright/test`, already listed in `docs/tech-stack.md`). `pnpm e2e` builds the front end and runs the suite serially (`mode: serial`, one worker, no retries): the tests share the server, the database and the DAG, so they depend on order and are not run individually with `--grep`; the CI job installs Chromium and uploads the report if it fails. `packages/e2e` enters the boundaries matrix (`server`, `adapters`, `schemas`; nobody imports it) in `tooling/boundaries.test.ts`, `biome.json` and `docs/tech-stack.md`. Vitest only runs `harness/**/*.test.ts`.
 
-## Hallazgos del piloto
+## Pilot findings
 
-Se corrigieron en esta unidad:
+They were fixed in this unit:
 
-- **herdr real:** un agente sin `name` (sesión de Claude Code abierta a mano) hacía fallar todo `snapshot` con `invalid_type`. El adapter ahora los tolera y los descarta (hallazgo de [ADR uw-28-instalador](uw-28-instalador.md)).
-- **Carrera de `git fetch`:** al mergear una tarea, el hook `after_merge` y el worktree del dependiente que se libera hacen `fetch` del mismo ref `origin/main` a la vez; git abortaba al segundo con «incorrect old value provided» y el hook quedaba bloqueado sin ejecutar scripts (ni error visible). `RealGit.fetch` repite hasta 4 veces solo ante ese error.
-- **`lunasq start` no servía el front end:** `startRuntime` no pasaba `webRoot` a `createApp` y la UI quedaba sin servir.
+- **Real herdr:** an agent without a `name` (a Claude Code session opened by hand) made every `snapshot` fail with `invalid_type`. The adapter now tolerates and discards them (finding from [ADR uw-28-instalador](uw-28-instalador.md)).
+- **`git fetch` race:** when merging a task, the `after_merge` hook and the released dependent's worktree `fetch` the same `origin/main` ref at once; git aborted the second with "incorrect old value provided" and the hook was left blocked without running scripts (or a visible error). `RealGit.fetch` repeats up to 4 times only on that error.
+- **`lunasq start` did not serve the front end:** `startRuntime` did not pass `webRoot` to `createApp` and the UI was left unserved.
 
-Quedan como tareas nuevas, para encolar en LunasQ (`docs/pilot.md`):
+The following remain as new tasks, to queue in LunasQ (`docs/pilot.md`):
 
-- **Hooks sin conectar a su fase:** `before_refinement`, `after_refinement`, `before_implementation` y `on_failure` están en el esquema y en `docs/design.md`, pero nada los ejecuta. Solo corren `after_implementation`, `before_verification`, `after_verification`, `before_delivery`, `after_delivery` y `after_merge`. Un hook en cualquiera de los cuatro primeros no hace nada y no avisa.
-- **Crear una tarea no despierta al scheduler:** la tarea espera hasta el siguiente tick (30 s por defecto) para empezar el refinamiento. La UI muestra «en cola» sin explicar la espera.
+- **Hooks not connected to their phase:** `before_refinement`, `after_refinement`, `before_implementation` and `on_failure` are in the schema and in `docs/design.md`, but nothing runs them. Only `after_implementation`, `before_verification`, `after_verification`, `before_delivery`, `after_delivery` and `after_merge` run. A hook in any of the first four does nothing and does not warn.
+- **Creating a task does not wake the scheduler:** the task waits until the next tick (30 s by default) to start refinement. The UI shows "queued" without explaining the wait.
 
-## Verificación
+## Verification
 
-- `pnpm e2e` (6 tests de Playwright, ~25 s): crear las 3 tareas con dependencias desde la UI y verlas en el DAG; la pregunta del refinamiento llega a la bandeja, se responde y se aprueba la spec; A llega a `completed` con PR y evidencia; los hooks `before_verification` (exit 0) y `after_implementation` (exit 1, `warn`) aparecen en la vista de hooks; B espera el merge de A y pasa por un reject (2 Runs de implementación y 2 de verificación, iteración 1); C llega al final; las tres quedan con PR mergeado y `after_merge` corrió una vez por tarea (Event log).
-- Unitarios: el adapter de herdr descarta agentes sin nombre, `startRuntime` sirve estáticos solo con `webRoot`, `lunasq start` lo pasa, el paquete npm incluye `web/`, y el fixture del piloto (git real) rechaza un PR que no es avance directo.
-- `RealGit.fetch` repite ante la carrera por el ref y no repite otros fallos.
+- `pnpm e2e` (6 Playwright tests, ~25 s): create the 3 tasks with dependencies from the UI and see them in the DAG; the refinement question reaches the Inbox, is answered and the spec is approved; A reaches `completed` with a PR and evidence; the `before_verification` (exit 0) and `after_implementation` (exit 1, `warn`) hooks appear in the hooks view; B waits for A's merge and goes through a reject (2 implementation Runs and 2 verification Runs, iteration 1); C reaches the end; all three end with a merged PR and `after_merge` ran once per task (Event log).
+- Unit tests: the herdr adapter discards agents without a name, `startRuntime` serves static files only with `webRoot`, `lunasq start` passes it, the npm package includes `web/`, and the pilot fixture (real git) rejects a PR that is not a direct advance.
+- `RealGit.fetch` repeats on the ref race and does not repeat other failures.
 
-## Pendiente
+## Pending
 
-El piloto en un proyecto real no se ejecutó: necesita herdr, Claude Code y `gh` reales y gasta tokens. Queda como guía en [pilot.md](../pilot.md), para correrlo una vez por versión; los hallazgos de arriba que no se corrigieron aquí están listos para encolar como tareas en LunasQ.
+The pilot on a real project was not run: it needs real herdr, Claude Code and `gh` and spends tokens. It remains as a guide in [pilot.md](../pilot.md), to run once per version; the findings above that were not fixed here are ready to queue as tasks in LunasQ.

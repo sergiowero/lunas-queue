@@ -1,7 +1,7 @@
-// Lectura mínima de un valor de texto de un TOML (la config de herdr): basta para una clave, así
-// que no se agrega un parser. Entiende tablas `[a.b]`, claves con puntos y comentarios `#`.
+// Minimal reading of a text value from a TOML (herdr's config): enough for a key, so
+// no parser is added. It understands `[a.b]` tables, dotted keys and `#` comments.
 
-/** Valor de `key` (ruta con puntos, p. ej. `ui.toast.delivery`) si es un string; si no, undefined. */
+/** Value of `key` (dotted path, e.g. `ui.toast.delivery`) if it is a string; otherwise undefined. */
 export function tomlString(text: string, key: string): string | undefined {
   let table = "";
   for (const raw of text.split("\n")) {

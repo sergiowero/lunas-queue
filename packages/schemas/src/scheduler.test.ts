@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_GLOBAL_CONCURRENCY, SchedulerConfig } from "./scheduler.ts";
 
 describe("SchedulerConfig", () => {
-  it("sin valores aplica los defaults: límite global de 5 y los demás opcionales", () => {
+  it("without values applies the defaults: global limit of 5 and the others optional", () => {
     expect(SchedulerConfig.parse({})).toEqual({
       globalConcurrency: DEFAULT_GLOBAL_CONCURRENCY,
       phaseConcurrency: {},
@@ -16,7 +16,7 @@ describe("SchedulerConfig", () => {
     expect(DEFAULT_GLOBAL_CONCURRENCY).toBe(5);
   });
 
-  it("acepta límites por fase y por tipo de agente", () => {
+  it("accepts limits per phase and per agent kind", () => {
     const config = SchedulerConfig.parse({
       globalConcurrency: 8,
       phaseConcurrency: { refine: 3, implement: 2 },
@@ -39,7 +39,7 @@ describe("SchedulerConfig", () => {
     { retryBackoffMs: -1 },
     { maxRetryBackoffMs: 1.5 },
     { otro: 1 },
-  ])("rechaza %j", (input) => {
+  ])("rejects %j", (input) => {
     expect(SchedulerConfig.safeParse(input).success).toBe(false);
   });
 });

@@ -4,8 +4,8 @@ import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 
-describe("pestaña Completed", () => {
-  it("enlaza desde la navegación y lista tareas completadas de todos los proyectos", async () => {
+describe("Completed tab", () => {
+  it("links from the navigation and lists completed tasks of all projects", async () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
@@ -41,7 +41,7 @@ describe("pestaña Completed", () => {
     expect(within(screen.getByRole("table")).queryByText("En curso")).toBeNull();
   });
 
-  it("filtra las tareas completadas por proyecto y muestra el estado vacío", async () => {
+  it("filters completed tasks by project and shows the empty state", async () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
@@ -59,7 +59,7 @@ describe("pestaña Completed", () => {
     expect(screen.getByText("De dos")).toBeTruthy();
   });
 
-  it("AC-10: filtrando por Sin PR, la tarea con Resultado muestra su tipo en lugar de un PR", async () => {
+  it("AC-10: filtering by Sin PR, the task with a Result shows its type instead of a PR", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "uno" });
     fake.addTask(project.id, {
@@ -97,7 +97,7 @@ describe("pestaña Completed", () => {
     ).toBeTruthy();
   });
 
-  describe("filtro Estado del PR", () => {
+  describe("PR state filter", () => {
     const completed = { state: "completed", subState: null } as const;
 
     function seedAllStates() {
@@ -110,7 +110,7 @@ describe("pestaña Completed", () => {
       return fake;
     }
 
-    it("arranca en Todos y ofrece Todos, open, merged, closed y Sin PR", async () => {
+    it("starts at Todos and offers Todos, open, merged, closed and Sin PR", async () => {
       renderApp("/completed", seedAllStates());
 
       const select = (await screen.findByLabelText("Estado del PR")) as HTMLSelectElement;
@@ -124,7 +124,7 @@ describe("pestaña Completed", () => {
       ]);
     });
 
-    it("muestra solo las tareas con el estado de PR elegido", async () => {
+    it("shows only the tasks with the chosen PR state", async () => {
       const { user } = renderApp("/completed", seedAllStates());
 
       await screen.findByText("Con open");
@@ -136,7 +136,7 @@ describe("pestaña Completed", () => {
       expect(screen.queryByText("Sin ningún PR")).toBeNull();
     });
 
-    it("Sin PR muestra solo las tareas completadas sin estado de PR", async () => {
+    it("Sin PR shows only completed tasks without a PR state", async () => {
       const { user } = renderApp("/completed", seedAllStates());
 
       await screen.findByText("Con merged");
@@ -147,7 +147,7 @@ describe("pestaña Completed", () => {
       expect(screen.queryByText("Con open")).toBeNull();
     });
 
-    it("volver a Todos muestra de nuevo todas las tareas completadas", async () => {
+    it("going back to Todos shows all completed tasks again", async () => {
       const { user } = renderApp("/completed", seedAllStates());
 
       await screen.findByText("Con merged");
@@ -161,7 +161,7 @@ describe("pestaña Completed", () => {
       }
     });
 
-    it("se combina con el filtro de proyecto", async () => {
+    it("it combines with the project filter", async () => {
       const fake = new FakeApi();
       const one = fake.addProject({ name: "uno" });
       const two = fake.addProject({ name: "dos" });
@@ -179,7 +179,7 @@ describe("pestaña Completed", () => {
       expect(screen.queryByText("Open de uno")).toBeNull();
     });
 
-    it("nunca muestra tareas que no están completadas y cae al estado vacío", async () => {
+    it("never shows tasks that are not completed and falls back to the empty state", async () => {
       const fake = new FakeApi();
       const project = fake.addProject({ name: "uno" });
       fake.addTask(project.id, {
@@ -199,7 +199,7 @@ describe("pestaña Completed", () => {
     });
   });
 
-  it("explica cuando no hay tareas completadas", async () => {
+  it("explains when there are no completed tasks", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, {
       intent: "En cola",
@@ -211,7 +211,7 @@ describe("pestaña Completed", () => {
     expect(screen.getByText("No hay otras tareas completadas.")).toBeTruthy();
   });
 
-  it("muestra el PR como botón outline sm que abre en otra pestaña", async () => {
+  it("shows the PR as a small outline button that opens in another tab", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, {
       intent: "Con PR",
@@ -232,7 +232,7 @@ describe("pestaña Completed", () => {
     }
   });
 
-  it("el botón del PR lleva un icono de enlace externo decorativo", async () => {
+  it("the PR button carries a decorative external link icon", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, {
       intent: "Con PR",
@@ -249,7 +249,7 @@ describe("pestaña Completed", () => {
     expect(icon?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("sin prUrl la celda del PR es texto, sin enlace ni icono", async () => {
+  it("without prUrl the PR cell is text, without link or icon", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, {
       intent: "Sin PR",
@@ -266,7 +266,7 @@ describe("pestaña Completed", () => {
     expect(document.querySelector('[data-icon="external-link"]')).toBeNull();
   });
 
-  describe("dos listas: PR abierto y resto colapsable", () => {
+  describe("two lists: open PR and a collapsible rest", () => {
     const completed = { state: "completed", subState: null } as const;
     const openList = () => within(screen.getByRole("region", { name: "Con PR abierto" }));
     const rest = () => screen.getByTestId("completed-rest") as HTMLDetailsElement;
@@ -314,7 +314,7 @@ describe("pestaña Completed", () => {
       return fake;
     }
 
-    it("AC-1: la primera lista solo tiene el PR open y la segunda todo lo demás", async () => {
+    it("AC-1: the first list only has the open PR and the second everything else", async () => {
       renderApp("/completed", seedMixed());
 
       await screen.findByText("Con open");
@@ -331,7 +331,7 @@ describe("pestaña Completed", () => {
       expect(within(rest()).queryByText("Con open")).toBeNull();
     });
 
-    it("AC-2: la sección del resto arranca colapsada y la primera lista está visible", async () => {
+    it("AC-2: the rest section starts collapsed and the first list is visible", async () => {
       renderApp("/completed", seedMixed());
 
       await screen.findByText("Con open");
@@ -340,7 +340,7 @@ describe("pestaña Completed", () => {
       expect(screen.getByRole("region", { name: "Con PR abierto" }).closest("details")).toBeNull();
     });
 
-    it("AC-3: un clic en el encabezado expande la sección y otro la colapsa", async () => {
+    it("AC-3: a click on the heading expands the section and another collapses it", async () => {
       const { user } = renderApp("/completed", seedMixed());
 
       await screen.findByText("Con open");
@@ -351,7 +351,7 @@ describe("pestaña Completed", () => {
       expect(rest().open).toBe(false);
     });
 
-    it("AC-4: la tarea con Resultado y sin PR muestra su tipo y ningún enlace de PR", async () => {
+    it("AC-4: the task with a Result and without a PR shows its type and no PR link", async () => {
       const { user } = renderApp("/completed", seedMixed());
 
       await screen.findByText("Con open");
@@ -361,7 +361,7 @@ describe("pestaña Completed", () => {
       expect(row.queryByRole("link", { name: /^PR / })).toBeNull();
     });
 
-    it("AC-5: una tarea in_progress con prState open no aparece en ninguna lista", async () => {
+    it("AC-5: an in_progress task with prState open appears in neither list", async () => {
       const fake = seedMixed();
       fake.addTask(fake.addProject({ name: "otro" }).id, {
         intent: "En curso con PR",
@@ -375,7 +375,7 @@ describe("pestaña Completed", () => {
       expect(screen.queryByText("En curso con PR")).toBeNull();
     });
 
-    it("AC-6: filtrar por proyecto limita ambas listas a ese proyecto", async () => {
+    it("AC-6: filtering by project limits both lists to that project", async () => {
       const fake = new FakeApi();
       const one = fake.addProject({ name: "uno" });
       const two = fake.addProject({ name: "dos" });
@@ -394,7 +394,7 @@ describe("pestaña Completed", () => {
       expect(within(rest()).getByText("Merged de uno")).toBeTruthy();
     });
 
-    it("AC-7: elegir merged vacía la primera lista y deja solo la merged en la segunda", async () => {
+    it("AC-7: choosing merged empties the first list and leaves only the merged one in the second", async () => {
       const { user } = renderApp("/completed", seedMixed());
 
       await screen.findByText("Con open");
@@ -407,7 +407,7 @@ describe("pestaña Completed", () => {
       expect(within(rest()).queryByText("Sin PR ni resultado")).toBeNull();
     });
 
-    it("AC-8: sin PR abiertos la primera lista tiene su estado vacío y el resto sigue colapsado", async () => {
+    it("AC-8: without open PRs the first list has its empty state and the rest stays collapsed", async () => {
       const fake = new FakeApi();
       fake.addTask(fake.addProject().id, { ...completed, intent: "Mergeada", prState: "merged" });
       renderApp("/completed", fake);
@@ -417,7 +417,7 @@ describe("pestaña Completed", () => {
       expect(rest().open).toBe(false);
     });
 
-    it("AC-9: la fila con PR open conserva enlace al detalle, proyecto y botón «PR open»", async () => {
+    it("AC-9: the row with an open PR keeps its link to the detail, project and «PR open» button", async () => {
       const fake = new FakeApi();
       const project = fake.addProject({ name: "uno" });
       const task = fake.addTask(project.id, {
@@ -438,7 +438,7 @@ describe("pestaña Completed", () => {
       expect(pr.getAttribute("target")).toBe("_blank");
     });
 
-    it("AC-10: 45 tareas en el resto se paginan de 20 en 20", async () => {
+    it("AC-10: 45 tasks in the rest are paginated 20 at a time", async () => {
       const { user } = renderApp("/completed", seedMany(45));
 
       await screen.findByText("Resto 01");
@@ -462,7 +462,7 @@ describe("pestaña Completed", () => {
       ).toBe(true);
     });
 
-    it("AC-11: con 20 o menos tareas en el resto no hay controles de paginación", async () => {
+    it("AC-11: with 20 or fewer tasks in the rest there are no pagination controls", async () => {
       const { user } = renderApp("/completed", seedMany(20));
 
       await screen.findByText("Resto 01");
@@ -471,7 +471,7 @@ describe("pestaña Completed", () => {
       expect(within(rest()).queryByRole("navigation", { name: "Paginación" })).toBeNull();
     });
 
-    it("AC-12: cambiar un filtro desde la página 3 vuelve a la página 1", async () => {
+    it("AC-12: changing a filter from page 3 goes back to page 1", async () => {
       const fake = seedMany(45);
       const second = fake.addProject({ name: "dos" });
       for (let i = 1; i <= 25; i++) {
@@ -501,7 +501,7 @@ describe("pestaña Completed", () => {
       await waitFor(() => expect(within(rest()).getByText("Página 1 de 2")).toBeTruthy());
     });
 
-    it("AC-13: la primera lista no se pagina aunque haya más de 20 PR abiertos", async () => {
+    it("AC-13: the first list is not paginated even with more than 20 open PRs", async () => {
       const { user } = renderApp("/completed", seedMany(30, 25));
 
       await screen.findByText("Abierta 01");

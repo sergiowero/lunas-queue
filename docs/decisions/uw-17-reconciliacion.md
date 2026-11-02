@@ -1,57 +1,57 @@
-# UW-17 — Señales, nudges, timeout de fase, backoff y reconciliación
+# UW-17 — Signals, nudges, phase timeout, backoff and reconciliation
 
-- Estado: aceptada
-- Fecha: 2026-10-29
-- Unidad: UW-17 · Código: `packages/server/src/reconciler/` (`RunWatcher`, `PhaseClock`, `Reconciler`, `escalationNotification`), `packages/server/src/dispatcher/orchestrator.ts`, `packages/domain/src/scheduler.ts` (`retryAt`), `packages/domain/src/dispatch.ts` (`nudgePrompt`, `isAgentName`), `packages/db/src/scheduler-state.ts` (`retry`), `packages/db/src/task-worktrees.ts` (`releasable`), `packages/schemas/src/{scheduler,notification}.ts`
+- Status: accepted
+- Date: 2026-10-29
+- Unit: UW-17 · Code: `packages/server/src/reconciler/` (`RunWatcher`, `PhaseClock`, `Reconciler`, `escalationNotification`), `packages/server/src/dispatcher/orchestrator.ts`, `packages/domain/src/scheduler.ts` (`retryAt`), `packages/domain/src/dispatch.ts` (`nudgePrompt`, `isAgentName`), `packages/db/src/scheduler-state.ts` (`retry`), `packages/db/src/task-worktrees.ts` (`releasable`), `packages/schemas/src/{scheduler,notification}.ts`
 
-## Contexto
+## Context
 
-`docs/design.md` (§Señales y cómo se interpretan, §Timeout de fase, §Loop de reconciliación) fija la tabla de señales, el timeout de 30 minutos con pausa, los 3 reintentos con backoff y la reconciliación con `session.snapshot`. Varios ADR le dejaron trabajo a esta unidad:
+`docs/design.md` (§Signals and how they are interpreted, §Phase timeout, §Reconciliation loop) fixes the signals table, the 30‑minute timeout with pause, the 3 retries with backoff and the reconciliation with `session.snapshot`. Several ADRs left work for this unit:
 
-- ADR uw-16-dispatcher: implementar `RunObserver` y usar `failRun` ante un crash.
-- ADR 0009: llamar `Escalator.watch`/`resolve` en `blocked`, con un id distinto por cada bloqueo.
-- ADR 0010: detener el agente de una tarea cancelada.
-- ADR 0012 y ADR uw-14-adapter-github: remover el worktree tras la cancelación o el merge, y limpiar los huérfanos.
-- ADR 0014: no tratar `waiting_human` como caída.
-- ADR 0007: no tratar como Run caído el intervalo de la entrega.
+- ADR uw-16-dispatcher: implement `RunObserver` and use `failRun` on a crash.
+- ADR 0009: call `Escalator.watch`/`resolve` on `blocked`, with a different id for each block.
+- ADR 0010: stop the agent of a canceled task.
+- ADR 0012 and ADR uw-14-adapter-github: remove the worktree after cancellation or merge, and clean up orphans.
+- ADR 0014: do not treat `waiting_human` as a crash.
+- ADR 0007: do not treat the delivery interval as a fallen Run.
 
-El criterio de UW-17: cada escenario de fallo simulado termina en el estado y la notificación esperados.
+UW-17's criterion: each simulated failure scenario ends in the expected state and notification.
 
-## Decisión
+## Decision
 
-- **`RunWatcher`** implementa `RunObserver`. Por cada Run lanzado abre una suscripción de herdr a su pane, como pide ADR 0004, y comparte una suscripción global de ciclo de vida. Las señales de un Run se serializan con un `KeyedLock`, y antes de actuar cada una relee el Run y la tarea en la base. Así, una señal que llega después de que una tool del MCP cerró el Run no hace nada.
-  - **`blocked`**: pausa el reloj y llama `Escalator.watch` con id `blocked:<runId>:<n>`. Al salir de `blocked`, llama `resolve` y reanuda el reloj.
-  - **`idle`/`done` con el Run abierto y la tarea en `running`**: tras una gracia (`nudgeGraceMs`, 15 s por defecto), manda un nudge con `nudgePrompt`, hasta `maxNudges` veces (2 por defecto). Si el agente se detiene otra vez, `failRun` con `agent_stopped: …`. La gracia cubre la tool de salida que cierra el Run justo antes de que el agente termine su turno. En `waiting_human` no hay nudges.
-  - **`pane_closed`/`pane_exited`** de un pane observado: `failRun` con `agent_exited: …`. El dispatcher llama `unwatch` antes de cerrar un pane propio, así que su propia limpieza no cuenta como crash. Con la tarea en `waiting_human` el Run queda abierto (ADR 0014): la respuesta relanza (UW-22). Un `subscription_failed` solo cuenta como pane perdido con `pane_not_found`; otro código pide reconciliar.
-  - **Runs que no se fallan ni escalan:** un Run cerrado, o uno con handoff guardado (el verificador dio pass y la entrega corre con el Run abierto, ADR 0007). Sin nudges, sin `failRun` y sin timeout. Tras cada await el watcher confirma que el Run sigue observado, porque el dispatcher pudo llamar `unwatch` entretanto.
-  - **Timeout vencido** (si vence con la pregunta abierta antes de que el outbox pausara el reloj, queda en pausa sin presupuesto y escala al responder): aplica `escalate` con `reason: phase_timeout` y `expected` en running, y notifica `phase_timeout` de inmediato (id `timeout:<runId>`). El agente sigue vivo y el Run queda abierto; desde ese momento solo se vigila que el pane siga vivo.
-  - **Pérdida de eventos**: un `events_lost` en cualquier suscripción pide una pasada de reconciliación. Cuando la suscripción de un pane se reconecta (`subscribed`), se relee el estado del agente.
-- **`PhaseClock`**: presupuesto de `phaseTimeoutMs(project, phase)`, que solo corre sin razones de pausa (`blocked`, `waiting_human`). La pausa por `waiting_human` llega por el outbox: `RunWatcher.onTransition` alinea el reloj con el sub‑estado de la tarea. **Vive en memoria**: tras un reinicio, el reconciliador vuelve a observar el Run con el presupuesto completo. Nunca escala antes de tiempo, pero puede tardar hasta un timeout más. Se descartó persistir el tiempo pausado porque requiere columnas nuevas y escrituras en cada cambio de estado.
-- **Backoff de reintentos.** Lo decide el dominio: `retryAt(retry, config)` = fin del último fallo + `retryBackoffMs·2^(n‑1)`, con tope `maxRetryBackoffMs`. Los defaults son 30 s y 10 min (`SchedulerConfig`). `SchedulerStateRepository` agrega a cada tarea en `queued` su `retry`: los fallos seguidos de la fase pendiente, con el mismo `consecutiveFailures` de ADR 0007 (desde el último Run exitoso o `resume`), y el `endedAt` del último. `rankReady` no considera lista una tarea antes de `retryAt`, así que no ocupa slot. El tick del scheduler (30 s) la recoge al vencer. Aplica igual a los crashes que a `report_failure`. Los 3 reintentos siguen siendo los de `run_failed` (ADR 0007): el cuarto fallo seguido la manda a needs_human.
-- **`Reconciler`**: corre cada `intervalMs` (60 s por defecto), al arrancar y cuando el watcher pierde eventos. Las pasadas no se solapan y un pedido durante una pasada se agrupa en otra, como en el scheduler. Lee el snapshot de herdr *antes* que `runs.active()`: así todo agente del snapshot pertenece a un Run ya visible. Cada Run se relee antes de corregirlo, porque las correcciones anteriores de la pasada esperan a herdr. Por Run abierto:
-  - Si el Run tiene **handoff guardado**, no se toca: es el pass del verificador mientras corre la entrega (ADR 0007).
-  - **Tarea en needs_human**: se respeta y, si el agente vive, se vuelve a observar.
-  - **Tarea fuera de la fase del Run** (cancelada, reanudada tras un timeout, en otro estado): `closeRun` con `result: cancelled` y `failureReason: task_left_phase: …`, que también cierra el pane. Aplica también a un Run reclamado sin lanzar: su lanzamiento se detiene en el siguiente paso (`RunClosed`).
-  - **Agente vivo sin observar**: `watch`.
-  - **Sin agente con la tarea en running** (confirmado con `getAgent`, por si el snapshot se tomó antes de que arrancara): `failRun` con `agent_lost: …`. En `waiting_human` no se falla, porque la respuesta relanza (UW-22).
-  - Después llama a `dispatcher.recover()`, que ahora salta los Runs con un lanzamiento en curso. Va después del cierre de los Runs fuera de fase, así esos no se relanzan.
-  - Si la pasada cerró o falló algún Run, despierta al scheduler (`onRunsClosed`): una tarea reanudada tras un timeout se redespacha sin esperar al tick.
-  - **Panes huérfanos**: se cierra el de cualquier agente con nombre de LunasQ (`isAgentName`) sin Run abierto; los agentes ajenos no se tocan.
-  - **Worktrees**: se remueve (sin forzar) el de cada tarea en `TaskWorktreeRepository.releasable()`, que usa la misma regla que `worktreeReleased`: cancelada, o completada con el PR mergeado. Un fallo, por ejemplo `dirty_worktree`, se reporta una sola vez. Una tarea con un Run todavía abierto espera a otra pasada. Cada `orphanWorktreesEvery` pasadas (10 por defecto) se llama `cleanupOrphans` en cada proyecto, porque esa búsqueda lista el repo en herdr y puede crear el workspace del proyecto (ADR 0012).
-  - Una cancelación o un `resume` (outbox `task.transitioned`), o un merge (`task.pr_state_changed` con `to: merged`), piden una pasada inmediata.
-- **Reanudar tras un timeout.** Las tools de salida exigen `running` (ADR 0007), así que "esperar" significa dejar la tarea en needs_human mientras se mira el agente en herdr; ese agente ya no puede cerrar la fase. Al reanudar, la tarea vuelve a `queued` y el reconciliador cierra el Run viejo como cancelled. El scheduler redespacha la fase sobre el mismo worktree, con el código intacto.
-- **Notificaciones de escalamiento por el outbox.** `escalationNotification` convierte una transición a needs_human en aviso:
-  - `retries_exhausted` produce el kind nuevo `retries_exhausted`, con id `retries:<taskId>:<eventId>`;
-  - `iterations_exhausted` produce `verification_exhausted`, con id `iterations:<taskId>:<eventId>`.
+- **`RunWatcher`** implements `RunObserver`. For each launched Run it opens a herdr subscription to its pane, as ADR 0004 asks, and shares a global lifecycle subscription. A Run's signals are serialized with a `KeyedLock`, and before acting each one rereads the Run and the task in the database. This way, a signal that arrives after an MCP tool closed the Run does nothing.
+  - **`blocked`**: pauses the clock and calls `Escalator.watch` with id `blocked:<runId>:<n>`. On leaving `blocked`, it calls `resolve` and resumes the clock.
+  - **`idle`/`done` with the Run open and the task in `running`**: after a grace period (`nudgeGraceMs`, 15 s by default), it sends a nudge with `nudgePrompt`, up to `maxNudges` times (2 by default). If the agent stops again, `failRun` with `agent_stopped: …`. The grace covers the exit tool that closes the Run just before the agent ends its turn. In `waiting_human` there are no nudges.
+  - **`pane_closed`/`pane_exited`** of an observed pane: `failRun` with `agent_exited: …`. The dispatcher calls `unwatch` before closing its own pane, so its own cleanup does not count as a crash. With the task in `waiting_human` the Run stays open (ADR 0014): the answer relaunches (UW-22). A `subscription_failed` only counts as a lost pane with `pane_not_found`; any other code asks to reconcile.
+  - **Runs that are neither failed nor escalated:** a closed Run, or one with a stored handoff (the verifier passed and delivery runs with the Run open, ADR 0007). No nudges, no `failRun` and no timeout. After each await the watcher confirms the Run is still observed, because the dispatcher may have called `unwatch` in the meantime.
+  - **Expired timeout** (if it expires with the question open before the outbox paused the clock, it stays paused with no budget and escalates when answered): applies `escalate` with `reason: phase_timeout` and `expected` in running, and notifies `phase_timeout` immediately (id `timeout:<runId>`). The agent stays alive and the Run stays open; from then on it is only watched that the pane stays alive.
+  - **Event loss**: an `events_lost` on any subscription asks for a reconciliation pass. When a pane's subscription reconnects (`subscribed`), the agent's state is reread.
+- **`PhaseClock`**: budget of `phaseTimeoutMs(project, phase)`, which only runs without pause reasons (`blocked`, `waiting_human`). The `waiting_human` pause arrives through the outbox: `RunWatcher.onTransition` aligns the clock with the task's sub‑state. **It lives in memory**: after a restart, the reconciler observes the Run again with the full budget. It never escalates early, but may take up to one more timeout. Persisting the paused time was discarded because it requires new columns and writes on every state change.
+- **Retry backoff.** The domain decides it: `retryAt(retry, config)` = end of the last failure + `retryBackoffMs·2^(n‑1)`, capped at `maxRetryBackoffMs`. The defaults are 30 s and 10 min (`SchedulerConfig`). `SchedulerStateRepository` adds to each `queued` task its `retry`: the consecutive failures of the pending phase, with the same `consecutiveFailures` as ADR 0007 (since the last successful Run or `resume`), and the `endedAt` of the last one. `rankReady` does not consider a task ready before `retryAt`, so it does not occupy a slot. The scheduler's tick (30 s) picks it up on expiry. It applies equally to crashes and to `report_failure`. The 3 retries remain those of `run_failed` (ADR 0007): the fourth consecutive failure sends it to needs_human.
+- **`Reconciler`**: runs every `intervalMs` (60 s by default), on startup and when the watcher loses events. Passes do not overlap and a request during a pass is grouped into another, as in the scheduler. It reads herdr's snapshot *before* `runs.active()`: this way every agent in the snapshot belongs to an already visible Run. Each Run is reread before correcting it, because the pass's earlier corrections wait for herdr. Per open Run:
+  - If the Run has a **stored handoff**, it is not touched: it is the verifier's pass while delivery runs (ADR 0007).
+  - **Task in needs_human**: it is respected and, if the agent is alive, observed again.
+  - **Task outside the Run's phase** (canceled, resumed after a timeout, in another state): `closeRun` with `result: cancelled` and `failureReason: task_left_phase: …`, which also closes the pane. It also applies to a claimed Run that was not launched: its launch stops at the next step (`RunClosed`).
+  - **Live agent not observed**: `watch`.
+  - **No agent with the task in running** (confirmed with `getAgent`, in case the snapshot was taken before it started): `failRun` with `agent_lost: …`. In `waiting_human` it is not failed, because the answer relaunches (UW-22).
+  - Afterwards it calls `dispatcher.recover()`, which now skips Runs with a launch in progress. It goes after closing the out‑of‑phase Runs, so those are not relaunched.
+  - If the pass closed or failed any Run, it wakes the scheduler (`onRunsClosed`): a task resumed after a timeout is redispatched without waiting for the tick.
+  - **Orphan panes**: the pane of any agent with a LunasQ name (`isAgentName`) without an open Run is closed; foreign agents are not touched.
+  - **Worktrees**: the worktree of each task in `TaskWorktreeRepository.releasable()` is removed (without forcing), which uses the same rule as `worktreeReleased`: canceled, or completed with the PR merged. A failure, for example `dirty_worktree`, is reported only once. A task with a Run still open waits for another pass. Every `orphanWorktreesEvery` passes (10 by default) `cleanupOrphans` is called on each project, because that search lists the repo in herdr and may create the project's workspace (ADR 0012).
+  - A cancellation or a `resume` (outbox `task.transitioned`), or a merge (`task.pr_state_changed` with `to: merged`), ask for an immediate pass.
+- **Resuming after a timeout.** The exit tools require `running` (ADR 0007), so "waiting" means leaving the task in needs_human while the agent is looked at in herdr; that agent can no longer close the phase. On resuming, the task goes back to `queued` and the reconciler closes the old Run as cancelled. The scheduler redispatches the phase on the same worktree, with the code intact.
+- **Escalation notifications through the outbox.** `escalationNotification` converts a transition to needs_human into a notice:
+  - `retries_exhausted` produces the new kind `retries_exhausted`, with id `retries:<taskId>:<eventId>`;
+  - `iterations_exhausted` produces `verification_exhausted`, with id `iterations:<taskId>:<eventId>`.
 
-  Así hay un solo lugar que avisa, venga el escalamiento del dispatcher o del LunasQ MCP. El id sale del evento, de modo que la entrega "al menos una vez" del outbox no duplica avisos (ADR 0009). El timeout de fase lo notifica el watcher directamente.
-- **Composición.** `Orchestrator` arma `RunWatcher` (el observador del dispatcher, salvo que se pase `observer`), `Reconciler` y las suscripciones al outbox. Si no recibe `notifications`, arma el módulo con herdr como canal y lo expone en `orchestrator.notifications`, para que quien componga el servidor monte el SSE. `start()` reconcilia antes de arrancar el scheduler. `stop()` detiene la reconciliación y el scheduler, espera los lanzamientos y deja de observar.
+  This way there is a single place that notifies, whether the escalation comes from the dispatcher or from the LunasQ MCP. The id comes from the event, so the outbox's "at least once" delivery does not duplicate notices (ADR 0009). The phase timeout is notified by the watcher directly.
+- **Composition.** `Orchestrator` builds `RunWatcher` (the dispatcher's observer, unless `observer` is passed), `Reconciler` and the outbox subscriptions. If it does not receive `notifications`, it builds the module with herdr as a channel and exposes it in `orchestrator.notifications`, so whoever composes the server mounts the SSE. `start()` reconciles before starting the scheduler. `stop()` stops the reconciliation and the scheduler, waits for the launches and stops observing.
 
-## Consecuencias
+## Consequences
 
-- **Concurrencia en needs_human por timeout.** El agente sigue vivo pero la tarea no ocupa slot (`Occupancy` cuenta solo `running` y `waiting_human`, ADR 0014). Mientras el humano decide, se puede pasar temporalmente del límite de concurrencia. Se acepta en v1; si molesta, `Occupancy` puede contar los Runs abiertos.
-- **UW-22** responde las preguntas. Si el agente murió en `waiting_human`, ni el watcher ni el reconciliador lo fallan: el Run queda abierto hasta que `answer` lo mueva: con `agentAlive: false` la tarea pasa a `queued` y el reconciliador cierra el Run viejo como cancelled.
-- **UW-26** no necesita remover el worktree tras el merge: lo hace la reconciliación. Si la entrega cae con el Run del verificador abierto y con handoff, el reconciliador no lo toca; UW-26 debe cerrarlo o reintentarlo.
-- **UW-23** no tiene que emitir `verification_exhausted`: llega por el outbox.
-- **Nudges y bloqueos en memoria.** Tras un reinicio el contador de nudges vuelve a 0, y un `blocked` previo se vuelve a escalar a 1 minuto desde el reinicio (con un id que puede repetir el anterior; la deduplicación en memoria de ADR 0009 también se reinició).
-- **Sin probar contra herdr real en esta unidad:** que Claude Code reporte `done`/`idle` al terminar el turno y no entre herramientas. Si reporta `idle` entre herramientas, la gracia de 15 s evita nudges espurios; el piloto (UW-29) lo calibra.
+- **Concurrency in needs_human by timeout.** The agent stays alive but the task does not occupy a slot (`Occupancy` counts only `running` and `waiting_human`, ADR 0014). While the human decides, the concurrency limit may be temporarily exceeded. It is accepted in v1; if it bothers, `Occupancy` can count the open Runs.
+- **UW-22** answers the questions. If the agent died in `waiting_human`, neither the watcher nor the reconciler fails it: the Run stays open until `answer` moves it: with `agentAlive: false` the task goes to `queued` and the reconciler closes the old Run as cancelled.
+- **UW-26** does not need to remove the worktree after the merge: reconciliation does it. If delivery crashes with the verifier's Run open and with a handoff, the reconciler does not touch it; UW-26 must close it or retry it.
+- **UW-23** does not have to emit `verification_exhausted`: it arrives through the outbox.
+- **Nudges and blocks in memory.** After a restart the nudge counter goes back to 0, and a previous `blocked` is escalated again 1 minute after the restart (with an id that may repeat the previous one; ADR 0009's in‑memory deduplication was also reset).
+- **Not tested against real herdr in this unit:** that Claude Code reports `done`/`idle` when it ends the turn and not between tools. If it reports `idle` between tools, the 15 s grace avoids spurious nudges; the pilot (UW-29) calibrates it.

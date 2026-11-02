@@ -1,6 +1,6 @@
-// Ejecuciones de subagentes por Run (ADR uw-19-revisores): las escriben los hooks SubagentStart y
-// SubagentStop de Claude Code y UW-23 las compara con los revisores que reporta el veredicto.
-// Ambos hooks son idempotentes y gana el primero: repetirlos no mueve los tiempos.
+// Subagent executions per Run (ADR uw-19-revisores): written by the Claude Code SubagentStart and
+// SubagentStop hooks and UW-23 compares them with the reviewers the verdict reports.
+// Both hooks are idempotent and the first one wins: repeating them does not move the times.
 import { asc, eq, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { runSubagents } from "./schema.ts";
@@ -42,7 +42,7 @@ export class RunSubagentRepository {
       .run();
   }
 
-  /** En orden de llegada del primer hook. */
+  /** In order of arrival of the first hook. */
   forRun(runId: string): RunSubagentRow[] {
     return this.db
       .select()

@@ -1,5 +1,5 @@
-// Cliente del CLI `gh`. Corre con execFile y los argumentos sueltos, sin shell: el título y el
-// cuerpo del PR vienen de agentes y no deben poder inyectar comandos. El cuerpo entra por stdin.
+// Client of the `gh` CLI. It runs with execFile and the arguments passed separately, without a shell: the PR
+// title and body come from agents and must not be able to inject commands. The body goes in through stdin.
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { GitHubError } from "./errors.ts";
@@ -12,14 +12,14 @@ export interface GhExecResult {
 
 export interface GhExecOptions {
   cwd?: string;
-  /** Se escribe en stdin y se cierra. */
+  /** Written to stdin and closed. */
   input?: string;
   timeoutMs: number;
 }
 
 export type GhExecFn = (file: string, args: string[], opts: GhExecOptions) => Promise<GhExecResult>;
 
-/** Límite por defecto de un comando: GitHub lento no debe colgar al poller ni a la entrega. */
+/** Default limit of a command: a slow GitHub must not hang the poller or the delivery. */
 export const DEFAULT_GH_TIMEOUT_MS = 60_000;
 
 export const execGh: GhExecFn = (file, args, opts) =>
@@ -29,7 +29,7 @@ export const execGh: GhExecFn = (file, args, opts) =>
       args,
       {
         cwd: opts.cwd,
-        // Sin prompts interactivos: un gh que pregunta se quedaría esperando hasta el timeout.
+        // No interactive prompts: a gh that asks would hang until the timeout.
         env: { ...process.env, GH_PROMPT_DISABLED: "1", NO_COLOR: "1" },
         maxBuffer: 64 * 1024 * 1024,
         timeout: opts.timeoutMs,
@@ -37,27 +37,27 @@ export const execGh: GhExecFn = (file, args, opts) =>
       },
       (err, stdout, stderr) => {
         const where = args.slice(0, 2).join(" ");
-        // Node también mata al hijo (killed) cuando la salida pasa de maxBuffer.
+        // Node also kills the child (killed) when the output exceeds maxBuffer.
         if (err?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
-          reject(new GitHubError("gh_failed", `${where}: salida demasiado grande`, { cause: err }));
+          reject(new GitHubError("gh_failed", `${where}: output too large`, { cause: err }));
           return;
         }
         if (err?.killed) {
-          reject(new GitHubError("timeout", `${where}: sin respuesta en ${opts.timeoutMs} ms`));
+          reject(new GitHubError("timeout", `${where}: no response in ${opts.timeoutMs} ms`));
           return;
         }
-        // ENOENT del spawn: falta el binario o el cwd (un worktree borrado).
+        // ENOENT from the spawn: the binary or the cwd is missing (a deleted worktree).
         if (err?.code === "ENOENT") {
           const cwdMissing = opts.cwd !== undefined && !existsSync(opts.cwd);
           reject(
             cwdMissing
-              ? new GitHubError("gh_failed", `${where}: no existe ${opts.cwd}`, { cause: err })
+              ? new GitHubError("gh_failed", `${where}: ${opts.cwd} does not exist`, { cause: err })
               : new GitHubError("gh_unavailable", `${file}: ${err.message}`, { cause: err }),
           );
           return;
         }
         if (err && typeof err.code !== "number") {
-          // Muerto por una señal externa u otro fallo del proceso.
+          // Killed by an external signal or another process failure.
           reject(new GitHubError("gh_failed", `${where}: ${err.message}`, { cause: err }));
           return;
         }
@@ -65,21 +65,21 @@ export const execGh: GhExecFn = (file, args, opts) =>
       },
     );
     child.stdin?.on("error", () => {
-      // gh puede salir sin leer stdin; el resultado llega por el callback.
+      // gh may exit without reading stdin; the result arrives through the callback.
     });
     child.stdin?.end(opts.input ?? "");
   });
 
 export interface GhCliOptions {
-  /** Ruta del binario (por defecto `gh` en el PATH). */
+  /** Binary path (by default `gh` on the PATH). */
   bin?: string;
   exec?: GhExecFn;
   timeoutMs?: number;
 }
 
-// Mensajes de gh cuando el PR o el repo no existen (gh 2.100).
+// gh messages when the PR or the repo do not exist (gh 2.100).
 const NOT_FOUND = [/Could not resolve to a/i, /no pull requests found/i, /HTTP 404/i];
-// Sin sesión gh sale con 4; un token vencido o revocado sale con 1 y un 401.
+// Without a session gh exits with 4; an expired or revoked token exits with 1 and a 401.
 const NOT_AUTHENTICATED = [/HTTP 401/i, /Bad credentials/i, /gh auth login/i];
 
 export class GhCli {
@@ -93,7 +93,7 @@ export class GhCli {
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_GH_TIMEOUT_MS;
   }
 
-  /** Corre el comando y devuelve stdout; un exit distinto de 0 es GitHubError. */
+  /** Runs the command and returns stdout; an exit other than 0 is a GitHubError. */
   async text(args: string[], opts: { cwd?: string; input?: string } = {}): Promise<string> {
     const { stdout, stderr, exitCode } = await this.exec(this.bin, args, {
       ...opts,
@@ -103,13 +103,13 @@ export class GhCli {
     return stdout;
   }
 
-  /** Corre un comando con `--json` y devuelve la salida parseada. */
+  /** Runs a command with `--json` and returns the parsed output. */
   async json(args: string[], opts: { cwd?: string } = {}): Promise<unknown> {
     const stdout = await this.text(args, opts);
     try {
       return JSON.parse(stdout);
     } catch {
-      throw new GitHubError("invalid_output", `${args.join(" ")}: salida no JSON: ${stdout}`);
+      throw new GitHubError("invalid_output", `${args.join(" ")}: output is not JSON: ${stdout}`);
     }
   }
 }

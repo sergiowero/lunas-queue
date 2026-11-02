@@ -1,7 +1,7 @@
-// Arma el paquete npm `lunasq` en `dist/` (ADR uw-28-instalador): un solo bundle ESM con todo el
-// monorepo salvo better-sqlite3 (nativo, con prebuild), más las migraciones y los assets que el
-// bundle busca junto a sí (`bin/../drizzle`, `bin/../assets`). Node no quita tipos dentro de
-// node_modules, así que el paquete publicado no puede llevar los `.ts` del repo.
+// Builds the `lunasq` npm package in `dist/` (ADR uw-28-instalador): a single ESM bundle with the whole
+// monorepo except better-sqlite3 (native, with prebuild), plus the migrations and the assets the
+// bundle looks for next to itself (`bin/../drizzle`, `bin/../assets`). Node does not strip types inside
+// node_modules, so the published package cannot carry the repo's `.ts` files.
 import { execFileSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -22,16 +22,16 @@ export async function buildPackage(outdir = join(cli, "dist")): Promise<string> 
     format: "esm",
     target: "node26",
     external: ["better-sqlite3"],
-    // Dependencias CommonJS dentro de un bundle ESM: su `require` necesita uno real.
+    // CommonJS dependencies inside an ESM bundle: their `require` needs a real one.
     banner: {
       js: 'import { createRequire as __lunasqCreateRequire } from "node:module"; const require = __lunasqCreateRequire(import.meta.url);',
     },
     logLevel: "warning",
   });
   await cp(join(repo, "packages", "db", "drizzle"), join(outdir, "drizzle"), { recursive: true });
-  // El front end va en `web/`, que `lunasq start` sirve; siempre se arma de nuevo para no
-  // publicar un build viejo.
-  // Se arma en una carpeta temporal propia: dos builds en el mismo checkout no se vacían entre sí.
+  // The front end goes in `web/`, which `lunasq start` serves; it is always rebuilt so as not to
+  // publish an old build.
+  // It is built in its own temporary folder: two builds in the same checkout do not empty each other.
   const webDist = await mkdtemp(join(tmpdir(), "lunasq-web-"));
   try {
     execFileSync(
@@ -53,7 +53,7 @@ export async function buildPackage(outdir = join(cli, "dist")): Promise<string> 
   const published = {
     name: "lunasq",
     version: pkg.version,
-    description: "Cola de tareas que despacha agentes de codificación a través de herdr",
+    description: "Task queue that dispatches coding agents through herdr",
     type: "module",
     bin: { lunasq: "bin/lunasq.js" },
     engines: { node: ">=26" },

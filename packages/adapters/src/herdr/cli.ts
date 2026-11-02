@@ -1,6 +1,6 @@
-// Cliente del CLI de herdr. Cada operación es un proceso `herdr --session S <grupo> <sub> ...`
-// con salida JSON `{"id","result"}` en stdout. Errores del servidor: stdout vacío,
-// `{"error":{"code","message"}}` en stderr y exit 1; errores de sintaxis: exit 2 (ADR 0004).
+// Client of the herdr CLI. Each operation is a `herdr --session S <group> <sub> ...` process
+// with JSON output `{"id","result"}` on stdout. Server errors: empty stdout,
+// `{"error":{"code","message"}}` on stderr and exit 1; syntax errors: exit 2 (ADR 0004).
 import { execFile } from "node:child_process";
 import { HerdrError } from "./errors.ts";
 
@@ -10,10 +10,10 @@ export interface ExecResult {
   exitCode: number;
 }
 
-/** `timeoutMs` 0 = sin límite. */
+/** `timeoutMs` 0 = no limit. */
 export type ExecFn = (file: string, args: string[], timeoutMs: number) => Promise<ExecResult>;
 
-/** Límite por defecto de un comando: herdr colgado no debe colgar al dispatcher. */
+/** Default limit of a command: a hung herdr must not hang the dispatcher. */
 export const DEFAULT_CLI_TIMEOUT_MS = 30_000;
 
 export const execHerdr: ExecFn = (file, args, timeoutMs) =>
@@ -25,9 +25,7 @@ export const execHerdr: ExecFn = (file, args, timeoutMs) =>
     };
     execFile(file, args, opts, (err, stdout, stderr) => {
       if (err?.killed) {
-        reject(
-          new HerdrError("cli_timeout", `${args.join(" ")}: sin respuesta en ${timeoutMs} ms`),
-        );
+        reject(new HerdrError("cli_timeout", `${args.join(" ")}: no response in ${timeoutMs} ms`));
         return;
       }
       if (err && typeof err.code !== "number") {
@@ -39,9 +37,9 @@ export const execHerdr: ExecFn = (file, args, timeoutMs) =>
   });
 
 export interface HerdrCliOptions {
-  /** Ruta del binario de herdr (por defecto `herdr` en el PATH). */
+  /** Path of the herdr binary (by default `herdr` on the PATH). */
   bin?: string;
-  /** Sesión de herdr; omitida usa la sesión por defecto del usuario. */
+  /** herdr session; if omitted it uses the user's default session. */
   session?: string;
   exec?: ExecFn;
 }
@@ -57,22 +55,22 @@ export class HerdrCli {
     this.exec = opts.exec ?? execHerdr;
   }
 
-  /** Corre el comando y devuelve `result` de la respuesta JSON. */
+  /** Runs the command and returns `result` of the JSON response. */
   async json(args: string[], opts: { timeoutMs?: number } = {}): Promise<unknown> {
     const stdout = await this.text(args, opts);
     let parsed: unknown;
     try {
       parsed = JSON.parse(stdout);
     } catch {
-      throw new HerdrError("invalid_response", `${args.join(" ")}: salida no JSON: ${stdout}`);
+      throw new HerdrError("invalid_response", `${args.join(" ")}: output is not JSON: ${stdout}`);
     }
     if (typeof parsed !== "object" || parsed === null || !("result" in parsed)) {
-      throw new HerdrError("invalid_response", `${args.join(" ")}: sin result: ${stdout}`);
+      throw new HerdrError("invalid_response", `${args.join(" ")}: missing result: ${stdout}`);
     }
     return parsed.result;
   }
 
-  /** Corre el comando y devuelve stdout tal cual (p. ej. `agent read`, `report-metadata`). */
+  /** Runs the command and returns stdout as is (e.g. `agent read`, `report-metadata`). */
   async text(args: string[], opts: { timeoutMs?: number } = {}): Promise<string> {
     const full = this.session ? ["--session", this.session, ...args] : args;
     const timeoutMs = opts.timeoutMs ?? DEFAULT_CLI_TIMEOUT_MS;
@@ -90,7 +88,7 @@ function toError(args: string[], stderr: string, exitCode: number): HerdrError {
       return new HerdrError(parsed.error.code, String(parsed.error.message ?? ""));
     }
   } catch {
-    // stderr no es JSON: error de sintaxis del CLI u otro fallo del proceso.
+    // stderr is not JSON: a CLI syntax error or another process failure.
   }
   const code = exitCode === 2 ? "cli_usage" : "cli_failed";
   return new HerdrError(code, `${args.join(" ")} (exit ${exitCode}): ${line}`);

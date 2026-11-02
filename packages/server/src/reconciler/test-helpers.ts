@@ -1,5 +1,5 @@
-// Arnés de los tests de señales y reconciliación: base migrada, herdr y procesos falsos,
-// dispatcher real con el watcher como observador y notificaciones capturadas.
+// Harness for the signals and reconciliation tests: migrated database, fake herdr and processes,
+// real dispatcher with the watcher as observer and captured notifications.
 import { FakeHerdr, FakeProcessRunner } from "@lunasq/adapters";
 import {
   ProjectRepository,
@@ -28,7 +28,7 @@ export function harness(
 ) {
   const db = migratedDatabase();
   const project = insertProject(db, opts.project);
-  // Los prompts no terminan solos (20 días, bajo el tope de setTimeout): cada test decide.
+  // Prompts do not end on their own (20 days, under setTimeout's cap): each test decides.
   const herdr = opts.herdr ?? new FakeHerdr({ promptDurationMs: 20 * 24 * 60 * MIN });
   const projects = new ProjectRepository(db);
   const worktrees = new WorktreeService({
@@ -53,7 +53,7 @@ export function harness(
     escalator,
     notify,
     failRun: (runId, reason) => {
-      if (!dispatcher) throw new Error("sin dispatcher");
+      if (!dispatcher) throw new Error("no dispatcher");
       return dispatcher.failRun(runId, reason);
     },
     onLost: () => {
@@ -87,7 +87,7 @@ export function harness(
       worktreePath: string | null;
     };
 
-  /** Crea una tarea en draft/queued y despacha su refinamiento hasta mandar el prompt. */
+  /** Creates a task in draft/queued and dispatches its refinement until the prompt is sent. */
   async function launched(): Promise<{ taskId: string; run: RunRow; name: string }> {
     const task = insertTask(db, project.id);
     const decision: DispatchDecision = {
@@ -101,7 +101,7 @@ export function harness(
     await dispatcher?.dispatch(decision);
     await dispatcher?.idle();
     const run = runs.latestForTask(task.id);
-    if (!run?.herdrName || !run.launchedAt) throw new Error("el Run no se lanzó");
+    if (!run?.herdrName || !run.launchedAt) throw new Error("the Run was not launched");
     return { taskId: task.id, run, name: run.herdrName };
   }
 
@@ -128,7 +128,7 @@ export function harness(
   };
 }
 
-/** Deja correr las microtareas y los timers vencidos (eventos del fake, locks). */
+/** Lets microtasks and expired timers run (fake events, locks). */
 export async function settle(vi: { advanceTimersByTimeAsync(ms: number): Promise<unknown> }) {
   for (let i = 0; i < 5; i++) await vi.advanceTimersByTimeAsync(0);
 }

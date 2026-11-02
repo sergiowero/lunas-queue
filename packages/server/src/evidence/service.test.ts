@@ -88,17 +88,17 @@ function closedRun(over: Parameters<typeof insertRun>[2] = {}, result = "success
 }
 
 describe("EvidenceService.recordRun", () => {
-  it("escribe lunasq/tasks/{id}.md con la sección del Run al cerrarse", async () => {
+  it("writes lunasq/tasks/{id}.md with the Run's section on close", async () => {
     const run = closedRun({ phase: "implement" });
     const res = await service.recordRun(run.id);
     expect(res).toEqual({ status: "written", path: file() });
     const md = readFileSync(file(), "utf8");
-    expect(md).toContain(`# Evidencia de la tarea ${taskId}`);
+    expect(md).toContain(`# Evidence for task ${taskId}`);
     expect(md).toContain("Agregar login");
     expect(md).toContain(`## Run ${run.id} · implement`);
   });
 
-  it("agrega una sección por cada Run, en orden de cierre", async () => {
+  it("adds a section for each Run, in close order", async () => {
     const first = closedRun({ phase: "implement" });
     const second = closedRun({ phase: "verify" });
     await service.recordRun(first.id);
@@ -107,7 +107,7 @@ describe("EvidenceService.recordRun", () => {
     expect(md.indexOf(`## Run ${first.id}`)).toBeLessThan(md.indexOf(`## Run ${second.id}`));
   });
 
-  it("repetir el cierre del mismo Run deja el archivo igual", async () => {
+  it("repeating the close of the same Run leaves the file equal", async () => {
     const run = closedRun();
     await service.recordRun(run.id);
     const before = readFileSync(file(), "utf8");
@@ -115,7 +115,7 @@ describe("EvidenceService.recordRun", () => {
     expect(readFileSync(file(), "utf8")).toBe(before);
   });
 
-  it("registra failure_reason, handoff, salida del gate y hooks del Run", async () => {
+  it("records failure_reason, handoff, gate output and hooks of the Run", async () => {
     const run = insertRun(db, taskId, { phase: "implement" });
     closeRun(db, run.id, {
       result: "failure",
@@ -178,10 +178,10 @@ describe("EvidenceService.recordRun", () => {
     expect(md).toContain("HANDOFF-X");
     expect(md).toContain("GATE-OUTPUT-ROJO");
     expect(md).toContain("HOOK-OUTPUT");
-    expect(md).toContain("resultado: passed");
+    expect(md).toContain("result: passed");
   });
 
-  it("no mezcla los eventos de otros Runs ni de otras tareas", async () => {
+  it("does not mix the events of other Runs or other tasks", async () => {
     const mine = closedRun();
     const other = closedRun();
     const gate = (runId: string, output: string) => ({
@@ -214,7 +214,7 @@ describe("EvidenceService.recordRun", () => {
     expect(md).not.toContain("DE-OTRO-RUN");
   });
 
-  it("convierte a markdown el transcript de la sesión y de los subagentes", async () => {
+  it("converts to markdown the transcript of the session and the subagents", async () => {
     const run = closedRun({ phase: "verify", agentSession: "sess-9" });
     new RunSubagentRepository(db).recordStop(run.id, {
       agentId: "ag-1",
@@ -226,18 +226,18 @@ describe("EvidenceService.recordRun", () => {
         title: "Sesión del agente",
         jsonl: JSON.stringify({ type: "user", message: { role: "user", content: "hola agente" } }),
       },
-      { title: "Subagente lunasq-code-reviewer (ag-1)", jsonl: null, note: "no se encontró" },
+      { title: "Subagent lunasq-code-reviewer (ag-1)", jsonl: null, note: "not found" },
     ];
     await service.recordRun(run.id);
     expect(transcripts.requests[0]?.worktreePath).toBe(wt);
     expect(transcripts.requests[0]?.subagents.map((s) => s.agentId)).toEqual(["ag-1"]);
     const md = readFileSync(file(), "utf8");
     expect(md).toContain("hola agente");
-    expect(md).toContain("<summary>Subagente lunasq-code-reviewer (ag-1)</summary>");
-    expect(md).toContain("no se encontró");
+    expect(md).toContain("<summary>Subagent lunasq-code-reviewer (ag-1)</summary>");
+    expect(md).toContain("not found");
   });
 
-  it("redacta secretos antes de escribir", async () => {
+  it("redacts secrets before writing", async () => {
     const run = closedRun();
     const token = `ghp_${"a1B2c3D4e5".repeat(4)}`;
     transcripts.result = [
@@ -255,18 +255,18 @@ describe("EvidenceService.recordRun", () => {
     expect(md).toContain("[REDACTED");
   });
 
-  it("no deja archivos temporales junto al de evidencia", async () => {
+  it("leaves no temporary files next to the evidence one", async () => {
     await service.recordRun(closedRun().id);
     expect(readdirSync(join(wt, "lunasq/tasks"))).toEqual([`${taskId}.md`]);
   });
 
-  it("no escribe nada para un Run que sigue abierto", async () => {
+  it("writes nothing for a Run that is still open", async () => {
     const run = insertRun(db, taskId);
     expect(await service.recordRun(run.id)).toEqual({ status: "skipped", reason: "run_open" });
     expect(existsSync(file())).toBe(false);
   });
 
-  it("no escribe si el Run no existe o la tarea ya no tiene worktree", async () => {
+  it("writes nothing if the Run does not exist or the task no longer has a worktree", async () => {
     expect(await service.recordRun("no-existe")).toEqual({
       status: "skipped",
       reason: "run_not_found",
@@ -281,7 +281,7 @@ describe("EvidenceService.recordRun", () => {
     expect(await service.recordRun(run.id)).toEqual({ status: "skipped", reason: "no_worktree" });
   });
 
-  it("no escribe a través de un symlink en lunasq/ ni en lunasq/tasks", async () => {
+  it("does not write through a symlink in lunasq/ or in lunasq/tasks", async () => {
     const outside = realpathSync(mkdtempSync(join(tmpdir(), "lunasq-outside-")));
     dirs.push(outside);
     symlinkSync(outside, join(wt, "lunasq"));
@@ -296,14 +296,14 @@ describe("EvidenceService.recordRun", () => {
     expect(readdirSync(outside)).toEqual([]);
   });
 
-  it("cierres concurrentes de varios Runs no pierden secciones", async () => {
+  it("concurrent closes of several Runs do not lose sections", async () => {
     const runs = [closedRun(), closedRun(), closedRun(), closedRun()];
     await Promise.all(runs.map((r) => service.recordRun(r.id)));
     const md = readFileSync(file(), "utf8");
     for (const r of runs) expect(md).toContain(`## Run ${r.id}`);
   });
 
-  it("deja el archivo sin commitear y el worktree limpio para los chequeos de UW-15/23", async () => {
+  it("leaves the file uncommitted and the worktree clean for the UW-15/23 checks", async () => {
     await service.recordRun(closedRun().id);
     expect(git(wt, "status", "--porcelain", "--untracked-files=all")).toContain("lunasq/tasks/");
     expect(await new RealGit().isDirty(wt)).toBe(false);
@@ -311,7 +311,7 @@ describe("EvidenceService.recordRun", () => {
 });
 
 describe("EvidenceService.commit", () => {
-  it("commitea solo el archivo de evidencia, con los trailers de la tarea y el último Run", async () => {
+  it("commits only the evidence file, with the task trailers and the last Run", async () => {
     const run = closedRun();
     await service.recordRun(run.id);
     writeFileSync(join(wt, "ajeno.txt"), "cambio del agente");
@@ -326,13 +326,13 @@ describe("EvidenceService.commit", () => {
     expect(git(wt, "status", "--porcelain")).toBe("?? ajeno.txt");
   });
 
-  it("viaja en el branch: el archivo queda en el árbol de HEAD", async () => {
+  it("travels in the branch: the file is in HEAD's tree", async () => {
     await service.recordRun(closedRun().id);
     await service.commit(taskId);
     expect(git(wt, "ls-tree", "-r", "--name-only", "HEAD")).toContain(evidencePath(taskId));
   });
 
-  it("una sección nueva después del commit se commitea como cambio aparte", async () => {
+  it("a new section after the commit is committed as a separate change", async () => {
     await service.recordRun(closedRun().id);
     const first = await service.commit(taskId);
     expect(await service.commit(taskId)).toBeNull();
@@ -343,13 +343,13 @@ describe("EvidenceService.commit", () => {
     expect(readFileSync(file(), "utf8").match(/^## Run /gm)).toHaveLength(2);
   });
 
-  it("es null si no hay archivo ni worktree", async () => {
+  it("is null if there is no file or worktree", async () => {
     expect(await service.commit(taskId)).toBeNull();
     new TaskWorktreeRepository(db).clearWorktreePath(taskId);
     expect(await service.commit(taskId)).toBeNull();
   });
 
-  it("funciona también si el proyecto ignora lunasq/tasks/ en su .gitignore", async () => {
+  it("also works if the project ignores lunasq/tasks/ in its .gitignore", async () => {
     writeFileSync(join(wt, ".gitignore"), "lunasq/tasks/\n");
     git(wt, "add", ".gitignore");
     git(wt, "commit", "-q", "-m", "ignore");
@@ -358,8 +358,8 @@ describe("EvidenceService.commit", () => {
   });
 });
 
-describe("RunRepository sin cambios", () => {
-  it("el servicio solo lee: no modifica el Run", async () => {
+describe("RunRepository without changes", () => {
+  it("the service only reads: it does not modify the Run", async () => {
     const run = closedRun();
     const before = new RunRepository(db).get(run.id);
     await service.recordRun(run.id);

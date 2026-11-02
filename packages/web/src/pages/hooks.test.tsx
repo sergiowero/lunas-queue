@@ -64,8 +64,8 @@ function execution(
   } as never);
 }
 
-describe("vista de hooks", () => {
-  it("muestra por punto los hooks de la rama base con su contenido, política y timeout", async () => {
+describe("hooks view", () => {
+  it("shows per point the base branch hooks with their content, policy and timeout", async () => {
     const { fake, project } = setup();
     renderApp(`/projects/${project.id}/hooks`, fake);
 
@@ -78,7 +78,7 @@ describe("vista de hooks", () => {
     const changelog = within(point.getByRole("group", { name: "20-changelog" }));
     expect(changelog.getByText("block")).toBeTruthy();
     expect(changelog.getByText("10 min")).toBeTruthy();
-    // Los scripts salen en el orden en que corren.
+    // The scripts come out in the order they run.
     expect(point.getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual([
       "10-bump-version",
       "20-changelog",
@@ -86,7 +86,7 @@ describe("vista de hooks", () => {
     expect(screen.getByText(sha.slice(0, 7))).toBeTruthy();
   });
 
-  it("muestra las últimas ejecuciones por tarea con código de salida, duración y salida", async () => {
+  it("shows the latest executions per task with exit code, duration and output", async () => {
     const { fake, project, task } = setup();
     const other = fake.addTask(project.id, { intent: "Otra tarea" });
     execution(fake, task.id, 1, { exitCode: 1, passed: false, output: "falló el bump" });
@@ -102,7 +102,7 @@ describe("vista de hooks", () => {
 
     const bump = within(await screen.findByRole("group", { name: "10-bump-version" }));
     const rows = bump.getAllByRole("row").slice(1);
-    // Una fila por tarea, la más reciente de cada una.
+    // One row per task, the most recent of each.
     expect(rows).toHaveLength(2);
     const [first, second] = rows.map((r) => within(r));
     expect(first?.getByRole("link", { name: "Otra tarea" })).toBeTruthy();
@@ -118,7 +118,7 @@ describe("vista de hooks", () => {
     expect(bump.queryByText("falló el bump")).toBeNull();
   });
 
-  it("dice cuando un hook aún no se ha ejecutado y cuando un punto no tiene hooks", async () => {
+  it("says when a hook has not run yet and when a point has no hooks", async () => {
     const { fake, project } = setup();
     renderApp(`/projects/${project.id}/hooks`, fake);
     const changelog = within(await screen.findByRole("group", { name: "20-changelog" }));
@@ -126,7 +126,7 @@ describe("vista de hooks", () => {
     expect(screen.getByText(/Sin hooks: before_refinement, after_merge/)).toBeTruthy();
   });
 
-  it("muestra las ejecuciones de un script que ya no está en la rama base", async () => {
+  it("shows the executions of a script that is no longer in the base branch", async () => {
     const { fake, project, task } = setup();
     execution(fake, task.id, 1, { script: "99-viejo" });
     renderApp(`/projects/${project.id}/hooks`, fake);
@@ -135,7 +135,7 @@ describe("vista de hooks", () => {
     expect(old.getByRole("link", { name: "Subir versión" })).toBeTruthy();
   });
 
-  it("avisa de un error en lunasq/hooks/config", async () => {
+  it("warns of an error in lunasq/hooks/config", async () => {
     const { fake, project } = setup();
     const hooks = fake.hooks.get(project.id);
     if (hooks) hooks.configError = "lunasq/hooks/config no es JSON";
@@ -145,7 +145,7 @@ describe("vista de hooks", () => {
     );
   });
 
-  it("no dice «Sin ejecuciones» si la consulta de ejecuciones falla", async () => {
+  it("does not say «Sin ejecuciones» if the executions query fails", async () => {
     const { fake, project } = setup();
     fake.hookExecutionsFail = true;
     renderApp(`/projects/${project.id}/hooks`, fake);
@@ -155,7 +155,7 @@ describe("vista de hooks", () => {
     expect(bump.getByText(/npm version patch/)).toBeTruthy();
   });
 
-  it("pide un máximo de tareas por hook y muestra la ejecución de un hook poco frecuente", async () => {
+  it("asks for a maximum of tasks per hook and shows the execution of an infrequent hook", async () => {
     const { fake, project, task } = setup();
     execution(fake, task.id, 1, { point: "after_merge", script: "deploy" });
     for (let i = 0; i < 12; i++) {
@@ -176,12 +176,12 @@ describe("vista de hooks", () => {
     expect(bump.getAllByRole("row")).toHaveLength(1 + 10);
   });
 
-  it("muestra el error cuando no se puede leer la rama base", async () => {
+  it("shows the error when the base branch cannot be read", async () => {
     const fake = new FakeApi();
     const project = fake.addProject();
     renderApp(`/projects/${project.id}/hooks`, fake);
     expect((await screen.findByRole("alert")).textContent).toContain(
-      "no se pudo leer la rama base",
+      "the base branch could not be read",
     );
   });
 });

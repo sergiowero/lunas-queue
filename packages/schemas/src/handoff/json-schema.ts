@@ -12,14 +12,14 @@ const schemas = {
   "refinement.json": RefinementHandoff,
   "implementation.json": ImplementationHandoff,
   "verification.json": VerificationHandoff,
-  // Handoff de submit_result: tiene su propio sobre, fuera de handoff.json.
+  // Handoff of submit_result: it has its own envelope, outside handoff.json.
   "result.json": ResultHandoff,
 };
 
-// El JSON Schema describe la estructura; las reglas entre campos solo viven en Zod.
+// The JSON Schema describes the structure; the cross-field rules only live in Zod.
 const description =
-  "Handoff v1 de LunasQ, generado desde @lunasq/schemas. Las reglas entre campos (ids únicos, " +
-  `veredicto coherente, tamaño máximo de ${HANDOFF_MAX_BYTES} bytes) las aplica el validador Zod.`;
+  "LunasQ handoff v1, generated from @lunasq/schemas. The cross-field rules (unique ids, " +
+  `coherent verdict, maximum size of ${HANDOFF_MAX_BYTES} bytes) are applied by the Zod validator.`;
 
 export function buildHandoffJsonSchemas(): Record<string, JsonSchema> {
   return Object.fromEntries(

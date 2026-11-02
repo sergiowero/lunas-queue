@@ -1,5 +1,5 @@
-// El CLI solo depende de server (docs/tech-stack.md): sus comprobaciones de herramientas corren
-// con el mismo runner de procesos.
+// The CLI only depends on server (docs/tech-stack.md): its tool checks run
+// with the same process runner.
 export {
   FakeProcessRunner,
   type ProcessInput,

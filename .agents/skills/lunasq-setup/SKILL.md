@@ -1,72 +1,72 @@
 ---
 name: lunasq-setup
-description: Deja LunasQ listo y corriendo en esta máquina (Node 26, pnpm install, lunasq install/doctor, lunasq start, front end con Vite). Úsalo cuando pidan configurar el proyecto, arrancarlo, levantar el servidor o la UI, o diagnosticar por qué no corre.
+description: Leaves LunasQ ready and running on this machine (Node 26, pnpm install, lunasq install/doctor, lunasq start, front end with Vite). Use it when asked to set up the project, start it, bring up the server or the UI, or diagnose why it is not running.
 ---
 
 # lunasq-setup
 
-Corre los pasos en orden y detente en el primer fallo: repórtalo con su salida y la acción que propone `doctor`. Todo desde la raíz del repo.
+Run the steps in order and stop at the first failure: report it with its output and the action `doctor` proposes. Everything from the repo root.
 
 ## 1. Node 26
 
-`package.json` exige `node >=26` (`.node-version`) y `doctor` falla con menos. El PATH puede traer otro Node (`/opt/homebrew/bin/node`).
+`package.json` requires `node >=26` (`.node-version`) and `doctor` fails with less. The PATH may bring another Node (`/opt/homebrew/bin/node`).
 
 ```sh
-node -v          # debe ser v26.x
+node -v          # must be v26.x
 ```
 
-Si no es 26, usa fnm (instalado en esta máquina): `fnm install 26 && fnm use 26`, y repite el comando en el mismo shell con `eval "$(fnm env)" && fnm use 26 && <comando>`. Si no hay fnm, avisa al usuario.
+If it is not 26, use fnm (installed on this machine): `fnm install 26 && fnm use 26`, and repeat the command in the same shell with `eval "$(fnm env)" && fnm use 26 && <command>`. If there is no fnm, tell the user.
 
-## 2. Dependencias
+## 2. Dependencies
 
 ```sh
 pnpm install
 ```
 
-pnpm está fijado en `packageManager`. better-sqlite3 usa prebuilds (no compila); si `doctor` dice que no carga, es un problema de plataforma (ADR 0003).
+pnpm is pinned in `packageManager`. better-sqlite3 uses prebuilds (it does not compile); if `doctor` says it does not load, it is a platform problem (ADR 0003).
 
-## 3. Requisitos de la máquina
+## 3. Machine requirements
 
 ```sh
 pnpm lunasq doctor
 ```
 
-Necesita herdr ≥ 0.9.5 con su servidor corriendo, Codex ≥ 2.1.312 y `gh auth login` hecho. `lunasq install` no instala esos tres: si faltan, pídele al usuario que los instale (herdr: `herdr status --json`; gh: `gh auth login`).
+It needs herdr ≥ 0.9.5 with its server running, Codex ≥ 2.1.312 and `gh auth login` done. `lunasq install` does not install those three: if they are missing, ask the user to install them (herdr: `herdr status --json`; gh: `gh auth login`).
 
-## 4. Instalar (una vez, idempotente)
+## 4. Install (once, idempotent)
 
 ```sh
 pnpm lunasq install [--port <n>]
 ```
 
-Escribe `~/.lunasq/` (`config.json`, `mcp.json`, `Codex-settings.json`, base SQLite) y copia skills/subagentes a `~/.Codex/`. Repetirlo no cambia nada. Luego `pnpm lunasq doctor` debe salir en verde (solo avisos son aceptables). Puerto por defecto: 7360.
+It writes `~/.lunasq/` (`config.json`, `mcp.json`, `Codex-settings.json`, SQLite database) and copies skills/subagents to `~/.Codex/`. Repeating it changes nothing. Then `pnpm lunasq doctor` must come out green (only warnings are acceptable). Default port: 7360.
 
-Para no tocar el entorno real: `LUNASQ_HOME=$(mktemp -d) CLAUDE_CONFIG_DIR=$(mktemp -d) pnpm lunasq install` y usa las mismas variables en `doctor` y `start`.
+To avoid touching the real environment: `LUNASQ_HOME=$(mktemp -d) CLAUDE_CONFIG_DIR=$(mktemp -d) pnpm lunasq install` and use the same variables in `doctor` and `start`.
 
-## 5. Arrancar
+## 5. Start
 
 ```sh
 pnpm lunasq start
 ```
 
-Imprime `LunasQ en http://127.0.0.1:<puerto>`; se detiene con Ctrl-C. Es un proceso largo: córrelo en background (`run_in_background`). Comprueba que vive:
+It prints `LunasQ at http://127.0.0.1:<port>`; it stops with Ctrl-C. It is a long process: run it in the background (`run_in_background`). Check that it is alive:
 
 ```sh
 curl -s http://127.0.0.1:7360/api/projects
 ```
 
-Errores típicos: `LunasQ no está instalado` → paso 4; puerto ocupado → `lunasq install --port <otro>` o libera el puerto.
+Typical errors: `LunasQ is not installed` → step 4; port in use → `lunasq install --port <other>` or free the port.
 
-## 6. Front end (opcional)
+## 6. Front end (optional)
 
-`lunasq start` hoy no monta el build del front end (`webRoot` no se pasa desde `startRuntime`), así que la UI se corre con Vite apuntando al servidor:
+`lunasq start` does not mount the front end build today (`webRoot` is not passed from `startRuntime`), so the UI is run with Vite pointing at the server:
 
 ```sh
 LUNASQ_API=http://127.0.0.1:7360 pnpm --filter @lunasq/web dev
 ```
 
-`LUNASQ_API` es necesario: el proxy de `vite.config.ts` usa 4310 por defecto, no el 7360 de `start`. Vite imprime la URL (normalmente `http://localhost:5173`).
+`LUNASQ_API` is necessary: the proxy in `vite.config.ts` uses 4310 by default, not `start`'s 7360. Vite prints the URL (normally `http://localhost:5173`).
 
-## Verificación del repo
+## Repo verification
 
-Antes de un PR (ver `AGENTS.md`): `pnpm typecheck && pnpm lint && pnpm test`. Pruebas contra herdr/Codex/gh reales, aparte: `pnpm --filter @lunasq/server test:herdr` (también `test:Codex`, `test:usage`, `test:skills`).
+Before a PR (see `AGENTS.md`): `pnpm typecheck && pnpm lint && pnpm test`. Tests against real herdr/Codex/gh, separately: `pnpm --filter @lunasq/server test:herdr` (also `test:Codex`, `test:usage`, `test:skills`).

@@ -1,7 +1,7 @@
 import { herdrContract } from "./contract.ts";
 import { FakeHerdr } from "./fake.ts";
 
-herdrContract("fake en memoria", async () => {
+herdrContract("in-memory fake", async () => {
   const adapter = new FakeHerdr();
   let repos = 0;
   return {

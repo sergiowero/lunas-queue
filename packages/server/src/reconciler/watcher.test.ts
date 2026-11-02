@@ -25,7 +25,7 @@ function setup(opts: Parameters<typeof harness>[0] = {}) {
 }
 
 describe("RunWatcher: crash", () => {
-  it("el proceso del agente termina: Run fallido y la tarea vuelve a queued", async () => {
+  it("the agent process ends: failed Run and the task goes back to queued", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     expect(h.watcher.watching()).toEqual([run.id]);
@@ -34,24 +34,24 @@ describe("RunWatcher: crash", () => {
     await settle(vi);
 
     expect(h.runs.get(run.id)).toMatchObject({ result: "failure" });
-    expect(h.runs.get(run.id)?.failureReason).toMatch(/^agent_exited: el proceso del agente/);
+    expect(h.runs.get(run.id)?.failureReason).toMatch(/^agent_exited: the agent process/);
     expect(h.taskRow(taskId)).toMatchObject({ state: "draft", subState: "queued" });
     expect(h.watcher.watching()).toEqual([]);
     expect(h.errors).toEqual([]);
   });
 
-  it("el pane se cierra desde afuera: Run fallido", async () => {
+  it("the pane is closed from outside: failed Run", async () => {
     const h = setup();
     const { taskId, run } = await h.launched();
 
     await h.herdr.closePane(run.herdrPane ?? "");
     await settle(vi);
 
-    expect(h.runs.get(run.id)?.failureReason).toMatch(/^agent_exited: el pane se cerró/);
+    expect(h.runs.get(run.id)?.failureReason).toMatch(/^agent_exited: the pane was closed/);
     expect(h.taskRow(taskId)).toMatchObject({ state: "draft", subState: "queued" });
   });
 
-  it("si una tool del MCP ya cerró el Run, el cierre del pane no lo falla", async () => {
+  it("if an MCP tool already closed the Run, the pane close does not fail it", async () => {
     const h = setup();
     const { taskId, run } = await h.launched();
     h.runs.close(run.id, { result: "success" });
@@ -63,7 +63,7 @@ describe("RunWatcher: crash", () => {
     expect(h.taskRow(taskId)).toMatchObject({ subState: "running" });
   });
 
-  it("el dispatcher libera el Run: deja de observar sin fallarlo", async () => {
+  it("the dispatcher releases the Run: it stops observing without failing it", async () => {
     const h = setup();
     const { run } = await h.launched();
     await h.dispatcher?.closeRun(run.id, { result: "success" });
@@ -73,8 +73,8 @@ describe("RunWatcher: crash", () => {
   });
 });
 
-describe("RunWatcher: agente detenido sin señal MCP", () => {
-  it("nudge N veces y luego Run fallido", async () => {
+describe("RunWatcher: agent stopped without an MCP signal", () => {
+  it("nudge N times and then failed Run", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
 
@@ -98,7 +98,7 @@ describe("RunWatcher: agente detenido sin señal MCP", () => {
     expect(await h.herdr.getAgent(name)).toBeUndefined();
   });
 
-  it("si vuelve a trabajar dentro de la gracia no hay nudge", async () => {
+  it("if it works again within the grace period there is no nudge", async () => {
     const h = setup();
     const { taskId, name } = await h.launched();
     h.herdr.setAgentStatus(name, "idle");
@@ -111,7 +111,7 @@ describe("RunWatcher: agente detenido sin señal MCP", () => {
     expect(await h.herdr.readAgent({ name })).not.toContain(nudgePrompt("refine", taskId));
   });
 
-  it("con la pregunta abierta (waiting_human) no hay nudge", async () => {
+  it("with the question open (waiting_human) there is no nudge", async () => {
     const h = setup();
     const { taskId, name } = await h.launched();
     const asked = transitionTask(h.db, { taskId, actor: "agent", command: { type: "ask_human" } });
@@ -124,7 +124,7 @@ describe("RunWatcher: agente detenido sin señal MCP", () => {
     expect(h.taskRow(taskId)).toMatchObject({ subState: "waiting_human" });
   });
 
-  it("el Run cerrado por una tool del MCP no recibe nudge", async () => {
+  it("a Run closed by an MCP tool receives no nudge", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     h.runs.close(run.id, { result: "success" });
@@ -137,7 +137,7 @@ describe("RunWatcher: agente detenido sin señal MCP", () => {
 });
 
 describe("RunWatcher: blocked", () => {
-  it("blocked() lista los agentes que esperan un permiso hasta que salen de blocked", async () => {
+  it("blocked() lists the agents waiting for a permission until they leave blocked", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     expect(h.watcher.blocked()).toEqual([]);
@@ -160,7 +160,7 @@ describe("RunWatcher: blocked", () => {
     expect(h.watcher.blocked()).toEqual([]);
   });
 
-  it("notifica una vez si sigue bloqueado 1 minuto y no antes", async () => {
+  it("notifies once if still blocked for 1 minute and not before", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     h.herdr.setAgentStatus(name, "blocked");
@@ -174,12 +174,12 @@ describe("RunWatcher: blocked", () => {
         id: `blocked:${run.id}:1`,
         kind: "agent_blocked",
         runId: run.id,
-        title: `Agente bloqueado en #${h.taskRow(taskId)?.number}`,
+        title: `Blocked agent in #${h.taskRow(taskId)?.number}`,
       }),
     ]);
   });
 
-  it("salir de blocked antes del minuto cancela el aviso; un segundo bloqueo usa otro id", async () => {
+  it("leaving blocked before the minute cancels the notice; a second block uses another id", async () => {
     const h = setup();
     const { run, name } = await h.launched();
     h.herdr.setAgentStatus(name, "blocked");
@@ -196,7 +196,7 @@ describe("RunWatcher: blocked", () => {
     expect(h.notifications.map((n) => n.id)).toEqual([`blocked:${run.id}:2`]);
   });
 
-  it("un agente bloqueado no recibe nudge", async () => {
+  it("a blocked agent receives no nudge", async () => {
     const h = setup();
     const { taskId, name } = await h.launched();
     h.herdr.setAgentStatus(name, "blocked");
@@ -206,8 +206,8 @@ describe("RunWatcher: blocked", () => {
   });
 });
 
-describe("RunWatcher: timeout de fase", () => {
-  it("vencido: needs_human con phase_timeout, notificación inmediata y el agente sigue vivo", async () => {
+describe("RunWatcher: phase timeout", () => {
+  it("expired: needs_human with phase_timeout, immediate notification and the agent stays alive", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
 
@@ -220,7 +220,7 @@ describe("RunWatcher: timeout de fase", () => {
         id: `timeout:${run.id}`,
         kind: "phase_timeout",
         taskId,
-        title: `Timeout de fase en #${h.taskRow(taskId)?.number}`,
+        title: `Phase timeout in #${h.taskRow(taskId)?.number}`,
       }),
     ]);
     expect(await h.herdr.getAgent(name)).toBeDefined();
@@ -234,7 +234,7 @@ describe("RunWatcher: timeout de fase", () => {
     });
   });
 
-  it("usa el timeout del proyecto para la fase", async () => {
+  it("uses the project's timeout for the phase", async () => {
     const h = setup({ project: { limits: { phaseTimeoutMinutes: { refine: 5 } } } });
     const { taskId } = await h.launched();
     await vi.advanceTimersByTimeAsync(5 * MIN);
@@ -242,7 +242,7 @@ describe("RunWatcher: timeout de fase", () => {
     expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human" });
   });
 
-  it("se pausa mientras el agente está blocked", async () => {
+  it("it pauses while the agent is blocked", async () => {
     const h = setup();
     const { taskId, name } = await h.launched();
     await vi.advanceTimersByTimeAsync(20 * MIN);
@@ -257,7 +257,7 @@ describe("RunWatcher: timeout de fase", () => {
     expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human" });
   });
 
-  it("se pausa mientras la tarea está en waiting_human", async () => {
+  it("it pauses while the task is in waiting_human", async () => {
     const h = setup();
     const { taskId } = await h.launched();
     await vi.advanceTimersByTimeAsync(20 * MIN);
@@ -280,17 +280,17 @@ describe("RunWatcher: timeout de fase", () => {
   });
 });
 
-describe("RunWatcher: límite de uso", () => {
+describe("RunWatcher: usage limit", () => {
   const CLAUDE_LIMIT_SCREEN =
     "trabajo en curso…\nUsage limit reached · limit resets 3:45pm\nContinuing automatically at 3:45pm · Esc to cancel";
 
   function usageNotification(notifications: Notification[]) {
     const last = notifications[notifications.length - 1];
-    if (last?.kind !== "usage_limit") throw new Error("no hay notificación de usage_limit");
+    if (last?.kind !== "usage_limit") throw new Error("no usage_limit notification");
     return last;
   }
 
-  it("agente detenido con el aviso en pantalla: needs_human con usage_limit, sin nudge ni fallo", async () => {
+  it("agent stopped with the notice on screen: needs_human with usage_limit, without nudge or failure", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     h.herdr.setAgentScreen(name, CLAUDE_LIMIT_SCREEN);
@@ -320,11 +320,11 @@ describe("RunWatcher: límite de uso", () => {
       to: { state: "needs_human", subState: null },
       verificationIteration: 0,
       reason: "usage_limit",
-      note: `El agente ${name} (refine) se quedó sin uso: Usage limit reached · limit resets 3:45pm · Continuing automatically at 3:45pm · Esc to cancel`,
+      note: `Agent ${name} (refine) ran out of usage: Usage limit reached · limit resets 3:45pm · Continuing automatically at 3:45pm · Esc to cancel`,
     });
   });
 
-  it("el trabajo propio que menciona límites no dispara el escalamiento: sigue la ruta normal", async () => {
+  it("the agent's own work that mentions limits does not trigger the escalation: the normal path continues", async () => {
     const h = setup();
     const { taskId, name } = await h.launched();
     h.herdr.setAgentScreen(name, "Reviso los rate limits del poller antes de seguir");
@@ -339,7 +339,7 @@ describe("RunWatcher: límite de uso", () => {
     expect(await h.herdr.readAgent({ name })).toContain(nudgePrompt("refine", taskId));
   });
 
-  it("el aviso del límite en forma de menú (blocked) escala en vez de avisar agente bloqueado", async () => {
+  it("the limit notice as a menu (blocked) escalates instead of reporting a blocked agent", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     h.herdr.setAgentScreen(
@@ -358,7 +358,7 @@ describe("RunWatcher: límite de uso", () => {
     ]);
   });
 
-  it("una vez escalado, más señales del mismo agente no duplican el escalamiento", async () => {
+  it("once escalated, more signals from the same agent do not duplicate the escalation", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     h.herdr.setAgentScreen(name, CLAUDE_LIMIT_SCREEN);
@@ -377,8 +377,8 @@ describe("RunWatcher: límite de uso", () => {
   });
 });
 
-describe("RunWatcher: eventos perdidos", () => {
-  it("un corte del stream pide reconciliar y relee el estado del agente", async () => {
+describe("RunWatcher: lost events", () => {
+  it("a stream cut requests reconciling and re-reads the agent's state", async () => {
     const h = setup();
     const { taskId, name } = await h.launched();
     h.herdr.dropStreams();
@@ -389,8 +389,8 @@ describe("RunWatcher: eventos perdidos", () => {
   });
 });
 
-describe("RunWatcher: Runs que no se fallan", () => {
-  it("con handoff guardado (pass del verificador): ni nudge, ni fallo, ni timeout", async () => {
+describe("RunWatcher: Runs that are not failed", () => {
+  it("with a saved handoff (verifier pass): no nudge, no failure, no timeout", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     h.runs.recordHandoff(run.id, { verdict: "pass" });
@@ -412,7 +412,7 @@ describe("RunWatcher: Runs que no se fallan", () => {
     expect(h.taskRow(taskId)).toMatchObject({ subState: "running" });
   });
 
-  it("un crash con la pregunta abierta deja el Run abierto para la respuesta (UW-22)", async () => {
+  it("a crash with the question open leaves the Run open for the answer (UW-22)", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
     transitionTask(h.db, { taskId, actor: "agent", command: { type: "ask_human" } });
@@ -425,10 +425,10 @@ describe("RunWatcher: Runs que no se fallan", () => {
     expect(h.watcher.watching()).toEqual([]);
   });
 
-  it("un timeout que vence con la pregunta abierta antes del outbox escala al responder", async () => {
+  it("a timeout that expires with the question open before the outbox escalates on answering", async () => {
     const h = setup();
     const { taskId } = await h.launched();
-    // ask_human sin avisar al watcher: el outbox todavía no lo entregó.
+    // ask_human without notifying the watcher: the outbox has not delivered it yet.
     transitionTask(h.db, { taskId, actor: "agent", command: { type: "ask_human" } });
     await vi.advanceTimersByTimeAsync(30 * MIN);
     await settle(vi);
@@ -440,7 +440,7 @@ describe("RunWatcher: Runs que no se fallan", () => {
     expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human" });
   });
 
-  it("una suscripción rechazada por otro motivo pide reconciliar en vez de fallar el Run", async () => {
+  it("a subscription rejected for another reason requests reconciling instead of failing the Run", async () => {
     class FlakyHerdr extends FakeHerdr {
       override subscribe(input: SubscribeInput, onEvent: (event: HerdrEvent) => void) {
         if (!input.paneIds) return super.subscribe(input, onEvent);

@@ -1,6 +1,6 @@
-// Rutas de la bandeja de preguntas (UW-22, ADR uw-22-preguntas). Listar y consultar leen la base;
-// responder lo hace el QuestionService, que habla con herdr. La validación vive en
-// @lunasq/schemas y la lógica en QuestionRepository y QuestionService.
+// Question inbox routes (UW-22, ADR uw-22-preguntas). Listing and querying read the database;
+// answering is done by the QuestionService, which talks to herdr. Validation lives in
+// @lunasq/schemas and the logic in QuestionRepository and QuestionService.
 import { isHerdrError } from "@lunasq/adapters";
 import type { QuestionRepository, QuestionRow } from "@lunasq/db";
 import {
@@ -17,10 +17,10 @@ export interface QuestionAnswerer {
   answer(id: string, input: QuestionAnswer): Promise<AnswerOutcome>;
 }
 
-/** Los agentes bloqueados por un permiso en este momento (los observa el RunWatcher). */
+/** The agents blocked by a permission right now (observed by the RunWatcher). */
 export type BlockedSource = () => BlockedAgent[];
 
-/** Enfoca en herdr el pane de un agente por su nombre (`HerdrAdapter.focusAgent`). */
+/** Focuses an agent's pane in herdr by its name (`HerdrAdapter.focusAgent`). */
 export type AgentFocuser = (agentName: string) => Promise<unknown>;
 
 export function toQuestion(row: QuestionRow): Question {
@@ -68,8 +68,8 @@ export function questionRoutes(questions: QuestionRepository, answerer?: Questio
 }
 
 /**
- * El acceso de la bandeja al pane (ADR uw-27-bandeja): solo enfoca agentes que el RunWatcher ve
- * bloqueados, así la UI no puede mover la vista de herdr a un agente cualquiera.
+ * The inbox's access to the pane (ADR uw-27-bandeja): it only focuses agents the RunWatcher sees
+ * blocked, so the UI cannot move herdr's view to an arbitrary agent.
  */
 export function blockedRoutes(blocked: BlockedSource, focus?: AgentFocuser): Hono {
   return new Hono()
@@ -77,10 +77,7 @@ export function blockedRoutes(blocked: BlockedSource, focus?: AgentFocuser): Hon
     .post("/:runId/focus", async (c) => {
       const agent = blocked().find((b) => b.runId === c.req.param("runId"));
       if (!agent) {
-        return c.json(
-          { error: "not_blocked", message: "el Run no tiene un agente bloqueado" },
-          404,
-        );
+        return c.json({ error: "not_blocked", message: "the Run has no blocked agent" }, 404);
       }
       if (!focus) return c.json({ error: "focus_unavailable" }, 503);
       try {
@@ -88,7 +85,7 @@ export function blockedRoutes(blocked: BlockedSource, focus?: AgentFocuser): Hon
       } catch (error) {
         if (isHerdrError(error, "agent_not_found")) {
           return c.json(
-            { error: "agent_gone", message: `${agent.agentName} ya no está en herdr` },
+            { error: "agent_gone", message: `${agent.agentName} is no longer in herdr` },
             409,
           );
         }

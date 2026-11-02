@@ -1,11 +1,13 @@
-// Piezas compartidas por las páginas: estado de una tarea, carga y errores de consulta y escritura.
+// Pieces shared by the pages: a task's state, loading and query and write errors.
 import type { SubState, TaskState } from "@lunasq/schemas";
 import type { ComponentProps } from "react";
 import { ApiError } from "../lib/api.ts";
-import { STATE_LABEL, SUB_STATE_LABEL } from "../lib/format.ts";
+import type { Dictionary } from "../lib/dictionary/index.ts";
+import { useErrorText } from "../lib/error-text.ts";
+import { useT } from "../lib/i18n.ts";
 import { Badge } from "./ui/badge.tsx";
 
-/** Solo In progress va en azul y Needs human en rojo; el resto queda neutro. */
+/** Only In progress is blue and Needs human red; the rest stays neutral. */
 function stateVariant(state: TaskState): ComponentProps<typeof Badge>["variant"] {
   if (state === "in_progress") return "info";
   if (state === "needs_human") return "destructive";
@@ -13,42 +15,51 @@ function stateVariant(state: TaskState): ComponentProps<typeof Badge>["variant"]
 }
 
 export function StateBadges({ state, subState }: { state: TaskState; subState: SubState | null }) {
+  const t = useT();
   return (
     <span className="inline-flex gap-1">
-      <Badge variant={stateVariant(state)}>{STATE_LABEL[state]}</Badge>
-      {subState && <Badge variant="outline">{SUB_STATE_LABEL[subState]}</Badge>}
+      <Badge variant={stateVariant(state)}>{t.state[state]}</Badge>
+      {subState && <Badge variant="outline">{t.subState[subState]}</Badge>}
     </span>
   );
 }
 
-export function stateText(position: { state: TaskState; subState: SubState | null }): string {
-  const sub = position.subState ? ` · ${SUB_STATE_LABEL[position.subState]}` : "";
-  return `${STATE_LABEL[position.state]}${sub}`;
+export function stateText(
+  position: { state: TaskState; subState: SubState | null },
+  t: Dictionary,
+): string {
+  const sub = position.subState ? ` · ${t.subState[position.subState]}` : "";
+  return `${t.state[position.state]}${sub}`;
 }
 
 export function Loading() {
-  return <p className="text-sm text-muted-foreground">Cargando…</p>;
+  const t = useT();
+  return <p className="text-sm text-muted-foreground">{t.common.loading}</p>;
 }
 
 export function QueryError({ error }: { error: Error }) {
+  const t = useT();
+  const errorText = useErrorText();
   return (
     <p role="alert" className="text-sm text-destructive">
-      Error al cargar: {error.message}
+      {t.common.loadError(errorText(error))}
     </p>
   );
 }
 
-/** Error de una escritura, con los issues de validación del servidor si los trae. */
+/** A write error, with the server's validation issues if it carries them. */
 export function MutationError({ error }: { error: Error }) {
+  const t = useT();
+  const errorText = useErrorText();
   const issues = error instanceof ApiError ? error.issues : [];
   return (
     <div role="alert" className="text-sm text-destructive">
-      <p>{error.message}</p>
+      <p>{errorText(error)}</p>
       {issues.length > 0 && (
         <ul className="list-disc pl-5 font-mono text-xs">
           {issues.map((issue, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: los issues pueden repetirse y la lista no se reordena.
-            <li key={i}>{`${issue.path.join(".") || "(raíz)"}: ${issue.message}`}</li>
+            // biome-ignore lint/suspicious/noArrayIndexKey: the issues can repeat and the list is not reordered.
+            <li key={i}>{`${issue.path.join(".") || t.common.root}: ${issue.message}`}</li>
           ))}
         </ul>
       )}

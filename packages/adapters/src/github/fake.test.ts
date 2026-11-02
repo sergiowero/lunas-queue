@@ -3,7 +3,7 @@ import { gitHubContract } from "./contract.ts";
 import { GitHubError } from "./errors.ts";
 import { FakeGitHub } from "./fake.ts";
 
-gitHubContract("fake en memoria", async () => {
+gitHubContract("in-memory fake", async () => {
   const adapter = new FakeGitHub();
   let branches = 0;
   return {
@@ -16,11 +16,11 @@ gitHubContract("fake en memoria", async () => {
   };
 });
 
-// Controles propios del fake, que usan el poller y la entrega en sus tests.
-describe("FakeGitHub: controles de test", () => {
+// The fake's own controls, used by the poller and the delivery in their tests.
+describe("FakeGitHub: test controls", () => {
   const input = { cwd: "/repo", head: "lunasq/t1", base: "main", title: "t", body: "b" };
 
-  it("setChecks y addReview se ven en getPr", async () => {
+  it("setChecks and addReview show up in getPr", async () => {
     const fake = new FakeGitHub();
     const { pr } = await fake.createPr(input);
     fake.setChecks(pr.url, [
@@ -35,7 +35,7 @@ describe("FakeGitHub: controles de test", () => {
     expect(read.reviewDecision).toBe("approved");
   });
 
-  it("merge usa la hora dada, reopen reabre un cerrado y failGetPr inyecta fallos", async () => {
+  it("merge uses the given time, reopen reopens a closed one and failGetPr injects failures", async () => {
     const fake = new FakeGitHub({ repo: "o/r" });
     const { pr } = await fake.createPr(input);
     expect(pr.url).toBe("https://github.com/o/r/pull/1");
@@ -52,7 +52,7 @@ describe("FakeGitHub: controles de test", () => {
     expect(fake.created).toHaveLength(1);
   });
 
-  it("getPr devuelve copias: modificarlas no cambia el fake", async () => {
+  it("getPr returns copies: modifying them does not change the fake", async () => {
     const fake = new FakeGitHub();
     const { pr } = await fake.createPr(input);
     pr.state = "merged";

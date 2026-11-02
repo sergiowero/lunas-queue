@@ -1,5 +1,5 @@
-// Preguntas del agente al humano (docs/design.md §Preguntas del agente y bloqueos,
-// ADR uw-22-preguntas). QUESTION_CREATED y la tool ask_human viven en mcp.ts.
+// Questions from the agent to the human (docs/design.md §Agent questions and blocks,
+// ADR uw-22-preguntas). QUESTION_CREATED and the ask_human tool live in mcp.ts.
 import { z } from "zod";
 import { QuestionStatus } from "./enums.ts";
 import { ShortText, Text } from "./handoff/common.ts";
@@ -8,7 +8,7 @@ import { SchedulablePhase } from "./scheduler.ts";
 export const QUESTION_ANSWERED = "question.answered";
 export const QUESTION_CANCELLED = "question.cancelled";
 
-/** Cuerpo de `POST /api/questions/:id/answer`. */
+/** Body of `POST /api/questions/:id/answer`. */
 export const QuestionAnswer = z.strictObject({
   answer: z.string().trim().min(1).max(2000),
   answeredBy: ShortText.optional(),
@@ -25,14 +25,14 @@ export type QuestionListQuery = z.infer<typeof QuestionListQuery>;
 export const QUESTION_OPTIONS_MIN = 2;
 export const QUESTION_OPTIONS_MAX = 6;
 
-/** Alternativa estructurada que el agente propone: el label es lo que llega de vuelta como respuesta. */
+/** Structured alternative the agent proposes: the label is what comes back as the answer. */
 export const QuestionOption = z.strictObject({
   label: z.string().trim().min(1).max(100),
   description: z.string().trim().min(1).max(500).optional(),
 });
 export type QuestionOption = z.infer<typeof QuestionOption>;
 
-/** De 2 a 6 opciones con labels únicos sin distinguir mayúsculas ni espacios extremos. */
+/** 2 to 6 options with unique labels, case-insensitive and ignoring surrounding whitespace. */
 export const QuestionOptions = z
   .array(QuestionOption)
   .min(QUESTION_OPTIONS_MIN)
@@ -45,7 +45,7 @@ export const QuestionOptions = z
         ctx.addIssue({
           code: "custom",
           path: [index, "label"],
-          message: `label de opción repetido: ${option.label}`,
+          message: `duplicate option label: ${option.label}`,
         });
       }
       seen.add(key);
@@ -68,7 +68,7 @@ export const Question = z.strictObject({
 });
 export type Question = z.infer<typeof Question>;
 
-/** `pane`: la respuesta fue al agente vivo; `new_run`: el pane ya no existía y se redespacha. */
+/** `pane`: the answer went to the live agent; `new_run`: the pane no longer existed and it is redispatched. */
 export const QuestionDelivery = z.enum(["pane", "new_run"]);
 export type QuestionDelivery = z.infer<typeof QuestionDelivery>;
 
@@ -86,7 +86,7 @@ export const QuestionCancelledPayload = z.strictObject({
 });
 export type QuestionCancelledPayload = z.infer<typeof QuestionCancelledPayload>;
 
-/** Agente que espera un permiso en su TUI: se responde en herdr, en el pane del agente. */
+/** Agent waiting for a permission in its TUI: it is answered in herdr, in the agent's pane. */
 export const BlockedAgent = z.strictObject({
   runId: z.uuid(),
   taskId: z.uuid(),

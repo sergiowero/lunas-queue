@@ -1,29 +1,29 @@
-# 0011 — Outbox de eventos: encolado transaccional y publicador at-least-once
+# 0011 — Event outbox: transactional enqueueing and at-least-once publisher
 
-- Estado: aceptada
-- Fecha: 2026-10-29
-- Unidad: UW-08 · Código: `packages/db/src/outbox.ts`, `packages/db/src/event-log.ts`, `packages/server/src/outbox/`, esquema en `packages/schemas/src/outbox.ts`
+- Status: accepted
+- Date: 2026-10-29
+- Unit: UW-08 · Code: `packages/db/src/outbox.ts`, `packages/db/src/event-log.ts`, `packages/server/src/outbox/`, schema in `packages/schemas/src/outbox.ts`
 
-## Contexto
+## Context
 
-`docs/design.md` (§Componentes) pide publicar los cambios de estado hacia el scheduler y el dispatcher sin perder eventos entre la base y la cola. UW-01 dejó la tabla `outbox` (id autoincremental, `event_id` único, `topic`, `payload`, `published_at`, `attempts`) y ADR 0007 fijó que el outbox sale de los eventos `task.transitioned`. El criterio de UW-08 es que ningún evento se pierda ante una caída entre el commit y la publicación.
+`docs/design.md` (§Components) asks to publish state changes to the scheduler and the dispatcher without losing events between the database and the queue. UW-01 left the `outbox` table (autoincrement id, unique `event_id`, `topic`, `payload`, `published_at`, `attempts`) and ADR 0007 fixed that the outbox comes from the `task.transitioned` events. UW-08's criterion is that no event is lost on a crash between the commit and the publication.
 
-## Decisión
+## Decision
 
-- **Encolado en la misma transacción.** `appendEvent(db, input, { publish: true })` escribe el evento y su fila de outbox en una transacción; dentro de otra (como en `transitionTask`) es un savepoint, así que se confirma o se revierte junto con quien llama. `transitionTask` siempre publica. Si el commit ocurre, la fila pendiente existe; si no, no existe ni el evento ni el cambio de estado. Otros eventos (p. ej. `task.created` de UW-07) eligen publicar con la misma opción.
-- **Idempotente.** `enqueueOutbox` ignora un `event_id` ya encolado.
-- **Topic = tipo del evento.** El mensaje (`OutboxMessage` en `@lunasq/schemas`) se arma con un join a `events`: `id`, `eventId`, `topic`, `taskId`, `actor`, `payload`, `createdAt`. La columna `outbox.payload` queda en `NULL` para no duplicar el payload del evento; cada suscriptor valida el payload con el esquema de su topic.
-- **Publicador en proceso** (`OutboxPublisher`): suscriptores por topic o `*`. `drain()` lee pendientes en orden de `id`, entrega a cada suscriptor en orden de registro y esperando a los asíncronos, y marca `published_at`. Una sola pasada a la vez: un `drain` o `wake` durante otra pide una pasada más, y si llega cuando la pasada ya está saliendo, se relanza al terminar; así no se queda atrás lo confirmado después de la lectura. Tras un fallo de entrega no hay pasada extra: el reintento espera al siguiente `wake` o poll. `start()` hace un drain inicial (recupera lo que dejó una caída) y arranca un poll periódico (1 s por defecto); `wake()` lo adelanta después de un commit; `stop()` detiene el poll y espera al mensaje en curso.
-- **At-least-once y en orden.** Si el proceso cae después de entregar y antes de marcar, el mensaje se entrega otra vez al arrancar. Si un suscriptor falla, se suma `attempts`, se avisa con `onError` y el drain se detiene para no entregar fuera de orden; el siguiente drain reintenta desde ese mensaje y lo reentrega también a los suscriptores que ya lo habían recibido.
-- **Sin suscriptores.** Con al menos un suscriptor registrado, un mensaje cuyo topic no tiene destinatarios se marca publicado. Sin ningún suscriptor el drain no marca nada, así un `start` antes de registrarlos no pierde lo que dejó una caída.
-- **Prueba del criterio.** Un proceso hijo confirma una transición y muere con `SIGKILL` antes de publicar; un publicador nuevo sobre el mismo archivo la entrega al arrancar. Otro hijo recibe el mensaje y muere dentro del handler, antes de marcarlo; el publicador siguiente lo reentrega. Los hijos ejecutan el TypeScript del workspace directo con Node (type stripping, sin flags), así que el código de los paquetes debe ser solo sintaxis borrable: `tsconfig.base.json` activa `erasableSyntaxOnly` y las parameter properties de `ProjectRepository`, `TaskRepository` y sus errores pasaron a campos declarados. Node 26 ya no acepta `--experimental-transform-types`.
+- **Enqueueing in the same transaction.** `appendEvent(db, input, { publish: true })` writes the event and its outbox row in one transaction; inside another one (as in `transitionTask`) it is a savepoint, so it is committed or rolled back together with the caller. `transitionTask` always publishes. If the commit happens, the pending row exists; if not, neither the event nor the state change exists. Other events (e.g. UW-07's `task.created`) choose to publish with the same option.
+- **Idempotent.** `enqueueOutbox` ignores an `event_id` that is already enqueued.
+- **Topic = event type.** The message (`OutboxMessage` in `@lunasq/schemas`) is built with a join to `events`: `id`, `eventId`, `topic`, `taskId`, `actor`, `payload`, `createdAt`. The `outbox.payload` column stays `NULL` so as not to duplicate the event's payload; each subscriber validates the payload with its topic's schema.
+- **In‑process publisher** (`OutboxPublisher`): subscribers per topic or `*`. `drain()` reads pending ones in `id` order, delivers to each subscriber in registration order and waiting for the asynchronous ones, and marks `published_at`. Only one pass at a time: a `drain` or `wake` during another asks for one more pass, and if it arrives when the pass is already exiting, it is relaunched at the end; this way what was committed after the read is not left behind. After a delivery failure there is no extra pass: the retry waits for the next `wake` or poll. `start()` does an initial drain (recovers what a crash left) and starts a periodic poll (1 s by default); `wake()` brings it forward after a commit; `stop()` stops the poll and waits for the message in progress.
+- **At‑least‑once and in order.** If the process crashes after delivering and before marking, the message is delivered again on startup. If a subscriber fails, `attempts` is incremented, `onError` is notified and the drain stops so as not to deliver out of order; the next drain retries from that message and redelivers it also to the subscribers that had already received it.
+- **No subscribers.** With at least one registered subscriber, a message whose topic has no recipients is marked published. With no subscriber at all the drain marks nothing, so a `start` before registering them does not lose what a crash left.
+- **Proof of the criterion.** A child process commits a transition and dies with `SIGKILL` before publishing; a new publisher on the same file delivers it on startup. Another child receives the message and dies inside the handler, before marking it; the next publisher redelivers it. The children run the workspace's TypeScript directly with Node (type stripping, no flags), so the packages' code must be erasable syntax only: `tsconfig.base.json` enables `erasableSyntaxOnly` and the parameter properties of `ProjectRepository`, `TaskRepository` and their errors became declared fields. Node 26 no longer accepts `--experimental-transform-types`.
 
-## Consecuencias
+## Consequences
 
-- Los suscriptores (UW-13 scheduler, UW-16 dispatcher) deben ser idempotentes ante mensajes repetidos; el scheduler lo es porque recalcula el ready set desde la base.
-- La unidad que componga el servidor (UW-13 al conectar el scheduler, o la que monte el proceso) crea un `OutboxPublisher`, registra suscriptores, llama `start()` y `wake()` después de cada transición confirmada; al apagar, `stop()`.
-- Un suscriptor que falla siempre bloquea la cola (mensaje venenoso): no hay dead-letter en v1. `attempts` y `onError` lo hacen visible; si hace falta, se agrega un tope que escale a needs_human o marque el mensaje.
-- Los reintentos no tienen backoff: un mensaje que siempre falla se reintenta en cada `wake` y cada poll, y llama `onError` cada vez.
-- `stop()` espera sin límite al handler en curso; un handler que nunca resuelve bloquea el apagado. Los suscriptores no deben quedarse esperando I/O sin timeout.
-- Las filas publicadas no se purgan; con el volumen de v1 no hace falta. `published_at` permite purgar después.
-- Un publicador por base. Dos procesos publicando sobre el mismo archivo podrían entregar dos veces; v1 corre en un solo proceso.
+- The subscribers (UW-13 scheduler, UW-16 dispatcher) must be idempotent for repeated messages; the scheduler is because it recomputes the ready set from the database.
+- The unit that composes the server (UW-13 when connecting the scheduler, or the one that mounts the process) creates an `OutboxPublisher`, registers subscribers, calls `start()` and `wake()` after each committed transition; on shutdown, `stop()`.
+- A subscriber that always fails blocks the queue (poison message): there is no dead‑letter in v1. `attempts` and `onError` make it visible; if needed, a cap is added that escalates to needs_human or marks the message.
+- Retries have no backoff: a message that always fails is retried on every `wake` and every poll, and calls `onError` each time.
+- `stop()` waits without limit for the handler in progress; a handler that never resolves blocks shutdown. Subscribers must not be left waiting on I/O without a timeout.
+- Published rows are not purged; with v1's volume it is not needed. `published_at` allows purging later.
+- One publisher per database. Two processes publishing on the same file could deliver twice; v1 runs in a single process.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parsePr, parsePrList, summarizeChecks } from "./wire.ts";
 
-// Salida real de `gh pr view 10 --json …` con gh 2.100.0 (un campo extra que se ignora).
+// Real output of `gh pr view 10 --json …` with gh 2.100.0 (an extra field that is ignored).
 const merged = {
   closedAt: "2026-10-29T15:47:34Z",
   headRefName: "uw-09-worktrees",
@@ -59,7 +59,7 @@ const open = {
 };
 
 describe("parsePr", () => {
-  it("traduce un PR mergeado con su CI", () => {
+  it("translates a merged PR with its CI", () => {
     expect(parsePr(merged)).toEqual({
       number: 10,
       url: merged.url,
@@ -80,7 +80,7 @@ describe("parsePr", () => {
     });
   });
 
-  it("lee los nombres de las etiquetas y descarta las de forma desconocida", () => {
+  it("reads the label names and discards those of unknown shape", () => {
     const labeled = {
       ...merged,
       labels: [{ name: "lunasq:risk-low", color: "0e8a16" }, { id: 1 }, "raro"],
@@ -88,7 +88,7 @@ describe("parsePr", () => {
     expect(parsePr(labeled).labels).toEqual(["lunasq:risk-low"]);
   });
 
-  it("lee si el PR choca con la base; un valor ausente o desconocido es unknown", () => {
+  it("reads whether the PR clashes with the base; an absent or unknown value is unknown", () => {
     expect(parsePr({ ...open, mergeable: "CONFLICTING" }).mergeable).toBe("conflicting");
     expect(parsePr({ ...open, mergeable: "MERGEABLE" }).mergeable).toBe("mergeable");
     expect(parsePr({ ...open, mergeable: "OTRO" }).mergeable).toBe("unknown");
@@ -96,7 +96,7 @@ describe("parsePr", () => {
     expect(parsePr(sinCampo).mergeable).toBe("unknown");
   });
 
-  it("traduce checks pendientes, saltados y de status, y las reviews", () => {
+  it("translates pending, skipped and status checks, and the reviews", () => {
     const pr = parsePr(open);
     expect(pr.state).toBe("open");
     expect(pr.mergedAt).toBeNull();
@@ -119,7 +119,7 @@ describe("parsePr", () => {
     ]);
   });
 
-  it("un PR cerrado sin merge y sin checks", () => {
+  it("a PR closed without merge and without checks", () => {
     const pr = parsePr({
       ...open,
       state: "CLOSED",
@@ -134,7 +134,7 @@ describe("parsePr", () => {
     expect(pr.closedAt).toEqual(new Date("2026-10-30T00:00:00Z"));
   });
 
-  it("un check o una review de forma desconocida no impide leer el estado", () => {
+  it("a check or review of unknown shape does not prevent reading the state", () => {
     const pr = parsePr({
       ...merged,
       statusCheckRollup: [
@@ -147,14 +147,14 @@ describe("parsePr", () => {
     expect(pr.checks).toEqual({
       status: "pending",
       items: [
-        { name: "desconocido", status: "pending", url: null },
-        { name: "desconocido", status: "pending", url: null },
+        { name: "unknown", status: "pending", url: null },
+        { name: "unknown", status: "pending", url: null },
       ],
     });
     expect(pr.reviews).toEqual([{ author: "ana", state: "approved", submittedAt: null }]);
   });
 
-  it("rechaza una salida con forma inesperada", () => {
+  it("rejects an output with an unexpected shape", () => {
     expect(() => parsePr({ ...merged, state: "DRAFT" })).toThrow(
       expect.objectContaining({ code: "invalid_output" }),
     );
@@ -169,14 +169,14 @@ describe("summarizeChecks", () => {
     url: null,
   });
 
-  it("una falla gana a todo y un pendiente a los exitosos", () => {
+  it("a failure beats everything and a pending beats the successful ones", () => {
     expect(summarizeChecks([])).toBe("none");
     expect(summarizeChecks([c("success"), c("skipped")])).toBe("success");
     expect(summarizeChecks([c("success"), c("pending")])).toBe("pending");
     expect(summarizeChecks([c("pending"), c("failure")])).toBe("failure");
   });
 
-  it("parsePr traduce las conclusiones de falla de un CheckRun", () => {
+  it("parsePr translates the failure conclusions of a CheckRun", () => {
     for (const conclusion of ["FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED"]) {
       const pr = parsePr({
         ...merged,

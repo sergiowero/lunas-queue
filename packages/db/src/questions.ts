@@ -1,6 +1,6 @@
-// Questions del agente al humano (docs/design.md §Preguntas del agente y bloqueos,
-// ADR uw-22-preguntas). `createQuestion` vive en runs.ts porque lo usa el LunasQ MCP; aquí están
-// la respuesta, la consulta y la cancelación.
+// Agent Questions to the human (docs/design.md §Agent questions and blocks,
+// ADR uw-22-preguntas). `createQuestion` lives in runs.ts because the LunasQ MCP uses it; here are
+// the answer, the query and the cancellation.
 import {
   QUESTION_ANSWERED,
   QUESTION_CANCELLED,
@@ -18,7 +18,7 @@ import { applyTransition, type TaskRow } from "./task-transitions.ts";
 export type AnswerQuestionInput = {
   answer: string;
   answeredBy?: string;
-  /** El pane del agente sigue vivo: la tarea vuelve a running; si no, a queued (Run nuevo). */
+  /** The agent's pane is still alive: the task goes back to running; otherwise, to queued (new Run). */
   agentAlive: boolean;
 };
 
@@ -41,7 +41,7 @@ export class QuestionRepository {
     return this.db.select().from(questions).where(eq(questions.id, id)).get() ?? null;
   }
 
-  /** Más viejas primero (rowid desempata el mismo milisegundo): el orden en que esperan al humano. */
+  /** Oldest first (rowid breaks the tie within the same millisecond): the order in which they wait for the human. */
   list(query: QuestionListQuery = {}): QuestionRow[] {
     const base = this.db
       .select({ question: questions })
@@ -58,7 +58,7 @@ export class QuestionRepository {
     return base.all().map((r) => r.question);
   }
 
-  /** La pregunta abierta de la tarea: `ask_human` rechaza una segunda, así que hay a lo sumo una. */
+  /** The task's open question: `ask_human` rejects a second one, so there is at most one. */
   openForTask(taskId: string): QuestionRow | null {
     return (
       this.db
@@ -71,8 +71,8 @@ export class QuestionRepository {
   }
 
   /**
-   * Guarda la respuesta y aplica `answer` en una sola transacción: la Question, la transición y
-   * los eventos se confirman juntos o ninguno. Responder dos veces se rechaza (`not_open`).
+   * Stores the answer and applies `answer` in a single transaction: the Question, the transition and
+   * the events commit together or not at all. Answering twice is rejected (`not_open`).
    */
   answer(id: string, input: AnswerQuestionInput): AnswerQuestionResult {
     const fail = (code: AnswerQuestionErrorCode, message: string): AnswerQuestionResult => ({
@@ -82,9 +82,9 @@ export class QuestionRepository {
     return this.db.transaction(
       (tx) => {
         const question = tx.select().from(questions).where(eq(questions.id, id)).get();
-        if (!question) return fail("not_found", `no existe la pregunta ${id}`);
+        if (!question) return fail("not_found", `question ${id} does not exist`);
         if (question.status !== "open") {
-          return fail("not_open", `la pregunta ${id} está ${question.status}`);
+          return fail("not_open", `question ${id} is ${question.status}`);
         }
         const moved = applyTransition(tx, {
           taskId: question.taskId,
@@ -107,7 +107,7 @@ export class QuestionRepository {
           .where(and(eq(questions.id, id), eq(questions.status, "open")))
           .returning()
           .all();
-        if (!row) return fail("not_open", `la pregunta ${id} ya no está abierta`);
+        if (!row) return fail("not_open", `question ${id} is no longer open`);
         const payload: QuestionAnsweredPayload = {
           questionId: id,
           runId: question.runId,
@@ -126,7 +126,7 @@ export class QuestionRepository {
     );
   }
 
-  /** Cancela las preguntas abiertas de la tarea (cancelación o salida de waiting_human). */
+  /** Cancels the task's open questions (cancellation or exit from waiting_human). */
   cancelOpen(taskId: string, reason: QuestionCancelledPayload["reason"]): QuestionRow[] {
     return this.db.transaction(
       (tx) => {

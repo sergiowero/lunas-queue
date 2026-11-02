@@ -14,12 +14,12 @@ export type RenderedApp = {
   router: ReturnType<typeof createAppRouter>;
   queryClient: QueryClient;
   user: UserEvent;
-  /** Lo que haría el refresco periódico: vuelve a pedir todo lo activo. */
+  /** What the periodic refresh would do: requests everything active again. */
   refresh: () => Promise<void>;
   unmount: () => void;
 };
 
-/** Monta la app completa en `path` contra un FakeApi; sin refresco periódico ni reintentos. */
+/** Mounts the full app at `path` against a FakeApi; without periodic refresh or retries. */
 export function renderApp(path: string, fake = new FakeApi()): RenderedApp {
   vi.stubGlobal("fetch", fake.fetch);
   const queryClient = new QueryClient({
@@ -35,7 +35,7 @@ export function renderApp(path: string, fake = new FakeApi()): RenderedApp {
   return { fake, router, queryClient, user, refresh, unmount };
 }
 
-/** Simula el esquema de colores que declara el sistema (prefers-color-scheme). */
+/** Simulates the color scheme the system declares (prefers-color-scheme). */
 export function stubColorScheme(scheme: "light" | "dark") {
   const base = globalThis.matchMedia;
   vi.stubGlobal("matchMedia", (query: string) => ({

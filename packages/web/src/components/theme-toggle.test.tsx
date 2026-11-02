@@ -13,7 +13,7 @@ function icon() {
   return toggle().querySelector("svg")?.dataset.icon;
 }
 
-describe("selector de tema", () => {
+describe("theme toggle", () => {
   it.each(["/queue", "/inbox", "/projects", "/tasks/new"])(
     "en %s, sin preferencia y con el sistema en claro, el tema es claro y el selector al final del header muestra la luna",
     async (path) => {
@@ -26,13 +26,17 @@ describe("selector de tema", () => {
       expect(bar?.parentElement?.tagName).toBe("HEADER");
       expect(bar?.lastElementChild).toBe(button);
       expect(button.className).not.toContain("ml-auto");
-      expect(button.previousElementSibling?.getAttribute("href")).toBe("/settings");
-      expect(button.previousElementSibling?.className).not.toContain("ml-auto");
-      expect(button.previousElementSibling?.previousElementSibling?.className).toContain("ml-auto");
+      const language = button.previousElementSibling;
+      expect(language?.getAttribute("aria-label")).toBe("Cambiar a inglés");
+      expect(language?.previousElementSibling?.getAttribute("href")).toBe("/settings");
+      expect(language?.previousElementSibling?.className).not.toContain("ml-auto");
+      expect(language?.previousElementSibling?.previousElementSibling?.className).toContain(
+        "ml-auto",
+      );
     },
   );
 
-  it("en tema claro, un click pasa a oscuro, muestra el sol y guarda «dark»", async () => {
+  it("in light theme, a click switches to dark, shows the sun and saves «dark»", async () => {
     const { user } = renderApp("/queue");
     await user.click(await screen.findByRole("button", { name: "Cambiar a tema oscuro" }));
     expect(html.classList.contains("dark")).toBe(true);
@@ -41,7 +45,7 @@ describe("selector de tema", () => {
     expect(localStorage.getItem(THEME_KEY)).toBe("dark");
   });
 
-  it("en tema oscuro, un click pasa a claro, muestra la luna y guarda «light»", async () => {
+  it("in dark theme, a click switches to light, shows the moon and saves «light»", async () => {
     localStorage.setItem(THEME_KEY, "dark");
     const { user } = renderApp("/queue");
     await user.click(await screen.findByRole("button", { name: "Cambiar a tema claro" }));
@@ -50,7 +54,7 @@ describe("selector de tema", () => {
     expect(localStorage.getItem(THEME_KEY)).toBe("light");
   });
 
-  it("con «dark» guardado, al cargar el tema es oscuro y muestra el sol aunque el sistema esté en claro", async () => {
+  it("with «dark» saved, on load the theme is dark and shows the sun even if the system is light", async () => {
     stubColorScheme("light");
     localStorage.setItem(THEME_KEY, "dark");
     renderApp("/queue");
@@ -59,14 +63,14 @@ describe("selector de tema", () => {
     expect(icon()).toBe("sun");
   });
 
-  it("sin preferencia guardada y con el sistema en oscuro, al cargar el tema es oscuro", async () => {
+  it("without a saved preference and with the system dark, on load the theme is dark", async () => {
     stubColorScheme("dark");
     renderApp("/queue");
     await screen.findByRole("button", { name: "Cambiar a tema claro" });
     expect(html.classList.contains("dark")).toBe(true);
   });
 
-  it("con un valor guardado inválido, carga en claro y el selector sigue alternando", async () => {
+  it("with an invalid saved value, it loads light and the toggle keeps toggling", async () => {
     localStorage.setItem(THEME_KEY, "sepia");
     const { user } = renderApp("/queue");
     await user.click(await screen.findByRole("button", { name: "Cambiar a tema oscuro" }));
@@ -75,7 +79,7 @@ describe("selector de tema", () => {
     expect(html.classList.contains("dark")).toBe(false);
   });
 
-  it("con localStorage que lanza error y sin matchMedia, carga en claro y el selector sigue alternando", async () => {
+  it("with localStorage throwing and without matchMedia, it loads light and the toggle keeps toggling", async () => {
     vi.stubGlobal("matchMedia", undefined);
     vi.stubGlobal("localStorage", {
       getItem: () => {
@@ -94,7 +98,7 @@ describe("selector de tema", () => {
     expect(icon()).toBe("moon");
   });
 
-  it("es un botón con aria-label de la acción, icono decorativo y operable con teclado", async () => {
+  it("is a button with an aria-label of the action, decorative icon and operable with keyboard", async () => {
     const { user } = renderApp("/queue");
     const button = await screen.findByRole("button", { name: "Cambiar a tema oscuro" });
     expect(button.tagName).toBe("BUTTON");

@@ -1,11 +1,11 @@
 export type GitHubErrorCode =
-  /** `gh` no está instalado o no se pudo ejecutar. */
+  /** `gh` is not installed or could not be run. */
   | "gh_unavailable"
-  /** `gh` sin sesión (exit 4). */
+  /** `gh` without a session (exit 4). */
   | "not_authenticated"
   | "not_found"
   | "timeout"
-  /** Salida que no cumple el esquema esperado. */
+  /** Output that does not meet the expected schema. */
   | "invalid_output"
   | "gh_failed";
 

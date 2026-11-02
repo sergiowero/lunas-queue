@@ -1,7 +1,7 @@
-// Settings: el humano habilita o deshabilita cada proveedor de agente y fija el límite global de
-// agentes concurrentes (docs/decisions/settings-proveedores.md). Apagar un proveedor aplica las
-// reglas de fallback; apagar ambos pausa el despacho. Los agentes vivos nunca se interrumpen, ni
-// al apagar un proveedor ni al bajar el límite.
+// Settings: the human enables or disables each agent provider and sets the global limit of
+// concurrent agents (docs/decisions/settings-proveedores.md). Turning a provider off applies the
+// fallback rules; turning both off pauses dispatch. Live agents are never interrupted, neither
+// when turning a provider off nor when lowering the limit.
 import {
   AgentKind,
   type AgentProviderPatch,
@@ -15,14 +15,10 @@ import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
 import { Input, Label } from "../components/ui/input.tsx";
 import { api } from "../lib/api.ts";
+import { useErrorText } from "../lib/error-text.ts";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 import { cn } from "../lib/utils.ts";
-
-const LABEL: Record<AgentKind, string> = { claude: "Claude", copilot: "Copilot" };
-const DESCRIPTION: Record<AgentKind, string> = {
-  claude: "Claude Code",
-  copilot: "GitHub Copilot CLI",
-};
 
 function Switch({
   label,
@@ -41,15 +37,15 @@ function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      // aria-disabled y no disabled: un botón disabled pierde el foco y el teclado se queda sin sitio.
-      // aria-disabled y no disabled: un botón disabled pierde el foco y el teclado se queda sin sitio.
+      // aria-disabled and not disabled: a disabled button loses focus and the keyboard is left with nowhere to go.
+      // aria-disabled and not disabled: a disabled button loses focus and the keyboard is left with nowhere to go.
       aria-disabled={disabled}
       onClick={() => {
         if (!disabled) onChange(!checked);
       }}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60",
-        // El apagado usa un gris con contraste suficiente contra la tarjeta (≥3:1) para localizarlo.
+        // The off state uses a gray with enough contrast against the card (≥3:1) to spot it.
         checked ? "border-primary bg-primary" : "border-text-muted bg-text-muted",
       )}
     >
@@ -65,34 +61,35 @@ function Switch({
 }
 
 export function SettingsPage() {
+  const t = useT();
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">Settings</h1>
+      <h1 className="text-xl font-semibold">{t.settings.title}</h1>
       <ProvidersSection />
       <ConcurrencySection />
     </div>
   );
 }
 
-const CONCURRENCY_INVALID = `Escribe un número entero entre 1 y ${MAX_GLOBAL_CONCURRENCY}.`;
-
 function ConcurrencySection() {
+  const t = useT();
+  const errorText = useErrorText();
   const inputId = useId();
   const messageId = useId();
   const settings = useQuery(queries.concurrencySettings());
   const queryClient = useQueryClient();
-  // null: el campo sigue al valor leído; un texto: lo que el humano está escribiendo.
+  // null: the field follows the value read; a text: what the human is typing.
   const [draft, setDraft] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
-  // Último límite que un PUT guardó y que ninguna lectura posterior llegó a leer: el servidor ya lo
-  // tiene, pero la caché sigue con un valor anterior.
+  // Last limit a PUT saved and that no later read managed to read: the server already
+  // has it, but the cache still holds an earlier value.
   const [unread, setUnread] = useState<{ value: number; at: number } | null>(null);
   const update = useMutation({
     mutationFn: (input: ConcurrencySettings) => api.updateConcurrencySettings(input),
-    // Se vuelve a leer en vez de pisar la caché con la respuesta del PUT, y el campo solo vuelve a
-    // seguir al servidor cuando llegó la lectura: así muestra el valor guardado y no uno viejo.
-    // invalidateQueries no lanza si la lectura falla: en ese caso el campo conserva el valor que el
-    // PUT confirmó y el aviso dice que se guardó, en vez de mostrar el valor anterior.
+    // It is re-read instead of overwriting the cache with the PUT response, and the field only goes back to
+    // following the server when the read arrived: this way it shows the saved value and not an old one.
+    // invalidateQueries does not throw if the read fails: in that case the field keeps the value the
+    // PUT confirmed and the notice says it was saved, instead of showing the previous value.
     onSuccess: async (saved) => {
       const queryKey = queries.concurrencySettings().queryKey;
       await queryClient.invalidateQueries({ queryKey });
@@ -121,26 +118,22 @@ function ConcurrencySection() {
     update.mutate(parsed.data);
   }
 
-  // Una lectura posterior al PUT ya refleja lo guardado: entonces rige settings.data.
+  // A read after the PUT already reflects what was saved: then settings.data governs.
   const savedUnread = unread && (settings.dataUpdatedAt ?? 0) < unread.at ? unread.value : null;
   const effective = savedUnread ?? settings.data?.globalConcurrency;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Concurrencia</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Máximo de agentes vivos a la vez, entre todos los proyectos y fases (incluye los que
-          esperan una respuesta). Subirlo despacha de inmediato las tareas en cola; bajarlo no
-          interrumpe a los que ya corren, solo frena los despachos nuevos.
-        </p>
+        <CardTitle>{t.settings.concurrencyTitle}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t.settings.concurrencyHelp}</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {!settings.data && !settings.error && <Loading />}
         {settings.data && (
           <form onSubmit={submit} noValidate className="flex flex-wrap items-end gap-3">
             <div className="flex flex-col gap-1">
-              <Label htmlFor={inputId}>Agentes concurrentes</Label>
+              <Label htmlFor={inputId}>{t.settings.concurrentAgents}</Label>
               <Input
                 id={inputId}
                 type="number"
@@ -159,11 +152,11 @@ function ConcurrencySection() {
               />
             </div>
             <Button type="submit" disabled={update.isPending}>
-              Guardar
+              {t.settings.save}
             </Button>
             {invalid && (
               <p id={messageId} className="basis-full text-sm text-destructive">
-                {CONCURRENCY_INVALID}
+                {t.settings.concurrencyInvalid(MAX_GLOBAL_CONCURRENCY)}
               </p>
             )}
           </form>
@@ -172,15 +165,15 @@ function ConcurrencySection() {
           <p role="alert" className="text-sm text-destructive">
             {settings.data
               ? savedUnread === null
-                ? "No se pudo actualizar el límite; se muestra el último valor leído: "
-                : `El límite se guardó (${savedUnread}), pero no se pudo volver a leer: `
-              : "No se pudo leer el límite de concurrencia: "}
-            {settings.error.message}
+                ? t.settings.limitUpdateFailed
+                : t.settings.limitSavedUnread(savedUnread)
+              : t.settings.limitReadFailed}
+            {errorText(settings.error)}
           </p>
         )}
         {update.error && effective !== undefined && (
           <p role="alert" className="text-sm text-destructive">
-            No se pudo guardar el límite; sigue vigente {effective}: {update.error.message}
+            {t.settings.limitSaveFailed(effective, errorText(update.error))}
           </p>
         )}
       </CardContent>
@@ -189,13 +182,15 @@ function ConcurrencySection() {
 }
 
 function ProvidersSection() {
+  const t = useT();
+  const errorText = useErrorText();
   const settings = useQuery(queries.providerSettings());
   const queryClient = useQueryClient();
   const update = useMutation({
     mutationFn: (input: AgentProviderPatch) => api.updateProviderSettings(input),
-    // Se vuelve a leer en vez de pisar la caché con la respuesta: un PUT lento no debe restaurar una
-    // vista anterior a un cambio posterior (de otra pestaña). La mutación sigue pendiente hasta
-    // que llega la lectura fresca, así los interruptores no se mueven con datos viejos.
+    // It is re-read instead of overwriting the cache with the response: a slow PUT must not restore a
+    // view earlier than a later change (from another tab). The mutation stays pending until
+    // the fresh read arrives, so the switches do not move with old data.
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queries.providerSettings().queryKey }),
   });
@@ -203,55 +198,49 @@ function ProvidersSection() {
     return settings.error ? <QueryError error={settings.error} /> : <Loading />;
   }
   const current = settings.data;
-  // El PUT del último cambio tuvo éxito y ninguna lectura posterior llegó a leerlo: el servidor ya
-  // guardó, pero los interruptores muestran un estado anterior. Si una lectura posterior al PUT
-  // tuvo éxito, los datos ya reflejan el cambio y un fallo más tardío es ajeno a él.
+  // The last change's PUT succeeded and no later read managed to read it: the server already
+  // saved, but the switches show an earlier state. If a read after the PUT
+  // succeeded, the data already reflects the change and a later failure is unrelated to it.
   const savedButUnread =
     update.isSuccess &&
     settings.errorUpdatedAt >= update.submittedAt &&
     settings.dataUpdatedAt < update.submittedAt;
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Proveedores de agente</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Deshabilita un proveedor cuando se agote su límite de uso: no recibirá despachos nuevos
-            y se aplica el fallback al otro. Con ambos deshabilitados, las tareas esperan en cola.
-            Los agentes que ya corren no se interrumpen.
-          </p>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {AgentKind.options.map((kind) => (
-            <div key={kind} className="flex items-center justify-between gap-4">
-              <div className="flex flex-col">
-                <span className="font-medium">{LABEL[kind]}</span>
-                <span className="text-sm text-muted-foreground">{DESCRIPTION[kind]}</span>
-              </div>
-              <Switch
-                label={LABEL[kind]}
-                checked={current[kind]}
-                disabled={update.isPending}
-                onChange={(checked) => update.mutate({ [kind]: checked })}
-              />
+    <Card>
+      <CardHeader>
+        <CardTitle>{t.settings.providersTitle}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t.settings.providersHelp}</p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {AgentKind.options.map((kind) => (
+          <div key={kind} className="flex items-center justify-between gap-4">
+            <div className="flex flex-col">
+              <span className="font-medium">{t.settings.providers[kind]}</span>
+              <span className="text-sm text-muted-foreground">
+                {t.settings.providerDescriptions[kind]}
+              </span>
             </div>
-          ))}
-          {settings.error && (
-            <p role="alert" className="text-sm text-destructive">
-              {savedButUnread
-                ? "El cambio se guardó, pero no se pudo leer el estado; los interruptores muestran el último estado leído, que puede no reflejarlo: "
-                : "No se pudo actualizar la configuración; se muestra el último estado leído: "}
-              {settings.error.message}
-            </p>
-          )}
-          {update.error && (
-            <p role="alert" className="text-sm text-destructive">
-              No se pudo guardar: {update.error.message}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </>
+            <Switch
+              label={t.settings.providers[kind]}
+              checked={current[kind]}
+              disabled={update.isPending}
+              onChange={(checked) => update.mutate({ [kind]: checked })}
+            />
+          </div>
+        ))}
+        {settings.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {savedButUnread ? t.settings.providersSavedUnread : t.settings.providersUpdateFailed}
+            {errorText(settings.error)}
+          </p>
+        )}
+        {update.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {t.settings.saveFailed(errorText(update.error))}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

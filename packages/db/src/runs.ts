@@ -1,7 +1,7 @@
-// Runs: el claim atómico del dispatcher, el ciclo de vida de cada intento de un agente y lo que
-// usa el LunasQ MCP (Questions, checklist). Las funciones sueltas aceptan la base o una
-// transacción abierta, para que la tool de salida cierre el Run en la misma transacción que la
-// transición de la tarea (ADR uw-15-mcp-tools, ADR uw-16-dispatcher, ADR 0007, ADR 0014).
+// Runs: the dispatcher's atomic claim, the lifecycle of each agent attempt and what the
+// LunasQ MCP uses (Questions, checklist). The standalone functions accept the database or an open
+// transaction, so the exit tool closes the Run in the same transaction as the task
+// transition (ADR uw-15-mcp-tools, ADR uw-16-dispatcher, ADR 0007, ADR 0014).
 import { randomBytes } from "node:crypto";
 import {
   agentName,
@@ -43,7 +43,7 @@ export type QuestionRow = typeof questions.$inferSelect;
 type Reader = Pick<LunasqDatabase, "select">;
 type Writer = Pick<LunasqDatabase, "select" | "insert" | "update" | "transaction">;
 
-/** Lo que el claim necesita de la decisión del scheduler (DispatchDecision sin score). */
+/** What the claim needs from the scheduler's decision (DispatchDecision without score). */
 export type ClaimDecision = {
   taskId: string;
   projectId: string;
@@ -55,7 +55,7 @@ export type ClaimInput = {
   decision: ClaimDecision;
   config: SchedulerConfig;
   projects: ProjectConfigReader;
-  /** Session id nativo que el dispatcher pasará a Claude Code (`--session-id`). */
+  /** Native session id the dispatcher will pass to Claude Code (`--session-id`). */
   sessionId: string;
 };
 
@@ -85,12 +85,12 @@ class ClaimRejected extends Error {
   }
 }
 
-/** 256 bits: el token solo vive en el entorno del pane (ADR 0002). */
+/** 256 bits: the token only lives in the pane's environment (ADR 0002). */
 const newRunToken = () => randomBytes(32).toString("hex");
 
 /**
- * La configuración del scheduler con el límite global vigente: el guardado en Settings o, sin
- * valor, el de `config`. Se lee dentro de la transacción del claim para revalidar contra lo último.
+ * The scheduler configuration with the global limit in force: the one saved in Settings or, with no
+ * value, the one from `config`. It is read inside the claim transaction to revalidate against the latest.
  */
 function effectiveConfig(
   db: Pick<LunasqDatabase, "select">,
@@ -103,10 +103,10 @@ function effectiveConfig(
 }
 
 /**
- * Reclama la tarea para una fase: en una sola transacción IMMEDIATE revalida los límites con un
- * snapshot fresco (el plan del scheduler se calculó antes) y contra los proveedores habilitados
- * vigentes, aplica `dispatch` con `expected` y crea el Run con su token y el proveedor efectivo. Si algo no cuadra no escribe nada. Repetirlo con la misma decisión
- * da `stale_state`: la tarea ya está en running.
+ * Claims the task for a phase: in a single IMMEDIATE transaction it revalidates the limits with a fresh
+ * snapshot (the scheduler plan was computed earlier) and against the currently enabled providers,
+ * applies `dispatch` with `expected` and creates the Run with its token and the effective provider. If anything does not add up it writes nothing. Repeating it with the same decision
+ * gives `stale_state`: the task is already running.
  */
 export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
   const { decision } = input;
@@ -115,24 +115,24 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
       (tx) => {
         const task = tx.select().from(tasks).where(eq(tasks.id, decision.taskId)).get();
         if (!task)
-          throw new ClaimRejected("task_not_found", `no existe la tarea ${decision.taskId}`);
+          throw new ClaimRejected("task_not_found", `task ${decision.taskId} does not exist`);
         const { expected } = decision;
-        // Primero: repetir un claim ya aplicado es stale_state, no un Run activo.
+        // First: repeating an already applied claim is stale_state, not an active Run.
         if (expected.state !== task.state || expected.subState !== task.subState) {
           throw new ClaimRejected(
             "stale_state",
-            `se esperaba ${expected.state}/${expected.subState ?? "-"} y la tarea está en ${task.state}/${task.subState ?? "-"}`,
+            `expected ${expected.state}/${expected.subState ?? "-"} but the task is in ${task.state}/${task.subState ?? "-"}`,
           );
         }
         if (pendingPhase(task.state) !== decision.phase) {
           throw new ClaimRejected(
             "phase_mismatch",
-            `la tarea ${task.id} está en ${task.state}, no en una fase ${decision.phase}`,
+            `task ${task.id} is in ${task.state}, not in a ${decision.phase} phase`,
           );
         }
         const project = input.projects.get(task.projectId);
         if (!project) {
-          throw new ClaimRejected("project_not_found", `no existe el proyecto ${task.projectId}`);
+          throw new ClaimRejected("project_not_found", `project ${task.projectId} does not exist`);
         }
         const active = tx
           .select({ id: runs.id })
@@ -140,31 +140,28 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
           .where(and(eq(runs.taskId, task.id), isNull(runs.endedAt)))
           .get();
         if (active) {
-          throw new ClaimRejected(
-            "run_active",
-            `la tarea ${task.id} tiene abierto el Run ${active.id}`,
-          );
+          throw new ClaimRejected("run_active", `task ${task.id} has Run ${active.id} open`);
         }
-        // Los proveedores habilitados se leen aquí, no al planear: el humano pudo cambiarlos.
+        // Enabled providers are read here, not when planning: the human may have changed them.
         const providers = readProviderSettings(tx);
         const profile = phaseProfile(project, decision.phase);
         const agentKind = effectiveAgentKind(profile.kind, providers);
         if (agentKind === null) {
           throw new ClaimRejected(
             "providers_disabled",
-            `no hay proveedor de agente habilitado para ${task.id}`,
+            `no agent provider is enabled for ${task.id}`,
           );
         }
-        // La misma conexión: el snapshot ve lo que esta transacción ve (savepoint anidado).
+        // The same connection: the snapshot sees what this transaction sees (nested savepoint).
         const occupancy = Occupancy.of(
           new SchedulerStateRepository(tx).snapshot(),
           input.projects,
           providers,
         );
-        // El límite global también se lee aquí: Settings pudo cambiarlo después de planear.
+        // The global limit is also read here: Settings may have changed it after planning.
         const config = effectiveConfig(tx, input.config);
         if (!occupancy.fits(occupancy.slotFor(task, decision.phase), config)) {
-          throw new ClaimRejected("no_slot", `sin slot para ${task.id} en ${decision.phase}`);
+          throw new ClaimRejected("no_slot", `no slot for ${task.id} in ${decision.phase}`);
         }
 
         const moved = applyTransition(tx, {
@@ -186,7 +183,7 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
             taskId: task.id,
             phase: decision.phase,
             agentKind,
-            // El modelo del perfil es del proveedor primario; un fallback usa el suyo por default.
+            // The profile's model belongs to the primary provider; a fallback uses its own default.
             model: agentKind === profile.kind ? (profile.model ?? null) : null,
             iteration: task.verificationIteration,
             herdrName: agentName(task.id, decision.phase, previous + 1),
@@ -196,7 +193,7 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
           })
           .returning()
           .all();
-        if (!run) throw new Error("insert de run sin fila");
+        if (!run) throw new Error("run insert without a row");
         return { ok: true as const, run, task: moved.task };
       },
       { behavior: "immediate" },
@@ -220,7 +217,7 @@ export class RunRepository {
     return this.db.select().from(runs).where(eq(runs.id, runId)).get() ?? null;
   }
 
-  /** El Run activo (sin ended_at) con ese token; un token de un Run cerrado no cuenta. */
+  /** The active Run (no ended_at) with that token; the token of a closed Run does not count. */
   activeByToken(token: string): RunRow | null {
     return (
       this.db
@@ -232,14 +229,14 @@ export class RunRepository {
   }
 
   /**
-   * El Run con ese token, esté o no cerrado. La telemetría llega con retraso (Claude Code vacía su
-   * buffer al salir), así que el usage collector acepta también el último lote de un Run cerrado.
+   * The Run with that token, closed or not. Telemetry arrives late (Claude Code flushes its
+   * buffer on exit), so the usage collector also accepts the last batch of a closed Run.
    */
   byToken(token: string): RunRow | null {
     return this.db.select().from(runs).where(eq(runs.runToken, token)).get() ?? null;
   }
 
-  /** Registra la primera lectura del contexto; repetir devuelve la misma fecha. */
+  /** Records the first context read; repeating it returns the same date. */
   markContextRead(runId: string, at = new Date()): Date | null {
     this.db
       .update(runs)
@@ -249,14 +246,14 @@ export class RunRepository {
     return this.get(runId)?.contextReadAt ?? null;
   }
 
-  /** Guarda el handoff sin cerrar el Run: el verificador con pass sigue abierto (ADR 0007). */
+  /** Saves the handoff without closing the Run: the verifier with pass stays open (ADR 0007). */
   recordHandoff(runId: string, handoff: unknown): void {
     this.db.update(runs).set({ handoff }).where(eq(runs.id, runId)).run();
   }
 
   /**
-   * La entrega corre: el Run del verificador sigue abierto con su pass guardado (ADR 0007). Pausar
-   * ahí dejaría el PR a medias.
+   * Delivery is running: the verifier's Run stays open with its pass saved (ADR 0007). Pausing
+   * there would leave the PR half done.
    */
   deliveryInProgress(taskId: string): boolean {
     return (
@@ -276,7 +273,7 @@ export class RunRepository {
     );
   }
 
-  /** Handoffs guardados de la fase, del Run más viejo al más nuevo. */
+  /** Saved handoffs of the phase, from the oldest Run to the newest. */
   handoffs(taskId: string, phase: Phase): unknown[] {
     return this.db
       .select({ handoff: runs.handoff })
@@ -287,7 +284,7 @@ export class RunRepository {
       .map((r) => r.handoff);
   }
 
-  /** El Run más nuevo de la fase con handoff guardado, con su iteración; null si no hay. */
+  /** The newest Run of the phase with a saved handoff, with its iteration; null if there is none. */
   latestHandoff(
     taskId: string,
     phase: Phase,
@@ -303,7 +300,7 @@ export class RunRepository {
     );
   }
 
-  /** El último Run cerrado de la fase, sin contar `exceptRunId`: el intento anterior. */
+  /** The last closed Run of the phase, not counting `exceptRunId`: the previous attempt. */
   previousRun(taskId: string, phase: Phase, exceptRunId: string): RunRow | null {
     return (
       this.db
@@ -323,17 +320,17 @@ export class RunRepository {
     );
   }
 
-  /** Runs de la tarea en orden de creación. */
+  /** Runs of the task in creation order. */
   forTask(taskId: string): RunRow[] {
     return this.db.select().from(runs).where(eq(runs.taskId, taskId)).orderBy(sql`rowid`).all();
   }
 
-  /** Runs abiertos (sin ended_at): los que pueden tener un agente vivo. */
+  /** Open Runs (no ended_at): those that may have a live agent. */
   active(): RunRow[] {
     return this.db.select().from(runs).where(isNull(runs.endedAt)).orderBy(sql`rowid`).all();
   }
 
-  /** El Run más reciente de la tarea, abierto o no. */
+  /** The task's most recent Run, open or not. */
   latestForTask(taskId: string): RunRow | null {
     return (
       this.db
@@ -363,10 +360,10 @@ export class RunRepository {
   }
 
   /**
-   * Cambia el proveedor del Run. El claim reservó el slot del proveedor efectivo de entonces; pasar
-   * a otro (un fallback tras fallar el arranque, o porque el humano cambió Settings) lo revalida en
-   * la misma transacción contra los agentes vivos de los demás Runs, con los mismos límites del
-   * claim. Devuelve `no_slot` sin escribir nada si el proveedor nuevo no cabe; null si no hay Run.
+   * Changes the Run's provider. The claim reserved the slot of the provider effective back then; moving
+   * to another one (a fallback after the start failed, or because the human changed Settings) revalidates it in
+   * the same transaction against the live agents of the other Runs, with the same limits as the
+   * claim. Returns `no_slot` without writing anything if the new provider does not fit; null if there is no Run.
    */
   switchAgentKind(
     runId: string,
@@ -381,7 +378,7 @@ export class RunRepository {
         if (run.agentKind !== kind) {
           const task = tx.select().from(tasks).where(eq(tasks.id, run.taskId)).get();
           const snapshot = new SchedulerStateRepository(tx).snapshot();
-          // Sin el propio Run: se vuelve a colocar, no se suma a su slot actual.
+          // Without the Run itself: it is placed again, not added to its current slot.
           const others = { ...snapshot, tasks: snapshot.tasks.filter((t) => t.id !== run.taskId) };
           const occupancy = Occupancy.of(others, limits.projects, readProviderSettings(tx));
           const slot = {
@@ -437,7 +434,7 @@ export class RunRepository {
   ): void {
     this.db.transaction((tx) => {
       const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
-      if (!run) throw new Error(`no existe el Run ${runId}`);
+      if (!run) throw new Error(`Run ${runId} does not exist`);
       appendEvent(
         tx,
         {
@@ -451,7 +448,7 @@ export class RunRepository {
     });
   }
 
-  /** Marca que el prompt de fase salió; conserva la primera marca. */
+  /** Marks that the phase prompt was sent; keeps the first mark. */
   markLaunched(runId: string): RunRow | null {
     this.db
       .update(runs)
@@ -461,16 +458,16 @@ export class RunRepository {
     return this.get(runId);
   }
 
-  /** Cierra el Run una sola vez: si ya estaba cerrado no cambia nada y devuelve closed false. */
+  /** Closes the Run only once: if it was already closed nothing changes and it returns closed false. */
   close(runId: string, input: CloseRunInput): { closed: boolean; run: RunRow | null } {
     const closed = closeRun(this.db, runId, input);
     return { closed, run: this.get(runId) };
   }
 
   /**
-   * Run fallido que no declaró el agente (crash, despacho que no llegó a lanzar): lo cierra como
-   * failure y, si la tarea sigue en running en la fase del Run, aplica `run_failed` con el mismo
-   * conteo que `report_failure`. Al agotar los reintentos la tarea pasa a needs_human (ADR 0007).
+   * Failed Run that the agent did not declare (crash, dispatch that never launched): closes it as
+   * failure and, if the task is still running in the Run's phase, applies `run_failed` with the same
+   * count as `report_failure`. When retries run out the task goes to needs_human (ADR 0007).
    */
   fail(
     runId: string,
@@ -480,8 +477,8 @@ export class RunRepository {
     return this.db.transaction(
       (tx) => {
         const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
-        if (!run) throw new Error(`no existe el Run ${runId}`);
-        // Antes de cerrar: los fallos previos, más este.
+        if (!run) throw new Error(`Run ${runId} does not exist`);
+        // Before closing: the previous failures, plus this one.
         const attempt = consecutiveFailures(tx, run.taskId, run.phase) + 1;
         if (!closeRun(tx, runId, { result: "failure", failureReason: reason })) {
           return { closed: false, transitioned: false };
@@ -518,15 +515,15 @@ export class RunRepository {
   }
 
   /**
-   * Despacho en pausa: el humano apagó todos los proveedores después del claim y antes de que
-   * arrancara el agente. Cierra el Run como cancelled (no cuenta como fallo ni agota reintentos) y
-   * devuelve la tarea a queued para que espere a que se habilite un proveedor.
+   * Paused dispatch: the human turned off all providers after the claim and before the
+   * agent started. Closes the Run as cancelled (it does not count as a failure or use up retries) and
+   * returns the task to queued so it waits for a provider to be enabled.
    */
   pause(runId: string, reason: string): FailRunResult {
     return this.db.transaction(
       (tx) => {
         const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
-        if (!run) throw new Error(`no existe el Run ${runId}`);
+        if (!run) throw new Error(`Run ${runId} does not exist`);
         if (!closeRun(tx, runId, { result: "cancelled", failureReason: reason })) {
           return { closed: false, transitioned: false };
         }
@@ -547,7 +544,7 @@ export class RunRepository {
     );
   }
 
-  /** Runs fallidos seguidos de la fase, desde el último exitoso o el último resume (ADR 0007). */
+  /** Consecutive failed Runs of the phase, since the last successful one or the last resume (ADR 0007). */
   consecutiveFailures(taskId: string, phase: Phase): number {
     return consecutiveFailures(this.db, taskId, phase);
   }
@@ -557,13 +554,13 @@ export type CloseRunInput = {
   result: RunResult;
   failureReason?: string;
   handoff?: unknown;
-  /** Identidad de sesión resuelta al cerrar; sin ella se conserva la del despacho. */
+  /** Session identity resolved on closing; without it the one from dispatch is kept. */
   session?: SessionIdentity;
 };
 
 export type FailRunResult = { closed: boolean; transitioned: boolean; task?: TaskRow };
 
-/** Cierra el Run si sigue abierto; false si ya estaba cerrado. */
+/** Closes the Run if it is still open; false if it was already closed. */
 export function closeRun(
   db: Writer,
   runId: string,
@@ -589,9 +586,9 @@ export function closeRun(
 }
 
 /**
- * Registra el veredicto del approver (ADR uw-23-verificacion): fija la etiqueta de riesgo de la
- * tarea y agrega `verification.verdict_recorded` al Event log y al outbox. Corre dentro de la
- * transacción de `submit_verdict`.
+ * Records the approver's verdict (ADR uw-23-verificacion): sets the task's risk label
+ * and adds `verification.verdict_recorded` to the Event log and the outbox. It runs inside the
+ * `submit_verdict` transaction.
  */
 export function recordVerdict(db: Writer, taskId: string, payload: VerdictRecordedPayload): void {
   const parsed = VerdictRecordedPayload.parse(payload);
@@ -604,8 +601,8 @@ export function recordVerdict(db: Writer, taskId: string, payload: VerdictRecord
 }
 
 /**
- * Runs fallidos seguidos de la fase, del más nuevo hacia atrás, hasta uno que no falló o hasta
- * el último resume de la tarea: es el `attempt` de run_failed sin contar el Run que falla ahora.
+ * Consecutive failed Runs of the phase, from the newest backwards, up to one that did not fail or up to
+ * the task's last resume: it is the `attempt` of run_failed without counting the Run that is failing now.
  */
 export function consecutiveFailures(db: Reader, taskId: string, phase: Phase): number {
   const lastResume = db
@@ -632,7 +629,7 @@ export function consecutiveFailures(db: Reader, taskId: string, phase: Phase): n
         lastResume ? gt(runs.startedAt, lastResume.at) : undefined,
       ),
     )
-    // rowid desempata Runs del mismo milisegundo: es el orden de creación.
+    // rowid breaks ties between Runs of the same millisecond: it is the creation order.
     .orderBy(desc(runs.startedAt), sql`rowid desc`)
     .all();
   const firstOther = closed.findIndex((r) => r.result !== "failure");
@@ -660,7 +657,7 @@ export function createQuestion(db: Writer, input: CreateQuestionInput): Question
       })
       .returning()
       .all();
-    if (!row) throw new Error("insert de question sin fila");
+    if (!row) throw new Error("question insert without a row");
     const payload = QuestionCreatedPayload.parse({ questionId: row.id, runId: input.runId });
     appendEvent(tx, { taskId: input.taskId, type: QUESTION_CREATED, actor: "agent", payload });
     return row;
@@ -676,7 +673,7 @@ export function listQuestions(db: Reader, taskId: string): QuestionRow[] {
     .all();
 }
 
-/** Agrega el snapshot completo del checklist al Event log. */
+/** Appends the full checklist snapshot to the Event log. */
 export function appendChecklist(
   db: Writer,
   taskId: string,

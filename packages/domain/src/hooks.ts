@@ -1,5 +1,5 @@
-// Hooks por fase (docs/design.md §Hooks por fase, ADR uw-10-hooks): orden, ajustes por defecto y
-// resultado de un punto. Leer la rama base y ejecutar los scripts es de adapters y server.
+// Hooks per phase (docs/design.md §Hooks per phase, ADR uw-10-hooks): order, default settings and
+// result of a point. Reading the base branch and running the scripts belong to adapters and server.
 import {
   type HookPoint,
   type HookPointOutcome,
@@ -16,19 +16,19 @@ export const DEFAULT_HOOK_TIMEOUT_SECONDS = 10 * 60;
 
 export type HooksConfigResult = { ok: true; config: HooksConfig } | { ok: false; message: string };
 
-/** `text` es el contenido de lunasq/hooks/config; sin archivo, todos los scripts usan los defaults. */
+/** `text` is the content of lunasq/hooks/config; without a file, every script uses the defaults. */
 export function parseHooksConfig(text: string | undefined): HooksConfigResult {
   if (text === undefined) return { ok: true, config: {} };
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch (err) {
-    return { ok: false, message: `${HOOKS_CONFIG_PATH} no es JSON válido: ${String(err)}` };
+    return { ok: false, message: `${HOOKS_CONFIG_PATH} is not valid JSON: ${String(err)}` };
   }
   const parsed = HooksConfig.safeParse(json);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
-    return { ok: false, message: `${HOOKS_CONFIG_PATH} inválido: ${issues.join("; ")}` };
+    return { ok: false, message: `${HOOKS_CONFIG_PATH} invalid: ${issues.join("; ")}` };
   }
   return { ok: true, config: parsed.data };
 }
@@ -40,8 +40,8 @@ export interface PlannedHook {
 }
 
 /**
- * Scripts del punto en el orden en que corren: alfabético por nombre de archivo (por unidades de
- * código, sin locale, para que un prefijo numérico defina la secuencia en cualquier máquina).
+ * Scripts of the point in the order they run: alphabetical by file name (by code
+ * units, without locale, so that a numeric prefix defines the sequence on any machine).
  */
 export function planHooks(
   point: HookPoint,
@@ -58,7 +58,7 @@ export function planHooks(
     }));
 }
 
-/** Un script con política block que falla detiene el punto: los siguientes no corren. */
+/** A script with block policy that fails stops the point: the following ones do not run. */
 export function hookStopsPoint(hook: { policy: HookPolicy; passed: boolean }): boolean {
   return !hook.passed && hook.policy === "block";
 }
@@ -87,14 +87,14 @@ export function hookPointPhase(point: HookPoint): Phase | null {
   return POINT_PHASE[point];
 }
 
-/** after_merge corre en el checkout de la rama base del proyecto; los demás, en el worktree. */
+/** after_merge runs in the checkout of the project's base branch; the others, in the worktree. */
 export function hookPointRunsInWorktree(point: HookPoint): boolean {
   return point !== "after_merge";
 }
 
 /**
- * Si un fallo con política block manda la tarea a needs_human. after_merge llega con la tarea ya
- * terminada y on_failure con el Run ya fallido: ahí el fallo solo se registra.
+ * Whether a failure with block policy sends the task to needs_human. after_merge arrives with the task already
+ * finished and on_failure with the Run already failed: there the failure is only recorded.
  */
 export function hookPointEscalates(point: HookPoint): boolean {
   return point !== "after_merge" && point !== "on_failure";

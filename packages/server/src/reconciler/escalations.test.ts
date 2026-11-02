@@ -25,32 +25,32 @@ const escalated = (reason: string, command = "run_failed") =>
   });
 
 describe("escalationNotification", () => {
-  it("reintentos agotados → retries_exhausted, con id por evento", () => {
+  it("retries exhausted → retries_exhausted, with id per event", () => {
     expect(escalationNotification(12, escalated("retries_exhausted"))).toMatchObject({
       id: `retries:${TASK}:42`,
       kind: "retries_exhausted",
       taskId: TASK,
-      title: "Reintentos agotados en #12",
+      title: "Retries exhausted in #12",
       createdAt: "2026-10-29T12:00:00.000Z",
     });
   });
 
-  it("loop de verificación agotado → verification_exhausted", () => {
+  it("verification loop exhausted → verification_exhausted", () => {
     expect(
       escalationNotification(12, escalated("iterations_exhausted", "verdict_rework")),
     ).toMatchObject({
       id: `iterations:${TASK}:42`,
       kind: "verification_exhausted",
-      title: "Loop de verificación agotado en #12",
+      title: "Verification loop exhausted in #12",
     });
   });
 
   it.each([
-    ["phase_timeout: ya la notificó el watcher", escalated("phase_timeout", "escalate")],
-    ["usage_limit: ya la notificó el watcher", escalated("usage_limit", "escalate")],
-    ["otra transición", message({ command: "dispatch", from: {}, to: {} })],
-    ["otro topic", message({}, "task.pr_opened")],
-    ["payload inválido", message({ command: 1 })],
+    ["phase_timeout: already notified by the watcher", escalated("phase_timeout", "escalate")],
+    ["usage_limit: already notified by the watcher", escalated("usage_limit", "escalate")],
+    ["another transition", message({ command: "dispatch", from: {}, to: {} })],
+    ["another topic", message({}, "task.pr_opened")],
+    ["invalid payload", message({ command: 1 })],
   ])("%s → nada", (_, msg) => {
     expect(escalationNotification(12, msg)).toBeNull();
   });

@@ -2,7 +2,7 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
-# Datos y estado locales del servidor
+# Server local data and state
 *.db
 *.db-wal
 *.db-shm

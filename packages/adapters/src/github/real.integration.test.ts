@@ -1,8 +1,8 @@
-// Suite de contrato contra GitHub real. No corre en `pnpm test`:
+// Contract suite against real GitHub. It does not run in `pnpm test`:
 //   LUNASQ_GH_SANDBOX_REPO=<owner>/<repo> pnpm --filter @lunasq/adapters test:gh
-// Necesita `gh` autenticado y un repo sandbox desechable: clona el repo en un directorio
-// temporal, publica branches `lunasq-contract/*` con commits vacíos, abre PRs, mergea algunos
-// hacia la rama por defecto y borra los branches al terminar.
+// It needs an authenticated `gh` and a disposable sandbox repo: it clones the repo into a
+// temporary directory, publishes `lunasq-contract/*` branches with empty commits, opens PRs, merges some
+// into the default branch and deletes the branches when done.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -52,7 +52,7 @@ describe.skipIf(!enabled)("GitHub real", () => {
             try {
               run("git", ["push", "--quiet", "origin", "--delete", head]);
             } catch {
-              // Ya borrado (p. ej. por la configuración del repo al mergear).
+              // Already deleted (e.g. by the repo configuration on merge).
             }
           }
           rmSync(dir, { recursive: true, force: true });

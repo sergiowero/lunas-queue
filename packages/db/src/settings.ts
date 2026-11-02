@@ -1,6 +1,6 @@
-// Configuración global de LunasQ (docs/decisions/settings-proveedores.md): qué proveedores de
-// agente puede usar el dispatcher y cuántos agentes pueden vivir a la vez. Una fila por clave;
-// guardar es un upsert, así que repetir la misma configuración deja el mismo estado.
+// LunasQ global configuration (docs/decisions/settings-proveedores.md): which agent
+// providers the dispatcher may use and how many agents may live at once. One row per key;
+// saving is an upsert, so repeating the same configuration leaves the same state.
 import {
   type Actor,
   AgentKind,
@@ -19,12 +19,12 @@ import { appSettings } from "./schema.ts";
 const PROVIDERS_KEY = "providers";
 const CONCURRENCY_KEY = "concurrency";
 
-/** Puerto de lectura de los proveedores habilitados; scheduler y claim lo consultan por pasada. */
+/** Read port for the enabled providers; scheduler and claim query it on each pass. */
 export interface ProviderSettingsReader {
   providers(): AgentProviderSettings;
 }
 
-/** Lo guardado, completado con los defaults; sin fila, todos habilitados. Acepta una transacción. */
+/** What was saved, completed with the defaults; without a row, all enabled. Accepts a transaction. */
 export function readProviderSettings(db: Pick<LunasqDatabase, "select">): AgentProviderSettings {
   const row = db
     .select({ value: appSettings.value })
@@ -34,14 +34,14 @@ export function readProviderSettings(db: Pick<LunasqDatabase, "select">): AgentP
   return AgentProviderSettings.parse(row?.value ?? {});
 }
 
-/** Puerto de lectura del límite global de concurrencia; `fallback` rige sin valor guardado. */
+/** Read port for the global concurrency limit; `fallback` applies when no value is saved. */
 export interface ConcurrencySettingsReader {
   concurrency(fallback: number): ConcurrencySettings;
 }
 
 /**
- * El límite guardado en Settings o, sin fila (o con un valor que ya no valida), `fallback`: el
- * default de SchedulerConfig. Acepta una transacción, para revalidar dentro del claim.
+ * The limit saved in Settings or, without a row (or with a value that no longer validates), `fallback`: the
+ * SchedulerConfig default. Accepts a transaction, to revalidate inside the claim.
  */
 export function readConcurrencySettings(
   db: Pick<LunasqDatabase, "select">,
@@ -72,9 +72,9 @@ export class SettingsRepository implements ProviderSettingsReader, ConcurrencySe
   }
 
   /**
-   * Guarda el límite global y publica settings.updated en la misma transacción. Idempotente: si el
-   * valor ya es el vigente (el guardado o, sin fila, `fallback`) no escribe ni publica. Cambiarlo
-   * nunca toca los Runs en curso; solo decide los claims siguientes.
+   * Saves the global limit and publishes settings.updated in the same transaction. Idempotent: if the
+   * value is already in force (the saved one or, without a row, `fallback`) it neither writes nor publishes. Changing it
+   * never touches Runs in progress; it only decides the following claims.
    */
   saveConcurrency(
     input: unknown,
@@ -104,10 +104,10 @@ export class SettingsRepository implements ProviderSettingsReader, ConcurrencySe
   }
 
   /**
-   * Aplica un cambio (parcial o completo) sobre lo vigente y publica settings.updated en la misma
-   * transacción; los proveedores que el cambio no nombra conservan su valor, así que dos cambios
-   * concurrentes sobre proveedores distintos no se pisan. Idempotente: si el resultado ya es lo
-   * vigente no escribe ni publica, para no despertar al scheduler ni a la UI sin un cambio real.
+   * Applies a change (partial or complete) on top of what is in force and publishes settings.updated in the same
+   * transaction; the providers the change does not name keep their value, so two
+   * concurrent changes on different providers do not overwrite each other. Idempotent: if the result is already what is
+   * in force it neither writes nor publishes, so as not to wake the scheduler or the UI without a real change.
    */
   saveProviders(input: unknown, actor: Actor = "human"): AgentProviderSettings {
     const patch = AgentProviderPatch.parse(input);

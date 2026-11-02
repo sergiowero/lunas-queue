@@ -1,5 +1,5 @@
-// Estáticos del front end (UW-21): el build de packages/web se sirve desde el mismo proceso. Las
-// rutas del cliente (TanStack Router) reciben index.html; la API y los assets faltantes, su 404.
+// Front end statics (UW-21): the packages/web build is served from the same process. The
+// client routes (TanStack Router) receive index.html; the API and missing assets, their 404.
 import { join } from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
@@ -7,7 +7,7 @@ import { SUBAGENT_HOOK_PATH } from "../subagents/routes.ts";
 
 const SERVER_PREFIXES = ["/api", "/mcp", SUBAGENT_HOOK_PATH, "/assets"];
 
-/** Rutas del router del cliente: ni de la API ni archivos (`/favicon.ico` faltante da 404). */
+/** Client router routes: neither API nor files (a missing `/favicon.ico` gives 404). */
 function isClientRoute(path: string): boolean {
   if (SERVER_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
     return false;

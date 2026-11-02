@@ -1,6 +1,6 @@
-// Fake en memoria del adapter de herdr. Reproduce el comportamiento observado en herdr 0.9.5
-// (ADR 0004): ids opacos `wN`, `wN:tN`, `wN:pN`; worktrees que sobreviven como branch tras
-// `remove`; eventos por pane; notificaciones apagadas por defecto. Cumple la suite de contrato.
+// In-memory fake of the herdr adapter. It reproduces the behavior observed in herdr 0.9.5
+// (ADR 0004): opaque ids `wN`, `wN:tN`, `wN:pN`; worktrees that survive as a branch after
+// `remove`; per-pane events; notifications off by default. It passes the contract suite.
 import { type ChildProcess, spawn } from "node:child_process";
 import { COPILOT_TRUST_ACCEPT_KEYS, TRUST_ACCEPT_KEYS, TRUST_DIALOG_MARKER } from "./claude-tui.ts";
 import { HerdrError } from "./errors.ts";
@@ -20,8 +20,8 @@ import type {
 
 const SETTLED: AgentStatus[] = ["idle", "done"];
 
-// Pantalla del diálogo como la captura `spikes/herdr/outputs/09-agent-read-blocked.txt`: el
-// cursor arranca en "No, exit", así que un Enter a secas cierra Claude Code.
+// Dialog screen like the capture `spikes/herdr/outputs/09-agent-read-blocked.txt`: the
+// cursor starts on "No, exit", so a bare Enter closes Claude Code.
 const trustDialog = (cursor: number, kind: string) =>
   kind === "copilot"
     ? [
@@ -40,7 +40,7 @@ const trustDialog = (cursor: number, kind: string) =>
       ].join("\n");
 
 interface FakeWorkspace extends HerdrWorkspace {
-  /** Checkout que abre el workspace; herdr solo lo publica para worktrees (ADR 0004, adenda). */
+  /** Checkout that opens the workspace; herdr only publishes it for worktrees (ADR 0004, addendum). */
   repoPath: string;
   tabId: string;
   nextPane: number;
@@ -48,7 +48,7 @@ interface FakeWorkspace extends HerdrWorkspace {
 
 interface FakePane extends HerdrPane {
   env: Record<string, string>;
-  /** Comandos lanzados con `runInPane`; cerrar el pane los mata. */
+  /** Commands launched with `runInPane`; closing the pane kills them. */
   processes: ChildProcess[];
   title?: string;
   tokens: Record<string, string>;
@@ -62,9 +62,9 @@ interface FakeAgent {
   args: string[];
   transcript: string[];
   session?: AgentSessionInfo;
-  /** Posición del cursor en el diálogo de confianza, mientras se muestra. */
+  /** Cursor position in the trust dialog, while it is shown. */
   trustCursor?: number;
-  /** Pantalla fijada por `setAgentScreen`; si no, el transcript actúa de pantalla. */
+  /** Screen set by `setAgentScreen`; otherwise the transcript acts as the screen. */
   screen?: string;
   keys: string[][];
 }
@@ -72,7 +72,7 @@ interface FakeAgent {
 interface FakeWorktree {
   path: string;
   workspaceId?: string;
-  /** Cambios sin commit: `remove` exige `force`. */
+  /** Uncommitted changes: `remove` requires `force`. */
   dirty?: boolean;
 }
 
@@ -83,13 +83,13 @@ interface FakeSubscription {
 }
 
 export interface FakeHerdrOptions {
-  /** Cuánto tarda un prompt en pasar de `working` a `done`. */
+  /** How long a prompt takes to go from `working` to `done`. */
   promptDurationMs?: number;
-  /** Simula `[ui.toast] delivery`; herdr lo trae apagado por defecto. */
+  /** Simulates `[ui.toast] delivery`; herdr ships it off by default. */
   notificationsEnabled?: boolean;
   /**
-   * Estado con que arrancan los agentes. `blocked` simula el diálogo de confianza de carpeta de
-   * Claude Code en un worktree nuevo (ADR 0004); herdr real responde `agent_not_ready`.
+   * State agents start with. `blocked` simulates Claude Code's folder trust dialog in a
+   * new worktree (ADR 0004); real herdr answers `agent_not_ready`.
    */
   startStatus?: "idle" | "blocked";
 }
@@ -102,14 +102,14 @@ export class FakeHerdr implements HerdrAdapter {
   private readonly workspaces = new Map<string, FakeWorkspace>();
   private readonly panes = new Map<string, FakePane>();
   private readonly agents = new Map<string, FakeAgent>();
-  /** Worktrees por repo (checkout del proyecto) y branch. */
+  /** Worktrees per repo (project checkout) and branch. */
   private readonly worktrees = new Map<string, Map<string, FakeWorktree>>();
   private readonly subscriptions = new Set<FakeSubscription>();
   private readonly statusWaiters = new Set<() => void>();
 
-  /** Notificaciones mostradas, para que los tests las inspeccionen. */
+  /** Notifications shown, for tests to inspect. */
   readonly notifications: { title: string; body?: string; sound?: string }[] = [];
-  /** Último agente enfocado con `focusAgent`. */
+  /** Last agent focused with `focusAgent`. */
   focused: string | undefined;
 
   constructor(opts: FakeHerdrOptions = {}) {
@@ -135,7 +135,7 @@ export class FakeHerdr implements HerdrAdapter {
         created: false,
       };
     }
-    // Como herdr real (snapshot y luego create): dos llamadas concurrentes crean dos workspaces.
+    // Like real herdr (snapshot and then create): two concurrent calls create two workspaces.
     await Promise.resolve();
     const ws = this.createWorkspace(input.label, input.cwd, false, input.env ?? {});
     return { workspace: toWorkspace(ws), rootPaneId: this.rootPane(ws), created: true };
@@ -146,7 +146,7 @@ export class FakeHerdr implements HerdrAdapter {
   }
 
   private removeWorkspace(workspaceId: string) {
-    // Se borra primero para que cerrar su último pane no vuelva a cerrarlo.
+    // It is deleted first so that closing its last pane does not close it again.
     if (!this.workspaces.delete(workspaceId)) return;
     for (const pane of [...this.panes.values()]) {
       if (pane.workspaceId === workspaceId) this.removePane(pane.paneId);
@@ -180,7 +180,7 @@ export class FakeHerdr implements HerdrAdapter {
       return { worktree: this.toWorktree(ws, input.branch, existing.path), created: false };
     }
 
-    // Como herdr real (list y luego create): un create concurrente del mismo branch falla.
+    // Like real herdr (list and then create): a concurrent create of the same branch fails.
     await Promise.resolve();
     if (repo.has(input.branch)) {
       throw new HerdrError("worktree_create_failed", `branch ${input.branch} already exists`);
@@ -248,7 +248,7 @@ export class FakeHerdr implements HerdrAdapter {
     if (this.panes.has(paneId)) this.removePane(paneId);
   }
 
-  /** Como herdr: corre el comando de verdad, con `sh -c` en el cwd y el env del pane. */
+  /** Like herdr: really runs the command, with `sh -c` in the pane's cwd and env. */
   async runInPane(input: { paneId: string; command: string }) {
     const pane = this.requirePane(input.paneId);
     const child = spawn("/bin/sh", ["-c", input.command], {
@@ -258,7 +258,7 @@ export class FakeHerdr implements HerdrAdapter {
       detached: true,
     });
     child.on("error", () => {
-      // El cwd ya no existe: en herdr el comando fallaría dentro del pane.
+      // The cwd no longer exists: in herdr the command would fail inside the pane.
     });
     child.unref();
     pane.processes.push(child);
@@ -406,7 +406,7 @@ export class FakeHerdr implements HerdrAdapter {
     const sub: FakeSubscription = { input, onEvent, closed: false };
     const missing = input.paneIds?.find((paneId) => !this.panes.has(paneId));
     if (missing) {
-      // herdr rechaza la suscripción completa si un pane no existe.
+      // herdr rejects the whole subscription if a pane does not exist.
       this.deliver(sub, {
         type: "subscription_failed",
         code: "pane_not_found",
@@ -424,9 +424,9 @@ export class FakeHerdr implements HerdrAdapter {
     };
   }
 
-  // --- Controles de test: provocar lo que en herdr real hace el agente o el servidor. ---
+  // --- Test controls: cause what the agent or the server does in real herdr. ---
 
-  /** Cambia el estado de un agente y emite `agent_status_changed`, como su integración en herdr. */
+  /** Changes an agent's state and emits `agent_status_changed`, like its integration in herdr. */
   setAgentStatus(name: string, status: AgentStatus) {
     const agent = this.requireAgent(name);
     if (agent.status === status) return;
@@ -443,19 +443,19 @@ export class FakeHerdr implements HerdrAdapter {
     for (const check of [...this.statusWaiters]) check();
   }
 
-  /** Publica la identidad de sesión del agente, como la integración oficial (`agent_session`). */
+  /** Publishes the agent's session identity, like the official integration (`agent_session`). */
   setAgentSession(name: string, session: AgentSessionInfo) {
     this.requireAgent(name).session = session;
   }
 
-  /** Fija la pantalla que devuelve `readAgent` (simula la TUI del agente, p. ej. el límite de uso). */
+  /** Sets the screen `readAgent` returns (simulates the agent's TUI, e.g. the usage limit). */
   setAgentScreen(name: string, screen: string | undefined) {
     const agent = this.requireAgent(name);
     if (screen === undefined) delete agent.screen;
     else agent.screen = screen;
   }
 
-  /** Simula que el proceso del agente terminó: el pane queda abierto sin agente. */
+  /** Simulates the agent process ending: the pane stays open without an agent. */
   exitAgent(name: string) {
     const agent = this.requireAgent(name);
     this.agents.delete(name);
@@ -465,29 +465,29 @@ export class FakeHerdr implements HerdrAdapter {
     for (const check of [...this.statusWaiters]) check();
   }
 
-  /** Args con que arrancó el agente (los que van después de `--`). */
+  /** Args the agent started with (those after `--`). */
   agentArgs(name: string): string[] {
     return [...this.requireAgent(name).args];
   }
 
-  /** Env con que se creó el pane (`pane split --env`). */
+  /** Env the pane was created with (`pane split --env`). */
   paneEnv(paneId: string): Record<string, string> {
     return { ...this.requirePane(paneId).env };
   }
 
-  /** Cada llamada a `sendKeys` que recibió el agente. */
+  /** Each `sendKeys` call the agent received. */
   sentKeys(name: string): string[][] {
     return this.requireAgent(name).keys.map((k) => [...k]);
   }
 
-  /** Simula cambios sin commit en el checkout `path`. */
+  /** Simulates uncommitted changes in the checkout `path`. */
   setWorktreeDirty(path: string, dirty = true) {
     for (const repo of this.worktrees.values()) {
       for (const wt of repo.values()) if (wt.path === path) wt.dirty = dirty;
     }
   }
 
-  /** Corta todos los streams como herdr bajo backpressure: cada uno pierde eventos y reconecta. */
+  /** Cuts all streams like herdr under backpressure: each loses events and reconnects. */
   dropStreams() {
     for (const sub of this.subscriptions) {
       this.deliver(sub, { type: "events_lost", reason: "stream closed" });
@@ -540,7 +540,7 @@ export class FakeHerdr implements HerdrAdapter {
     for (const [name, agent] of this.agents) if (agent.paneId === paneId) this.agents.delete(name);
     this.emit({ type: "pane_closed", paneId, workspaceId: pane.workspaceId });
     for (const check of [...this.statusWaiters]) check();
-    // Como herdr: al cerrarse el último pane se cierra su workspace.
+    // Like herdr: when the last pane closes, its workspace closes.
     const empty = ![...this.panes.values()].some((p) => p.workspaceId === pane.workspaceId);
     if (empty) this.removeWorkspace(pane.workspaceId);
   }
@@ -587,7 +587,7 @@ export class FakeHerdr implements HerdrAdapter {
     }
   }
 
-  /** Entrega asíncrona, como el socket: nunca dentro de la llamada que provocó el evento. */
+  /** Asynchronous delivery, like the socket: never inside the call that caused the event. */
   private deliver(sub: FakeSubscription, event: HerdrEvent) {
     queueMicrotask(() => {
       if (!sub.closed) sub.onEvent(event);
@@ -618,6 +618,6 @@ function killGroup(child: ChildProcess) {
   try {
     process.kill(-child.pid, "SIGKILL");
   } catch {
-    // El grupo ya terminó.
+    // The group already finished.
   }
 }

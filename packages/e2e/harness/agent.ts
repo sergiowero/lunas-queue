@@ -1,7 +1,7 @@
-// El agente guionado: hace lo que Claude Code haría en cada fase, pero con el LunasQ MCP real, los
-// hooks de subagentes por HTTP y git real. El guion lo decide la fase y el intent de la tarea:
-//   · `[pregunta]` → el refinamiento pregunta antes de entregar la spec.
-//   · `[rework]`   → el primer veredicto de verificación es reject.
+// The scripted agent: does what Claude Code would do in each phase, but with the real LunasQ MCP, the
+// subagent hooks over HTTP and real git. The script is decided by the phase and the task's intent:
+//   · `[pregunta]` → the refinement asks before delivering the spec.
+//   · `[rework]`   → the first verification verdict is reject.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { RUN_ENV, RUN_TOKEN_HEADER } from "@lunasq/schemas";
@@ -44,7 +44,7 @@ class McpSession {
     return new McpSession(client);
   }
 
-  /** Llama a una tool; un `isError` es un fallo del guion, no un resultado. */
+  /** Calls a tool; an `isError` is a script failure, not a result. */
   async call<T = Json>(name: string, args: Json = {}): Promise<T> {
     const result = await this.#client.callTool({ name, arguments: args });
     const [first] = result.content as { text: string }[];
@@ -57,7 +57,7 @@ class McpSession {
   }
 }
 
-/** Hooks SubagentStart/Stop de Claude Code: la evidencia de que cada revisor corrió. */
+/** Claude Code SubagentStart/Stop hooks: the evidence that each reviewer ran. */
 async function reviewersRan(
   baseUrl: string,
   token: string,
@@ -86,35 +86,35 @@ async function reviewersRan(
 
 const slug = (taskId: string) => taskId.slice(0, 8);
 
-/** Un commit real en el worktree: el trabajo de la tarea, distinto por iteración. */
+/** A real commit in the worktree: the task's work, different per iteration. */
 function commitWork(worktree: string, taskId: string, iteration: number): string {
   const file = join(worktree, "work", `${slug(taskId)}.txt`);
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `trabajo de ${taskId}, iteración ${iteration}\n`, { flag: "a" });
+  writeFileSync(file, `work for ${taskId}, iteration ${iteration}\n`, { flag: "a" });
   git(worktree, "add", "-A");
   git(
     worktree,
     "commit",
     "--quiet",
     "-m",
-    `feat: trabajo de ${slug(taskId)} (iteración ${iteration})`,
+    `feat: work for ${slug(taskId)} (iteration ${iteration})`,
   );
   return git(worktree, "rev-parse", "HEAD");
 }
 
 export interface AgentEnv {
-  /** `http://127.0.0.1:<puerto>` del servidor de LunasQ. */
+  /** `http://127.0.0.1:<port>` of the LunasQ server. */
   baseUrl: string;
 }
 
-/** Un turno del agente: lo que hace entre que recibe un prompt y queda esperando. */
+/** An agent turn: what it does between receiving a prompt and being left waiting. */
 export async function runTurn(agent: PromptedAgent, env: AgentEnv): Promise<void> {
   const token = agent.env[RUN_ENV.runToken];
   const runId = agent.env[RUN_ENV.runId];
   const taskId = agent.env[RUN_ENV.taskId];
   const phase = agent.env[RUN_ENV.phase];
   if (!token || !runId || !taskId || !phase) {
-    throw new Error(`el pane ${agent.paneId} no trae la identidad del Run`);
+    throw new Error(`pane ${agent.paneId} does not carry the Run identity`);
   }
   const sessionId = agent.args[agent.args.indexOf("--session-id") + 1] ?? runId;
   const ids = { taskId, runId };
@@ -133,9 +133,9 @@ export async function runTurn(agent: PromptedAgent, env: AgentEnv): Promise<void
       }
       const answered = context.questions.find((q) => q.answer);
       const summary = answered
-        ? `Spec con la respuesta del humano: ${answered.answer}`.slice(0, 280)
+        ? `Spec with the human's answer: ${answered.answer}`.slice(0, 280)
         : undefined;
-      // El título es el intent: el piloto busca las tareas por ese texto en la UI.
+      // The title is the intent: the pilot looks tasks up by that text in the UI.
       const refinement = handoff("refinement", ids, summary) as Json & { body: Json };
       refinement.body = { ...refinement.body, title: intent };
       await mcp.call("submit_spec", { handoff: refinement });
@@ -154,7 +154,7 @@ export async function runTurn(agent: PromptedAgent, env: AgentEnv): Promise<void
       await reviewersRan(env.baseUrl, token, sessionId, verdict.body);
       await mcp.call("submit_verdict", { handoff: verdict });
     } else {
-      throw new Error(`fase sin guion: ${phase}`);
+      throw new Error(`phase without a script: ${phase}`);
     }
   } finally {
     await mcp.close();

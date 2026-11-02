@@ -12,7 +12,7 @@ function seeded() {
 }
 
 describe("api.focusRun", () => {
-  it("pide POST /api/runs/:runId/focus y el FakeApi registra el agente enfocado", async () => {
+  it("requests POST /api/runs/:runId/focus and the FakeApi records the focused agent", async () => {
     const { fake, task } = seeded();
     const run = fake.startRun(task.id, "implement");
     await api.focusRun(run.id);
@@ -23,7 +23,7 @@ describe("api.focusRun", () => {
     expect(fake.focused).toEqual([run.herdrName]);
   });
 
-  it("el FakeApi solo enfoca con POST, como el servidor: un GET responde 404 y no enfoca", async () => {
+  it("the FakeApi only focuses with POST, like the server: a GET answers 404 and does not focus", async () => {
     const { fake, task } = seeded();
     const run = fake.startRun(task.id, "implement");
     const response = await fake.fetch(`/api/runs/${run.id}/focus`);
@@ -31,7 +31,7 @@ describe("api.focusRun", () => {
     expect(fake.focused).toEqual([]);
   });
 
-  it("un Run que no existe falla con 404 not_found", async () => {
+  it("a Run that does not exist fails with 404 not_found", async () => {
     seeded();
     await expect(api.focusRun("no-existe")).rejects.toMatchObject({
       status: 404,
@@ -39,7 +39,7 @@ describe("api.focusRun", () => {
     });
   });
 
-  it("un Run sin pane o sin nombre de agente falla con 409 no_pane", async () => {
+  it("a Run without a pane or agent name fails with 409 no_pane", async () => {
     const { fake, task } = seeded();
     const noPane = fake.startRun(task.id, "refine");
     noPane.herdrPane = null;
@@ -51,7 +51,7 @@ describe("api.focusRun", () => {
     expect(fake.focused).toEqual([]);
   });
 
-  it("propaga el error de herdr que fije el FakeApi", async () => {
+  it("propagates the herdr error set by the FakeApi", async () => {
     const { fake, task } = seeded();
     const run = fake.startRun(task.id, "implement");
     fake.focusError = { status: 502, error: "herdr_error", message: "herdr no responde" };
@@ -62,8 +62,8 @@ describe("api.focusRun", () => {
   });
 });
 
-describe("api.pauseTask y resumeTask", () => {
-  it("pauseTask pide POST /api/tasks/:id/pause y devuelve la tarea pausada", async () => {
+describe("api.pauseTask and resumeTask", () => {
+  it("pauseTask requests POST /api/tasks/:id/pause and returns the paused task", async () => {
     const { fake, task } = seeded();
     const paused = await api.pauseTask(task.id);
     expect(fake.requests.at(-1)).toMatchObject({
@@ -73,13 +73,13 @@ describe("api.pauseTask y resumeTask", () => {
     expect(paused).toMatchObject({ id: task.id, state: "paused", subState: null });
   });
 
-  it("resumeTask devuelve la tarea pausada a su estado previo", async () => {
+  it("resumeTask returns the paused task to its previous state", async () => {
     const { task } = seeded();
     await api.pauseTask(task.id);
     expect(await api.resumeTask(task.id)).toMatchObject({ state: "draft", subState: "queued" });
   });
 
-  it("pausar una tarea que no se puede pausar falla con 409 invalid_transition", async () => {
+  it("pausing a task that cannot be paused fails with 409 invalid_transition", async () => {
     const { fake, task } = seeded();
     fake.transition(task.id, "completed", null);
     await expect(api.pauseTask(task.id)).rejects.toMatchObject({

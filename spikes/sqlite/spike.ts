@@ -1,4 +1,4 @@
-// Spike UW-00/c: better-sqlite3 en Node 26 — WAL, transacción síncrona y Drizzle.
+// Spike UW-00/c: better-sqlite3 on Node 26 — WAL, synchronous transaction and Drizzle.
 import { strict as assert } from "node:assert";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,14 +19,14 @@ console.log(`journal_mode=${mode}, sqlite ${sqlite.prepare("select sqlite_versio
 sqlite.exec("create table task (id integer primary key, state text not null)");
 sqlite.prepare("insert into task (id, state) values (1, 'queued')").run();
 
-// Claim atómico: UPDATE … WHERE state = 'queued' dentro de una transacción síncrona.
+// Atomic claim: UPDATE … WHERE state = 'queued' inside a synchronous transaction.
 const claim = sqlite.transaction((id: number) => {
   const r = sqlite.prepare("update task set state = 'running' where id = ? and state = 'queued'").run(id);
   return r.changes === 1;
 });
 assert.equal(claim(1), true);
 assert.equal(claim(1), false);
-console.log("claim atómico: primero gana, segundo falla");
+console.log("atomic claim: first wins, second fails");
 
 // Rollback ante throw.
 const failing = sqlite.transaction(() => {
@@ -35,9 +35,9 @@ const failing = sqlite.transaction(() => {
 });
 assert.throws(() => failing());
 assert.equal(sqlite.prepare("select state from task where id = 1").get().state, "running");
-console.log("rollback ante excepción: ok");
+console.log("rollback on exception: ok");
 
-// Drizzle sobre la misma conexión.
+// Drizzle over the same connection.
 const task = sqliteTable("task", { id: integer().primaryKey(), state: text().notNull() });
 const db = drizzle({ client: sqlite });
 db.transaction((tx) => {
@@ -46,5 +46,5 @@ db.transaction((tx) => {
   assert.equal(res.changes, 1);
 });
 assert.deepEqual(db.select().from(task).where(eq(task.id, 2)).all(), [{ id: 2, state: "running" }]);
-console.log("drizzle-orm/better-sqlite3: transacción y consulta ok");
+console.log("drizzle-orm/better-sqlite3: transaction and query ok");
 sqlite.close();

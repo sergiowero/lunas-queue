@@ -1,11 +1,11 @@
-// Claves y consultas de TanStack Query. Cualquier escritura invalida ["task", id] y las listas;
-// el refresco periódico lo fija el QueryClient (ver main.tsx).
+// TanStack Query keys and queries. Any write invalidates ["task", id] and the lists;
+// the periodic refresh is set by the QueryClient (see main.tsx).
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "./api.ts";
 
 /**
- * Los bloqueos por permiso viven en memoria del RunWatcher y no dejan eventos: el stream de cambios
- * no los avisa, así que la consulta se refresca sola (ADR uw-27-bandeja).
+ * Permission blocks live in the RunWatcher's memory and leave no events: the changes stream
+ * does not announce them, so the query refreshes on its own (ADR uw-27-bandeja).
  */
 export const BLOCKED_REFRESH_MS = 5000;
 

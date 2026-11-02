@@ -23,7 +23,7 @@ const request = (sourceRef: string | null, overrides: Partial<UsageInput> = {}):
 });
 
 describe("UsageRepository.record", () => {
-  it("guarda un registro por request con el agente que lo hizo", () => {
+  it("stores one record per request with the agent that made it", () => {
     const { db, run, repo } = setup();
     expect(repo.record(run.id, [request("req_1"), request("req_2", { agentId: "a1" })])).toBe(2);
     const rows = db.select().from(usageRecords).all();
@@ -33,21 +33,21 @@ describe("UsageRepository.record", () => {
     ]);
   });
 
-  it("reenviar el mismo lote no duplica tokens", () => {
+  it("resending the same batch does not duplicate tokens", () => {
     const { db, run, repo } = setup();
     repo.record(run.id, [request("req_1")]);
     expect(repo.record(run.id, [request("req_1"), request("req_2")])).toBe(1);
     expect(db.select().from(usageRecords).all()).toHaveLength(2);
   });
 
-  it("sin source_ref no deduplica y un lote vacío no hace nada", () => {
+  it("without source_ref it does not deduplicate and an empty batch does nothing", () => {
     const { db, run, repo } = setup();
     expect(repo.record(run.id, [])).toBe(0);
     repo.record(run.id, [request(null), request(null)]);
     expect(db.select().from(usageRecords).all()).toHaveLength(2);
   });
 
-  it("acepta costo desconocido", () => {
+  it("accepts unknown cost", () => {
     const { db, run, repo } = setup();
     repo.record(run.id, [request("req_1", { costUsd: null })]);
     expect(db.select().from(usageRecords).get()?.costUsd).toBeNull();

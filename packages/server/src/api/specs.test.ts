@@ -15,7 +15,7 @@ function revised(): SpecContent {
   return content;
 }
 
-// Una tarea en refined con la versión 1 de su spec, entregada por el refinador.
+// A task in refined with version 1 of its spec, delivered by the refiner.
 function setup() {
   const db = migratedDatabase();
   const project = insertProject(db);
@@ -36,7 +36,7 @@ function setup() {
 }
 
 describe("GET /api/tasks/:id/specs", () => {
-  it("lista las versiones y lee una por número", async () => {
+  it("lists the versions and reads one by number", async () => {
     const { send, base, task } = setup();
     const list = await send("GET", base);
     expect(list.status).toBe(200);
@@ -49,7 +49,7 @@ describe("GET /api/tasks/:id/specs", () => {
     expect(await one.json()).toMatchObject({ version: 1, content: specContentExample() });
   });
 
-  it("404 si la tarea o la versión no existen; 400 si la versión no es un entero positivo", async () => {
+  it("404 if the task or the version do not exist; 400 if the version is not a positive integer", async () => {
     const { send, base } = setup();
     expect((await send("GET", `/api/tasks/${missing}/specs`)).status).toBe(404);
     expect((await send("GET", `${base}/2`)).status).toBe(404);
@@ -60,7 +60,7 @@ describe("GET /api/tasks/:id/specs", () => {
 });
 
 describe("POST /api/tasks/:id/specs/:version/approve", () => {
-  it("aprueba la versión exacta y la tarea pasa a in_progress", async () => {
+  it("approves the exact version and the task moves to in_progress", async () => {
     const { send, base } = setup();
     const res = await send("POST", `${base}/1/approve`);
     expect(res.status).toBe(200);
@@ -70,7 +70,7 @@ describe("POST /api/tasks/:id/specs/:version/approve", () => {
     });
   });
 
-  it("409 al repetir o con una versión superada; 404 si no existe", async () => {
+  it("409 when repeating or with a superseded version; 404 if it does not exist", async () => {
     const { send, base } = setup();
     expect((await send("POST", `${base}/1/approve`)).status).toBe(200);
     const again = await send("POST", `${base}/1/approve`);
@@ -80,7 +80,7 @@ describe("POST /api/tasks/:id/specs/:version/approve", () => {
     expect((await send("POST", `/api/tasks/${missing}/specs/1/approve`)).status).toBe(404);
   });
 
-  it("409 stale_version al aprobar una versión que ya no es la última", async () => {
+  it("409 stale_version when approving a version that is no longer the latest", async () => {
     const { send, base } = setup();
     await send("POST", `${base}/1/edit-and-approve`, { content: revised() });
     const res = await send("POST", `${base}/1/approve`);
@@ -90,7 +90,7 @@ describe("POST /api/tasks/:id/specs/:version/approve", () => {
 });
 
 describe("POST /api/tasks/:id/specs/:version/request-changes", () => {
-  it("guarda los comentarios y regresa la tarea a draft", async () => {
+  it("saves the comments and sends the task back to draft", async () => {
     const { send, base } = setup();
     const res = await send("POST", `${base}/1/request-changes`, {
       comments: "Falta el caso de pedido enviado",
@@ -106,7 +106,7 @@ describe("POST /api/tasks/:id/specs/:version/request-changes", () => {
     });
   });
 
-  it("409 si la versión ya se decidió o fue superada", async () => {
+  it("409 if the version was already decided or was superseded", async () => {
     const { send, base } = setup();
     const comments = { comments: "otra ronda" };
     expect((await send("POST", `${base}/1/request-changes`, comments)).status).toBe(200);
@@ -115,7 +115,7 @@ describe("POST /api/tasks/:id/specs/:version/request-changes", () => {
     expect(await again.json()).toMatchObject({ error: "spec_not_pending" });
   });
 
-  it("400 sin comentarios o con JSON inválido", async () => {
+  it("400 without comments or with invalid JSON", async () => {
     const { send, base } = setup();
     expect((await send("POST", `${base}/1/request-changes`, { comments: " " })).status).toBe(400);
     expect((await send("POST", `${base}/1/request-changes`, "{")).status).toBe(400);
@@ -124,7 +124,7 @@ describe("POST /api/tasks/:id/specs/:version/request-changes", () => {
 });
 
 describe("POST /api/tasks/:id/specs/:version/edit-and-approve", () => {
-  it("crea la versión siguiente de autor humano, aprobada", async () => {
+  it("creates the next version with human author, approved", async () => {
     const { send, base } = setup();
     const res = await send("POST", `${base}/1/edit-and-approve`, { content: revised() });
     expect(res.status).toBe(200);
@@ -134,7 +134,7 @@ describe("POST /api/tasks/:id/specs/:version/edit-and-approve", () => {
     });
   });
 
-  it("409 al reintentar: la versión base ya fue superada por la editada", async () => {
+  it("409 when retrying: the base version was already superseded by the edited one", async () => {
     const { send, base } = setup();
     const body = { content: revised() };
     expect((await send("POST", `${base}/1/edit-and-approve`, body)).status).toBe(200);
@@ -145,7 +145,7 @@ describe("POST /api/tasks/:id/specs/:version/edit-and-approve", () => {
     expect(versions).toHaveLength(2);
   });
 
-  it("400 con contenido incompleto", async () => {
+  it("400 with incomplete content", async () => {
     const { send, base } = setup();
     const res = await send("POST", `${base}/1/edit-and-approve`, {
       content: { ...revised(), criteria: [] },
@@ -156,7 +156,7 @@ describe("POST /api/tasks/:id/specs/:version/edit-and-approve", () => {
 });
 
 describe("GET /api/tasks/:id/specs/:version/diff", () => {
-  it("compara contra la anterior por defecto o contra ?against", async () => {
+  it("compares against the previous one by default or against ?against", async () => {
     const { send, base } = setup();
     await send("POST", `${base}/1/edit-and-approve`, { content: revised() });
     const res = await send("GET", `${base}/2/diff`);
@@ -174,7 +174,7 @@ describe("GET /api/tasks/:id/specs/:version/diff", () => {
     });
   });
 
-  it("404 si alguna versión no existe; 400 con ?against inválido", async () => {
+  it("404 if either version does not exist; 400 with invalid ?against", async () => {
     const { send, base } = setup();
     expect((await send("GET", `${base}/1/diff?against=4`)).status).toBe(404);
     expect((await send("GET", `${base}/1/diff?against=x`)).status).toBe(400);

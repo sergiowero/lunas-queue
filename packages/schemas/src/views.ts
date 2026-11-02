@@ -1,10 +1,10 @@
-// Vistas de solo lectura que consume el front end (UW-21, ADR uw-21-front-end): Runs, Event log,
-// usage, evidencia y la cola global. Se derivan de las tablas; ninguna se escribe por la API.
+// Read-only views consumed by the front end (UW-21, ADR uw-21-front-end): Runs, Event log,
+// usage, evidence and the global queue. They are derived from the tables; none is written through the API.
 import { z } from "zod";
 import { Actor, AgentKind, Phase, RunResult, SessionSource } from "./enums.ts";
 import { Task } from "./task.ts";
 
-/** Un Run como lo ve la UI: sin el run token, que solo vive en el pane del agente. */
+/** A Run as the UI sees it: without the run token, which only lives in the pane's environment. */
 export const RunView = z.strictObject({
   id: z.uuid(),
   taskId: z.uuid(),
@@ -37,7 +37,7 @@ export type EventView = z.infer<typeof EventView>;
 
 const Tokens = z.int().min(0);
 
-/** Suma de UsageRecords; costUsd es null mientras ningún registro trae costo. */
+/** Sum of UsageRecords; costUsd is null while no record carries a cost. */
 export const UsageTotals = z.strictObject({
   inputTokens: Tokens,
   outputTokens: Tokens,
@@ -55,13 +55,13 @@ export const EMPTY_USAGE: UsageTotals = {
   costUsd: null,
 };
 
-/** Fase para el desglose: el rework son los Runs de implementación después del primer rechazo. */
+/** Phase for the breakdown: rework is the implementation Runs after the first rejection. */
 export const UsagePhase = z.enum(["refine", "implement", "rework", "verify", "deliver"]);
 export type UsagePhase = z.infer<typeof UsagePhase>;
 
 /**
- * Task.usage (read-only, ADR uw-20-usage-collector): total y desglose por Run, fase, agente,
- * modelo y revisor de verificación. Solo trae los grupos con registros.
+ * Task.usage (read-only, ADR uw-20-usage-collector): total and breakdown by Run, phase, agent,
+ * model and verification reviewer. It only carries the groups with records.
  */
 export const TaskUsage = z.strictObject({
   total: UsageTotals,
@@ -74,9 +74,9 @@ export const TaskUsage = z.strictObject({
 export type TaskUsage = z.infer<typeof TaskUsage>;
 
 /**
- * Archivo de evidencia `lunasq/tasks/{id}.md` (lo escribe UW-24): del worktree mientras existe; si
- * ya se limpió, de la branch de la tarea y, tras el merge, de la rama base. `path` es la ruta en
- * disco o `<ref>:<ruta>` en git.
+ * Evidence file `lunasq/tasks/{id}.md` (written by UW-24): from the worktree while it exists; if
+ * it was already cleaned up, from the task branch and, after the merge, from the base branch. `path` is the path on
+ * disk or `<ref>:<path>` in git.
  */
 export const EvidenceSource = z.enum(["worktree", "branch", "base"]);
 export type EvidenceSource = z.infer<typeof EvidenceSource>;
@@ -91,8 +91,8 @@ export type TaskEvidence = z.infer<typeof TaskEvidence>;
 const queueBase = { task: Task, usage: UsageTotals };
 
 /**
- * Una tarea viva en la cola global. Las del ready set traen el score del scheduler y van primero,
- * en su orden; las demás (corriendo, esperando dependencias o al humano) no tienen score.
+ * A live task in the global queue. The ones in the ready set carry the scheduler score and go first,
+ * in their order; the others (running, waiting for dependencies or for the human) have no score.
  */
 export const QueueEntry = z.discriminatedUnion("ready", [
   z.strictObject({

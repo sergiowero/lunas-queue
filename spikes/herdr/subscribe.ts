@@ -1,7 +1,7 @@
-// Spike UW-00/d: se suscribe a events.subscribe por el socket Unix (NDJSON) y vuelca cada línea.
+// Spike UW-00/d: subscribes to events.subscribe over the Unix socket (NDJSON) and dumps each line.
 // Uso: node subscribe.ts <socket> <salida.ndjson> [subs-json] [--slow=<ms>]
 // subs-json: suscripciones extra, p. ej. [{"type":"pane.agent_status_changed","pane_id":"w2:p1"}]
-// --slow=<ms> deja de leer ese tiempo para provocar backpressure
+// --slow=<ms> stops reading for that long to cause backpressure
 import { appendFileSync } from "node:fs";
 import { createConnection } from "node:net";
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:lunasq:handoff:v1:verification",
-  "description": "Handoff v1 de LunasQ, generado desde @lunasq/schemas. Las reglas entre campos (ids únicos, veredicto coherente, tamaño máximo de 32768 bytes) las aplica el validador Zod.",
+  "description": "LunasQ handoff v1, generated from @lunasq/schemas. The cross-field rules (unique ids, coherent verdict, maximum size of 32768 bytes) are applied by the Zod validator.",
   "type": "object",
   "properties": {
     "schemaVersion": {

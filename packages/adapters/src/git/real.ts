@@ -1,5 +1,5 @@
-// Adapter real de git: execFile con los argumentos sueltos, sin shell. Rutas y mensajes pueden
-// venir de la configuración del proyecto y no deben poder inyectar comandos.
+// Real git adapter: execFile with the arguments passed separately, without a shell. Paths and messages may
+// come from the project configuration and must not be able to inject commands.
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { EVIDENCE_DIR } from "@lunasq/schemas";
@@ -7,7 +7,7 @@ import { GitError } from "./errors.ts";
 import { withTrailers } from "./trailers.ts";
 import type { GitAdapter, GitCommitInfo, GitFile, RebaseResult } from "./types.ts";
 
-/** Límite de un comando local; el fetch, que va a la red, tiene el suyo. */
+/** Limit of a local command; fetch, which goes over the network, has its own. */
 export const DEFAULT_GIT_TIMEOUT_MS = 60_000;
 export const DEFAULT_FETCH_TIMEOUT_MS = 5 * 60_000;
 
@@ -15,7 +15,7 @@ const FETCH_RACE = /incorrect old value provided|cannot lock ref/;
 const FETCH_RACE_ATTEMPTS = 4;
 
 export interface RealGitOptions {
-  /** Ruta del binario (por defecto `git` en el PATH). */
+  /** Binary path (by default `git` on the PATH). */
   bin?: string;
   timeoutMs?: number;
   fetchTimeoutMs?: number;
@@ -27,7 +27,7 @@ interface GitRun {
   exitCode: number;
 }
 
-// Pathspec que deja fuera el archivo de evidencia de LunasQ de los chequeos y de `commitAll`.
+// Pathspec that leaves LunasQ's evidence file out of the checks and of `commitAll`.
 const EXCLUDE_EVIDENCE = [".", `:(exclude)${EVIDENCE_DIR}`];
 
 const REGULAR_FILE = "100644";
@@ -45,8 +45,8 @@ export class RealGit implements GitAdapter {
   }
 
   async fetch(input: { cwd: string; remote: string; branch: string }) {
-    // El sha sale del remoto (ls-remote), no de releer `<remote>/<rama>` después del fetch: ese
-    // ref vive en el gitdir común y un worktree podría moverlo entre el fetch y la lectura.
+    // The sha comes from the remote (ls-remote), not from re-reading `<remote>/<branch>` after the fetch: that
+    // ref lives in the common gitdir and a worktree could move it between the fetch and the read.
     const ref = `refs/heads/${input.branch}`;
     const listed = await this.ok(input.cwd, ["ls-remote", "--end-of-options", input.remote, ref], {
       timeoutMs: this.fetchTimeoutMs,
@@ -56,11 +56,11 @@ export class RealGit implements GitAdapter {
       .split("\n")
       .map((line) => line.split("\t"))
       .find(([, name]) => name === ref)?.[0];
-    if (!sha) throw new GitError("git_failed", `${input.remote} no tiene ${ref}`);
+    if (!sha) throw new GitError("git_failed", `${input.remote} does not have ${ref}`);
     const refspec = `+${ref}:refs/remotes/${input.remote}/${input.branch}`;
-    // Dos fetch del mismo ref en el mismo repo (el hook after_merge y el worktree del dependiente
-    // que se libera) compiten por él y git aborta al segundo con «incorrect old value provided»:
-    // el ref ya quedó al día, así que se repite.
+    // Two fetches of the same ref in the same repo (the after_merge hook and the dependent's worktree
+    // being released) race for it and git aborts the second with "incorrect old value provided":
+    // the ref is already up to date, so it is retried.
     for (let attempt = 1; ; attempt++) {
       const res = await this.run(
         input.cwd,
@@ -98,7 +98,7 @@ export class RealGit implements GitAdapter {
   }
 
   async readFile(input: { cwd: string; commit: string; path: string }) {
-    // ls-tree distingue "no existe" de un fallo real, que cat-file mezcla en el mismo exit 128.
+    // ls-tree distinguishes "does not exist" from a real failure, which cat-file mixes under the same exit 128.
     const [entry] = await this.lsTree(input.cwd, input.commit, input.path);
     if (!entry || (entry.mode !== REGULAR_FILE && entry.mode !== EXECUTABLE_FILE)) return undefined;
     const res = await this.ok(input.cwd, ["cat-file", "blob", entry.object]);
@@ -130,11 +130,11 @@ export class RealGit implements GitAdapter {
     trailers: Record<string, string>;
   }) {
     if (input.paths.length === 0) return null;
-    // --force: el archivo de evidencia puede estar en un .gitignore del proyecto.
+    // --force: the evidence file may be in a project's .gitignore.
     await this.ok(input.cwd, ["add", "--force", "--", ...input.paths]);
     const staged = await this.run(input.cwd, ["diff", "--cached", "--quiet", "--", ...input.paths]);
     if (staged.exitCode === 0) return null;
-    // `-- <rutas>` commitea solo esas rutas, aunque haya otras cosas en el índice.
+    // `-- <paths>` commits only those paths, even if there are other things in the index.
     return this.commitStaged(input, ["--only", "--", ...input.paths]);
   }
 
@@ -142,8 +142,8 @@ export class RealGit implements GitAdapter {
     input: { cwd: string; message: string; trailers: Record<string, string> },
     extra: string[],
   ) {
-    // Los trailers van en su propio párrafo. Con `--trailer`, git toma como bloque de trailers un
-    // asunto de una línea con `: ` (`chore(lunasq): …`) y los pega sin línea en blanco.
+    // The trailers go in their own paragraph. With `--trailer`, git takes as the trailer block a
+    // one-line subject with `: ` (`chore(lunasq): …`) and glues them on without a blank line.
     const trailers = Object.entries(input.trailers).map(([k, v]) => `${k}: ${v}`);
     const paragraphs = trailers.length ? ["--message", trailers.join("\n")] : [];
     try {
@@ -156,7 +156,7 @@ export class RealGit implements GitAdapter {
         ...extra,
       ]);
     } catch (err) {
-      // Sin esto el índice queda preparado y el siguiente commit vería un worktree ya sucio.
+      // Without this the index stays staged and the next commit would see an already dirty worktree.
       await this.run(input.cwd, ["reset", "--quiet"]);
       throw err;
     }
@@ -170,14 +170,14 @@ export class RealGit implements GitAdapter {
       const head = await this.resolveCommit({ cwd: input.cwd, ref: "HEAD" });
       return { status: head === before ? "up_to_date" : "rebased", head };
     }
-    // Un conflicto deja archivos sin fusionar; cualquier otro fallo (worktree sucio, ref
-    // inexistente) no, y ahí no hay nada que abortar.
+    // A conflict leaves unmerged files; any other failure (dirty worktree, nonexistent
+    // ref) does not, and there is nothing to abort there.
     const unmerged = await this.run(input.cwd, ["diff", "--name-only", "--diff-filter=U", "-z"]);
     const files = unmerged.stdout.toString("utf8").split("\0").filter(Boolean);
     if (files.length === 0) {
       throw new GitError(
         "git_failed",
-        `rebase en ${input.cwd} (exit ${res.exitCode}): ${res.stderr.trim()}`,
+        `rebase in ${input.cwd} (exit ${res.exitCode}): ${res.stderr.trim()}`,
       );
     }
     await this.ok(input.cwd, ["rebase", "--abort"]);
@@ -202,7 +202,7 @@ export class RealGit implements GitAdapter {
     let parent = await this.resolveCommit({ cwd: input.cwd, ref: input.base });
     for (const commit of await this.logCommits(input)) {
       const message = withTrailers(commit.message, input.trailers[commit.sha] ?? {});
-      // Sin cambios propios ni de un ancestro, el commit se conserva con su sha.
+      // With no changes of its own or from an ancestor, the commit keeps its sha.
       if (message === commit.message && commit.parent === parent) {
         parent = commit.sha;
         continue;
@@ -221,15 +221,15 @@ export class RealGit implements GitAdapter {
       parent = created.stdout.toString("utf8").trim();
     }
     if (parent === head) return head;
-    // Los árboles son los mismos: el índice y el working tree siguen limpios. `head` como valor
-    // anterior evita pisar un commit que otro hiciera mientras tanto.
+    // The trees are the same: the index and the working tree stay clean. `head` as the previous
+    // value avoids overwriting a commit someone else made in the meantime.
     await this.ok(input.cwd, ["update-ref", "-m", "lunasq: trailers", "HEAD", parent, head]);
     return parent;
   }
 
   async push(input: { cwd: string; remote: string; branch: string }) {
-    // Tras un rebase la historia cambia: se fuerza, pero solo si el remoto sigue donde este
-    // checkout lo vio por última vez.
+    // After a rebase the history changes: it is forced, but only if the remote is still where this
+    // checkout last saw it.
     await this.ok(
       input.cwd,
       [
@@ -328,18 +328,18 @@ export class RealGit implements GitAdapter {
     return new Promise((resolve, reject) => {
       execFile(
         this.bin,
-        // Ningún comando de LunasQ ejecuta código del repo: ni hooks de git (que el branch de la
-        // tarea puede definir con core.hooksPath) ni el fsmonitor de la config compartida.
+        // No LunasQ command runs repo code: neither git hooks (which the task's branch
+        // may define with core.hooksPath) nor the fsmonitor from the shared config.
         ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", ...args],
         {
           cwd,
           env: {
             ...process.env,
-            // Sin prompts de credenciales: un fetch que pregunta se quedaría esperando.
+            // No credential prompts: a fetch that asks would hang waiting.
             GIT_TERMINAL_PROMPT: "0",
             LC_ALL: "C",
-            // `git replace` desde un worktree cambiaría el contenido de cualquier objeto de la
-            // base para todos los checkouts del repo (refs/replace vive en el gitdir común).
+            // `git replace` from a worktree would change the content of any object in the
+            // base for all the repo's checkouts (refs/replace lives in the common gitdir).
             GIT_NO_REPLACE_OBJECTS: "1",
             ...opts.env,
           },
@@ -351,11 +351,11 @@ export class RealGit implements GitAdapter {
         (err, stdout, stderr) => {
           const where = `${args[0]} en ${cwd}`;
           if (err?.killed) {
-            reject(new GitError("timeout", `${where}: sin respuesta en ${timeoutMs} ms`));
+            reject(new GitError("timeout", `${where}: no response in ${timeoutMs} ms`));
             return;
           }
           if (err?.code === "ENOENT") {
-            const what = existsSync(cwd) ? `${this.bin}: ${err.message}` : `no existe ${cwd}`;
+            const what = existsSync(cwd) ? `${this.bin}: ${err.message}` : `${cwd} does not exist`;
             reject(new GitError("git_unavailable", what, { cause: err }));
             return;
           }

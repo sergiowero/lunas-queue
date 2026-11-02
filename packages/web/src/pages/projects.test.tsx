@@ -9,8 +9,8 @@ async function openDialog(fake: FakeApi) {
   return { ...app, dialog: await screen.findByRole("dialog", { name: "Nuevo proyecto" }) };
 }
 
-describe("alta de proyectos", () => {
-  it("crea el proyecto con los campos básicos y lo muestra en la lista", async () => {
+describe("project creation", () => {
+  it("creates the project with the basic fields and shows it in the list", async () => {
     const fake = new FakeApi();
     const { user, dialog } = await openDialog(fake);
 
@@ -29,7 +29,7 @@ describe("alta de proyectos", () => {
     });
   });
 
-  it("envía comandos, límites y perfiles por fase, sin los campos vacíos", async () => {
+  it("sends commands, limits and per-phase profiles, without the empty fields", async () => {
     const fake = new FakeApi();
     const { user, dialog } = await openDialog(fake);
     const form = within(dialog);
@@ -70,7 +70,7 @@ describe("alta de proyectos", () => {
     });
   });
 
-  it("envía el esfuerzo por fase solo cuando se elige, y lo muestra al editar", async () => {
+  it("sends the per-phase effort only when chosen, and shows it when editing", async () => {
     const fake = new FakeApi();
     const { user, dialog } = await openDialog(fake);
     const form = within(dialog);
@@ -91,7 +91,7 @@ describe("alta de proyectos", () => {
     );
   });
 
-  it("permite elegir Copilot como proveedor de una fase", async () => {
+  it("allows choosing Copilot as a phase's provider", async () => {
     const fake = new FakeApi();
     const { user, dialog } = await openDialog(fake);
     const form = within(dialog);
@@ -108,7 +108,7 @@ describe("alta de proyectos", () => {
     });
   });
 
-  it("muestra el error del servidor y deja el popup abierto", async () => {
+  it("shows the server's error and leaves the popup open", async () => {
     const fake = new FakeApi();
     fake.addProject({ name: "repetido", localPath: "/repos/otro" });
     const { user, dialog } = await openDialog(fake);
@@ -123,7 +123,7 @@ describe("alta de proyectos", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
   });
 
-  it("muestra los issues de validación del servidor", async () => {
+  it("shows the server's validation issues", async () => {
     const fake = new FakeApi();
     const { user, dialog } = await openDialog(fake);
     const form = within(dialog);
@@ -134,11 +134,11 @@ describe("alta de proyectos", () => {
     await user.click(form.getByRole("button", { name: "Crear proyecto" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain(
-      "repo: repo debe ser owner/name",
+      "repo: repo must be owner/name",
     );
   });
 
-  it("se cierra con Cancelar y con Escape sin crear nada", async () => {
+  it("closes with Cancelar and with Escape without creating anything", async () => {
     const fake = new FakeApi();
     const { user } = await openDialog(fake);
 
@@ -152,7 +152,7 @@ describe("alta de proyectos", () => {
   });
 });
 
-describe("edición de proyectos", () => {
+describe("project editing", () => {
   function setup() {
     const fake = new FakeApi();
     const project = fake.addProject({
@@ -173,7 +173,7 @@ describe("edición de proyectos", () => {
     return { fake, project, app: renderApp("/projects", fake) };
   }
 
-  it("abre el mismo formulario prellenado con los datos del proyecto", async () => {
+  it("opens the same form prefilled with the project's data", async () => {
     const { app } = setup();
     await app.user.click(await screen.findByRole("button", { name: "Editar viejo" }));
     const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
@@ -198,7 +198,7 @@ describe("edición de proyectos", () => {
     );
   });
 
-  it("guarda los cambios con PATCH, borra el comando vaciado y actualiza la lista", async () => {
+  it("saves the changes with PATCH, deletes the emptied command and updates the list", async () => {
     const { fake, project, app } = setup();
     await app.user.click(await screen.findByRole("button", { name: "Editar viejo" }));
     const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
@@ -228,7 +228,7 @@ describe("edición de proyectos", () => {
     });
   });
 
-  it("muestra el error del servidor y deja el formulario abierto", async () => {
+  it("shows the error and leaves the form open", async () => {
     const { fake, app } = setup();
     fake.addProject({ name: "ocupado", localPath: "/repos/ocupado" });
     await app.user.click(await screen.findByRole("button", { name: "Editar viejo" }));
@@ -243,8 +243,8 @@ describe("edición de proyectos", () => {
   });
 });
 
-describe("borrado de proyectos", () => {
-  it("pide confirmación y borra el proyecto", async () => {
+describe("project deletion", () => {
+  it("asks for confirmation and deletes the project", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "sobra" });
     fake.addProject({ name: "queda" });
@@ -265,7 +265,7 @@ describe("borrado de proyectos", () => {
     );
   });
 
-  it("Cancelar no borra nada", async () => {
+  it("Cancelar deletes nothing", async () => {
     const fake = new FakeApi();
     fake.addProject({ name: "sobra" });
     const { user } = renderApp("/projects", fake);
@@ -278,7 +278,7 @@ describe("borrado de proyectos", () => {
     expect(fake.requests.some((r) => r.method === "DELETE")).toBe(false);
   });
 
-  it("muestra el error cuando el proyecto tiene tareas y no lo borra", async () => {
+  it("shows the error when the project has tasks and does not delete it", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "ocupado" });
     fake.addTask(project.id);
@@ -288,7 +288,9 @@ describe("borrado de proyectos", () => {
     const dialog = await screen.findByRole("dialog", { name: "Eliminar proyecto" });
     await user.click(within(dialog).getByRole("button", { name: "Eliminar" }));
 
-    expect((await screen.findByRole("alert")).textContent).toContain("el proyecto tiene tareas");
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "El proyecto tiene tareas y no se puede eliminar.",
+    );
     expect(screen.getByRole("link", { name: "ocupado" })).toBeTruthy();
   });
 });

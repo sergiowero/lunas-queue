@@ -19,13 +19,13 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-/** Dispatcher falso: hace el claim (dispatch → running) como lo hará UW-16. */
+/** Fake dispatcher: does the claim (dispatch → running) as UW-16 will. */
 class FakeDispatcher {
   readonly calls: DispatchDecision[] = [];
   readonly db: LunasqDatabase;
   reject = new Set<string>();
   gate: Promise<void> | undefined;
-  /** Agentes vivos vistos al momento de cada claim. */
+  /** Live agents seen at the time of each claim. */
   readonly liveAtClaim: number[] = [];
 
   constructor(db: LunasqDatabase) {
@@ -70,7 +70,7 @@ function setup(opts: Partial<SchedulerOptions> = {}) {
 }
 
 describe("Scheduler", () => {
-  it("despacha el ready set en orden de score con la fase de cada tarea", async () => {
+  it("dispatches the ready set in score order with each task's phase", async () => {
     const { db, project, dispatcher, scheduler } = setup();
     const baja = insertTask(db, project.id, { priority: 100 });
     const alta = insertTask(db, project.id, { priority: 500, state: "in_progress" });
@@ -82,7 +82,7 @@ describe("Scheduler", () => {
     expect(result.dispatched).toEqual([alta.id, baja.id]);
   });
 
-  it("no despacha una tarea pausada y despacha la que está en queued", async () => {
+  it("does not dispatch a paused task and dispatches the one in queued", async () => {
     const { db, project, dispatcher, scheduler, errors } = setup();
     const pausada = insertTask(db, project.id, { priority: 900 });
     const lista = insertTask(db, project.id, { priority: 100 });
@@ -98,7 +98,7 @@ describe("Scheduler", () => {
     expect(errors).toEqual([]);
   });
 
-  it("una pausada con una dependencia cerrada no se escala ni da error", async () => {
+  it("a paused one with a closed dependency is neither escalated nor an error", async () => {
     const { db, project, scheduler, errors } = setup();
     const dep = insertTask(db, project.id, { state: "cancelled", subState: null });
     const pausada = insertTask(db, project.id, { state: "paused", subState: null });
@@ -109,15 +109,15 @@ describe("Scheduler", () => {
     expect(row).toEqual({ state: "paused" });
   });
 
-  it("en pasadas sucesivas nunca excede los límites", async () => {
+  it("in successive passes it never exceeds the limits", async () => {
     const { db, project, dispatcher, scheduler } = setup({ config: { globalConcurrency: 3 } });
     const ids = Array.from({ length: 8 }, () => insertTask(db, project.id).id);
     await scheduler.run();
     await scheduler.run();
     expect(live(db)).toBe(3);
-    // Un agente termina su fase: la tarea pasa a refined y libera el slot.
+    // An agent ends its phase: the task moves to refined and frees the slot.
     const [first] = dispatcher.calls;
-    if (!first) throw new Error("sin despacho");
+    if (!first) throw new Error("no dispatch");
     const done = transitionTask(db, {
       taskId: first.taskId,
       actor: "agent",
@@ -132,7 +132,7 @@ describe("Scheduler", () => {
     expect(ids).toEqual(expect.arrayContaining(dispatcher.calls.map((d) => d.taskId)));
   });
 
-  it("respeta el límite del proyecto", async () => {
+  it("respects the project limit", async () => {
     const { db, dispatcher, scheduler } = setup();
     const limitado = insertProject(db, { limits: { concurrency: 1 } });
     const otro = insertProject(db);
@@ -143,7 +143,7 @@ describe("Scheduler", () => {
     expect(dispatcher.calls.map((d) => d.projectId)).toEqual([limitado.id, libre.projectId]);
   });
 
-  it("un despacho rechazado se reporta y no detiene la pasada", async () => {
+  it("a rejected dispatch is reported and does not stop the pass", async () => {
     const { db, project, dispatcher, scheduler, errors } = setup();
     const a = insertTask(db, project.id, { priority: 900 });
     const b = insertTask(db, project.id, { priority: 100 });
@@ -153,7 +153,7 @@ describe("Scheduler", () => {
     expect(errors.map((e) => e.message)).toEqual([`claim perdido ${a.id}`]);
   });
 
-  it("agrupa los pedidos que llegan durante una pasada en una pasada más", async () => {
+  it("groups the requests that arrive during a pass into one more pass", async () => {
     const db = migratedDatabase();
     const project = insertProject(db);
     const state = new SchedulerStateRepository(db);
@@ -173,14 +173,14 @@ describe("Scheduler", () => {
     expect(reads).toHaveBeenCalledTimes(2);
   });
 
-  it("un pedido que llega cuando la pasada ya está saliendo no se pierde", async () => {
+  it("a request that arrives when the pass is already exiting is not lost", async () => {
     const db = migratedDatabase();
     const project = insertProject(db);
     const state = new SchedulerStateRepository(db);
     const reads = vi.spyOn(state, "snapshot");
     const { dispatcher, scheduler } = setup({ db, state });
     const first = scheduler.run();
-    // La pasada no tiene despachos: termina sin ceder. El pedido llega antes del finally.
+    // The pass has no dispatches: it ends without yielding. The request arrives before the finally.
     await Promise.resolve();
     await Promise.resolve();
     insertTask(db, project.id);
@@ -190,13 +190,13 @@ describe("Scheduler", () => {
     expect(reads).toHaveBeenCalledTimes(2);
   });
 
-  it("un fallo al escalar se reporta con su tarea y no salta los despachos", async () => {
+  it("a failure escalating is reported with its task and does not skip the dispatches", async () => {
     const { db, project, dispatcher, scheduler, errors } = setup();
     const dep = insertTask(db, project.id, { state: "cancelled", subState: null });
     const bloqueada = insertTask(db, project.id);
     db.insert(taskDependencies).values({ taskId: bloqueada.id, dependsOnId: dep.id }).run();
     const libre = insertTask(db, project.id);
-    // Un trigger hace fallar la escritura del escalamiento.
+    // A trigger makes the escalation write fail.
     db.$client.exec(`create trigger romper before update of state on tasks
       when new.state = 'needs_human' begin select raise(abort, 'base rota'); end`);
     const result = await scheduler.run();
@@ -205,7 +205,7 @@ describe("Scheduler", () => {
     expect(errors.map((e) => e.message)).toEqual(["base rota"]);
   });
 
-  it("escala a los dependientes de una dependencia cancelada, una sola vez", async () => {
+  it("escalates the dependents of a canceled dependency, only once", async () => {
     const { db, project, dispatcher, scheduler } = setup();
     const publisher = new OutboxPublisher({ db, onError: () => {} });
     const wake = vi.spyOn(publisher, "wake");
@@ -229,7 +229,7 @@ describe("Scheduler", () => {
     expect(dispatcher.calls).toEqual([]);
   });
 
-  it("reacciona a los eventos del outbox", async () => {
+  it("reacts to the outbox events", async () => {
     const { db, project, dispatcher } = setup();
     const publisher = new OutboxPublisher({ db, onError: () => {}, pollIntervalMs: 60_000 });
     const scheduler = new Scheduler({
@@ -257,7 +257,7 @@ describe("Scheduler", () => {
     );
   });
 
-  it("con claude y copilot deshabilitados no despacha y las tareas siguen en queued", async () => {
+  it("with claude and copilot disabled it does not dispatch and the tasks stay in queued", async () => {
     const { db, project, dispatcher, scheduler } = setup();
     const task = insertTask(db, project.id);
     new SettingsRepository(db).saveProviders({ claude: false, copilot: false });
@@ -269,7 +269,7 @@ describe("Scheduler", () => {
     ).toBe("queued");
   });
 
-  it("lee la configuración en cada pasada y despacha al proveedor habilitado", async () => {
+  it("reads the configuration on each pass and dispatches to the enabled provider", async () => {
     const { db, project, dispatcher, scheduler } = setup();
     const settings = new SettingsRepository(db);
     const task = insertTask(db, project.id);
@@ -282,7 +282,7 @@ describe("Scheduler", () => {
     expect(dispatcher.calls.map((d) => [d.taskId, d.agentKind])).toEqual([[task.id, "copilot"]]);
   });
 
-  it("settings.updated despierta al scheduler por el outbox", async () => {
+  it("settings.updated wakes the scheduler through the outbox", async () => {
     const { db, project, dispatcher } = setup();
     const publisher = new OutboxPublisher({ db, onError: () => {}, pollIntervalMs: 60_000 });
     const scheduler = new Scheduler({
@@ -307,7 +307,7 @@ describe("Scheduler", () => {
     );
   });
 
-  it("con un límite guardado de 1 despacha exactamente una de tres tareas en proyectos distintos", async () => {
+  it("with a saved limit of 1 it dispatches exactly one of three tasks in different projects", async () => {
     const { db, dispatcher, scheduler } = setup();
     for (let i = 0; i < 3; i++) insertTask(db, insertProject(db).id);
     new SettingsRepository(db).saveConcurrency({ globalConcurrency: 1 });
@@ -316,7 +316,7 @@ describe("Scheduler", () => {
     expect(live(db)).toBe(1);
   });
 
-  it("subir el límite en Settings despierta al scheduler y despacha las tareas en cola", async () => {
+  it("raising the limit in Settings wakes the scheduler and dispatches the queued tasks", async () => {
     const { db, project, dispatcher } = setup();
     const publisher = new OutboxPublisher({ db, onError: () => {}, pollIntervalMs: 60_000 });
     const scheduler = new Scheduler({
@@ -342,7 +342,7 @@ describe("Scheduler", () => {
     expect(live(db)).toBe(3);
   });
 
-  it("bajar el límite no toca a los agentes vivos y no despacha hasta que bajen del límite", async () => {
+  it("lowering the limit does not touch the live agents and does not dispatch until they drop below the limit", async () => {
     const { db, dispatcher, scheduler } = setup();
     const settings = new SettingsRepository(db);
     settings.saveConcurrency({ globalConcurrency: 3 });
@@ -368,7 +368,7 @@ describe("Scheduler", () => {
     ).toBe("queued");
   });
 
-  it("el tick recoge lo que no pasó por el outbox y stop lo detiene", async () => {
+  it("the tick picks up what did not go through the outbox and stop halts it", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     const { db, project, dispatcher, scheduler } = setup({ config: { tickIntervalMs: 1000 } });
     await scheduler.start();
@@ -383,7 +383,7 @@ describe("Scheduler", () => {
     expect(dispatcher.calls).toHaveLength(1);
   });
 
-  it("stop espera la pasada en curso y no despacha lo que quedaba", async () => {
+  it("stop waits for the pass in progress and does not dispatch what was left", async () => {
     const { db, project, dispatcher, scheduler } = setup();
     insertTask(db, project.id, { priority: 900 });
     insertTask(db, project.id, { priority: 100 });
@@ -400,7 +400,7 @@ describe("Scheduler", () => {
     expect(dispatcher.calls).toHaveLength(1);
   });
 
-  it("un fallo al leer el estado se reporta en wake", async () => {
+  it("a failure reading the state is reported in wake", async () => {
     const db = migratedDatabase();
     const state = new SchedulerStateRepository(db);
     vi.spyOn(state, "snapshot").mockImplementation(() => {

@@ -15,14 +15,14 @@ import { insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
 
 const outboxRows = (db: LunasqDatabase) => db.select().from(outbox).orderBy(outbox.id).all();
 
-/** Hace fallar cualquier insert en outbox, como una caída a mitad de la transacción. */
+/** Makes any insert into outbox fail, like a crash halfway through the transaction. */
 const breakOutbox = (db: LunasqDatabase) =>
   db.$client.exec(
     "create trigger outbox_broken before insert on outbox begin select raise(abort, 'outbox caído'); end",
   );
 
-describe("Outbox: encolado", () => {
-  it("appendEvent con publish deja el evento y su fila pendiente en la misma escritura", () => {
+describe("Outbox: enqueueing", () => {
+  it("appendEvent with publish leaves the event and its pending row in the same write", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const e = appendEvent(
@@ -41,14 +41,14 @@ describe("Outbox: encolado", () => {
     ]);
   });
 
-  it("appendEvent sin publish no encola", () => {
+  it("appendEvent without publish does not enqueue", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     appendEvent(db, { taskId: t.id, type: "task.note", actor: "system" });
     expect(outboxRows(db)).toEqual([]);
   });
 
-  it("encolar dos veces el mismo evento deja una sola fila", () => {
+  it("enqueuing the same event twice leaves a single row", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const e = appendEvent(
@@ -61,7 +61,7 @@ describe("Outbox: encolado", () => {
     expect(outboxRows(db)).toHaveLength(1);
   });
 
-  it("si el outbox falla, appendEvent no deja el evento", () => {
+  it("if the outbox fails, appendEvent leaves no event", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     breakOutbox(db);
@@ -71,7 +71,7 @@ describe("Outbox: encolado", () => {
     expect(listEvents(db, t.id)).toEqual([]);
   });
 
-  it("transitionTask encola su evento task.transitioned", () => {
+  it("transitionTask enqueues its task.transitioned event", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const result = transitionTask(db, {
@@ -90,7 +90,7 @@ describe("Outbox: encolado", () => {
     ]);
   });
 
-  it("si el outbox falla, la transición se revierte completa: ni estado ni evento", () => {
+  it("if the outbox fails, the transition is rolled back completely: neither state nor event", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     breakOutbox(db);
@@ -104,7 +104,7 @@ describe("Outbox: encolado", () => {
     expect(listEvents(db, t.id)).toEqual([]);
   });
 
-  it("una transición rechazada no encola nada", () => {
+  it("a rejected transition enqueues nothing", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id);
     const result = transitionTask(db, {
@@ -117,7 +117,7 @@ describe("Outbox: encolado", () => {
   });
 });
 
-describe("Outbox: lectura y marcas", () => {
+describe("Outbox: reading and marks", () => {
   const seed = (db: LunasqDatabase, n: number) => {
     const t = insertTask(db, insertProject(db).id);
     return Array.from({ length: n }, (_, i) =>
@@ -129,7 +129,7 @@ describe("Outbox: lectura y marcas", () => {
     );
   };
 
-  it("listPendingOutbox devuelve mensajes válidos en orden de escritura, con límite", () => {
+  it("listPendingOutbox returns valid messages in write order, with a limit", () => {
     const db = migratedDatabase();
     const [e0, e1] = seed(db, 3);
     const pending = listPendingOutbox(db, { limit: 2 });
@@ -143,11 +143,11 @@ describe("Outbox: lectura y marcas", () => {
     });
   });
 
-  it("markOutboxPublished saca el mensaje de pendientes y solo marca una vez", () => {
+  it("markOutboxPublished removes the message from pending and only marks once", () => {
     const db = migratedDatabase();
     seed(db, 2);
     const [first, second] = listPendingOutbox(db);
-    if (!first || !second) throw new Error("faltan pendientes");
+    if (!first || !second) throw new Error("pending messages are missing");
 
     expect(markOutboxPublished(db, first.message.id)).toBe(true);
     expect(markOutboxPublished(db, first.message.id)).toBe(false);
@@ -155,7 +155,7 @@ describe("Outbox: lectura y marcas", () => {
     expect(outboxRows(db)[0]?.publishedAt).toBeInstanceOf(Date);
   });
 
-  it("recordOutboxFailure suma intentos sin sacar el mensaje de pendientes", () => {
+  it("recordOutboxFailure adds attempts without removing the message from pending", () => {
     const db = migratedDatabase();
     seed(db, 1);
     const id = listPendingOutbox(db)[0]?.message.id ?? 0;

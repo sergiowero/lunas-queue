@@ -1,12 +1,12 @@
-// Las skills de fase contra Claude Code real (criterio de UW-18): cada una produce un handoff
-// válido en una tarea de prueba. No corre en `pnpm test`:
+// The phase skills against real Claude Code (UW-18 criterion): each one produces a valid handoff
+// on a test task. It does not run in `pnpm test`:
 //   pnpm --filter @lunasq/server test:skills
-// Una sola tarea recorre refinamiento, implementación y verificación sobre un repo temporal. Cada
-// fase abre `claude -p` con el prompt de fase del dispatcher, el MCP de LunasQ por `--mcp-config`
-// (sin engram: `--strict-mcp-config`), el settings de hooks y el run token en el entorno, como en
-// un pane. El gate de tests es el de UW-11 con un runner local en lugar del pane de herdr. Las
-// fases corren con `LUNASQ_SKILL_MODEL` (sonnet por defecto) y los revisores con
-// `LUNASQ_REVIEWER_MODEL` (haiku por defecto).
+// A single task goes through refinement, implementation and verification on a temporary repo. Each
+// phase opens `claude -p` with the dispatcher's phase prompt, the LunasQ MCP via `--mcp-config`
+// (no engram: `--strict-mcp-config`), the hooks settings and the run token in the environment, as
+// in a pane. The test gate is the UW-11 one with a local runner instead of the herdr pane. Phases
+// run with `LUNASQ_SKILL_MODEL` (sonnet by default) and reviewers with
+// `LUNASQ_REVIEWER_MODEL` (haiku by default).
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
@@ -55,13 +55,13 @@ const enabled = process.env.LUNASQ_SKILLS_INTEGRATION === "1";
 const skillModel = process.env.LUNASQ_SKILL_MODEL ?? "sonnet";
 const reviewerModel = process.env.LUNASQ_REVIEWER_MODEL ?? "haiku";
 const assets = new URL("../../../../assets/", import.meta.url);
-const BRANCH = "lunasq/prueba";
+const BRANCH = "lunasq/test";
 
 const INTENT =
-  "Agregar a la calculadora la operación dividir(a, b) en src/dividir.js: devuelve a / b y " +
-  "rechaza dividir entre cero con un error que lo diga.";
+  "Add the divide(a, b) operation to the calculator in src/divide.js: it returns a / b and " +
+  "rejects division by zero with an error that says so.";
 
-describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1_800_000 }, () => {
+describe.skipIf(!enabled)("phase skills against real Claude Code", { timeout: 1_800_000 }, () => {
   let dir: string;
   let repo: string;
   let server: Server;
@@ -76,37 +76,37 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
     dir = mkdtempSync(join(tmpdir(), "lunasq-skills-"));
     repo = join(dir, "repo");
     mkdirSync(join(repo, "src"), { recursive: true });
-    writeFileSync(join(repo, "package.json"), '{ "name": "calculadora", "type": "module" }\n');
-    writeFileSync(join(repo, "src", "sumar.js"), "export const sumar = (a, b) => a + b;\n");
+    writeFileSync(join(repo, "package.json"), '{ "name": "calculator", "type": "module" }\n');
+    writeFileSync(join(repo, "src", "add.js"), "export const add = (a, b) => a + b;\n");
     writeFileSync(
-      join(repo, "src", "sumar.test.js"),
+      join(repo, "src", "add.test.js"),
       [
         'import assert from "node:assert/strict";',
         'import { test } from "node:test";',
-        'import { sumar } from "./sumar.js";',
+        'import { add } from "./add.js";',
         "",
-        'test("sumar dos números devuelve su suma", () => {',
-        "  assert.equal(sumar(2, 3), 5);",
+        'test("adding two numbers returns their sum", () => {',
+        "  assert.equal(add(2, 3), 5);",
         "});",
         "",
       ].join("\n"),
     );
     writeFileSync(
       join(repo, "AGENTS.md"),
-      "# Calculadora\n\nJavaScript sin dependencias. Un archivo por operación en `src/`, con su test al lado (`node:test`). Tests: `node --test`.\n",
+      "# Calculator\n\nDependency-free JavaScript. One file per operation in `src/`, with its test next to it (`node:test`). Tests: `node --test`.\n",
     );
     git("init", "-q", "-b", "main");
     git("add", ".");
-    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "calculadora");
-    // Como un worktree de LunasQ: el branch sale de origin/main (ADR 0012).
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "calculator");
+    // Like a LunasQ worktree: the branch starts from origin/main (ADR 0012).
     execFileSync("git", ["init", "-q", "--bare", join(dir, "origin.git")]);
     git("remote", "add", "origin", join(dir, "origin.git"));
     git("push", "-q", "origin", "main");
     git("fetch", "-q", "origin");
     git("checkout", "-q", "-b", BRANCH, "origin/main");
-    git("config", "user.name", "LunasQ prueba");
-    git("config", "user.email", "prueba@lunasq.local");
-    // Lo que instala `lunasq install` vive fuera del árbol de la tarea: no ensucia el worktree.
+    git("config", "user.name", "LunasQ test");
+    git("config", "user.email", "test@lunasq.local");
+    // What `lunasq install` installs lives outside the task tree: it does not dirty the worktree.
     appendFileSync(join(repo, ".git", "info", "exclude"), ".claude/\n");
     for (const skill of readdirSync(new URL("skills/", assets), { withFileTypes: true })) {
       if (!skill.isDirectory() || skill.name === "node_modules") continue;
@@ -125,7 +125,7 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
       writeFileSync(join(agents, file), text.replace(/^model: .*$/m, `model: ${reviewerModel}`));
     }
 
-    // Abierta a mano: las de test-helpers se cierran en cada afterEach y aquí las fases la comparten.
+    // Opened by hand: the test-helpers ones close in every afterEach and here the phases share it.
     db = openDatabase(join(dir, "lunasq.db"));
     migrateDatabase(db);
     const project = insertProject(db, { localPath: repo, testCommand: "node --test" });
@@ -162,7 +162,7 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
     rmSync(dir, { recursive: true, force: true });
   });
 
-  /** Despacha la fase como el dispatcher (Run con session id nativo, prompt de fase) y espera. */
+  /** Dispatches the phase like the dispatcher (Run with native session id, phase prompt) and waits. */
   async function dispatch(phase: SchedulablePhase, position: StatePosition) {
     setTaskPosition(db, taskId, position);
     const sessionId = randomUUID();
@@ -205,11 +205,11 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
       },
     );
     const row = new RunRepository(db).get(run.id);
-    if (!row) throw new Error("el Run desapareció");
-    // Un modelo puede preguntar en vez de seguir: que el fallo lo diga, no una aserción opaca.
+    if (!row) throw new Error("the Run disappeared");
+    // A model may ask instead of continuing: let the failure say so, not an opaque assertion.
     const now = taskPosition();
     if (now?.subState === "waiting_human") {
-      throw new Error(`la fase ${phase} se quedó esperando al humano (ask_human):\n${output}`);
+      throw new Error(`phase ${phase} was left waiting for the human (ask_human):\n${output}`);
     }
     return { run: row, output };
   }
@@ -217,7 +217,7 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
   function validHandoff(raw: unknown, output: string): Handoff {
     const parsed = parseHandoff(raw);
     expect(parsed.success ? [] : parsed.errors, output).toEqual([]);
-    if (!parsed.success) throw new Error("handoff inválido");
+    if (!parsed.success) throw new Error("invalid handoff");
     return parsed.data;
   }
 
@@ -226,7 +226,7 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
     return task && { state: task.state, subState: task.subState };
   };
 
-  it("refine-task envía una spec con submit_spec y deja la tarea en refined", async () => {
+  it("refine-task sends a spec with submit_spec and leaves the task in refined", async () => {
     const head = git("rev-parse", "HEAD");
     const { run, output } = await dispatch("refine", { state: "draft", subState: "running" });
     expect(run.result, output).toBe("success");
@@ -234,14 +234,14 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
     const handoff = validHandoff(run.handoff, output);
     expect(handoff).toMatchObject({ phase: "refinement", taskId, runId: run.id });
     expect(taskPosition()).toEqual({ state: "refined", subState: null });
-    expect(git("status", "--porcelain"), "el refinador no escribe código").toBe("");
-    expect(git("rev-parse", "HEAD"), "el refinador no commitea").toBe(head);
+    expect(git("status", "--porcelain"), "the refiner does not write code").toBe("");
+    expect(git("rev-parse", "HEAD"), "the refiner does not commit").toBe(head);
 
     const approved = new SpecRepository(db).approve(taskId, 1);
     expect(approved.ok).toBe(true);
   });
 
-  it("implement-task entrega commits en verde con submit_for_verification", async () => {
+  it("implement-task delivers green commits with submit_for_verification", async () => {
     const { run, output } = await dispatch("implement", {
       state: "in_progress",
       subState: "running",
@@ -251,7 +251,7 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
     expect(handoff).toMatchObject({ phase: "implementation", taskId, runId: run.id });
     expect(taskPosition()).toEqual({ state: "verification", subState: "queued" });
     expect(git("status", "--porcelain")).toBe("");
-    if (handoff.phase !== "implementation") throw new Error("fase inesperada");
+    if (handoff.phase !== "implementation") throw new Error("unexpected phase");
     const branchCommits = git("rev-list", `origin/main..${BRANCH}`).split("\n");
     expect(branchCommits.length).toBeGreaterThan(0);
     for (const sha of handoff.body.commits) {
@@ -260,7 +260,7 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
         sha,
       ).toBe(true);
     }
-    // El checklist quedó marcado con update_checklist.
+    // The checklist was marked with update_checklist.
     const checklist = latestChecklist(db, taskId);
     expect(checklist?.length, output).toBeGreaterThan(0);
     expect(
@@ -270,7 +270,7 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
     expect(() => execFileSync("node", ["--test"], { cwd: repo, stdio: "ignore" })).not.toThrow();
   });
 
-  it("verify-task emite un veredicto con submit_verdict, con los revisores que dice haber lanzado", async () => {
+  it("verify-task issues a verdict with submit_verdict, with the reviewers it says it launched", async () => {
     const head = git("rev-parse", "HEAD");
     const { run, output } = await dispatch("verify", {
       state: "verification",
@@ -278,9 +278,9 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
     });
     const handoff = validHandoff(run.handoff, output);
     expect(handoff).toMatchObject({ phase: "verification", taskId, runId: run.id });
-    if (handoff.phase !== "verification") throw new Error("fase inesperada");
+    if (handoff.phase !== "verification") throw new Error("unexpected phase");
 
-    // Lo que UW-23 exigirá: cada revisor reportado como ran aparece en los hooks del Run.
+    // What UW-23 will require: every reviewer reported as ran appears in the Run hooks.
     const recorded = new RunSubagentRepository(db).forRun(run.id).map((r) => r.agentType);
     const ran = Object.entries(handoff.body.reviewers)
       .filter(([, report]) => report.status === "ran")
@@ -288,11 +288,11 @@ describe.skipIf(!enabled)("skills de fase contra Claude Code real", { timeout: 1
     expect(ran.length, output).toBeGreaterThan(0);
     for (const name of ran) expect(recorded, name).toContain(name);
 
-    // El verificador no edita: la prueba de reversión queda deshecha.
+    // The verifier does not edit: the revert check is left undone.
     expect(git("status", "--porcelain")).toBe("");
     expect(git("rev-parse", "HEAD")).toBe(head);
     if (handoff.body.verdict === "pass") {
-      // El Run sigue abierto para la entrega (ADR 0007).
+      // The Run stays open for delivery (ADR 0007).
       expect(run.endedAt).toBeNull();
       expect(taskPosition()).toEqual({ state: "verification", subState: "running" });
     } else {

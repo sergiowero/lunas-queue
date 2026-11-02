@@ -1,13 +1,13 @@
-// Vista de hooks por proyecto (UW-25), montada bajo /api/projects/:id/hooks. El contenido sale de
-// lunasq/hooks/ en la rama base (HookService.listHooks) y las ejecuciones, del Event log: los
-// hooks se editan por PR en el repo, no desde aquí.
+// Per-project hooks view (UW-25), mounted under /api/projects/:id/hooks. The content comes from
+// lunasq/hooks/ on the base branch (HookService.listHooks) and the executions from the Event log: hooks
+// are edited through a PR in the repo, not from here.
 import type { ProjectRepository, TaskViewRepository } from "@lunasq/db";
 import { HookExecutionsQuery } from "@lunasq/schemas";
 import { type Context, Hono } from "hono";
 import { isHookError, type ProjectHooks } from "../hooks/service.ts";
 import { invalidInput, notFound } from "./http.ts";
 
-/** Lo que la vista necesita del HookService. */
+/** What the view needs from the HookService. */
 export interface HookLister {
   listHooks(projectId: string): Promise<ProjectHooks>;
 }
@@ -15,26 +15,25 @@ export interface HookLister {
 export interface HookRoutesDeps {
   projects: ProjectRepository;
   views: TaskViewRepository;
-  /** Sin él, `GET /` responde 503: quien compone el servidor pasa el HookService. */
+  /** Without it, `GET /` answers 503: whoever composes the server passes the HookService. */
   hooks?: HookLister | undefined;
 }
 
 function projectId(c: Context): string {
   const id = c.req.param("id");
-  if (!id) throw new Error("ruta de hooks montada sin :id");
+  if (!id) throw new Error("hooks route mounted without :id");
   return id;
 }
 
 export function hookRoutes({ projects, views, hooks }: HookRoutesDeps): Hono {
   return new Hono()
     .get("/", async (c) => {
-      if (!hooks)
-        return c.json({ error: "hooks_unavailable", message: "sin servicio de hooks" }, 503);
+      if (!hooks) return c.json({ error: "hooks_unavailable", message: "no hooks service" }, 503);
       try {
         return c.json(await hooks.listHooks(projectId(c)));
       } catch (error) {
         if (isHookError(error, "project_not_found")) return notFound(c);
-        // Sin red o sin la rama base no se sabe qué hooks hay: no es un fallo del servidor.
+        // Without network or the base branch it is unknown which hooks exist: it is not a server failure.
         const message = error instanceof Error ? error.message : String(error);
         return c.json({ error: "hooks_unavailable", message }, 502);
       }

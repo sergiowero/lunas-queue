@@ -21,7 +21,7 @@ export {
 } from "./service.ts";
 export { notificationRoutes } from "./sse.ts";
 
-/** Arma el módulo: herdr y UI como canales, escalador sobre el servicio y rutas SSE. */
+/** Builds the module: herdr and UI as channels, escalator over the service and SSE routes. */
 export function createNotifications(opts: {
   herdr: Pick<HerdrAdapter, "notify">;
   onChannelError?: ChannelErrorHandler;

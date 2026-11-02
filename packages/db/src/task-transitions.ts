@@ -1,5 +1,5 @@
-// Única vía para cambiar estado, sub-estado o iteración de una tarea (ADR 0007): aplica la
-// máquina de estados de @lunasq/domain y escribe la tarea y su evento en una sola transacción.
+// The only way to change a task's state, sub-state or iteration (ADR 0007): it applies the
+// state machine of @lunasq/domain and writes the task and its event in a single transaction.
 import {
   type CommandInput,
   type TaskSnapshot,
@@ -19,7 +19,7 @@ import { events, tasks } from "./schema.ts";
 
 export type TaskRow = typeof tasks.$inferSelect;
 
-/** Como CommandInput, pero resume toma su destino del último escalamiento o pausa registrados. */
+/** Like CommandInput, but resume takes its destination from the last recorded escalation or pause. */
 export type TransitionCommand =
   | Exclude<CommandInput, { type: "resume" }>
   | Omit<Extract<CommandInput, { type: "resume" }>, "resumeTo">;
@@ -28,7 +28,7 @@ export type TransitionTaskInput = {
   taskId: string;
   actor: Actor;
   command: TransitionCommand;
-  /** Estado que quien llama vio; si ya cambió, la transición se rechaza con stale_state. */
+  /** State the caller saw; if it already changed, the transition is rejected with stale_state. */
   expected?: StatePosition;
 };
 
@@ -48,15 +48,15 @@ export function transitionTask(
   db: LunasqDatabase,
   input: TransitionTaskInput,
 ): TransitionTaskResult {
-  // IMMEDIATE toma el lock de escritura antes de leer: otro proceso no puede mover la tarea
-  // entre la lectura y el update.
+  // IMMEDIATE takes the write lock before reading: another process cannot move the task
+  // between the read and the update.
   return db.transaction((tx) => applyTransition(tx, input), { behavior: "immediate" });
 }
 
 /**
- * Como transitionTask, dentro de una transacción IMMEDIATE que ya abrió quien llama: así una
- * escritura propia (por ejemplo la versión de spec, ADR 0013) y la transición se confirman
- * juntas. Un rechazo no escribe nada; quien llama decide si revierte lo suyo.
+ * Like transitionTask, inside an IMMEDIATE transaction already opened by the caller: this way its own
+ * write (for example the spec version, ADR 0013) and the transition are confirmed
+ * together. A rejection writes nothing; the caller decides whether to roll back its own.
  */
 export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionTaskResult {
   const fail = (code: TransitionTaskErrorCode, message: string): TransitionTaskResult => ({
@@ -64,19 +64,19 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
     error: { code, message },
   });
   const current = tx.select().from(tasks).where(eq(tasks.id, input.taskId)).get();
-  if (!current) return fail("task_not_found", `no existe la tarea ${input.taskId}`);
+  if (!current) return fail("task_not_found", `task ${input.taskId} does not exist`);
 
   const { expected } = input;
   if (expected && (expected.state !== current.state || expected.subState !== current.subState)) {
     return fail(
       "stale_state",
-      `se esperaba ${expected.state}/${expected.subState ?? "-"} y la tarea está en ${current.state}/${current.subState ?? "-"}`,
+      `expected ${expected.state}/${expected.subState ?? "-"} but the task is in ${current.state}/${current.subState ?? "-"}`,
     );
   }
 
   let command: CommandInput;
   if (input.command.type === "resume") {
-    // Fuera de needs_human y paused resume se rechaza en el dominio; el destino no importa.
+    // Outside needs_human and paused, resume is rejected in the domain; the destination does not matter.
     const origin =
       current.state === "needs_human" || current.state === "paused"
         ? lastOrigin(tx, current.id, current.state)
@@ -84,13 +84,13 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
     if ((current.state === "needs_human" || current.state === "paused") && !origin) {
       return fail(
         "no_escalation_found",
-        `la tarea ${current.id} no tiene un evento que la llevara a ${current.state}`,
+        `task ${current.id} has no event that took it to ${current.state}`,
       );
     }
-    // Iteraciones agotadas en verificación: hay un must-fix sin corregir. Reanudar a verificación
-    // volvería a verificar el mismo diff sin cambios y volvería a escalar; el destino es implementar.
-    // Y como el humano reanuda para que el agente corrija, se concede un ciclo nuevo de
-    // iteraciones (resetIteration); si no, el primer reject volvería a escalar de inmediato.
+    // Exhausted iterations in verification: there is an unfixed must-fix. Resuming to verification
+    // would verify the same unchanged diff again and escalate again; the destination is implement.
+    // And since the human resumes so the agent fixes it, a new cycle of
+    // iterations is granted (resetIteration); otherwise, the first reject would escalate again at once.
     const exhausted =
       origin !== undefined &&
       origin.from === "verification" &&
@@ -123,7 +123,7 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
     )
     .returning()
     .all();
-  if (!task) throw new Error(`la tarea ${current.id} cambió durante la transición`);
+  if (!task) throw new Error(`task ${current.id} changed during the transition`);
   const event = appendEvent(
     tx,
     {
@@ -137,7 +137,7 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
   return { ok: true, task, event };
 }
 
-/** Estado desde el que la tarea pasó a `entered` (needs_human o paused) por última vez, y el motivo. */
+/** State from which the task last moved to `entered` (needs_human or paused), and the reason. */
 function lastOrigin(
   tx: Pick<LunasqDatabase, "select">,
   taskId: string,

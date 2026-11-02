@@ -21,7 +21,7 @@ const batch = (records: object[], resource: object[] = []) =>
   });
 
 describe("apiRequests", () => {
-  it("lee tokens, costo, request id y atributos del Run de un lote real de Claude Code 2.1.314", () => {
+  it("reads tokens, cost, request id and Run attributes from a real Claude Code 2.1.314 batch", () => {
     const found = apiRequests(real);
     expect(found).toHaveLength(2);
     expect(found[0]).toEqual({
@@ -47,7 +47,7 @@ describe("apiRequests", () => {
     });
   });
 
-  it("sin request_id deriva un source_ref estable de la sesión y la secuencia del evento", () => {
+  it("without request_id it derives a stable source_ref from the session and the event sequence", () => {
     const withSequence = (n: number) =>
       request([
         str("model", "m"),
@@ -61,11 +61,11 @@ describe("apiRequests", () => {
     expect(none?.usage.sourceRef).toBeNull();
   });
 
-  it("ignora los eventos que no son api_request", () => {
+  it("ignores events that are not api_request", () => {
     expect(apiRequests(batch([request([], "tool_result"), request([], "api_error")]))).toEqual([]);
   });
 
-  it("toma agent_id del subagente y acepta int64 como string", () => {
+  it("takes agent_id from the subagent and accepts int64 as string", () => {
     const [found] = apiRequests(
       batch([
         request([
@@ -86,7 +86,7 @@ describe("apiRequests", () => {
     });
   });
 
-  it("los atributos del evento ganan a los del recurso", () => {
+  it("the event's attributes win over the resource's", () => {
     const found = apiRequests(
       batch(
         [request([str("lunasq.run_id", "R2"), str("model", "m")])],
@@ -96,7 +96,7 @@ describe("apiRequests", () => {
     expect(found[0]).toMatchObject({ runId: "R2", sessionId: "s-1" });
   });
 
-  it("descarta una llamada sin modelo o con tokens inválidos en vez de fallar el lote", () => {
+  it("discards a call without a model or with invalid tokens instead of failing the batch", () => {
     const ok = request([str("model", "m"), attr("input_tokens", { intValue: 1 })]);
     const noModel = request([attr("input_tokens", { intValue: 1 })]);
     const negative = request([str("model", "m"), attr("input_tokens", { intValue: -4 })]);

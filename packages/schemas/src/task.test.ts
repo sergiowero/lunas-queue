@@ -21,11 +21,11 @@ const otherId = "00000000-0000-4000-8000-000000000002";
 const validCreate = { projectId, intent: "Agregar login con GitHub", priority: 100 };
 
 describe("TaskCreate", () => {
-  it("acepta lo mínimo y rellena tags y dependencias vacías", () => {
+  it("accepts the minimum and fills in empty tags and dependencies", () => {
     expect(TaskCreate.parse(validCreate)).toEqual({ ...validCreate, tags: [], dependsOn: [] });
   });
 
-  it("recorta el intent y las tags y quita duplicados", () => {
+  it("trims the intent and the tags and removes duplicates", () => {
     const parsed = TaskCreate.parse({
       ...validCreate,
       intent: "  Agregar login  ",
@@ -40,20 +40,20 @@ describe("TaskCreate", () => {
   });
 
   it.each([
-    ["prioridad negativa", { priority: -1 }],
-    ["prioridad no entera", { priority: 1.5 }],
-    ["prioridad mayor que MAX_SAFE_INTEGER", { priority: Number.MAX_SAFE_INTEGER + 1 }],
-    ["intent vacío", { intent: "   " }],
-    ["tag vacía", { tags: [""] }],
-    ["projectId que no es uuid", { projectId: "p1" }],
-    ["dependencia que no es uuid", { dependsOn: ["t1"] }],
-    ["causedBy que no es uuid", { causedBy: "t1" }],
-    ["campo desconocido", { state: "completed" }],
-  ])("rechaza %s", (_, override) => {
+    ["negative priority", { priority: -1 }],
+    ["non-integer priority", { priority: 1.5 }],
+    ["priority greater than MAX_SAFE_INTEGER", { priority: Number.MAX_SAFE_INTEGER + 1 }],
+    ["empty intent", { intent: "   " }],
+    ["empty tag", { tags: [""] }],
+    ["projectId that is not a uuid", { projectId: "p1" }],
+    ["dependency that is not a uuid", { dependsOn: ["t1"] }],
+    ["causedBy that is not a uuid", { causedBy: "t1" }],
+    ["unknown field", { state: "completed" }],
+  ])("rejects %s", (_, override) => {
     expect(TaskCreate.safeParse({ ...validCreate, ...override }).success).toBe(false);
   });
 
-  it("acepta la prioridad 0 y MAX_SAFE_INTEGER", () => {
+  it("accepts priority 0 and MAX_SAFE_INTEGER", () => {
     expect(TaskCreate.safeParse({ ...validCreate, priority: 0 }).success).toBe(true);
     expect(
       TaskCreate.safeParse({ ...validCreate, priority: Number.MAX_SAFE_INTEGER }).success,
@@ -62,12 +62,12 @@ describe("TaskCreate", () => {
 });
 
 describe("TaskUpdate", () => {
-  it("acepta un subconjunto de intent, tags y prioridad", () => {
+  it("accepts a subset of intent, tags and priority", () => {
     expect(TaskUpdate.parse({ priority: 900 })).toEqual({ priority: 900 });
     expect(TaskUpdate.parse({})).toEqual({});
   });
 
-  it("no permite cambiar estado, proyecto ni campos de solo lectura", () => {
+  it("does not allow changing the state, project or read-only fields", () => {
     for (const field of ["state", "projectId", "riskLabel", "prUrl"]) {
       expect(TaskUpdate.safeParse({ [field]: "x" }).success).toBe(false);
     }
@@ -75,7 +75,7 @@ describe("TaskUpdate", () => {
 });
 
 describe("TaskCancel", () => {
-  it("acepta una nota opcional de hasta 2000 caracteres", () => {
+  it("accepts an optional note of up to 2000 characters", () => {
     expect(TaskCancel.parse({})).toEqual({});
     expect(TaskCancel.parse({ note: "ya no aplica" })).toEqual({ note: "ya no aplica" });
     expect(TaskCancel.safeParse({ note: "x".repeat(2001) }).success).toBe(false);
@@ -108,18 +108,18 @@ describe("Task", () => {
     updatedAt: now,
   };
 
-  it("acepta una fila completa", () => {
+  it("accepts a complete row", () => {
     expect(Task.parse(row)).toEqual(row);
   });
 
-  it("exige un número de tarea entero positivo", () => {
+  it("requires a positive integer task number", () => {
     const { number: _, ...withoutNumber } = row;
     expect(Task.safeParse(withoutNumber).success).toBe(false);
     expect(Task.safeParse({ ...row, number: 0 }).success).toBe(false);
     expect(Task.safeParse({ ...row, number: 1.5 }).success).toBe(false);
   });
 
-  it("una tarea completada con Resultado lleva su tipo y su texto", () => {
+  it("a task completed with a Result carries its type and its text", () => {
     const withResult = {
       ...row,
       state: "completed",
@@ -130,7 +130,7 @@ describe("Task", () => {
     expect(Task.parse(withResult)).toEqual(withResult);
   });
 
-  it("exige resultKind y result (null si la tarea no tiene Resultado)", () => {
+  it("requires resultKind and result (null if the task has no Result)", () => {
     const { resultKind: _k, ...withoutKind } = row;
     const { result: _r, ...withoutResult } = row;
     expect(Task.safeParse(withoutKind).success).toBe(false);
@@ -138,13 +138,13 @@ describe("Task", () => {
     expect(Task.safeParse({ ...row, resultKind: "otro" }).success).toBe(false);
   });
 
-  it("rechaza un estado fuera del enum", () => {
+  it("rejects a state outside the enum", () => {
     expect(Task.safeParse({ ...row, state: "new" }).success).toBe(false);
   });
 });
 
 describe("DependencyLink", () => {
-  it("describe la otra tarea de la arista y si cruza proyectos", () => {
+  it("describes the other task of the edge and whether it crosses projects", () => {
     const link = {
       taskId: otherId,
       number: 3,
@@ -160,8 +160,8 @@ describe("DependencyLink", () => {
   });
 });
 
-describe("eventos de tareas", () => {
-  it("tienen nombres estables", () => {
+describe("task events", () => {
+  it("have stable names", () => {
     expect([TASK_CREATED, TASK_UPDATED, TASK_DEPENDENCY_ADDED, TASK_DEPENDENCY_REMOVED]).toEqual([
       "task.created",
       "task.updated",
@@ -170,7 +170,7 @@ describe("eventos de tareas", () => {
     ]);
   });
 
-  it("task.created registra lo capturado al crear", () => {
+  it("task.created records what was captured on creation", () => {
     const payload = {
       projectId,
       intent: "Agregar login",
@@ -182,20 +182,20 @@ describe("eventos de tareas", () => {
     expect(TaskCreatedPayload.parse(payload)).toEqual(payload);
   });
 
-  it("task.updated registra solo los campos que cambiaron, antes y después", () => {
+  it("task.updated records only the fields that changed, before and after", () => {
     const payload = { from: { priority: 100 }, to: { priority: 900 } };
     expect(TaskUpdatedPayload.parse(payload)).toEqual(payload);
     expect(TaskUpdatedPayload.safeParse({ from: {}, to: {} }).success).toBe(false);
   });
 
-  it("las aristas registran la dependencia y si cruza proyectos", () => {
+  it("edges record the dependency and whether it crosses projects", () => {
     const payload = { dependsOnId: otherId, crossProject: false };
     expect(TaskDependencyPayload.parse(payload)).toEqual(payload);
   });
 });
 
 describe("TaskListQuery", () => {
-  it("acepta filtros opcionales por proyecto y estado", () => {
+  it("accepts optional filters by project and state", () => {
     expect(TaskListQuery.parse({})).toEqual({});
     expect(TaskListQuery.parse({ projectId, state: "draft" })).toEqual({
       projectId,

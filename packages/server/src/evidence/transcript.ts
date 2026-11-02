@@ -1,7 +1,7 @@
-// Transcript de Claude Code (JSONL) a markdown compacto para el archivo de evidencia (docs/design.md
-// §Auditoría, ADR uw-24-archivo-evidencia). Claude Code agrega tipos de línea entre versiones, así
-// que solo se leen los turnos de conversación y lo demás se salta. El razonamiento interno no entra:
-// pesa y no es evidencia de lo que el agente hizo.
+// Claude Code transcript (JSONL) to compact markdown for the evidence file (docs/design.md
+// §Audit, ADR uw-24-archivo-evidencia). Claude Code adds line types between versions, so
+// only the conversation turns are read and the rest is skipped. Internal reasoning does not go in:
+// it is heavy and is not evidence of what the agent did.
 
 import { redactSecrets } from "./redact.ts";
 
@@ -11,13 +11,13 @@ export const DEFAULT_TOOL_RESULT_LIMIT = 1_500;
 export const DEFAULT_TRANSCRIPT_LIMIT = 120_000;
 
 export type TranscriptOptions = {
-  /** Caracteres de un bloque de texto de usuario o agente. */
+  /** Characters of a user or agent text block. */
   textLimit?: number;
-  /** Caracteres del input de una tool. */
+  /** Characters of a tool's input. */
   toolInputLimit?: number;
-  /** Caracteres del resultado de una tool: se conservan el principio y el final. */
+  /** Characters of a tool's result: the beginning and the end are kept. */
   toolResultLimit?: number;
-  /** Caracteres de todo el transcript: se conservan el principio y el final. */
+  /** Characters of the whole transcript: the beginning and the end are kept. */
   maxChars?: number;
 };
 
@@ -27,13 +27,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
- * Redacta y después recorta: al revés, el recorte puede partir un secreto (el BEGIN de una llave
- * en el medio omitido) y dejar un resto que ningún patrón reconoce.
+ * Redacts and then trims: the other way round, trimming can split a secret (a key's BEGIN
+ * in the omitted middle) and leave a remainder no pattern recognizes.
  */
 const safeClip = (text: string, limit: number) => clip(redactSecrets(text), limit);
 
-/** Conserva el principio y el final de `text`; el medio, que suele ser relleno, se omite. */
-function clip(text: string, limit: number, what = "caracteres omitidos"): string {
+/** Keeps the beginning and the end of `text`; the middle, which is usually filler, is omitted. */
+function clip(text: string, limit: number, what = "characters omitted"): string {
   if (text.length <= limit) return text;
   const head = Math.ceil(limit / 2);
   const tail = Math.floor(limit / 2);
@@ -41,7 +41,7 @@ function clip(text: string, limit: number, what = "caracteres omitidos"): string
   return `${text.slice(0, head)}\n… ${omitted} ${what} …\n${text.slice(text.length - tail)}`;
 }
 
-/** Cerca de código más larga que cualquier racha de backticks del contenido. */
+/** Code fence longer than any run of backticks in the content. */
 function fenced(text: string): string {
   const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map((m) => m[0].length));
   const fence = "`".repeat(Math.max(3, longest + 1));
@@ -71,7 +71,7 @@ function toolInput(name: string, input: unknown, limit: number): string {
 }
 
 function renderBlocks(
-  role: "Usuario" | "Agente",
+  role: "User" | "Agent",
   timestamp: unknown,
   blocks: Block[],
   opts: Required<Omit<TranscriptOptions, "maxChars">>,
@@ -87,12 +87,12 @@ function renderBlocks(
       );
     } else if (block.type === "tool_result") {
       const body = safeClip(resultText(block.content).trimEnd(), opts.toolResultLimit);
-      const label = block.is_error === true ? "Resultado (error)" : "Resultado";
+      const label = block.is_error === true ? "Result (error)" : "Result";
       out.push(`${label}\n${fenced(body)}`);
     }
   }
   const parts = text.length > 0 ? [`**${role}**${clock(timestamp)}\n\n${text.join("\n\n")}`] : [];
-  // Los bloques de tool van tras el texto del mismo turno; sin texto, el turno no abre con rol.
+  // Tool blocks go after the same turn's text; without text, the turn does not open with a role.
   if (text.length === 0 && out.length > 0) parts.push(`**${role}**${clock(timestamp)}`);
   return [...parts, ...out];
 }
@@ -117,7 +117,7 @@ export function transcriptToMarkdown(jsonl: string, options: TranscriptOptions =
       continue;
     }
     if (!isRecord(parsed) || !isRecord(parsed.message) || parsed.isMeta === true) continue;
-    const role = parsed.type === "user" ? "Usuario" : parsed.type === "assistant" ? "Agente" : null;
+    const role = parsed.type === "user" ? "User" : parsed.type === "assistant" ? "Agent" : null;
     if (!role) continue;
     const { content } = parsed.message;
     const blocks: Block[] =
@@ -128,6 +128,6 @@ export function transcriptToMarkdown(jsonl: string, options: TranscriptOptions =
           : [];
     entries.push(...renderBlocks(role, parsed.timestamp, blocks, opts));
   }
-  if (unreadable > 0) entries.push(`_${unreadable} líneas ilegibles del transcript._`);
-  return clip(entries.join("\n\n"), maxChars, "caracteres omitidos del transcript");
+  if (unreadable > 0) entries.push(`_${unreadable} unreadable lines in the transcript._`);
+  return clip(entries.join("\n\n"), maxChars, "characters omitted from the transcript");
 }

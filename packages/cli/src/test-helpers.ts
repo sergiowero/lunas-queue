@@ -1,5 +1,5 @@
-// Una máquina de prueba: home temporal, los assets del repo y un runner que responde como herdr,
-// Claude Code, gh y engram instalados y al día. Cada test cambia solo lo que prueba.
+// A test machine: temporary home, the repo's assets and a runner that answers like herdr,
+// Claude Code, gh and engram installed and up to date. Each test changes only what it tests.
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -45,13 +45,13 @@ export function fakeMachine(responses: Responses = healthyResponses()) {
     ctx,
     runner,
     responses,
-    /** Comandos que corrió el runner, en orden. */
+    /** Commands the runner ran, in order. */
     commands: () => runner.calls.map((c) => c.command),
     cleanup: () => rmSync(home, { recursive: true, force: true }),
   };
 }
 
-/** Escribe el estado de la integración de herdr para Claude Code. */
+/** Writes the herdr integration state for Claude Code. */
 export function integrationStatus(state: string): Partial<ProcessResult> {
   return { stdout: `claude: ${state} (/h/.claude/hooks/herdr-agent-state.sh)\n` };
 }

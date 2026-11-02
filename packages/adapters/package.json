@@ -2,7 +2,7 @@
   "name": "@lunasq/adapters",
   "version": "0.0.0",
   "private": true,
-  "description": "Adapters de herdr, gh, git y ejecución de procesos, con sus fakes",
+  "description": "Adapters for herdr, gh, git and process execution, with their fakes",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

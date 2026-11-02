@@ -24,7 +24,7 @@ function usage(
 }
 
 describe("TaskViewRepository.runs", () => {
-  it("devuelve los Runs en orden de inicio y sin el run token", () => {
+  it("returns the Runs in start order and without the run token", () => {
     const { db, task, views } = setup();
     const first = insertRun(db, task.id, {
       phase: "refine",
@@ -45,14 +45,14 @@ describe("TaskViewRepository.runs", () => {
     expect(runs?.[0]).not.toHaveProperty("runToken");
   });
 
-  it("devuelve null si la tarea no existe", () => {
+  it("returns null if the task does not exist", () => {
     const { views } = setup();
     expect(views.runs("00000000-0000-4000-8000-000000000000")).toBeNull();
   });
 });
 
 describe("TaskViewRepository.events", () => {
-  it("devuelve el Event log de la tarea en orden de escritura", () => {
+  it("returns the task's Event log in write order", () => {
     const { db, task, views } = setup();
     appendEvent(db, { taskId: task.id, type: "a", actor: "human", payload: { n: 1 } });
     appendEvent(db, { taskId: task.id, type: "b", actor: "system" });
@@ -62,14 +62,14 @@ describe("TaskViewRepository.events", () => {
     ]);
   });
 
-  it("devuelve null si la tarea no existe", () => {
+  it("returns null if the task does not exist", () => {
     const { views } = setup();
     expect(views.events("00000000-0000-4000-8000-000000000000")).toBeNull();
   });
 });
 
 describe("TaskViewRepository.usage", () => {
-  it("suma los UsageRecords por Run y en total", () => {
+  it("sums the UsageRecords per Run and in total", () => {
     const { db, task, views } = setup();
     const refine = insertRun(db, task.id, { phase: "refine", endedAt: new Date() });
     const implement = insertRun(db, task.id, { phase: "implement" });
@@ -83,7 +83,7 @@ describe("TaskViewRepository.usage", () => {
       outputTokens: 8,
       cacheReadTokens: 7,
       cacheWriteTokens: 2,
-      // El Run de implementación no trae costo: el total no se puede afirmar.
+      // The implementation Run brings no cost: the total cannot be asserted.
       costUsd: null,
     });
     expect(result?.byRun).toEqual([
@@ -106,7 +106,7 @@ describe("TaskViewRepository.usage", () => {
     ]);
   });
 
-  it("devuelve totales en cero sin UsageRecords", () => {
+  it("returns zero totals without UsageRecords", () => {
     const { task, views } = setup();
     expect(views.usage(task.id)).toEqual({
       total: EMPTY_USAGE,
@@ -118,12 +118,12 @@ describe("TaskViewRepository.usage", () => {
     });
   });
 
-  it("devuelve null si la tarea no existe", () => {
+  it("returns null if the task does not exist", () => {
     const { views } = setup();
     expect(views.usage("00000000-0000-4000-8000-000000000000")).toBeNull();
   });
 
-  it("deja el costo en null si algún registro no lo trae", () => {
+  it("leaves the cost as null if any record does not bring it", () => {
     const { db, task, views } = setup();
     const run = insertRun(db, task.id, { endedAt: new Date() });
     usage(db, run.id, { costUsd: 2, sourceRef: "1" });
@@ -132,7 +132,7 @@ describe("TaskViewRepository.usage", () => {
   });
 });
 
-describe("TaskViewRepository.usage: desgloses", () => {
+describe("TaskViewRepository.usage: breakdowns", () => {
   const tokens = (n: number) => ({ ...EMPTY_USAGE, inputTokens: n, costUsd: n / 10 });
   const rec = (n: number, extra: Partial<typeof usageRecords.$inferInsert> = {}) => ({
     inputTokens: n,
@@ -141,7 +141,7 @@ describe("TaskViewRepository.usage: desgloses", () => {
     ...extra,
   });
 
-  it("separa el rework de la implementación y agrupa por fase, agente y modelo", () => {
+  it("separates rework from implementation and groups by phase, agent and model", () => {
     const { db, task, views } = setup();
     const refine = insertRun(db, task.id, { phase: "refine", endedAt: new Date() });
     const first = insertRun(db, task.id, { phase: "implement", iteration: 0, endedAt: new Date() });
@@ -178,19 +178,19 @@ describe("TaskViewRepository.usage: desgloses", () => {
     ]);
   });
 
-  it("desglosa por revisor con los agent_id que registraron los hooks de subagentes", () => {
+  it("breaks down by reviewer with the agent_ids the subagent hooks recorded", () => {
     const { db, task, views } = setup();
     const verify = insertRun(db, task.id, { phase: "verify" });
     const subagents = new RunSubagentRepository(db);
     subagents.recordStart(verify.id, { agentId: "a1", agentType: "lunasq-code-reviewer" });
     subagents.recordStart(verify.id, { agentId: "a2", agentType: "lunasq-security-reviewer" });
     subagents.recordStart(verify.id, { agentId: "a3", agentType: "Explore" });
-    usage(db, verify.id, rec(1)); // sesión principal: el approver
+    usage(db, verify.id, rec(1)); // main session: the approver
     usage(db, verify.id, rec(2, { agentId: "a1" }));
     usage(db, verify.id, rec(3, { agentId: "a1" }));
     usage(db, verify.id, rec(4, { agentId: "a2" }));
-    usage(db, verify.id, rec(5, { agentId: "a3" })); // subagente que no es revisor
-    usage(db, verify.id, rec(6, { agentId: "a9" })); // hook perdido: no se sabe de quién es
+    usage(db, verify.id, rec(5, { agentId: "a3" })); // subagent that is not a reviewer
+    usage(db, verify.id, rec(6, { agentId: "a9" })); // lost hook: it is not known whose it is
 
     expect(views.usage(task.id)?.byReviewer).toEqual([
       { reviewer: "lunasq-code-reviewer", usage: tokens(5) },
@@ -199,7 +199,7 @@ describe("TaskViewRepository.usage: desgloses", () => {
     expect(views.usage(task.id)?.total.inputTokens).toBe(21);
   });
 
-  it("deja el costo en null en el grupo que tiene un registro sin costo, y solo en ese", () => {
+  it("leaves the cost as null in the group that has a record without cost, and only in that one", () => {
     const { db, task, views } = setup();
     const refine = insertRun(db, task.id, { phase: "refine", endedAt: new Date() });
     const verify = insertRun(db, task.id, { phase: "verify" });
@@ -221,7 +221,7 @@ describe("TaskViewRepository.usage: desgloses", () => {
     ]);
   });
 
-  it("el hook de otro Run no le atribuye consumo a este", () => {
+  it("another Run's hook does not attribute usage to this one", () => {
     const { db, task, views } = setup();
     const other = insertRun(db, insertTask(db, insertProject(db).id).id, { phase: "verify" });
     const verify = insertRun(db, task.id, { phase: "verify" });
@@ -235,7 +235,7 @@ describe("TaskViewRepository.usage: desgloses", () => {
 });
 
 describe("TaskViewRepository.usageByTask", () => {
-  it("suma por tarea y omite las que no tienen consumo", () => {
+  it("sums per task and omits those without usage", () => {
     const { db, project, task, views } = setup();
     const other = insertTask(db, project.id);
     usage(db, insertRun(db, task.id, { endedAt: new Date() }).id, { inputTokens: 4, costUsd: 0.5 });
@@ -247,7 +247,7 @@ describe("TaskViewRepository.usageByTask", () => {
 });
 
 describe("TaskViewRepository.changesSince", () => {
-  it("devuelve el último id y las tareas con eventos posteriores, sin repetir", () => {
+  it("returns the latest id and the tasks with later events, without repeating", () => {
     const { db, project, task, views } = setup();
     const other = insertTask(db, project.id);
     expect(views.lastEventId()).toBe(0);
@@ -273,7 +273,7 @@ describe("TaskViewRepository.changesSince", () => {
     });
   });
 
-  it("marca settingsChanged con un settings.updated, que no pertenece a ninguna tarea", () => {
+  it("marks settingsChanged with a settings.updated, which does not belong to any task", () => {
     const { db, views } = setup();
     const event = appendEvent(db, { taskId: null, type: "settings.updated", actor: "human" });
     expect(views.changesSince(event.id - 1)).toEqual({
@@ -301,7 +301,7 @@ describe("TaskViewRepository.hookExecutions", () => {
     ...over,
   });
 
-  it("devuelve las ejecuciones del proyecto, las más nuevas primero, con la tarea", () => {
+  it("returns the project's runs, newest first, with the task", () => {
     const { db, project, task, views } = setup();
     const other = insertProject(db);
     const foreign = insertTask(db, other.id);
@@ -344,7 +344,7 @@ describe("TaskViewRepository.hookExecutions", () => {
     expect(rows[0]?.at).toBeInstanceOf(Date);
   });
 
-  it("deja la ejecución más reciente de cada tarea en cada script", () => {
+  it("leaves the most recent run of each task in each script", () => {
     const { db, project, task, views } = setup();
     const other = insertTask(db, project.id, { intent: "Otra" });
     const add = (taskId: string, over: Record<string, unknown>) =>
@@ -363,7 +363,7 @@ describe("TaskViewRepository.hookExecutions", () => {
     expect(rows[1]).toMatchObject({ output: "segunda", passed: true });
   });
 
-  it("limita las tareas por punto y script sin que un hook desplace a otro", () => {
+  it("limits the tasks per point and script without a hook displacing another", () => {
     const { db, project, views } = setup();
     const old = insertTask(db, project.id, { intent: "Vieja" });
     appendEvent(db, {
@@ -383,11 +383,11 @@ describe("TaskViewRepository.hookExecutions", () => {
     }
     const rows = views.hookExecutions(project.id, 2);
     expect(rows.filter((r) => r.script === "10-bump")).toHaveLength(2);
-    // after_merge es la ejecución más vieja del proyecto y sigue apareciendo.
+    // after_merge is the project's oldest run and still shows up.
     expect(rows.find((r) => r.script === "deploy")).toMatchObject({ taskId: old.id });
   });
 
-  it("se salta payloads que no son de hook", () => {
+  it("skips payloads that are not from a hook", () => {
     const { db, project, task, views } = setup();
     appendEvent(db, { taskId: task.id, type: "hook.executed", actor: "system", payload: { x: 1 } });
     expect(views.hookExecutions(project.id, 10)).toEqual([]);

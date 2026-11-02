@@ -1,7 +1,7 @@
-// Actualización en vivo (ADR uw-21-front-end): el servidor manda `change` por SSE con las tareas que
-// tuvieron eventos y aquí se invalidan sus consultas y las listas, incluida la bandeja. Los bloqueos
-// no dejan eventos y se refrescan solos (ADR uw-27-bandeja). EventSource reconecta solo y manda
-// Last-Event-ID; el refresco periódico del QueryClient queda como red de seguridad.
+// Live updates (ADR uw-21-front-end): the server sends `change` over SSE with the tasks that
+// had events and here their queries and the lists are invalidated, the inbox included. Blocks
+// leave no events and refresh on their own (ADR uw-27-bandeja). EventSource reconnects on its own and sends
+// Last-Event-ID; the QueryClient's periodic refresh stays as a safety net.
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
@@ -12,13 +12,13 @@ export function invalidateChanges(
   taskIds: string[],
   settings = false,
 ): void {
-  // La configuración de proveedores es global (settings.updated): la página Settings y el aviso
-  // de despacho en pausa de otras pestañas se refrescan sin esperar el polling.
+  // The providers configuration is global (settings.updated): the Settings page and the paused
+  // dispatch notice of other tabs refresh without waiting for the polling.
   if (settings) void queryClient.invalidateQueries({ queryKey: ["settings"] });
   void queryClient.invalidateQueries({ queryKey: ["queue"] });
   void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-  // Las ejecuciones de hooks son eventos de tarea. El contenido de los hooks
-  // (["project", id, "hooks"]) viene de git y no se invalida por eventos.
+  // Hook executions are task events. The hooks' content
+  // (["project", id, "hooks"]) comes from git and is not invalidated by events.
   void queryClient.invalidateQueries({
     predicate: (q) => q.queryKey[0] === "project" && q.queryKey[2] === "hook-executions",
   });
@@ -26,7 +26,7 @@ export function invalidateChanges(
   for (const id of taskIds) void queryClient.invalidateQueries({ queryKey: ["task", id] });
 }
 
-/** Preguntas y bloqueos; las specs por aprobar salen de ["tasks"]. */
+/** Questions and blocks; the specs to approve come from ["tasks"]. */
 export function invalidateInbox(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: ["questions"] });
   void queryClient.invalidateQueries({ queryKey: ["blocked"] });
@@ -45,7 +45,7 @@ export function useLiveUpdates(): void {
         };
         invalidateChanges(queryClient, taskIds, settings === true);
       } catch {
-        // Un mensaje ilegible no rompe la UI: el refresco periódico lo cubre.
+        // An unreadable message does not break the UI: the periodic refresh covers it.
       }
     };
     source.addEventListener("change", onChange);

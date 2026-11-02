@@ -1,5 +1,5 @@
-// Entradas de las tools del LunasQ MCP, el contexto que devuelve get_task_context y los eventos
-// que escriben (docs/design.md §MCPs y skills, ADR uw-15-mcp-tools).
+// Inputs of the LunasQ MCP tools, the context returned by get_task_context and the events
+// they write (docs/design.md §MCPs and skills, ADR uw-15-mcp-tools).
 import { z } from "zod";
 import { DeliveryConflictPayload } from "./delivery.ts";
 import { Phase, QuestionStatus, RiskLabel, SubState, TaskState } from "./enums.ts";
@@ -16,12 +16,12 @@ import { SpecContent } from "./spec.ts";
 import { TaskNumber } from "./task.ts";
 
 const TaskItemId = z.string().regex(/^T-[1-9]\d*$/, {
-  error: "id de tarea inválido: se esperaba T-<n>, por ejemplo T-1",
+  error: "invalid task id: T-<n> expected, for example T-1",
 });
 const Prose = z.string().trim().min(1).max(2000);
 
-// El handoff entra como objeto cualquiera: parseHandoff lo valida con errores en español y
-// con las reglas entre campos, que el JSON Schema del inputSchema no puede expresar.
+// The handoff enters as any object: parseHandoff validates it with errors in English and
+// with the cross-field rules, which the JSON Schema of the inputSchema cannot express.
 export const HandoffInput = z.strictObject({
   handoff: z.record(z.string(), z.unknown()),
 });
@@ -46,7 +46,7 @@ export const UpdateChecklistInput = z
       input.items,
       (i) => i.taskId,
       (i) => ["items", i, "taskId"],
-      "item del checklist",
+      "checklist item",
     );
   });
 export type UpdateChecklistInput = z.infer<typeof UpdateChecklistInput>;
@@ -64,7 +64,7 @@ export type ChecklistItem = z.infer<typeof ChecklistItem>;
 export const CHECKLIST_UPDATED = "checklist.updated";
 export const QUESTION_CREATED = "question.created";
 
-// Snapshot completo: el último evento de la tarea es su checklist vigente.
+// Full snapshot: the last event of the task is its current checklist.
 export const ChecklistUpdatedPayload = z.strictObject({
   runId: z.uuid(),
   items: z.array(ChecklistItem),
@@ -73,12 +73,12 @@ export type ChecklistUpdatedPayload = z.infer<typeof ChecklistUpdatedPayload>;
 
 export const VERDICT_RECORDED = "verification.verdict_recorded";
 
-// Resumen del veredicto para el Event log y el outbox; el handoff completo queda en el Run. Con
-// pass, la entrega (UW-26) arranca con este evento.
+// Summary of the verdict for the Event log and the outbox; the full handoff stays in the Run. With
+// pass, delivery (UW-26) starts with this event.
 export const VerdictRecordedPayload = z.strictObject({
   runId: z.uuid(),
   verdict: z.enum(["pass", "reject"]),
-  // Iteración de verificación del Run, en base 0: el primer veredicto de la tarea tiene 0.
+  // Verification iteration of the Run, 0-based: the first verdict of the task has 0.
   iteration: z.int().min(0),
   riskLabel: RiskLabel,
   mustFix: z.int().min(0),
@@ -90,7 +90,7 @@ export type VerdictRecordedPayload = z.infer<typeof VerdictRecordedPayload>;
 export const QuestionCreatedPayload = z.strictObject({ questionId: z.uuid(), runId: z.uuid() });
 export type QuestionCreatedPayload = z.infer<typeof QuestionCreatedPayload>;
 
-/** Lo que recibe el agente al empezar su Run; cada fase usa las partes que le tocan. */
+/** What the agent receives when its Run starts; each phase uses the parts that concern it. */
 export const TaskContext = z.strictObject({
   task: z.strictObject({
     id: z.uuid(),
@@ -111,24 +111,24 @@ export const TaskContext = z.strictObject({
     baseBranch: z.string(),
     testCommand: z.string().nullable(),
   }),
-  // Implementación y verificación leen siempre la versión aprobada.
+  // Implementation and verification always read the approved version.
   approvedSpec: z.strictObject({ version: z.int().min(1), content: SpecContent }).nullable(),
-  // En una nueva ronda de refinamiento: la última versión con cambios pedidos y sus comentarios.
+  // In a new refinement round: the last version with requested changes and its comments.
   changesRequested: z
     .strictObject({ version: z.int().min(1), content: SpecContent, comments: z.string() })
     .nullable(),
-  // El último handoff de implementación: afirmaciones que el verificador comprueba.
+  // The last implementation handoff: claims that the verifier checks.
   implementation: ImplementationHandoff.nullable(),
-  // Veredictos de iteraciones anteriores, del más viejo al más nuevo; solo en verificación.
+  // Verdicts of previous iterations, from oldest to newest; only in verification.
   verificationHistory: z.array(VerificationHandoff),
-  // En implementación tras un reject: solo los must-fix del último veredicto, con su evidencia.
+  // In implementation after a reject: only the must-fix findings of the last verdict, with their evidence.
   rework: z
     .strictObject({ runId: z.uuid(), iteration: z.int().min(0), mustFix: z.array(MustFixFinding) })
     .nullable(),
-  // En implementación tras un conflicto de entrega (ADR uw-26-entrega): qué impidió integrar la
-  // rama base. Se limpia cuando el siguiente veredicto queda registrado.
+  // In implementation after a delivery conflict (ADR uw-26-entrega): what prevented integrating the
+  // base branch. It is cleared when the next verdict is recorded.
   deliveryConflict: DeliveryConflictPayload.nullable(),
-  // Handoff del último Run de la misma fase, si se reintenta.
+  // Handoff of the last Run of the same phase, if it is retried.
   previousAttempt: z
     .strictObject({
       runId: z.uuid(),

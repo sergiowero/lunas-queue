@@ -1,5 +1,5 @@
-// Dispara los hooks after_merge cuando el poller registra el merge del PR de una tarea
-// (task.pr_state_changed con to = merged, ADR uw-14-adapter-github).
+// Fires the after_merge hooks when the poller records the merge of a task's PR
+// (task.pr_state_changed with to = merged, ADR uw-14-adapter-github).
 import { TASK_PR_STATE_CHANGED, TaskPrStateChangedPayload } from "@lunasq/schemas";
 import type { OutboxPublisher } from "../outbox/publisher.ts";
 import type { HookService } from "./service.ts";
@@ -11,10 +11,10 @@ export interface AfterMergeHooksOptions {
 }
 
 /**
- * Suscribe los hooks after_merge al outbox y devuelve la función para desuscribir. No espera a
- * que terminen: un deploy puede tardar minutos y no debe frenar la entrega a los demás
- * suscriptores. La entrega es al menos una vez, así que un after_merge puede repetirse: los hooks
- * deben ser idempotentes (docs/design.md §Hooks por fase).
+ * Subscribes the after_merge hooks to the outbox and returns the function to unsubscribe. It does not wait
+ * for them to finish: a deploy can take minutes and must not hold back delivery to the other
+ * subscribers. Delivery is at least once, so an after_merge can repeat: the hooks
+ * must be idempotent (docs/design.md §Per-phase hooks).
  */
 export function subscribeAfterMergeHooks(opts: AfterMergeHooksOptions): () => void {
   const onError = opts.onError ?? defaultError;

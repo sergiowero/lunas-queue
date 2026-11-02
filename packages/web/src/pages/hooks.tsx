@@ -1,5 +1,5 @@
-// Vista de hooks por proyecto (docs/design.md §Hooks por fase): lo que hay en lunasq/hooks/ de la
-// rama base y las últimas ejecuciones por tarea. Solo lectura: los hooks se cambian por PR.
+// Per-project hooks view (docs/design.md §Per-phase hooks): what is in the base branch's lunasq/hooks/
+// and the latest executions per task. Read-only: hooks are changed by PR.
 import type { HookExecutionView, HookPoint, HookView } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
@@ -7,6 +7,7 @@ import { type ExecutionsState, HookCard } from "../components/hooks/hook-card.ts
 import { Muted, Section } from "../components/section.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import type { Json } from "../lib/api.ts";
+import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/projects/$projectId/hooks");
@@ -20,11 +21,11 @@ function PointSection({
 }: {
   point: HookPoint;
   hooks: Json<HookView>[];
-  /** Las del punto, o el estado de la consulta mientras no hay lista. */
+  /** The point's, or the query state while there is no list. */
   executions: Execution[] | "loading" | "failed";
 }) {
   const known = new Set(hooks.map((h) => h.script));
-  // Scripts que corrieron pero ya no están en la rama base (se borraron o renombraron).
+  // Scripts that ran but are no longer in the base branch (deleted or renamed).
   const list = Array.isArray(executions) ? executions : [];
   const forScript = (script: string): ExecutionsState =>
     Array.isArray(executions) ? list.filter((e) => e.script === script) : executions;
@@ -49,6 +50,7 @@ function PointSection({
 }
 
 export function HooksPage() {
+  const t = useT();
   const { projectId } = route.useParams();
   const projects = useQuery(queries.projects());
   const hooks = useQuery(queries.projectHooks(projectId));
@@ -57,7 +59,7 @@ export function HooksPage() {
 
   if (projects.error) return <QueryError error={projects.error} />;
   if (!projects.data) return <Loading />;
-  if (!project) return <p className="text-sm">El proyecto no existe.</p>;
+  if (!project) return <p className="text-sm">{t.board.notFound}</p>;
 
   const executionsOf = (point: HookPoint): Execution[] | "loading" | "failed" =>
     executions.data
@@ -76,18 +78,19 @@ export function HooksPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold">Hooks · {project.name}</h1>
+        <h1 className="text-xl font-semibold">{t.hooksPage.title(project.name)}</h1>
         <p className="text-sm text-muted-foreground">
-          Tal como están en {project.baseBranch}
+          {t.hooksPage.asIn}
+          {project.baseBranch}
           {hooks.data && (
             <>
               {" "}
               (<code>{hooks.data.baseRef.slice(0, 7)}</code>)
             </>
           )}
-          . Se cambian por PR en el repo.{" "}
+          {t.hooksPage.changedByPr}
           <Link to="/projects/$projectId" params={{ projectId }} className="underline">
-            Volver al tablero
+            {t.hooksPage.backToBoard}
           </Link>
         </p>
       </div>
@@ -99,7 +102,7 @@ export function HooksPage() {
         <>
           {hooks.data.configError && (
             <p role="alert" className="text-sm text-destructive">
-              lunasq/hooks/config inválido, se muestran los valores por defecto:{" "}
+              {t.hooksPage.invalidConfig}
               {hooks.data.configError}
             </p>
           )}
@@ -112,7 +115,9 @@ export function HooksPage() {
               executions={executionsOf(point)}
             />
           ))}
-          {empty.length > 0 && <Muted>Sin hooks: {empty.map((p) => p.point).join(", ")}.</Muted>}
+          {empty.length > 0 && (
+            <Muted>{t.hooksPage.noHooks(empty.map((p) => p.point).join(", "))}</Muted>
+          )}
         </>
       )}
     </div>

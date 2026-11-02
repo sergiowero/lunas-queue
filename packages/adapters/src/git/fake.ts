@@ -1,5 +1,5 @@
-// Fake en memoria del adapter de git. Cada checkout (cwd) tiene sus refs y un working tree que
-// solo sabe si está sucio; los commits son árboles inmutables. Cumple la suite de contrato.
+// In-memory fake of the git adapter. Each checkout (cwd) has its refs and a working tree that
+// only knows whether it is dirty; commits are immutable trees. It passes the contract suite.
 import { createHash } from "node:crypto";
 import { EVIDENCE_DIR } from "@lunasq/schemas";
 import { GitError } from "./errors.ts";
@@ -18,20 +18,20 @@ interface FakeCommit {
   tree: Map<string, FakeFile>;
   message: string;
   parent: string | null;
-  /** Rutas que este commit cambia respecto de su padre: con ellas el fake detecta conflictos. */
+  /** Paths this commit changes relative to its parent: with them the fake detects conflicts. */
   touched: Set<string>;
   authoredAt: Date;
 }
 
 interface FakeCheckout {
   refs: Map<string, string>;
-  /** Ramas del remoto (`origin`), que `fetch` copia a `<remote>/<rama>`. */
+  /** Branches of the remote (`origin`), which `fetch` copies to `<remote>/<branch>`. */
   remote: Map<string, string>;
-  /** Rutas con cambios sin commit; `setDirty` usa una ruta genérica. */
+  /** Paths with uncommitted changes; `setDirty` uses a generic path. */
   dirty: Set<string>;
 }
 
-const GENERIC_CHANGE = "(cambios)";
+const GENERIC_CHANGE = "(changes)";
 const isEvidence = (path: string) => path.startsWith(`${EVIDENCE_DIR}/`);
 
 export class FakeGit implements GitAdapter {
@@ -39,7 +39,7 @@ export class FakeGit implements GitAdapter {
   private readonly commits = new Map<string, FakeCommit>();
   private seq = 0;
 
-  /** Commits hechos con commitAll, para que los tests los inspeccionen. */
+  /** Commits made with commitAll, for tests to inspect. */
   readonly commitLog: {
     cwd: string;
     sha: string;
@@ -47,7 +47,7 @@ export class FakeGit implements GitAdapter {
     trailers: Record<string, string>;
   }[] = [];
 
-  /** Crea el checkout `cwd` con `remote/branch` (y HEAD) apuntando a un commit con `tree`. */
+  /** Creates the checkout `cwd` with `remote/branch` (and HEAD) pointing to a commit with `tree`. */
   addCheckout(cwd: string, opts: { remote?: string; branch: string; tree: FakeTree }) {
     const remote = opts.remote ?? "origin";
     const sha = this.commit(opts.tree, "init");
@@ -63,7 +63,7 @@ export class FakeGit implements GitAdapter {
     return sha;
   }
 
-  /** Un commit nuevo en la rama del remoto; el checkout lo ve después de `fetch`. */
+  /** A new commit on the remote's branch; the checkout sees it after `fetch`. */
   pushToRemote(cwd: string, branch: string, tree: FakeTree) {
     const checkout = this.checkout(cwd);
     const sha = this.commit(tree, "push", checkout.remote.get(branch) ?? null);
@@ -71,29 +71,29 @@ export class FakeGit implements GitAdapter {
     return sha;
   }
 
-  /** Para que el contrato cree la rama de la tarea; el fake no distingue ramas locales. */
+  /** For the contract to create the task branch; the fake does not distinguish local branches. */
   checkoutBranch(cwd: string) {
     this.checkout(cwd);
   }
 
-  /** Sha de `branch` en el remoto; null si no existe. */
+  /** Sha of `branch` on the remote; null if it does not exist. */
   remoteBranch(cwd: string, branch: string) {
     return this.checkout(cwd).remote.get(branch) ?? null;
   }
 
-  /** Simula cambios sin commit en el working tree (un hook que escribe archivos). */
+  /** Simulates uncommitted changes in the working tree (a hook that writes files). */
   setDirty(cwd: string, dirty = true) {
     const checkout = this.checkout(cwd);
     if (dirty) checkout.dirty.add(GENERIC_CHANGE);
     else checkout.dirty.clear();
   }
 
-  /** Escribe `path` en el working tree sin commitear. */
+  /** Writes `path` into the working tree without committing. */
   writeWorkingFile(cwd: string, path: string) {
     this.checkout(cwd).dirty.add(path);
   }
 
-  /** Rutas del árbol de HEAD. */
+  /** Paths of the HEAD tree. */
   trackedFiles(cwd: string): string[] {
     const head = this.commits.get(this.checkout(cwd).refs.get("HEAD") ?? "");
     return [...(head?.tree.keys() ?? [])];
@@ -183,7 +183,7 @@ export class FakeGit implements GitAdapter {
   async rebase(input: { cwd: string; onto: string }): Promise<RebaseResult> {
     const checkout = this.checkout(input.cwd);
     if (await this.isDirty(input.cwd)) {
-      throw new GitError("git_failed", `rebase en ${input.cwd}: hay cambios sin commit`);
+      throw new GitError("git_failed", `rebase in ${input.cwd}: there are uncommitted changes`);
     }
     const head = await this.resolveCommit({ cwd: input.cwd, ref: "HEAD" });
     const onto = await this.resolveCommit({ cwd: input.cwd, ref: input.onto });
@@ -200,7 +200,7 @@ export class FakeGit implements GitAdapter {
       .sort();
     if (files.length > 0) return { status: "conflict", files };
 
-    // Cada commit propio se rehace sobre la base nueva con los mismos cambios.
+    // Each own commit is redone on top of the new base with the same changes.
     let parent = onto;
     for (const sha of own) {
       const original = this.getCommit(sha);
@@ -259,13 +259,13 @@ export class FakeGit implements GitAdapter {
     const checkout = this.checkout(input.cwd);
     const head = await this.resolveCommit({ cwd: input.cwd, ref: "HEAD" });
     const current = checkout.remote.get(input.branch);
-    // --force-with-lease: solo pisa lo que este checkout ya conocía.
+    // --force-with-lease: only overwrites what this checkout already knew.
     const known = checkout.refs.get(`${input.remote}/${input.branch}`);
     if (current !== undefined && current !== known && current !== head) {
       throw new GitError("git_failed", `push en ${input.cwd}: stale info`);
     }
     if (input.remote !== "origin") {
-      throw new GitError("git_failed", `push en ${input.cwd}: ${input.remote} no existe`);
+      throw new GitError("git_failed", `push in ${input.cwd}: ${input.remote} does not exist`);
     }
     checkout.remote.set(input.branch, head);
     checkout.refs.set(`${input.remote}/${input.branch}`, head);
@@ -273,7 +273,8 @@ export class FakeGit implements GitAdapter {
 
   async addDetachedWorktree(input: { cwd: string; path: string; commit: string }) {
     this.requireCommit(input.cwd, input.commit);
-    if (this.checkouts.has(input.path)) throw new GitError("git_failed", `${input.path} ya existe`);
+    if (this.checkouts.has(input.path))
+      throw new GitError("git_failed", `${input.path} already exists`);
     this.checkouts.set(input.path, {
       refs: new Map([["HEAD", input.commit]]),
       remote: new Map(),
@@ -286,12 +287,12 @@ export class FakeGit implements GitAdapter {
     this.checkouts.delete(input.path);
   }
 
-  /** true si `path` es un checkout conocido (p. ej. un worktree temporal que no se borró). */
+  /** true if `path` is a known checkout (e.g. a temporary worktree that was not deleted). */
   hasCheckout(path: string) {
     return this.checkouts.has(path);
   }
 
-  /** Mensaje del commit en HEAD de `cwd`. */
+  /** Message of the commit at HEAD of `cwd`. */
   headMessage(cwd: string) {
     return this.commits.get(this.checkout(cwd).refs.get("HEAD") ?? "")?.message ?? "";
   }
@@ -334,11 +335,11 @@ export class FakeGit implements GitAdapter {
 
   private checkout(cwd: string) {
     const checkout = this.checkouts.get(cwd);
-    if (!checkout) throw new GitError("git_unavailable", `no existe ${cwd}`);
+    if (!checkout) throw new GitError("git_unavailable", `${cwd} does not exist`);
     return checkout;
   }
 
-  /** `sha` y sus ancestros, del más nuevo al más viejo. */
+  /** `sha` and its ancestors, from newest to oldest. */
   private ancestry(sha: string): string[] {
     const chain: string[] = [];
     for (let next: string | null = sha; next; next = this.commits.get(next)?.parent ?? null) {
@@ -349,14 +350,14 @@ export class FakeGit implements GitAdapter {
 
   private getCommit(sha: string) {
     const commit = this.commits.get(sha);
-    if (!commit) throw new GitError("git_failed", `${sha} no es un commit`);
+    if (!commit) throw new GitError("git_failed", `${sha} is not a commit`);
     return commit;
   }
 
   private requireCommit(cwd: string, sha: string) {
     this.checkout(cwd);
     const commit = this.commits.get(sha);
-    if (!commit) throw new GitError("git_failed", `${sha} no es un commit`);
+    if (!commit) throw new GitError("git_failed", `${sha} is not a commit`);
     return commit;
   }
 }

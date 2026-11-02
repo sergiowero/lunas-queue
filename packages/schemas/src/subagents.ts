@@ -1,6 +1,6 @@
-// Input de los hooks `SubagentStart` y `SubagentStop` de Claude Code (docs/design.md
-// §Verificación con subagentes, ADR uw-19-revisores). Claude Code agrega campos entre versiones,
-// así que solo se exige lo que LunasQ registra y el resto se tolera.
+// Input of the Claude Code `SubagentStart` and `SubagentStop` hooks (docs/design.md
+// §Verification with subagents, ADR uw-19-revisores). Claude Code adds fields between versions,
+// so only what LunasQ records is required and the rest is tolerated.
 import { z } from "zod";
 import { REVIEWER_NAMES } from "./handoff/index.ts";
 

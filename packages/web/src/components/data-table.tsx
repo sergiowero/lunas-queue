@@ -1,4 +1,4 @@
-// Tabla genérica sobre TanStack Table con las piezas de shadcn/ui.
+// Generic table over TanStack Table with shadcn/ui pieces.
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table.tsx";
 
@@ -8,7 +8,7 @@ export function DataTable<T>({
   getRowId,
   empty,
 }: {
-  // biome-ignore lint/suspicious/noExplicitAny: las columnas mezclan tipos de valor por celda.
+  // biome-ignore lint/suspicious/noExplicitAny: the columns mix value types per cell.
   columns: ColumnDef<T, any>[];
   data: T[];
   getRowId: (row: T) => string;

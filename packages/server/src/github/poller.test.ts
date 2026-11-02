@@ -39,7 +39,7 @@ function setup(opts: Partial<PrPollerOptions> = {}) {
     ...opts,
   });
   stoppables.push(poller);
-  /** Una tarea entregada con su PR abierto en el fake y registrado en la base. */
+  /** A delivered task with its PR open in the fake and recorded in the database. */
   async function delivered(head: string) {
     const task = insertTask(db, project.id, { state: "completed", subState: null });
     insertRun(db, task.id, { phase: "verify" });
@@ -61,7 +61,7 @@ const prState = (db: LunasqDatabase, id: string) =>
     .pr_state;
 
 describe("PrPoller", () => {
-  it("registra merges y cierres con la hora de GitHub, una sola vez", async () => {
+  it("records merges and closes with GitHub's time, only once", async () => {
     const { db, github, poller, delivered } = setup();
     const a = await delivered("lunasq/a");
     const b = await delivered("lunasq/b");
@@ -90,7 +90,7 @@ describe("PrPoller", () => {
     );
   });
 
-  it("un PR abierto en conflicto con la base regresa su tarea a implementación, una sola vez", async () => {
+  it("an open PR in conflict with the base sends its task back to implementation, only once", async () => {
     const { db, github, poller, delivered } = setup();
     const a = await delivered("lunasq/a");
     const b = await delivered("lunasq/b");
@@ -109,12 +109,12 @@ describe("PrPoller", () => {
     expect(state(b.task.id)).toEqual({ state: "completed", sub_state: null });
     expect(prState(db, a.task.id)).toBe("open");
 
-    // El PR sigue en conflicto mientras el implementador trabaja: no se reabre otra vez.
+    // The PR is still in conflict while the implementer works: it is not reopened again.
     expect((await poller.poll()).conflicted).toEqual([]);
     expect(listEvents(db, a.task.id).filter((e) => e.type === DELIVERY_CONFLICT)).toHaveLength(1);
   });
 
-  it("un PR abierto con checks fallidos regresa la tarea a implementación una sola vez", async () => {
+  it("an open PR with failed checks sends the task back to implementation only once", async () => {
     const { db, github, poller, delivered } = setup();
     const pr = await delivered("lunasq/ci-failed");
     const pending = await delivered("lunasq/ci-pending");
@@ -143,7 +143,7 @@ describe("PrPoller", () => {
     ).toHaveLength(1);
   });
 
-  it("un PR que falla se reporta y no detiene a los demás", async () => {
+  it("a PR that fails is reported and does not stop the others", async () => {
     const { github, poller, errors, delivered } = setup();
     const roto = await delivered("lunasq/roto");
     const ok = await delivered("lunasq/ok");
@@ -164,7 +164,7 @@ describe("PrPoller", () => {
     expect((await poller.poll()).merged).toEqual([roto.task.id]);
   });
 
-  it("despierta al publicador solo cuando registró algo", async () => {
+  it("wakes the publisher only when it recorded something", async () => {
     const { db, github, delivered } = setup();
     const publisher = new OutboxPublisher({ db, onError: () => {} });
     const wake = vi.spyOn(publisher, "wake");
@@ -177,7 +177,7 @@ describe("PrPoller", () => {
     expect(wake).toHaveBeenCalledTimes(1);
   });
 
-  it("un poll durante una pasada se une a ella y pide una más", async () => {
+  it("a poll during a pass joins it and asks for one more", async () => {
     const { github, poller, delivered } = setup();
     await delivered("lunasq/a");
     let release = () => {};
@@ -198,7 +198,7 @@ describe("PrPoller", () => {
     expect(reads).toHaveBeenCalledTimes(2);
   });
 
-  it("start hace una pasada y luego consulta en cada intervalo; stop lo detiene", async () => {
+  it("start does a pass and then queries on each interval; stop halts it", async () => {
     vi.useFakeTimers();
     const { db, github, delivered } = setup();
     const pr = await delivered("lunasq/a");
@@ -215,13 +215,13 @@ describe("PrPoller", () => {
     expect(reads).toHaveBeenCalledTimes(2);
   });
 
-  it("rechaza un intervalo menor a 1 s", () => {
+  it("rejects an interval below 1 s", () => {
     const { db, github } = setup();
     expect(() => new PrPoller({ db, github, intervalMs: 10 })).toThrow();
   });
 });
 
-/** Dispatcher falso: hace el claim (dispatch → running) como lo hará UW-16. */
+/** Fake dispatcher: does the claim (dispatch → running) as UW-16 will. */
 class FakeDispatcher {
   readonly calls: DispatchDecision[] = [];
   readonly db: LunasqDatabase;
@@ -242,8 +242,8 @@ class FakeDispatcher {
   }
 }
 
-// Criterio de terminado de UW-14: un merge detectado libera a las tareas dependientes.
-describe("PrPoller con outbox y scheduler", () => {
+// UW-10's done criterion: a detected merge releases the dependent tasks.
+describe("PrPoller with outbox and scheduler", () => {
   async function wired() {
     const ctx = setup();
     const { db } = ctx;
@@ -266,7 +266,7 @@ describe("PrPoller con outbox y scheduler", () => {
     return { ...ctx, dispatcher, poller, dep, dependiente };
   }
 
-  it("un merge detectado libera a la tarea dependiente", async () => {
+  it("a detected merge releases the dependent task", async () => {
     const { github, dispatcher, poller, dep, dependiente } = await wired();
     expect(dispatcher.calls).toEqual([]);
 
@@ -279,7 +279,7 @@ describe("PrPoller con outbox y scheduler", () => {
     );
   });
 
-  it("un PR cerrado sin merge manda a la dependiente a needs_human", async () => {
+  it("a PR closed without merge sends the dependent to needs_human", async () => {
     const { db, github, dispatcher, poller, dep, dependiente } = await wired();
     github.close(dep.url);
     await poller.poll();

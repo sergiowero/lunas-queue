@@ -1,4 +1,4 @@
-// Tests de contrato de cada tool del LunasQ MCP, por el cliente oficial de MCP.
+// Contract tests of each LunasQ MCP tool, through the official MCP client.
 import {
   appendEvent,
   closeRun,
@@ -21,7 +21,7 @@ const verifying = { state: "verification", subState: "running" } as const;
 const runOf = (h: ReturnType<typeof mcpHarness>, id: string) => new RunRepository(h.db).get(id);
 
 describe("get_task_context", () => {
-  it("implementación recibe intent, proyecto, spec aprobada y checklist", async () => {
+  it("implementation receives intent, project, approved spec and checklist", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.session("implement", implementing);
     const { isError, body } = await call("get_task_context");
@@ -46,7 +46,7 @@ describe("get_task_context", () => {
     });
   });
 
-  it("refinamiento tras cambios pedidos recibe la versión y sus comentarios", async () => {
+  it("refinement after requested changes receives the version and its comments", async () => {
     const h = mcpHarness();
     const task = h.task(refining, { approved: false });
     const specs = new SpecRepository(h.db);
@@ -64,7 +64,7 @@ describe("get_task_context", () => {
     });
   });
 
-  it("verificación recibe el handoff de implementación, el historial y el intento previo", async () => {
+  it("verification receives the implementation handoff, the history and the previous attempt", async () => {
     const h = mcpHarness();
     const task = h.task(verifying);
     const impl = insertRun(h.db, task.id, { phase: "implement", startedAt: new Date(1000) });
@@ -84,7 +84,7 @@ describe("get_task_context", () => {
     });
   });
 
-  it("tras un reject, implementación recibe solo los must-fix y no el historial", async () => {
+  it("after a reject, implementation receives only the must-fix and not the history", async () => {
     const h = mcpHarness();
     const task = h.task(implementing);
     const verify1 = insertRun(h.db, task.id, {
@@ -103,7 +103,7 @@ describe("get_task_context", () => {
     });
   });
 
-  it("sin reject previo, o con un pass como último veredicto, no hay rework", async () => {
+  it("without a previous reject, or with a pass as the last verdict, there is no rework", async () => {
     const h = mcpHarness();
     const task = h.task(implementing);
     const verify1 = insertRun(h.db, task.id, { phase: "verify", startedAt: new Date(1000) });
@@ -111,13 +111,13 @@ describe("get_task_context", () => {
       result: "success",
       handoff: handoffFor("verification-pass", verify1),
     });
-    // Un conflicto en la entrega devuelve a implementación sin rework del verificador.
+    // A delivery conflict sends it back to implementation without verifier rework.
     const run = insertRun(h.db, task.id, { phase: "implement" });
     const { call } = await h.connect(run.runToken);
     expect((await call("get_task_context")).body).toMatchObject({ rework: null });
   });
 
-  it("tras un conflicto de entrega, implementación recibe qué lo causó hasta el siguiente veredicto", async () => {
+  it("after a delivery conflict, implementation receives what caused it until the next verdict", async () => {
     const h = mcpHarness();
     const task = h.task(implementing);
     const verify1 = insertRun(h.db, task.id, { phase: "verify", startedAt: new Date(1000) });
@@ -145,7 +145,7 @@ describe("get_task_context", () => {
       deliveryConflict: conflict,
     });
 
-    // El implementador entregó y el verificador registró un veredicto nuevo: el conflicto quedó atrás.
+    // The implementer delivered and the verifier recorded a new verdict: the conflict is behind.
     appendEvent(h.db, {
       taskId: task.id,
       type: "verification.verdict_recorded",
@@ -163,13 +163,13 @@ describe("get_task_context", () => {
     expect((await call("get_task_context")).body).toMatchObject({ deliveryConflict: null });
   });
 
-  it("verificación no recibe rework", async () => {
+  it("verification receives no rework", async () => {
     const h = mcpHarness();
     const { call } = await h.session("verify", verifying);
     expect((await call("get_task_context")).body).toMatchObject({ rework: null });
   });
 
-  it("repetirla no mueve la marca de lectura", async () => {
+  it("repeating it does not move the read mark", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("implement", implementing);
     const first = runOf(h, run.id)?.contextReadAt?.getTime();
@@ -179,7 +179,7 @@ describe("get_task_context", () => {
 });
 
 describe("submit_spec", () => {
-  it("crea la versión, pasa la tarea a refined y cierra el Run con el handoff", async () => {
+  it("creates the version, moves the task to refined and closes the Run with the handoff", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("refine", refining, { approved: false });
     const handoff = handoffFor("refinement", run);
@@ -193,7 +193,7 @@ describe("submit_spec", () => {
     expect(runOf(h, run.id)?.endedAt).toBeInstanceOf(Date);
   });
 
-  it("guarda el título del handoff en la tarea, sin ponerlo en la spec", async () => {
+  it("saves the handoff title on the task, without putting it in the spec", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("refine", refining, { approved: false });
     expect(h.taskOf(task.id)?.title).toBeNull();
@@ -205,7 +205,7 @@ describe("submit_spec", () => {
     expect(listEvents(h.db, task.id).filter((e) => e.type === "task.titled")).toHaveLength(1);
   });
 
-  it("un refinamiento posterior no cambia el título", async () => {
+  it("a later refinement does not change the title", async () => {
     const h = mcpHarness();
     const task = h.task(refining, { approved: false });
     const first = insertRun(h.db, task.id, { phase: "refine" });
@@ -228,7 +228,7 @@ describe("submit_spec", () => {
     expect(listEvents(h.db, task.id).filter((e) => e.type === "task.titled")).toHaveLength(1);
   });
 
-  it("un handoff sin título se rechaza", async () => {
+  it("a handoff without a title is rejected", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("refine", refining, { approved: false });
     const handoff = handoffFor("refinement", run);
@@ -241,7 +241,7 @@ describe("submit_spec", () => {
     });
   });
 
-  it("un handoff inválido se rechaza con errores por ruta y no escribe nada", async () => {
+  it("an invalid handoff is rejected with errors by path and writes nothing", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("refine", refining, { approved: false });
     const handoff = handoffFor("refinement", run);
@@ -254,13 +254,13 @@ describe("submit_spec", () => {
     });
     expect(new SpecRepository(h.db).list(task.id)).toEqual([]);
     expect(runOf(h, run.id)?.endedAt).toBeNull();
-    // El agente corrige y reintenta en el mismo Run.
+    // The agent fixes it and retries in the same Run.
     expect((await call("submit_spec", { handoff: handoffFor("refinement", run) })).isError).toBe(
       false,
     );
   });
 
-  it("un handoff de otra fase, tarea o Run se rechaza con handoff_mismatch", async () => {
+  it("a handoff of another phase, task or Run is rejected with handoff_mismatch", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("refine", refining, { approved: false });
     const other = handoffFor("refinement", { id: "otro-run", taskId: "otra-tarea" });
@@ -276,7 +276,7 @@ describe("submit_spec", () => {
     });
   });
 
-  it("si la máquina de estados rechaza, no queda versión ni Run cerrado", async () => {
+  it("if the state machine rejects, no version or closed Run is left", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready(
       "refine",
@@ -293,7 +293,7 @@ describe("submit_spec", () => {
 });
 
 describe("submit_result", () => {
-  it("AC-1: en refinamiento completa la tarea sin PR con Resultado, título y Run cerrado", async () => {
+  it("AC-1: in refinement it completes the task without a PR with Result, title and closed Run", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("refine", refining, { approved: false });
     expect(h.taskOf(task.id)?.title).toBeNull();
@@ -324,13 +324,13 @@ describe("submit_result", () => {
         note: "research",
       },
     });
-    // Sin verificación ni entrega: no hay veredicto ni gate.
+    // Without verification or delivery: there is no verdict or gate.
     expect(events.some((e) => e.type === "verification.verdict_recorded")).toBe(false);
     expect(h.testGate.calls).toHaveLength(0);
     expect(new SpecRepository(h.db).list(task.id)).toEqual([]);
   });
 
-  it("AC-2: en implementación sin commits sobre la base completa la tarea y conserva su título", async () => {
+  it("AC-2: in implementation without commits on the base it completes the task and keeps its title", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     const titleBefore = h.taskOf(task.id)?.title ?? null;
@@ -353,15 +353,15 @@ describe("submit_result", () => {
       prUrl: null,
       prState: null,
     });
-    // El título se fija solo si aún es null: una tarea ya titulada no lo cambia.
+    // The title is only set if it is still null: an already titled task does not change it.
     expect(h.taskOf(task.id)?.title).toBe(titleBefore ?? "Otro título");
     expect(runOf(h, run.id)?.result).toBe("success");
-    // No se despacha verificador ni se corre el gate de tests.
+    // No verifier is dispatched and the test gate is not run.
     expect(h.testGate.calls).toHaveLength(0);
     expect(h.phaseHooks.calls).toEqual([]);
   });
 
-  it("AC-2: una tarea ya titulada conserva su título", async () => {
+  it("AC-2: an already titled task keeps its title", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     h.db.$client.prepare("update tasks set title = 'Título previo' where id = ?").run(task.id);
@@ -377,7 +377,7 @@ describe("submit_result", () => {
     expect(listEvents(h.db, task.id).filter((e) => e.type === "task.titled")).toHaveLength(0);
   });
 
-  it("AC-3: con commits sobre la base se rechaza y la tarea y el Run quedan como estaban", async () => {
+  it("AC-3: with commits on the base it is rejected and the task and the Run stay as they were", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     h.commitVerifier.ahead = true;
@@ -392,7 +392,7 @@ describe("submit_result", () => {
     expect(h.taskOf(task.id)).toMatchObject({ ...implementing, resultKind: null, result: null });
     expect(runOf(h, run.id)?.endedAt).toBeNull();
     expect(listEvents(h.db, task.id)).toHaveLength(eventsBefore);
-    // El agente puede seguir con submit_for_verification en el mismo Run.
+    // The agent can continue with submit_for_verification in the same Run.
     h.commitVerifier.ahead = false;
     expect(
       (await call("submit_result", { handoff: resultFor(run, { phase: "implementation" }) }))
@@ -400,7 +400,7 @@ describe("submit_result", () => {
     ).toBe(false);
   });
 
-  it("AC-3: sin worktree no se puede comprobar el branch", async () => {
+  it("AC-3: without a worktree the branch cannot be checked", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     h.db.$client.prepare("update tasks set worktree_path = null where id = ?").run(task.id);
@@ -411,7 +411,7 @@ describe("submit_result", () => {
     expect(h.taskOf(task.id)).toMatchObject(implementing);
   });
 
-  it("AC-4: en verificación se rechaza con tool_not_allowed y la tarea no cambia", async () => {
+  it("AC-4: in verification it is rejected with tool_not_allowed and the task does not change", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     const result = await call("submit_result", {
@@ -423,11 +423,11 @@ describe("submit_result", () => {
   });
 
   it.each([
-    ["un tipo fuera de los tres", { resultKind: "bug" }, "resultKind"],
-    ["un texto vacío", { result: "" }, "result"],
-    ["un texto de más de 20 000 caracteres", { result: "x".repeat(20_001) }, "result"],
+    ["a type outside the three", { resultKind: "bug" }, "resultKind"],
+    ["an empty text", { result: "" }, "result"],
+    ["a text of more than 20,000 characters", { result: "x".repeat(20_001) }, "result"],
   ])(
-    "AC-5: %s da invalid_handoff con la ruta y el Run sigue abierto",
+    "AC-5: %s gives invalid_handoff with the path and the Run stays open",
     async (_n, override, path) => {
       const h = mcpHarness();
       const { task, run, call } = await h.ready("refine", refining, { approved: false });
@@ -441,12 +441,12 @@ describe("submit_result", () => {
       });
       expect(h.taskOf(task.id)).toMatchObject({ ...refining, resultKind: null, result: null });
       expect(runOf(h, run.id)?.endedAt).toBeNull();
-      // Corrige y reintenta en el mismo Run.
+      // Fix it and retry in the same Run.
       expect((await call("submit_result", { handoff: resultFor(run) })).isError).toBe(false);
     },
   );
 
-  it("AC-6: taskId, runId o fase que no son los del Run dan handoff_mismatch", async () => {
+  it("AC-6: taskId, runId or phase that are not the Run's give handoff_mismatch", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("refine", refining, { approved: false });
 
@@ -468,7 +468,7 @@ describe("submit_result", () => {
     expect(runOf(h, run.id)?.endedAt).toBeNull();
   });
 
-  it("si la tarea ya no está en running no escribe el Resultado", async () => {
+  it("if the task is no longer in running it does not write the Result", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("refine", refining, { approved: false });
     setTaskPosition(h.db, task.id, { state: "needs_human", subState: null });
@@ -484,7 +484,7 @@ describe("submit_result", () => {
     expect(runOf(h, run.id)?.endedAt).toBeNull();
   });
 
-  it("un reintento tras completar responde invalid_run_token y no cambia nada", async () => {
+  it("a retry after completing answers invalid_run_token and changes nothing", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("refine", refining, { approved: false });
     await call("submit_result", { handoff: resultFor(run) });
@@ -495,7 +495,7 @@ describe("submit_result", () => {
 });
 
 describe("ask_human", () => {
-  it("registra la Question, pasa a waiting_human y regresa de inmediato", async () => {
+  it("records the Question, moves to waiting_human and returns immediately", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     const result = await call("ask_human", { question: "¿Migro los datos?", context: "hay 2M" });
@@ -515,7 +515,7 @@ describe("ask_human", () => {
     expect(runOf(h, run.id)?.endedAt).toBeNull();
   });
 
-  it("con opciones las guarda en orden y get_task_context las devuelve", async () => {
+  it("with options it stores them in order and get_task_context returns them", async () => {
     const h = mcpHarness();
     const { task, call } = await h.ready("implement", implementing);
     const options = [
@@ -533,12 +533,12 @@ describe("ask_human", () => {
   });
 
   it.each([
-    ["una sola opción", [{ label: "A" }]],
-    ["siete opciones", Array.from({ length: 7 }, (_, i) => ({ label: `O${i}` }))],
-    ["un label vacío", [{ label: "" }, { label: "B" }]],
-    ["labels que solo difieren en mayúsculas", [{ label: "Sí" }, { label: "sí" }]],
-    ["labels que solo difieren en espacios", [{ label: "Sí" }, { label: " Sí  " }]],
-  ])("rechaza %s sin crear la Question ni mover la tarea", async (_name, options) => {
+    ["a single option", [{ label: "A" }]],
+    ["seven options", Array.from({ length: 7 }, (_, i) => ({ label: `O${i}` }))],
+    ["an empty label", [{ label: "" }, { label: "B" }]],
+    ["labels that only differ in case", [{ label: "Sí" }, { label: "sí" }]],
+    ["labels that only differ in whitespace", [{ label: "Sí" }, { label: " Sí  " }]],
+  ])("rejects %s without creating the Question or moving the task", async (_name, options) => {
     const h = mcpHarness();
     const { task, call } = await h.ready("implement", implementing);
     const result = await call("ask_human", { question: "¿Cuál?", options });
@@ -548,7 +548,7 @@ describe("ask_human", () => {
     expect(listEvents(h.db, task.id).filter((e) => e.type === "question.created")).toHaveLength(0);
   });
 
-  it("con la tarea ya esperando al humano se rechaza sin crear otra Question", async () => {
+  it("with the task already waiting for the human it is rejected without creating another Question", async () => {
     const h = mcpHarness();
     const { task, call } = await h.ready("implement", implementing);
     await call("ask_human", { question: "¿Uno?" });
@@ -557,7 +557,7 @@ describe("ask_human", () => {
     expect(listEvents(h.db, task.id).filter((e) => e.type === "question.created")).toHaveLength(1);
   });
 
-  it("valida la entrada", async () => {
+  it("validates the input", async () => {
     const h = mcpHarness();
     const { call } = await h.ready("implement", implementing);
     expect((await call("ask_human", { question: "" })).isError).toBe(true);
@@ -565,7 +565,7 @@ describe("ask_human", () => {
 });
 
 describe("update_checklist", () => {
-  it("marca items de la task list aprobada y devuelve el checklist completo", async () => {
+  it("marks items of the approved task list and returns the full checklist", async () => {
     const h = mcpHarness();
     const { task, call } = await h.ready("implement", implementing);
     const result = await call("update_checklist", { items: [{ taskId: "T-1", done: true }] });
@@ -573,12 +573,12 @@ describe("update_checklist", () => {
     expect(result).toEqual({ isError: false, body: { checklist } });
     expect((await call("get_task_context")).body.checklist).toEqual(checklist);
 
-    // Repetir la misma marca no agrega otro evento.
+    // Repeating the same mark does not add another event.
     await call("update_checklist", { items: [{ taskId: "T-1", done: true }] });
     expect(listEvents(h.db, task.id).filter((e) => e.type === "checklist.updated")).toHaveLength(1);
   });
 
-  it("rechaza items que no están en la spec aprobada", async () => {
+  it("rejects items that are not in the approved spec", async () => {
     const h = mcpHarness();
     const { call } = await h.ready("implement", implementing);
     const result = await call("update_checklist", { items: [{ taskId: "T-9", done: true }] });
@@ -590,7 +590,7 @@ describe("update_checklist", () => {
 });
 
 describe("submit_for_verification", () => {
-  it("con gate en verde y commits del branch pasa a verification y cierra el Run", async () => {
+  it("with a green gate and branch commits it moves to verification and closes the Run", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     const handoff = handoffFor("implementation", run);
@@ -613,7 +613,7 @@ describe("submit_for_verification", () => {
     });
   });
 
-  it("corre after_implementation y before_verification antes del gate", async () => {
+  it("runs after_implementation and before_verification before the gate", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     const order: string[] = [];
@@ -621,7 +621,7 @@ describe("submit_for_verification", () => {
       order.push(`gate:${h.commitVerifier.headSha}`);
       return { passed: input.command !== null, output: "" };
     };
-    // Un hook que commitea mueve el HEAD: el gate corre sobre el commit nuevo.
+    // A hook that commits moves the HEAD: the gate runs on the new commit.
     h.phaseHooks.onRun = (input) => {
       order.push(input.point);
       if (input.point === "before_verification") h.commitVerifier.headSha = "d".repeat(40);
@@ -636,7 +636,7 @@ describe("submit_for_verification", () => {
     expect(h.taskOf(task.id)).toMatchObject({ state: "verification", subState: "queued" });
   });
 
-  it("tras un hook bloqueado, un reintento no vuelve a correr hooks ni gate", async () => {
+  it("after a blocked hook, a retry does not run hooks or the gate again", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     h.phaseHooks.results.after_implementation = {
@@ -645,7 +645,7 @@ describe("submit_for_verification", () => {
       failedScript: "10-lint",
       error: null,
     };
-    // Como HookService: el punto bloqueado escala la tarea; el Run queda abierto.
+    // Like HookService: the blocked point escalates the task; the Run stays open.
     h.phaseHooks.onRun = () =>
       setTaskPosition(h.db, task.id, { state: "needs_human", subState: null });
     const handoff = handoffFor("implementation", run);
@@ -659,7 +659,7 @@ describe("submit_for_verification", () => {
     expect(h.testGate.calls).toHaveLength(0);
   });
 
-  it("un hook bloqueado detiene la llamada antes del gate y no transiciona", async () => {
+  it("a blocked hook stops the call before the gate and does not transition", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     h.phaseHooks.results.after_implementation = {
@@ -682,7 +682,7 @@ describe("submit_for_verification", () => {
     expect(runOf(h, run.id)?.endedAt).toBeNull();
   });
 
-  it("una suite en rojo bloquea la transición aunque el agente diga lo contrario", async () => {
+  it("a red suite blocks the transition even if the agent says otherwise", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     h.testGate.result = { passed: false, output: "FAIL order.test.ts" };
@@ -697,7 +697,7 @@ describe("submit_for_verification", () => {
     expect(runOf(h, run.id)?.endedAt).toBeNull();
   });
 
-  it("criterios sin tests o ajenos a la spec se rechazan antes de correr el gate", async () => {
+  it("criteria without tests or foreign to the spec are rejected before running the gate", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("implement", implementing);
     const handoff = handoffFor("implementation", run);
@@ -715,7 +715,7 @@ describe("submit_for_verification", () => {
     expect(h.testGate.calls).toHaveLength(0);
   });
 
-  it("commits que no están en el branch de la tarea se rechazan", async () => {
+  it("commits that are not in the task's branch are rejected", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     h.commitVerifier.absent.add("b7e04d9c2f");
@@ -729,7 +729,7 @@ describe("submit_for_verification", () => {
     expect(h.taskOf(task.id)).toMatchObject(implementing);
   });
 
-  it("un handoff inválido se rechaza con sus errores", async () => {
+  it("an invalid handoff is rejected with its errors", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("implement", implementing);
     const handoff = handoffFor("implementation", run);
@@ -741,7 +741,7 @@ describe("submit_for_verification", () => {
     });
   });
 
-  it("si el dispatcher cerró el Run y abrió otro mientras corría el gate, no transiciona", async () => {
+  it("if the dispatcher closed the Run and opened another while the gate ran, it does not transition", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     let next: { id: string } | undefined;
@@ -759,7 +759,7 @@ describe("submit_for_verification", () => {
     expect(next && runOf(h, next.id)).toMatchObject({ endedAt: null, handoff: null });
   });
 
-  it("un worktree con cambios sin commitear se rechaza antes del gate", async () => {
+  it("a worktree with uncommitted changes is rejected before the gate", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     h.commitVerifier.dirty = ["src/order.ts"];
@@ -774,7 +774,7 @@ describe("submit_for_verification", () => {
     expect(h.taskOf(task.id)).toMatchObject(implementing);
   });
 
-  it("un segundo submit mientras corre el gate se rechaza sin lanzar otra suite", async () => {
+  it("a second submit while the gate runs is rejected without launching another suite", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     let release: (value: { passed: boolean; output: string }) => void = () => {};
@@ -796,7 +796,7 @@ describe("submit_for_verification", () => {
     expect(h.taskOf(task.id)).toMatchObject({ state: "verification" });
   });
 
-  it("si la tarea cambió mientras corría el gate, no transiciona", async () => {
+  it("if the task changed while the gate ran, it does not transition", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     h.testGate.run = async () => {
@@ -812,7 +812,7 @@ describe("submit_for_verification", () => {
 });
 
 describe("submit_verdict", () => {
-  it("reject vuelve a in_progress con iteración + 1 y cierra el Run", async () => {
+  it("reject goes back to in_progress with iteration + 1 and closes the Run", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     const handoff = h.verdictFor("verification-reject", run);
@@ -826,7 +826,7 @@ describe("submit_verdict", () => {
     expect(runOf(h, run.id)).toMatchObject({ result: "success", handoff });
   });
 
-  it("pass guarda el veredicto con el Run abierto y no transiciona: la entrega emite el pass", async () => {
+  it("pass stores the verdict with the Run open and does not transition: the delivery emits the pass", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     const handoff = h.verdictFor("verification-pass", run);
@@ -837,7 +837,7 @@ describe("submit_verdict", () => {
     expect(h.taskOf(task.id)).toMatchObject(verifying);
     expect(runOf(h, run.id)).toMatchObject({ handoff, endedAt: null });
 
-    // Repetir el mismo veredicto es idempotente y no vuelve a correr el gate; uno distinto se rechaza.
+    // Repeating the same verdict is idempotent and does not run the gate again; a different one is rejected.
     expect((await call("submit_verdict", { handoff })).isError).toBe(false);
     expect(h.testGate.calls).toHaveLength(1);
     const reject = await call("submit_verdict", {
@@ -847,7 +847,7 @@ describe("submit_verdict", () => {
     expect(h.taskOf(task.id)).toMatchObject(verifying);
   });
 
-  it("antes de aceptar un pass, LunasQ corre el gate de tests en el worktree", async () => {
+  it("before accepting a pass, LunasQ runs the test gate in the worktree", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     await call("submit_verdict", { handoff: h.verdictFor("verification-pass", run) });
@@ -862,7 +862,7 @@ describe("submit_verdict", () => {
     ]);
   });
 
-  it("un pass con la suite en rojo se rechaza aunque el verificador diga lo contrario", async () => {
+  it("a pass with a red suite is rejected even if the verifier says otherwise", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     h.testGate.result = { passed: false, output: "FAIL order.test.ts" };
@@ -876,8 +876,8 @@ describe("submit_verdict", () => {
     expect(h.taskOf(task.id)).toMatchObject(verifying);
     expect(runOf(h, run.id)).toMatchObject({ handoff: null, endedAt: null });
 
-    // El Run sigue abierto: el verificador puede corregir su veredicto a reject. Los 4 revisores
-    // ya corrieron en este Run, así que el reject los reporta a todos.
+    // The Run stays open: the verifier can correct its verdict to reject. The 4 reviewers
+    // already ran in this Run, so the reject reports all of them.
     const reject = h.verdictFor("verification-reject", run);
     const ran = { status: "ran", findings: [] };
     reject.body.reviewers = {
@@ -888,7 +888,7 @@ describe("submit_verdict", () => {
     expect((await call("submit_verdict", { handoff: reject })).body).toEqual({ verdict: "reject" });
   });
 
-  it("un pass con el worktree sucio vuelve a implementación con un must-fix de git", async () => {
+  it("a pass with a dirty worktree goes back to implementation with a git must-fix", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     h.commitVerifier.dirty = ["src/order.ts"];
@@ -906,7 +906,7 @@ describe("submit_verdict", () => {
     });
   });
 
-  it("el implementador recibe el must-fix de git tras un pass refusado", async () => {
+  it("the implementer receives the git must-fix after a refused pass", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     h.commitVerifier.dirty = ["src/order.ts"];
@@ -918,10 +918,10 @@ describe("submit_verdict", () => {
     });
   });
 
-  it("un pass sobre un HEAD distinto del que pasó el gate de submit_for_verification vuelve a implementación", async () => {
+  it("a pass on a HEAD different from the one that passed the submit_for_verification gate goes back to implementation", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
-    // El verificador commiteó algo propio, p. ej. borrar los tests en rojo.
+    // The verifier committed something of its own, e.g. deleting the red tests.
     h.commitVerifier.headSha = "b".repeat(40);
     const result = await call("submit_verdict", {
       handoff: h.verdictFor("verification-pass", run),
@@ -934,20 +934,20 @@ describe("submit_verdict", () => {
     });
   });
 
-  it("un pass acepta commits posteriores al gate que solo tocan la evidencia", async () => {
+  it("a pass accepts commits after the gate that only touch the evidence", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
-    // LunasQ o un agente commitearon lunasq/tasks/ después del gate del implementador: no es código.
+    // LunasQ or an agent committed lunasq/tasks/ after the implementer's gate: it is not code.
     h.commitVerifier.headSha = "b".repeat(40);
     h.commitVerifier.evidenceOnly = true;
     expect(
       (await call("submit_verdict", { handoff: h.verdictFor("verification-pass", run) })).body,
     ).toEqual({ verdict: "pass" });
-    // El gate del pass corrió sobre el HEAD actual, no sobre el del implementador.
+    // The pass gate ran on the current HEAD, not on the implementer's.
     expect(h.testGate.calls).toHaveLength(1);
   });
 
-  it("sin gate en verde previo un pass se rechaza", async () => {
+  it("without a previous green gate a pass is rejected", async () => {
     const h = mcpHarness();
     const t = h.task(verifying);
     const run = insertRun(h.db, t.id, { phase: "verify" });
@@ -962,7 +962,7 @@ describe("submit_verdict", () => {
     });
   });
 
-  it("si el HEAD se movió mientras corría el gate del pass, vuelve a implementación", async () => {
+  it("if the HEAD moved while the pass gate ran, it goes back to implementation", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     h.testGate.run = async () => {
@@ -976,7 +976,7 @@ describe("submit_verdict", () => {
     expect(h.taskOf(run.taskId)).toMatchObject({ state: "in_progress", subState: "queued" });
   });
 
-  it("un reject no corre el gate", async () => {
+  it("a reject does not run the gate", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     h.commitVerifier.dirty = ["src/order.ts"];
@@ -984,7 +984,7 @@ describe("submit_verdict", () => {
     expect(h.testGate.calls).toHaveLength(0);
   });
 
-  it("un segundo pass mientras corre el gate se rechaza sin lanzar otra suite", async () => {
+  it("a second pass while the gate runs is rejected without launching another suite", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     let release: (value: { passed: boolean; output: string }) => void = () => {};
@@ -1006,7 +1006,7 @@ describe("submit_verdict", () => {
     expect(started).toBe(1);
   });
 
-  it("si el Run se cerró mientras corría el gate del pass, no guarda el veredicto", async () => {
+  it("if the Run closed while the pass gate ran, it does not store the verdict", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     h.testGate.run = async () => {
@@ -1020,7 +1020,7 @@ describe("submit_verdict", () => {
     expect(runOf(h, run.id)).toMatchObject({ handoff: null, result: "failure" });
   });
 
-  it("tras un pass, el token ya no puede preguntar ni reportar fallo", async () => {
+  it("after a pass, the token can no longer ask or report a failure", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     await call("submit_verdict", { handoff: h.verdictFor("verification-pass", run) });
@@ -1035,7 +1035,7 @@ describe("submit_verdict", () => {
     expect((await call("get_task_context")).isError).toBe(false);
   });
 
-  it("un veredicto que no cubre todos los criterios de la spec se rechaza", async () => {
+  it("a verdict that does not cover all the spec's criteria is rejected", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     const handoff = h.verdictFor("verification-pass", run);
@@ -1047,7 +1047,7 @@ describe("submit_verdict", () => {
     });
   });
 
-  it("un handoff inválido se rechaza con sus errores", async () => {
+  it("an invalid handoff is rejected with its errors", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     const handoff = h.verdictFor("verification-pass", run);
@@ -1059,7 +1059,7 @@ describe("submit_verdict", () => {
     });
   });
 
-  it("en la iteración máxima un reject escala a needs_human", async () => {
+  it("at the maximum iteration a reject escalates to needs_human", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", { ...verifying, verificationIteration: 3 });
     await call("submit_verdict", { handoff: h.verdictFor("verification-reject", run) });
@@ -1067,14 +1067,14 @@ describe("submit_verdict", () => {
   });
 });
 
-describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)", () => {
+describe("submit_verdict: reviewer evidence, cap, risk and hooks (UW-23)", () => {
   const verdictEvents = (h: ReturnType<typeof mcpHarness>, taskId: string) =>
     listEvents(h.db, taskId).filter((e) => e.type === "verification.verdict_recorded");
 
-  it("rechaza un revisor reportado que no aparece en los hooks del Run, sin efectos", async () => {
+  it("rejects a reported reviewer that does not appear in the Run's hooks, without effects", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
-    // Solo corrió el revisor de seguridad; el veredicto dice que corrió también el de código.
+    // Only the security reviewer ran; the verdict says the code one ran too.
     h.reviewersRan(run.id, ["lunasq-security-reviewer"]);
     const result = await call("submit_verdict", {
       handoff: handoffFor("verification-reject", run),
@@ -1093,7 +1093,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     expect(h.phaseHooks.calls).toHaveLength(0);
   });
 
-  it("rechaza un revisor omitido que sí corrió y terminó en el Run", async () => {
+  it("rejects an omitted reviewer that did run and finish in the Run", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     h.reviewersRan(run.id, ["lunasq-ux-reviewer"]);
@@ -1106,7 +1106,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     });
   });
 
-  it("los hooks de otro Run no cuentan como evidencia", async () => {
+  it("other Runs' hooks do not count as evidence", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     const other = insertRun(h.db, task.id, { phase: "verify", endedAt: new Date() });
@@ -1117,7 +1117,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     expect(result.body).toMatchObject({ error: "reviewer_evidence_mismatch" });
   });
 
-  it("un reject fija la etiqueta de riesgo y publica el veredicto en el mismo paso", async () => {
+  it("a reject sets the risk label and publishes the verdict in the same step", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     await call("submit_verdict", { handoff: h.verdictFor("verification-reject", run) });
@@ -1135,7 +1135,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     ]);
   });
 
-  it("un pass fija la etiqueta de riesgo, publica el veredicto y repetirlo no lo duplica", async () => {
+  it("a pass sets the risk label, publishes the verdict and repeating it does not duplicate it", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     const handoff = h.verdictFor("verification-pass", run);
@@ -1147,7 +1147,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     ]);
   });
 
-  it("el tope de iteraciones sale de la config del proyecto", async () => {
+  it("the iteration cap comes from the project's config", async () => {
     const h = mcpHarness();
     new ProjectRepository(h.db).update(h.project.id, { limits: { maxVerificationIterations: 1 } });
     const first = await h.ready("verify", verifying);
@@ -1166,7 +1166,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     expect(h.taskOf(second.task.id)).toMatchObject({ state: "needs_human", subState: null });
   });
 
-  it("corre after_verification con el veredicto antes de registrarlo", async () => {
+  it("runs after_verification with the verdict before recording it", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     await call("submit_verdict", { handoff: h.verdictFor("verification-reject", run) });
@@ -1175,7 +1175,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     ]);
   });
 
-  it("after_verification corre después del gate del pass", async () => {
+  it("after_verification runs after the pass gate", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("verify", verifying);
     const order: string[] = [];
@@ -1188,7 +1188,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     expect(order).toEqual(["gate", "after_verification"]);
   });
 
-  it("tras un after_verification bloqueado, un reintento no vuelve a correr hooks ni gate", async () => {
+  it("after a blocked after_verification, a retry does not run hooks or the gate again", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     h.phaseHooks.results.after_verification = {
@@ -1210,7 +1210,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
     expect(h.testGate.calls).toHaveLength(1);
   });
 
-  it("un after_verification bloqueado no registra el veredicto", async () => {
+  it("a blocked after_verification does not record the verdict", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("verify", verifying);
     h.phaseHooks.results.after_verification = {
@@ -1233,7 +1233,7 @@ describe("submit_verdict: evidencia de revisores, tope, riesgo y hooks (UW-23)",
 });
 
 describe("report_failure", () => {
-  it("cierra el Run como fallido y la tarea vuelve a queued con el intento contado", async () => {
+  it("closes the Run as failed and the task goes back to queued with the attempt counted", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
     const result = await call("report_failure", { reason: "la base no compila" });
@@ -1243,11 +1243,11 @@ describe("report_failure", () => {
       failureReason: "la base no compila",
     });
     expect(h.taskOf(task.id)).toMatchObject({ state: "in_progress", subState: "queued" });
-    // El token del Run cerrado ya no sirve.
+    // The closed Run's token no longer works.
     expect((await call("get_task_context")).body.error).toBe("invalid_run_token");
   });
 
-  it("el tercer reintento fallido escala a needs_human", async () => {
+  it("the third failed retry escalates to needs_human", async () => {
     const h = mcpHarness();
     const task = h.task(implementing);
     for (const at of [1000, 2000, 3000]) {
@@ -1263,12 +1263,12 @@ describe("report_failure", () => {
   });
 });
 
-describe("run_reviewer: ejecuciones verificables de Copilot CLI", () => {
-  it("lanza el perfil Copilot y persiste el prompt, respuesta y estado de ejecución", async () => {
+describe("run_reviewer: verifiable Copilot CLI executions", () => {
+  it("launches the Copilot profile and persists the prompt, answer and execution state", async () => {
     const reviewer = {
       run: vi.fn(async () => ({
         transcriptPath: "/lunasq/copilot-reviewers/run/copilot-session.jsonl",
-        output: "SIN HALLAZGOS",
+        output: "NO FINDINGS",
       })),
     };
     const h = mcpHarness({ copilotReviewers: reviewer });
@@ -1278,7 +1278,7 @@ describe("run_reviewer: ejecuciones verificables de Copilot CLI", () => {
       instructions: "Revisa AC-1 y el diff de src/auth.ts",
     });
 
-    expect(result).toEqual({ isError: false, body: { output: "SIN HALLAZGOS" } });
+    expect(result).toEqual({ isError: false, body: { output: "NO FINDINGS" } });
     expect(reviewer.run).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreePath: task.worktreePath,
@@ -1296,7 +1296,7 @@ describe("run_reviewer: ejecuciones verificables de Copilot CLI", () => {
     expect(evidence?.stoppedAt).toBeInstanceOf(Date);
   });
 
-  it("no permite que Claude declare por sí mismo evidencia de revisores", async () => {
+  it("does not let Claude declare reviewer evidence by itself", async () => {
     const reviewer = { run: vi.fn() };
     const h = mcpHarness({ copilotReviewers: reviewer });
     const { run, call } = await h.ready("verify", verifying);
@@ -1309,7 +1309,7 @@ describe("run_reviewer: ejecuciones verificables de Copilot CLI", () => {
     expect(new RunSubagentRepository(h.db).forRun(run.id)).toEqual([]);
   });
 
-  it("un fallo de Copilot queda como intento sin SubagentStop y no puede contarse como ran", async () => {
+  it("a Copilot failure stays as an attempt without SubagentStop and cannot count as ran", async () => {
     const reviewer = { run: vi.fn(async () => Promise.reject(new Error("auth required"))) };
     const h = mcpHarness({ copilotReviewers: reviewer });
     const { run, call } = await h.ready("verify", verifying, { agentKind: "copilot" });

@@ -2,9 +2,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// Fronteras de dependencia de docs/tech-stack.md. Cambiarla exige actualizar ese doc y biome.json.
-// Cada paquete declara exactamente sus dependencias permitidas, para que package.json,
-// tsconfig.references y los overrides de Biome describan la misma matriz.
+// Dependency boundaries of docs/tech-stack.md. Changing it requires updating that doc and biome.json.
+// Each package declares exactly its allowed dependencies, so that package.json,
+// tsconfig.references and Biome's overrides describe the same matrix.
 const allowed: Record<string, string[]> = {
   schemas: [],
   domain: ["schemas"],
@@ -13,7 +13,7 @@ const allowed: Record<string, string[]> = {
   server: ["domain", "db", "adapters", "schemas"],
   web: ["schemas"],
   cli: ["server"],
-  // Piloto end-to-end (UW-29): compone el runtime con fakes de adapters; no lo importa nadie.
+  // End-to-end pilot (UW-29): composes the runtime with adapter fakes; nobody imports it.
   e2e: ["server", "adapters", "schemas"],
 };
 
@@ -41,22 +41,22 @@ function tsReferences(pkgDir: string): string[] {
   return (tsconfig.references ?? []).map((ref) => ref.path.replace("../", ""));
 }
 
-describe("fronteras de dependencia", () => {
+describe("dependency boundaries", () => {
   const packages = readdirSync(join(root, "packages")).filter((name) =>
     existsSync(join(root, "packages", name, "package.json")),
   );
 
-  it("todo paquete de packages/ está en la matriz", () => {
+  it("every package in packages/ is in the matrix", () => {
     expect(packages.sort()).toEqual(Object.keys(allowed).sort());
   });
 
-  it.each(packages)("%s solo declara dependencias permitidas", (name) => {
+  it.each(packages)("%s only declares allowed dependencies", (name) => {
     const dir = join(root, "packages", name);
     expect(internalDeps(dir).sort()).toEqual([...(allowed[name] ?? [])].sort());
     expect(tsReferences(dir).sort()).toEqual([...(allowed[name] ?? [])].sort());
   });
 
-  it.each(packages)("biome.json prohíbe en %s todo @lunasq/* fuera de la matriz", (name) => {
+  it.each(packages)("biome.json forbids in %s every @lunasq/* outside the matrix", (name) => {
     const biome = readJson<{
       overrides: {
         includes: string[];
@@ -76,14 +76,14 @@ describe("fronteras de dependencia", () => {
     );
   });
 
-  it("la raíz no depende de paquetes internos ni abre el hoisting de pnpm", () => {
+  it("the root does not depend on internal packages nor open pnpm hoisting", () => {
     expect(internalDeps(root)).toEqual([]);
     const workspace = readFileSync(join(root, "pnpm-workspace.yaml"), "utf8");
     expect(workspace).not.toMatch(/nodeLinker|shamefullyHoist|publicHoistPattern|hoistPattern/);
     expect(existsSync(join(root, ".npmrc"))).toBe(false);
   });
 
-  it("tsconfig.json raíz referencia todos los paquetes y tooling", () => {
+  it("tsconfig.json root references all packages and tooling", () => {
     const refs = readJson<{ references: { path: string }[] }>(
       join(root, "tsconfig.json"),
     ).references;
@@ -92,7 +92,7 @@ describe("fronteras de dependencia", () => {
     );
   });
 
-  it.each(["skills", "agents"])("assets/%s no depende de paquetes internos", (name) => {
+  it.each(["skills", "agents"])("assets/%s do not depend on internal packages", (name) => {
     expect(internalDeps(join(root, "assets", name))).toEqual([]);
   });
 });

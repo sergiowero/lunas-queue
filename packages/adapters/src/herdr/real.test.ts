@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { ExecFn } from "./cli.ts";
 import { RealHerdr } from "./real.ts";
 
-// Ramas del adapter real que la suite contra herdr no provoca de forma fiable (respuestas de
-// error concretas, carreras); se prueban con un exec simulado que responde por subcomando.
+// Branches of the real adapter that the suite against herdr does not reliably cause (specific
+// error responses, races); they are tested with a simulated exec that answers by subcommand.
 const agentJson = (status: string) =>
   JSON.stringify({
     id: "cli:agent:get",
@@ -44,14 +44,14 @@ function scripted(
     calls.push({ args, timeoutMs });
     const key = args.slice(0, 2).join(" ");
     const respond = responses[key];
-    if (!respond) throw new Error(`sin respuesta para ${key}`);
+    if (!respond) throw new Error(`no response for ${key}`);
     return respond();
   };
   return { exec, calls };
 }
 
-describe("RealHerdr con exec simulado", () => {
-  it("startAgent conserva el kind solicitado si herdr lo omite en la respuesta inicial", async () => {
+describe("RealHerdr with a simulated exec", () => {
+  it("startAgent keeps the requested kind if herdr omits it in the initial response", async () => {
     const { exec } = scripted({
       "agent get": () => error("agent_not_found"),
       "agent start": () => ({ stdout: startedAgentWithoutKindJson, stderr: "", exitCode: 0 }),
@@ -69,7 +69,7 @@ describe("RealHerdr con exec simulado", () => {
     });
   });
 
-  it("startAgent con agent_not_ready devuelve el agente bloqueado como arrancado", async () => {
+  it("startAgent with agent_not_ready returns the blocked agent as started", async () => {
     let gets = 0;
     const { exec } = scripted({
       "agent get": () =>
@@ -87,7 +87,7 @@ describe("RealHerdr con exec simulado", () => {
     expect(res.agent.status).toBe("blocked");
   });
 
-  it("startAgent con agent_name_taken (carrera) devuelve el existente sin arrancar", async () => {
+  it("startAgent with agent_name_taken (race) returns the existing one without starting", async () => {
     let gets = 0;
     const { exec } = scripted({
       "agent get": () =>
@@ -104,7 +104,7 @@ describe("RealHerdr con exec simulado", () => {
     expect(res.started).toBe(false);
   });
 
-  it("startAgent propaga otros errores", async () => {
+  it("startAgent propagates other errors", async () => {
     const { exec } = scripted({
       "agent get": () => error("agent_not_found"),
       "agent start": () => error("pane_not_found"),
@@ -114,7 +114,7 @@ describe("RealHerdr con exec simulado", () => {
     ).rejects.toMatchObject({ code: "pane_not_found" });
   });
 
-  it("focusAgent corre `agent focus` con el nombre del agente", async () => {
+  it("focusAgent runs `agent focus` with the agent's name", async () => {
     const { exec, calls } = scripted({
       "agent focus": () => ({ stdout: agentJson("blocked"), stderr: "", exitCode: 0 }),
     });
@@ -123,7 +123,7 @@ describe("RealHerdr con exec simulado", () => {
     expect(agent).toMatchObject({ paneId: "w2:p2", status: "blocked" });
   });
 
-  it("los comandos que esperan dan al CLI margen sobre el timeout de herdr", async () => {
+  it("the commands that wait give the CLI margin over herdr's timeout", async () => {
     const { exec, calls } = scripted({
       "agent wait": () => ({ stdout: agentJson("done"), stderr: "", exitCode: 0 }),
       "api snapshot": () => error("server_unavailable"),

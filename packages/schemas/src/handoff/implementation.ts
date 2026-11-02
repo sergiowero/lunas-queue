@@ -5,12 +5,12 @@ import { envelopeShape } from "./envelope.ts";
 export const CriterionTests = z.strictObject({
   criterionId: CriterionId,
   tests: list(z.strictObject({ file: FilePath, name: ShortText }), 50).min(1, {
-    error: "cada criterio necesita al menos un test",
+    error: "each criterion needs at least one test",
   }),
 });
 
 export const CommitSha = z.string().regex(/^[0-9a-f]{7,40}$/, {
-  error: "commit inválido: se esperaba un SHA hexadecimal de 7 a 40 caracteres",
+  error: "invalid commit: a hexadecimal SHA of 7 to 40 characters was expected",
 });
 
 export const ImplementationBody = z
@@ -27,7 +27,7 @@ export const ImplementationBody = z
       body.criterionTests,
       (c) => c.criterionId,
       (i) => ["criterionTests", i, "criterionId"],
-      "criterio",
+      "criterion",
     );
   });
 

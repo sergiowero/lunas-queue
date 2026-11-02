@@ -1,12 +1,12 @@
-// Tema claro u oscuro (ADR tema-claro-oscuro). La clase `dark` de <html> es el tema efectivo: el
-// script inline de index.html la pone antes de montar React y aquí solo se lee y se cambia. Fuera
-// del navegador normal (localStorage bloqueado, sin matchMedia) se cae al tema claro sin fallar.
+// Light or dark theme (ADR tema-claro-oscuro). The `dark` class on <html> is the effective theme: the
+// inline script in index.html sets it before mounting React and here it is only read and changed. Outside
+// a normal browser (blocked localStorage, no matchMedia) it falls back to the light theme without failing.
 import { useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 
 export type Theme = "light" | "dark";
 
-/** La misma clave usa el script inline de index.html. */
+/** The same key is used by index.html's inline script. */
 export const THEME_KEY = "lunasq:theme";
 
 const listeners = new Set<() => void>();
@@ -29,7 +29,7 @@ function systemTheme(): Theme | null {
   }
 }
 
-/** La preferencia guardada si es válida; si no, la del sistema; si no, claro. */
+/** The saved preference if valid; otherwise the system's; otherwise light. */
 export function resolveTheme(): Theme {
   return storedTheme() ?? systemTheme() ?? "light";
 }
@@ -43,12 +43,12 @@ function apply(theme: Theme) {
   for (const listener of listeners) listener();
 }
 
-/** Al cargar: aplica el tema resuelto sin guardarlo, así seguir al sistema no queda fijado. */
+/** On load: applies the resolved theme without saving it, so following the system does not get pinned. */
 export function initTheme() {
   apply(resolveTheme());
 }
 
-/** Punto de la pantalla desde el que crece el revelado circular (normalmente el botón pulsado). */
+/** Point on the screen from which the circular reveal grows (normally the clicked button). */
 export interface RevealOrigin {
   x: number;
   y: number;
@@ -63,9 +63,9 @@ function prefersReducedMotion() {
 }
 
 /**
- * Cambia el tema con animación: un revelado circular desde `origin` donde hay View Transitions y un
- * fundido corto de colores si no. Sin cambio real o con movimiento reducido se aplica directo.
- * `flushSync` deja el DOM actualizado (icono incluido) dentro del callback de la transición.
+ * Switches the theme with animation: a circular reveal from `origin` where View Transitions exist and a
+ * short color fade if not. Without a real change or with reduced motion it is applied directly.
+ * `flushSync` leaves the DOM updated (icon included) inside the transition callback.
  */
 function transition(theme: Theme, origin?: RevealOrigin) {
   const root = document.documentElement;
@@ -76,8 +76,8 @@ function transition(theme: Theme, origin?: RevealOrigin) {
   }
 
   if (typeof document.startViewTransition === "function") {
-    // En porcentajes del viewport: Brave no respeta los px en el clip-path del pseudo-elemento y el
-    // círculo salía desde arriba al centro. Un radio en % se mide sobre hypot(w, h) / √2.
+    // In viewport percentages: Brave does not honor px in the pseudo-element's clip-path and the
+    // circle came out from the top to the center. A radius in % is measured over hypot(w, h) / √2.
     const width = root.clientWidth || window.innerWidth;
     const height = root.clientHeight || window.innerHeight;
     const x = origin?.x ?? width / 2;
@@ -108,13 +108,13 @@ function transition(theme: Theme, origin?: RevealOrigin) {
   window.setTimeout(() => root.classList.remove("theme-transition"), 320);
 }
 
-/** La elección de la persona: se aplica (animada) y se recuerda entre recargas. */
+/** The person's choice: it is applied (animated) and remembered across reloads. */
 export function setTheme(theme: Theme, origin?: RevealOrigin) {
   transition(theme, origin);
   try {
     globalThis.localStorage?.setItem(THEME_KEY, theme);
   } catch {
-    // Sin almacenamiento el tema vale para esta sesión.
+    // Without storage the theme holds for this session.
   }
 }
 

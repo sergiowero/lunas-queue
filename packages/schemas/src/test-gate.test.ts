@@ -15,7 +15,7 @@ describe("test_gate.executed", () => {
     error: null,
   };
 
-  it("guarda comando, commit probado, resultado y salida", () => {
+  it("stores command, tested commit, result and output", () => {
     expect(TestGateExecutedPayload.parse(executed)).toEqual(executed);
     expect(() =>
       TestGateExecutedPayload.parse({
@@ -24,12 +24,12 @@ describe("test_gate.executed", () => {
       }),
     ).toThrow();
     expect(() => TestGateExecutedPayload.parse({ ...executed, headSha: "HEAD" })).toThrow();
-    // Repos con object format SHA-256.
+    // Repos with the SHA-256 object format.
     const sha256 = "b".repeat(64);
     expect(TestGateExecutedPayload.parse({ ...executed, headSha: sha256 }).headSha).toBe(sha256);
   });
 
-  it("sin comando o sin ejecución no hay exit code, y el gate no pasa", () => {
+  it("without a command or without an execution there is no exit code, and the gate does not pass", () => {
     const skipped = {
       ...executed,
       command: null,
@@ -37,20 +37,20 @@ describe("test_gate.executed", () => {
       exitCode: null,
       durationMs: 0,
       output: "",
-      error: "el proyecto no tiene comando de tests configurado",
+      error: "the project has no test command configured",
     };
     expect(TestGateExecutedPayload.parse(skipped)).toEqual(skipped);
     expect(() => TestGateExecutedPayload.parse({ ...skipped, passed: true })).toThrow();
   });
 
-  it("pasa solo con exit 0, sin timeout y sin error", () => {
+  it("passes only with exit 0, without timeout and without error", () => {
     const green = { ...executed, exitCode: 0, passed: true };
     expect(TestGateExecutedPayload.parse(green).passed).toBe(true);
     expect(() => TestGateExecutedPayload.parse({ ...green, exitCode: 1 })).toThrow();
     expect(() => TestGateExecutedPayload.parse({ ...green, timedOut: true })).toThrow();
   });
 
-  it("dispara en submit_for_verification, antes de un pass y en la entrega", () => {
+  it("fires on submit_for_verification, before a pass and on delivery", () => {
     expect(TestGateTrigger.options).toEqual([
       "submit_for_verification",
       "verdict_pass",

@@ -1,9 +1,9 @@
-// Despacho de punta a punta contra herdr real (>= 0.9.5). No corre en `pnpm test`:
+// End-to-end dispatch against real herdr (>= 0.9.5). It does not run in `pnpm test`:
 //   pnpm --filter @lunasq/server test:herdr
-// Como la suite de contrato de UW-02: servidor headless en una sesión propia y un `claude` stub
-// que entra al PATH del pane por `ZDOTDIR` (requiere zsh). El stub muestra el diálogo de confianza
-// de carpeta de Claude Code y se queda bloqueado hasta recibir teclas, así se prueba que el
-// dispatcher lo acepta. Registra sus args y su run token para comprobarlos.
+// Like UW-02's contract suite: headless server in its own session and a `claude` stub
+// that enters the pane's PATH through `ZDOTDIR` (requires zsh). The stub shows Claude Code's folder
+// trust dialog and stays blocked until it receives keys, which tests that the
+// dispatcher accepts it. It records its args and its run token to check them.
 import { execFileSync, spawn } from "node:child_process";
 import {
   chmodSync,
@@ -64,7 +64,7 @@ describe.skipIf(!enabled)("dispatcher contra herdr real", { timeout: 60_000 }, (
     chmodSync(join(dir, "bin", "claude"), 0o755);
     writeFileSync(join(dir, "zdot", ".zshrc"), 'export PATH="$LUNASQ_STUB_BIN:$PATH"\nPS1="$ "\n');
 
-    // Repo con origin: el worktree sale de origin/main tras un fetch (ADR 0012).
+    // Repo with origin: the worktree comes from origin/main after a fetch (ADR 0012).
     const origin = join(dir, "origin.git");
     run("git", ["init", "-q", "--bare", "-b", "main", origin]);
     const seed = join(dir, "seed");
@@ -93,7 +93,7 @@ describe.skipIf(!enabled)("dispatcher contra herdr real", { timeout: 60_000 }, (
     });
     server.unref();
     const socketPath = defaultSocketPath(session);
-    await waitFor(() => existsSync(socketPath), `el socket de ${session}`);
+    await waitFor(() => existsSync(socketPath), `the socket of ${session}`);
     herdr = new RealHerdr({ bin: herdrBin, session, socketPath });
   }, 30_000);
 
@@ -106,7 +106,7 @@ describe.skipIf(!enabled)("dispatcher contra herdr real", { timeout: 60_000 }, (
     }
   });
 
-  it("despacha una fase de punta a punta, acepta la confianza y no duplica al repetir", async () => {
+  it("dispatches a phase end to end, accepts the trust and does not duplicate when repeated", async () => {
     const db = migratedDatabase();
     const project = new ProjectRepository(db).create({
       name: `dispatch-${process.pid}`,
@@ -142,11 +142,11 @@ describe.skipIf(!enabled)("dispatcher contra herdr real", { timeout: 60_000 }, (
 
       const runs = new RunRepository(db);
       const [row] = runs.forTask(task.id);
-      if (!row?.herdrName) throw new Error("sin Run lanzado");
+      if (!row?.herdrName) throw new Error("no Run launched");
       expect(row.launchedAt).toBeInstanceOf(Date);
       expect(row.result).toBeNull();
 
-      // Args y env llegaron al proceso del agente.
+      // Args and env reached the agent's process.
       const args = readFileSync(join(out, `${row.id}.args`), "utf8");
       expect(args).toContain("--model haiku --permission-mode auto");
       expect(args).toContain(
@@ -156,21 +156,21 @@ describe.skipIf(!enabled)("dispatcher contra herdr real", { timeout: 60_000 }, (
       expect(readFileSync(join(out, `${row.id}.token`), "utf8")).toBe(row.runToken);
       expect(existsSync(join(out, `${row.id}.keys`))).toBe(true);
 
-      // El prompt de fase llegó y la metadata quedó en el sidebar.
+      // The phase prompt arrived and the metadata is in the sidebar.
       const name = row.herdrName;
       await herdr.waitAgent({ name, until: ["idle", "done"], timeoutMs: 10_000 });
       expect(await herdr.readAgent({ name, lines: 40 })).toContain("got: Usa la skill refine-task");
       const agent = await herdr.getAgent(name);
       expect(agent?.tokens).toMatchObject({ task: task.id, phase: "refine", run: row.id });
 
-      // Repetir: otra pasada y otro recover no abren agentes.
+      // Repeat: another pass and another recover do not open agents.
       await orchestrator.scheduler.run();
       await orchestrator.dispatcher.recover();
       await orchestrator.dispatcher.idle();
       const agents = (await herdr.snapshot()).agents.filter((a) => a.tokens.task === task.id);
       expect(agents).toHaveLength(1);
 
-      // Cierre de fase: el pane se cierra con su agente.
+      // Phase close: the pane closes with its agent.
       await orchestrator.dispatcher.closeRun(row.id, { result: "success" });
       expect(await herdr.getAgent(name)).toBeUndefined();
       expect(runs.get(row.id)?.result).toBe("success");

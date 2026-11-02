@@ -1,8 +1,10 @@
-// El script inline de index.html pone el tema antes de que React monte, para que una recarga en
-// tema oscuro no destelle en claro (AC-9). Debe resolver igual que lib/theme.ts.
+// The inline script of index.html sets the theme and the language before React mounts, so a reload
+// in the dark theme does not flash light (AC-9) and one in English does not pass through Spanish.
+// It must resolve the same as lib/theme.ts and lib/i18n.ts.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { LANGUAGE_KEY } from "../src/lib/i18n.ts";
 import { THEME_KEY } from "../src/lib/theme.ts";
 import { stubColorScheme } from "./render.tsx";
 
@@ -15,8 +17,8 @@ function runInline() {
   new Function(inline?.textContent ?? "")();
 }
 
-describe("tema antes de montar React", () => {
-  it("el script inline va en <head>, antes del módulo de la app", () => {
+describe("theme before mounting React", () => {
+  it("the inline script goes in <head>, before the app module", () => {
     expect(inline?.parentElement?.tagName).toBe("HEAD");
     const scripts = [...doc.querySelectorAll("script")];
     const app = scripts.find((s) => s.getAttribute("src") === "/src/main.tsx");
@@ -25,20 +27,20 @@ describe("tema antes de montar React", () => {
     );
   });
 
-  it("con «dark» guardado aplica la clase dark a <html> aunque el sistema esté en claro", () => {
+  it("with «dark» saved it applies the dark class to <html> even if the system is light", () => {
     stubColorScheme("light");
     localStorage.setItem(THEME_KEY, "dark");
     runInline();
     expect(html.classList.contains("dark")).toBe(true);
   });
 
-  it("sin preferencia guardada sigue al sistema en oscuro", () => {
+  it("without a saved preference it follows the system dark", () => {
     stubColorScheme("dark");
     runInline();
     expect(html.classList.contains("dark")).toBe(true);
   });
 
-  it("con «light» guardado o un valor inválido no aplica la clase dark", () => {
+  it("with «light» saved or an invalid value it does not apply the dark class", () => {
     stubColorScheme("light");
     localStorage.setItem(THEME_KEY, "sepia");
     runInline();
@@ -49,7 +51,7 @@ describe("tema antes de montar React", () => {
     expect(html.classList.contains("dark")).toBe(false);
   });
 
-  it("no falla con un localStorage que lanza error ni sin matchMedia", () => {
+  it("does not fail with a localStorage that throws or without matchMedia", () => {
     vi.stubGlobal("matchMedia", undefined);
     vi.stubGlobal("localStorage", {
       getItem: () => {
@@ -59,5 +61,35 @@ describe("tema antes de montar React", () => {
     });
     expect(runInline).not.toThrow();
     expect(html.classList.contains("dark")).toBe(false);
+  });
+});
+
+describe("language before mounting React", () => {
+  it("without a stored preference sets lang to es", () => {
+    runInline();
+    expect(html.lang).toBe("es");
+  });
+
+  it("with «en» stored sets lang to en", () => {
+    localStorage.setItem(LANGUAGE_KEY, "en");
+    runInline();
+    expect(html.lang).toBe("en");
+  });
+
+  it("with an invalid value keeps es", () => {
+    localStorage.setItem(LANGUAGE_KEY, "fr");
+    runInline();
+    expect(html.lang).toBe("es");
+  });
+
+  it("does not fail with a localStorage that throws and falls back to es", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      clear: () => {},
+    });
+    expect(runInline).not.toThrow();
+    expect(html.lang).toBe("es");
   });
 });

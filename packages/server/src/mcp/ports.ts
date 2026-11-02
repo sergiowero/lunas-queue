@@ -1,7 +1,7 @@
-// Puertos del LunasQ MCP hacia el worktree: el gate de tests, la comprobación de commits y los
-// hooks de fase. El gate corre en un pane de herdr y deja su resultado en el Event log
-// (test-gate/, UW-11); la comprobación de commits corre comandos de git con el ProcessRunner de
-// adapters; los hooks los corre HookService (hooks/, UW-10).
+// LunasQ MCP ports toward the worktree: the test gate, the commit check and the
+// phase hooks. The gate runs in a herdr pane and leaves its result in the Event log
+// (test-gate/, UW-11); the commit check runs git commands with adapters' ProcessRunner;
+// the hooks are run by HookService (hooks/, UW-10).
 import type { ProcessRunner } from "@lunasq/adapters";
 import {
   EVIDENCE_DIR,
@@ -14,15 +14,15 @@ export type TestGateInput = {
   taskId: string;
   runId: string;
   worktreePath: string;
-  /** Comando de tests del proyecto; sin él no hay gate en verde. */
+  /** Project test command; without it there is no green gate. */
   command: string | null;
-  /** Qué pidió el gate; queda en el evento `test_gate.executed`. */
+  /** What the gate asked for; it stays in the `test_gate.executed` event. */
   trigger: TestGateTrigger;
 };
 
 export type TestGateResult = {
   passed: boolean;
-  /** Cola de la salida combinada, para que el agente sepa qué corregir. */
+  /** Tail of the combined output, so the agent knows what to fix. */
   output: string;
 };
 
@@ -37,22 +37,22 @@ export type CommitCheckInput = {
 };
 
 export interface CommitVerifier {
-  /** Commits del handoff que no están en el branch de la tarea (o que ya están en la base). */
+  /** Handoff commits that are not in the task's branch (or that are already in the base). */
   missing(input: CommitCheckInput): Promise<string[]>;
-  /** Archivos con cambios sin commitear: el gate debe correr sobre lo commiteado. */
+  /** Files with uncommitted changes: the gate must run on what is committed. */
   uncommitted(worktreePath: string): Promise<string[]>;
   /**
-   * true si el branch de la tarea tiene commits que no están en la rama base (ni local ni
-   * `origin/<base>`). Si no se puede comprobar responde true: submit_result no debe completar una
-   * tarea que quizá tiene código.
+   * true if the task's branch has commits that are not in the base branch (neither local nor
+   * `origin/<base>`). If it cannot be checked it answers true: submit_result must not complete a
+   * task that may have code.
    */
   branchHasCommits(input: { worktreePath: string; baseBranch: string }): Promise<boolean>;
-  /** Sha del HEAD del worktree; null si no se puede leer. */
+  /** Sha of the worktree's HEAD; null if it cannot be read. */
   head(worktreePath: string): Promise<string | null>;
   /**
-   * true si `to` desciende de `from` y los commits intermedios solo tocan el archivo de evidencia
-   * (`lunasq/tasks/`). El pass lo usa para tolerar los commits que LunasQ o un agente hacen de la
-   * evidencia después del gate de `submit_for_verification`.
+   * true if `to` descends from `from` and the intermediate commits only touch the evidence file
+   * (`lunasq/tasks/`). The pass uses it to tolerate the commits LunasQ or an agent makes of the
+   * evidence after the `submit_for_verification` gate.
    */
   onlyEvidenceBetween(input: { worktreePath: string; from: string; to: string }): Promise<boolean>;
 }
@@ -61,26 +61,26 @@ export type PhaseHookInput = {
   taskId: string;
   point: HookPoint;
   runId: string;
-  /** Resultado de la fase para los hooks `after_*` (p. ej. el veredicto). */
+  /** Result of the phase for the `after_*` hooks (e.g. the verdict). */
   phaseResult?: string | null;
-  /** URL del PR, en los hooks que corren cuando ya existe (`after_delivery`). */
+  /** PR URL, in the hooks that run when it already exists (`after_delivery`). */
   prUrl?: string | null;
 };
 
 export type PhaseHookResult = {
   outcome: HookPointOutcome;
-  /** La tarea pasó a needs_human con `hook_failed`. */
+  /** The task went to needs_human with `hook_failed`. */
   escalated: boolean;
   failedScript: string | null;
   error: string | null;
 };
 
-/** Hooks de un punto de fase; HookService lo cumple. */
+/** Hooks of a phase point; HookService implements it. */
 export interface PhaseHooks {
   run(input: PhaseHookInput): Promise<PhaseHookResult>;
 }
 
-/** Sin hooks compuestos: cada punto pasa sin correr nada, como un proyecto sin `lunasq/hooks/`. */
+/** Without composed hooks: each point passes without running anything, like a project without `lunasq/hooks/`. */
 export class NoPhaseHooks implements PhaseHooks {
   async run(_input: PhaseHookInput): Promise<PhaseHookResult> {
     return { outcome: "passed", escalated: false, failedScript: null, error: null };
@@ -89,14 +89,14 @@ export class NoPhaseHooks implements PhaseHooks {
 
 export const GATE_OUTPUT_LIMIT = 4000;
 
-/** Tiempo límite por defecto del gate: una suite colgada no debe correr para siempre. */
+/** Default gate time limit: a hung suite must not run forever. */
 export const DEFAULT_GATE_TIMEOUT_MS = 20 * 60_000;
 
-/** El final de la salida, que es donde está el error. */
+/** The end of the output, which is where the error is. */
 export const tailOf = (text: string, limit: number) =>
   text.length > limit ? text.slice(text.length - limit) : text;
 
-/** Comillas de shell POSIX: el valor llega como un solo argumento literal. */
+/** POSIX shell quotes: the value arrives as a single literal argument. */
 const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
 export class GitCommitVerifier implements CommitVerifier {
@@ -109,10 +109,10 @@ export class GitCommitVerifier implements CommitVerifier {
   async missing(input: CommitCheckInput): Promise<string[]> {
     const missing: string[] = [];
     for (const sha of input.commits) {
-      // El SHA ya viene validado como hexadecimal por el esquema del handoff; --end-of-options
-      // evita que una rama base como `--foo` se lea como opción de git. El worktree sale de
-      // origin/<base> (ADR 0012) y la base local puede ir atrasada: un commit que ya está en
-      // cualquiera de las dos no es de la tarea.
+      // The SHA already comes validated as hexadecimal by the handoff schema; --end-of-options
+      // keeps a base branch like `--foo` from being read as a git option. The worktree comes from
+      // origin/<base> (ADR 0012) and the local base may be behind: a commit that is already in
+      // either of the two is not the task's.
       const remote = `origin/${input.baseBranch}`;
       const result = await this.#runner.run({
         command: [
@@ -130,8 +130,8 @@ export class GitCommitVerifier implements CommitVerifier {
 
   async branchHasCommits(input: { worktreePath: string; baseBranch: string }): Promise<boolean> {
     const result = await this.#runner.run({
-      // Commits alcanzables desde HEAD que no están en ninguna de las dos refs de la base: el
-      // worktree sale de origin/<base> (ADR 0012) y la base local puede ir atrasada o adelantada.
+      // Commits reachable from HEAD that are in neither of the base's two refs: the
+      // worktree comes from origin/<base> (ADR 0012) and the local base may be behind or ahead.
       command: [
         'refs=""',
         `for ref in ${quote(`origin/${input.baseBranch}`)} ${quote(input.baseBranch)}; do git rev-parse --verify --quiet --end-of-options "$ref^{commit}" >/dev/null && refs="$refs $ref"; done`,
@@ -154,11 +154,11 @@ export class GitCommitVerifier implements CommitVerifier {
 
   async uncommitted(worktreePath: string): Promise<string[]> {
     const result = await this.#runner.run({
-      // lunasq/tasks/ es el archivo de evidencia de LunasQ, que se commitea en la entrega.
+      // lunasq/tasks/ is LunasQ's evidence file, which is committed on delivery.
       command: `git status --porcelain --untracked-files=all -- . ${quote(`:(exclude)${EVIDENCE_DIR}`)}`,
       cwd: worktreePath,
     });
-    if (result.exitCode !== 0) return ["(git status falló)"];
+    if (result.exitCode !== 0) return ["(git status failed)"];
     return result.stdout
       .split("\n")
       .filter((line) => line.trim() !== "")
@@ -171,8 +171,8 @@ export class GitCommitVerifier implements CommitVerifier {
     to: string;
   }): Promise<boolean> {
     const result = await this.#runner.run({
-      // `--name-only -z` separa las rutas con NUL: un nombre con saltos de línea no se confunde
-      // con dos rutas.
+      // `--name-only -z` separates paths with NUL: a name with line breaks is not confused
+      // with two paths.
       command: [
         `git merge-base --is-ancestor --end-of-options ${quote(input.from)} ${quote(input.to)}`,
         `git diff --name-only --no-renames -z --end-of-options ${quote(input.from)} ${quote(input.to)} --`,

@@ -5,10 +5,10 @@ import { buildHandoffJsonSchemas } from "./json-schema.ts";
 
 const outDir = join(import.meta.dirname, "../../json-schema/v1");
 
-describe("JSON Schema de handoff v1", () => {
+describe("handoff v1 JSON Schema", () => {
   const generated = buildHandoffJsonSchemas();
 
-  it("genera el handoff completo y uno por fase", () => {
+  it("generates the full handoff and one per phase", () => {
     expect(Object.keys(generated).sort()).toEqual([
       "handoff.json",
       "implementation.json",
@@ -18,18 +18,18 @@ describe("JSON Schema de handoff v1", () => {
     ]);
   });
 
-  it("el JSON Schema versionado en el repo coincide con los esquemas Zod", () => {
+  it("the versioned JSON Schema in the repo matches the Zod schemas", () => {
     const committed = readdirSync(outDir).filter((file) => file.endsWith(".json"));
     expect(committed.sort(), "corre `pnpm --filter @lunasq/schemas generate`").toEqual(
       Object.keys(generated).sort(),
     );
     for (const [file, schema] of Object.entries(generated)) {
       const onDisk = JSON.parse(readFileSync(join(outDir, file), "utf8"));
-      expect(onDisk, `${file} desactualizado: corre el generate`).toEqual(schema);
+      expect(onDisk, `${file} out of date: run generate`).toEqual(schema);
     }
   });
 
-  it("cada esquema declara draft 2020-12 y un $id versionado", () => {
+  it("each schema declares draft 2020-12 and a versioned $id", () => {
     for (const [file, schema] of Object.entries(generated)) {
       expect(schema.$schema).toBe("https://json-schema.org/draft/2020-12/schema");
       expect(schema.$id).toBe(`urn:lunasq:handoff:v1:${file.replace(".json", "")}`);

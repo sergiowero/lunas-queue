@@ -14,8 +14,8 @@ import {
   UsageSource,
 } from "./index.ts";
 
-describe("enums del dominio", () => {
-  it("TaskState tiene los cinco estados más needs_human, paused y cancelled", () => {
+describe("domain enums", () => {
+  it("TaskState has the five states plus needs_human, paused and cancelled", () => {
     expect(TaskState.options).toEqual([
       "draft",
       "refined",
@@ -28,19 +28,19 @@ describe("enums del dominio", () => {
     ]);
   });
 
-  it("SubState distingue cola, agente vivo y espera humana", () => {
+  it("SubState distinguishes queue, live agent and waiting for a human", () => {
     expect(SubState.options).toEqual(["queued", "running", "waiting_human"]);
   });
 
-  it("Phase cubre las cuatro fases con agente", () => {
+  it("Phase covers the four phases with an agent", () => {
     expect(Phase.options).toEqual(["refine", "implement", "verify", "deliver"]);
   });
 
-  it("enumera los proveedores de agente soportados", () => {
+  it("lists the supported agent providers", () => {
     expect(AgentKind.options).toEqual(["claude", "copilot"]);
   });
 
-  it("los demás enums tienen los valores del diseño", () => {
+  it("the other enums have the values of the design", () => {
     expect(Actor.options).toEqual(["human", "agent", "system"]);
     expect(QuestionStatus.options).toEqual(["open", "answered", "cancelled"]);
     expect(PrState.options).toEqual(["open", "merged", "closed"]);
@@ -50,12 +50,12 @@ describe("enums del dominio", () => {
     expect(UsageSource.options).toEqual(["otel", "transcript", "calculated"]);
   });
 
-  it("rechaza valores fuera del enum", () => {
+  it("rejects values outside the enum", () => {
     expect(TaskState.safeParse("new").success).toBe(false);
     expect(TaskState.parse("draft")).toBe("draft");
   });
 
-  it("ResultKind distingue investigación, ya implementada y sin resolución", () => {
+  it("ResultKind distinguishes research, already implemented and not resolvable", () => {
     expect(ResultKind.options).toEqual(["research", "already_implemented", "not_resolvable"]);
   });
 });

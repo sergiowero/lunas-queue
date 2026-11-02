@@ -1,42 +1,42 @@
-# UW-22 — Preguntas del agente y bloqueos por permiso
+# UW-22 — Agent questions and permission blocks
 
-- Estado: aceptada
-- Fecha: 2026-10-29
-- Unidad: UW-22 · Código: `packages/server/src/questions/` (`QuestionService`, `QuestionEscalations`), `packages/server/src/api/questions.ts`, `packages/db/src/questions.ts` (`QuestionRepository`), `packages/schemas/src/question.ts`, `packages/domain/src/dispatch.ts` (`answerPrompt`), `RunWatcher.blocked()`
+- Status: accepted
+- Date: 2026-10-29
+- Unit: UW-22 · Code: `packages/server/src/questions/` (`QuestionService`, `QuestionEscalations`), `packages/server/src/api/questions.ts`, `packages/db/src/questions.ts` (`QuestionRepository`), `packages/schemas/src/question.ts`, `packages/domain/src/dispatch.ts` (`answerPrompt`), `RunWatcher.blocked()`
 
-## Contexto
+## Context
 
-`docs/design.md` (§Preguntas del agente y bloqueos) fija el flujo de `ask_human`: la Question se guarda, la tarea pasa a `waiting_human` y el timeout se pausa; el humano responde en la bandeja; la respuesta llega al pane vivo con `agent prompt` o, si el agente ya no está, a un Run nuevo por `get_task_context`. ADR uw-15-mcp-tools dejó a esta unidad la respuesta; ADR uw-17-reconciliacion dejó abierto el Run de una tarea en `waiting_human` y ADR 0009 el aviso a 1 minuto.
+`docs/design.md` (§Agent questions and blocks) fixes the `ask_human` flow: the Question is stored, the task moves to `waiting_human` and the timeout is paused; the human answers in the Inbox; the answer reaches the live pane with `agent prompt` or, if the agent is no longer there, a new Run through `get_task_context`. ADR uw-15-mcp-tools left the answer to this unit; ADR uw-17-reconciliacion left open the Run of a task in `waiting_human` and ADR 0009 the 1‑minute notice.
 
-## Decisión
+## Decision
 
-- **Una pregunta abierta por tarea.** `ask_human` ya rechaza una segunda con la tarea en `waiting_human`, así que `QuestionRepository.openForTask` devuelve a lo sumo una.
-- **Responder es una transacción.** `QuestionRepository.answer` aplica `answer` (actor `human`, `waiting_human` → `running` o `queued`), marca la Question como `answered` con `answeredBy`/`answeredAt` y agrega el evento `question.answered` (`delivery: pane | new_run`). Una pregunta que ya no está abierta responde `not_open`; una tarea que dejó `waiting_human`, `task_not_waiting`. Nada se escribe en un rechazo. `answeredBy` es `human` si el cliente no lo manda: v1 es un solo usuario.
-- **Entrega, en este orden** (`QuestionService.answer`, un candado por pregunta):
-  1. Se comprueba que el Run que preguntó sigue abierto y que `getAgent(herdrName)` devuelve el mismo `paneId` que el Run guardó. Un agente con el mismo nombre en otro pane no recibe la respuesta.
-  2. Se manda `answerPrompt` con `promptAgent`: pregunta y respuesta en una sola línea, con la skill de la fase para que cierre con su tool de salida. Si herdr falla, el agente se da por perdido.
-  3. Se confirma la transacción con `agentAlive` según el paso anterior. El prompt va antes que la transición: si herdr lo rechaza, la respuesta no se pierde y sigue por el Run nuevo. La ventana entre el prompt y `running` son milisegundos, mucho menos que lo que tarda el agente en llamar una tool de salida.
-  4. Sin agente vivo, `dispatcher.closeRun(..., cancelled, "question_answered: …")` cierra el Run viejo y su pane de inmediato y despierta al scheduler. Así el claim del Run nuevo no choca con `run_active` y no espera al reconciliador, que cerraría igual el Run de una tarea fuera de su fase (ADR uw-17-reconciliacion).
-  - El Run nuevo recibe la Question con su respuesta en `get_task_context` (`questions`), sin cambios en el MCP.
-- **Aviso a 1 minuto** (`QuestionEscalations`). Al ver en el outbox la transición a `waiting_human`, arma `Escalator.watch` con id `question:<questionId>`, kind `question_open` y `since` igual a la creación de la Question. Responder, cancelar la tarea o salir de `waiting_human` llaman `resolve`. Al arrancar, `rearm` vuelve a armar el plazo de cada pregunta abierta desde la base (el reloj vive en memoria, ADR 0009) y cancela las que ya no corresponden a una tarea en `waiting_human`.
-- **Cancelación.** Si la tarea sale de `waiting_human` sin respuesta (cancelación, needs_human), sus preguntas abiertas pasan a `cancelled` con el evento `question.cancelled` y la causa (`task_cancelled` o `left_waiting_human`).
-- **Timeout de fase.** Sin cambios respecto a ADR uw-17-reconciliacion: el `PhaseClock` se pausa en `waiting_human` y se reanuda al responder, así que una respuesta horas después no vence la fase. UW-22 lo cubre con tests de extremo a extremo.
-- **API.** `GET /api/questions` (filtros `status`, `taskId`, `projectId`; las más viejas primero), `GET /api/questions/:id` y `POST /api/questions/:id/answer` (`{ answer, answeredBy? }` → `{ question, delivery }`; 404, 409 para `not_open` y `task_not_waiting`, 503 sin servicio). `createApp` recibe `questions` (el `QuestionService` del orquestador); quien compone el servidor lo conecta.
-- **Eventos a la UI.** La pregunta aparece de inmediato en la bandeja por la consulta (`GET /api/questions?status=open`), que la UI refresca con las transiciones; el SSE de notificaciones (ADR 0009) lleva el aviso `question_open` a 1 minuto. No hay un stream aparte de preguntas.
-- **Bloqueos por permiso.** El aviso a 1 minuto y la pausa del timeout ya los hace el `RunWatcher` (ADR uw-17-reconciliacion). Esta unidad agrega `RunWatcher.blocked()` y `GET /api/blocked` (`createApp({ blocked })`), que listan los agentes bloqueados con su pane. Se responden en herdr: LunasQ no contesta permisos.
+- **One open question per task.** `ask_human` already rejects a second one with the task in `waiting_human`, so `QuestionRepository.openForTask` returns at most one.
+- **Answering is a transaction.** `QuestionRepository.answer` applies `answer` (actor `human`, `waiting_human` → `running` or `queued`), marks the Question as `answered` with `answeredBy`/`answeredAt` and appends the `question.answered` event (`delivery: pane | new_run`). A question that is no longer open answers `not_open`; a task that left `waiting_human`, `task_not_waiting`. Nothing is written on a rejection. `answeredBy` is `human` if the client does not send it: v1 is a single user.
+- **Delivery, in this order** (`QuestionService.answer`, a lock per question):
+  1. It is checked that the Run that asked is still open and that `getAgent(herdrName)` returns the same `paneId` that the Run stored. An agent with the same name in another pane does not receive the answer.
+  2. `answerPrompt` is sent with `promptAgent`: question and answer on a single line, with the phase's skill so it closes with its exit tool. If herdr fails, the agent is considered lost.
+  3. The transaction is confirmed with `agentAlive` according to the previous step. The prompt goes before the transition: if herdr rejects it, the answer is not lost and continues through the new Run. The window between the prompt and `running` is milliseconds, much less than the agent takes to call an exit tool.
+  4. Without a live agent, `dispatcher.closeRun(..., cancelled, "question_answered: …")` closes the old Run and its pane immediately and wakes the scheduler. This way the new Run's claim does not collide with `run_active` and does not wait for the reconciler, which would close the Run of a task outside its phase anyway (ADR uw-17-reconciliacion).
+  - The new Run receives the Question with its answer in `get_task_context` (`questions`), with no changes to the MCP.
+- **Notice at 1 minute** (`QuestionEscalations`). On seeing the transition to `waiting_human` in the outbox, it arms `Escalator.watch` with id `question:<questionId>`, kind `question_open` and `since` equal to the Question's creation. Answering, canceling the task or leaving `waiting_human` call `resolve`. On startup, `rearm` arms again the deadline of each open question from the database (the clock lives in memory, ADR 0009) and cancels those that no longer correspond to a task in `waiting_human`.
+- **Cancellation.** If the task leaves `waiting_human` without an answer (cancellation, needs_human), its open questions become `cancelled` with the `question.cancelled` event and the cause (`task_cancelled` or `left_waiting_human`).
+- **Phase timeout.** No change from ADR uw-17-reconciliacion: the `PhaseClock` pauses in `waiting_human` and resumes on answering, so an answer hours later does not expire the phase. UW-22 covers it with end‑to‑end tests.
+- **API.** `GET /api/questions` (filters `status`, `taskId`, `projectId`; oldest first), `GET /api/questions/:id` and `POST /api/questions/:id/answer` (`{ answer, answeredBy? }` → `{ question, delivery }`; 404, 409 for `not_open` and `task_not_waiting`, 503 without a service). `createApp` receives `questions` (the orchestrator's `QuestionService`); whoever composes the server connects it.
+- **Events to the UI.** The question appears in the Inbox immediately through the query (`GET /api/questions?status=open`), which the UI refreshes with the transitions; the notifications SSE (ADR 0009) carries the `question_open` notice at 1 minute. There is no separate questions stream.
+- **Permission blocks.** The notice at 1 minute and the timeout pause are already done by the `RunWatcher` (ADR uw-17-reconciliacion). This unit adds `RunWatcher.blocked()` and `GET /api/blocked` (`createApp({ blocked })`), which list the blocked agents with their pane. They are answered in herdr: LunasQ does not answer permissions.
 
-## Opciones estructuradas (tarea 21)
+## Structured options (task 21)
 
-- **Contrato.** `ask_human` acepta `options` opcional: de 2 a 6 `{ label, description? }`. `label` de 1 a 100 caracteres recortados, `description` de hasta 500; los labels son únicos sin distinguir mayúsculas ni espacios extremos. Una entrada inválida se rechaza en la validación del input, antes de tocar la base: no se crea la Question ni cambia el estado de la tarea. Sin `options` la Question es abierta.
-- **Persistencia.** Columna `questions.options` JSON nullable (migración 0012); las Questions anteriores quedan en `null`. Las opciones no cambian después de crearse. `GET /api/questions`, `GET /api/questions/:id` y `questions` de `get_task_context` las devuelven (`options: null` si no hay).
-- **Respuesta.** No cambia: `POST /api/questions/:id/answer` sigue recibiendo `answer` como texto. Con una opción es su `label`; con «Otra respuesta», el texto libre recortado. El servidor no exige que la respuesta sea una de las opciones, porque «Otra respuesta» es válida.
-- **Bandeja.** Una pregunta con opciones se muestra como un `fieldset` con radios (label y descripción de cada opción) y un radio «Otra respuesta» que habilita un campo de texto. Responder se habilita con una opción elegida o con «Otra respuesta» y texto no vacío; cambiar a una opción envía su label, no el texto. Sin opciones se mantiene el campo de texto.
-- **Skills.** Las skills de fase explican cuándo mandar `options` (alternativas concretas) y que no hace falta una opción comodín.
+- **Contract.** `ask_human` accepts an optional `options`: 2 to 6 `{ label, description? }`. `label` of 1 to 100 trimmed characters, `description` of up to 500; labels are unique ignoring case and surrounding whitespace. An invalid entry is rejected in input validation, before touching the database: no Question is created and the task's state does not change. Without `options` the Question is open.
+- **Persistence.** Nullable JSON column `questions.options` (migration 0012); earlier Questions stay `null`. The options do not change after being created. `GET /api/questions`, `GET /api/questions/:id` and `get_task_context`'s `questions` return them (`options: null` if there are none).
+- **Answer.** Does not change: `POST /api/questions/:id/answer` still receives `answer` as text. With an option it is its `label`; with «Otra respuesta», the trimmed free text. The server does not require the answer to be one of the options, because «Otra respuesta» is valid.
+- **Inbox.** A question with options is shown as a `fieldset` with radios (label and description of each option) and an «Otra respuesta» radio that enables a text field. Answering is enabled with a chosen option or with «Otra respuesta» and non‑empty text; switching to an option sends its label, not the text. Without options the text field is kept.
+- **Skills.** The phase skills explain when to send `options` (concrete alternatives) and that a catch‑all option is not needed.
 
-## Consecuencias
+## Consequences
 
-- El adapter de herdr no tiene `agent focus`; UW-27 decide cómo la bandeja lleva al pane (con el `paneId` de `/api/blocked`) y si se agrega al adapter.
-- Una respuesta duplicada del outbox o un doble clic no reenvía el prompt: el candado por pregunta y `not_open` lo evitan.
-- Si el proceso cae entre el prompt y la confirmación de la transacción, la pregunta sigue abierta y el humano puede responder otra vez; el agente recibiría dos respuestas. Se acepta en v1.
-- Sin probar contra el Claude Code real: que la TUI acepte un prompt de una línea mientras está `idle` tras terminar el turno de `ask_human`. Es el mismo mecanismo del nudge; el piloto (UW-29) lo calibra.
-- UW-21 y UW-27 consumen estos endpoints y el SSE de notificaciones.
+- herdr's adapter has no `agent focus`; UW-27 decides how the Inbox takes the user to the pane (with the `paneId` from `/api/blocked`) and whether it is added to the adapter.
+- A duplicate outbox response or a double click does not resend the prompt: the per‑question lock and `not_open` prevent it.
+- If the process crashes between the prompt and the transaction's confirmation, the question stays open and the human can answer again; the agent would receive two answers. It is accepted in v1.
+- Not tested against real Claude Code: that the TUI accepts a one‑line prompt while `idle` after `ask_human`'s turn ends. It is the same mechanism as the nudge; the pilot (UW-29) calibrates it.
+- UW-21 and UW-27 consume these endpoints and the notifications SSE.

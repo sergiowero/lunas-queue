@@ -1,8 +1,8 @@
-// Suite de contrato contra herdr real (>= 0.9.5). No corre en `pnpm test`:
+// Contract suite against real herdr (>= 0.9.5). It does not run in `pnpm test`:
 //   pnpm --filter @lunasq/adapters test:herdr
-// Levanta un servidor headless en una sesión propia (`lunasq-contract-<pid>`), nunca la del
-// usuario, y la borra al terminar. En vez de Claude Code usa un `claude` stub que se reporta a
-// herdr con `pane report-agent`; el stub entra al PATH del pane por `ZDOTDIR` (requiere zsh).
+// It brings up a headless server in its own session (`lunasq-contract-<pid>`), never the
+// user's, and deletes it when done. Instead of Claude Code it uses a `claude` stub that reports to
+// herdr with `pane report-agent`; the stub enters the pane's PATH through `ZDOTDIR` (requires zsh).
 import { execFileSync, spawn } from "node:child_process";
 import {
   chmodSync,
@@ -23,7 +23,7 @@ const enabled = process.env.LUNASQ_HERDR_INTEGRATION === "1";
 const herdrBin = process.env.HERDR_BIN ?? "herdr";
 
 const STUB_AGENT = `#!/bin/sh
-# Agente stub: se reporta idle y trata cada línea de entrada como un prompt.
+# Stub agent: reports itself idle and treats each input line as a prompt.
 r() { "$HERDR_BIN_PATH" pane report-agent "$HERDR_PANE_ID" --source lunasq-stub --agent claude --state "$1" >/dev/null 2>&1; }
 echo "stub claude $*"
 r idle
@@ -69,9 +69,9 @@ describe.skipIf(!enabled)("herdr real", () => {
       };
       const socketPath = defaultSocketPath(session);
       try {
-        await waitFor(() => existsSync(socketPath), `el socket de ${session}`);
+        await waitFor(() => existsSync(socketPath), `the socket of ${session}`);
       } catch (err) {
-        // Sin harness no hay cleanup: no dejar la sesión ni el servidor huérfanos.
+        // Without a harness there is no cleanup: do not leave the session or the server orphaned.
         server.kill();
         try {
           teardown();

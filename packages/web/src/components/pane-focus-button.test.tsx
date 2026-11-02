@@ -29,13 +29,13 @@ function setup(overrides: { herdrPane?: string | null; herdrName?: string | null
 }
 
 describe("PaneFocusButton", () => {
-  it("es un button con nombre accesible que enfoca el pane en herdr e incluye el pane id", () => {
+  it("is a button with an accessible name that focuses the pane in herdr and includes the pane id", () => {
     const { run } = setup();
     const button = screen.getByRole("button", { name: `Enfocar pane ${run.herdrPane} en herdr` });
     expect(button.textContent).toBe(run.herdrPane);
   });
 
-  it("al hacer clic pide el foco del Run y enfoca su agente", async () => {
+  it("on click it asks for the Run's focus and focuses its agent", async () => {
     const { fake, run, user, stub } = setup();
     stub();
     await user.click(screen.getByRole("button"));
@@ -44,7 +44,7 @@ describe("PaneFocusButton", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("Enter con el foco en el botón lo activa", async () => {
+  it("Enter with focus on the button activates it", async () => {
     const { fake, run, user, stub } = setup();
     stub();
     await user.tab();
@@ -53,7 +53,7 @@ describe("PaneFocusButton", () => {
     await waitFor(() => expect(fake.focused).toEqual([run.herdrName]));
   });
 
-  it("queda deshabilitado mientras la petición está en curso", async () => {
+  it("it is disabled while the request is in progress", async () => {
     const { fake, user, stub } = setup();
     let release = () => {};
     const gate = new Promise<void>((resolve) => {
@@ -70,9 +70,9 @@ describe("PaneFocusButton", () => {
   });
 
   it.each([
-    [409, "agent_gone", "t1 ya no está en herdr"],
+    [409, "agent_gone", "El agente ya no está en herdr."],
     [502, "herdr_error", "herdr no responde"],
-    [503, "focus_unavailable", "focus_unavailable"],
+    [503, "focus_unavailable", "No se puede enfocar en herdr desde este servidor."],
   ])(
     "si el foco responde %i %s muestra el error junto al pane y el botón sigue",
     async (status, error, message) => {
@@ -85,7 +85,7 @@ describe("PaneFocusButton", () => {
     },
   );
 
-  it("si la fila pasa a otro Run no hereda el error del foco del Run anterior", async () => {
+  it("if the row moves to another Run it does not inherit the previous Run's focus error", async () => {
     const { fake, run, queryClient, user, stub, rerender } = setup();
     fake.focusError = { status: 502, error: "herdr_error", message: "herdr no responde" };
     stub();
@@ -102,13 +102,13 @@ describe("PaneFocusButton", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("un Run sin herdrPane muestra «—» como texto, sin botón", () => {
+  it("a Run without herdrPane shows «—» as text, without a button", () => {
     setup({ herdrPane: null });
     expect(screen.queryByRole("button")).toBeNull();
     expect(screen.getByText("—")).toBeTruthy();
   });
 
-  it("un Run sin herdrName muestra «—» como texto, sin botón", () => {
+  it("a Run without herdrName shows «—» as text, without a button", () => {
     setup({ herdrName: null });
     expect(screen.queryByRole("button")).toBeNull();
     expect(screen.getByText("—")).toBeTruthy();

@@ -1,15 +1,9 @@
 import { describe, expect, it } from "vitest";
-import {
-  BOARD_STATES,
-  canPause,
-  canResume,
-  formatAgent,
-  formatTimeout,
-  STATE_LABEL,
-} from "./format.ts";
+import { es } from "./dictionary/es.ts";
+import { BOARD_STATES, canPause, canResume, formatAgent, formatTimeout } from "./format.ts";
 
 describe("formatTimeout", () => {
-  it("muestra el timeout configurado sin redondearlo", () => {
+  it("shows the configured timeout without rounding it", () => {
     expect(formatTimeout(30)).toBe("30 s");
     expect(formatTimeout(90)).toBe("90 s");
     expect(formatTimeout(150)).toBe("150 s");
@@ -19,22 +13,22 @@ describe("formatTimeout", () => {
 });
 
 describe("formatAgent", () => {
-  it("une agentKind y modelo con un punto medio", () => {
+  it("joins agentKind and model with a middle dot", () => {
     expect(formatAgent({ agentKind: "claude", model: "opus" })).toBe("claude · opus");
   });
 
-  it("muestra solo el agentKind cuando no hay modelo", () => {
+  it("shows only the agentKind when there is no model", () => {
     expect(formatAgent({ agentKind: "claude", model: null })).toBe("claude");
   });
 });
 
-describe("pausa", () => {
-  it("Paused tiene etiqueta y su columna del tablero", () => {
-    expect(STATE_LABEL.paused).toBe("Paused");
+describe("pause", () => {
+  it("Paused has a label and its board column", () => {
+    expect(es.state.paused).toBe("Paused");
     expect(BOARD_STATES).toContain("paused");
   });
 
-  it("se pausan draft, refined, in_progress y verification", () => {
+  it("draft, refined, in_progress and verification can be paused", () => {
     expect((["draft", "refined", "in_progress", "verification"] as const).every(canPause)).toBe(
       true,
     );
@@ -43,7 +37,7 @@ describe("pausa", () => {
     }
   });
 
-  it("se reanudan paused y needs_human", () => {
+  it("paused and needs_human are resumed", () => {
     expect(canResume("paused")).toBe(true);
     expect(canResume("needs_human")).toBe(true);
     for (const state of ["draft", "refined", "in_progress", "completed"] as const) {

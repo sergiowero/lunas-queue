@@ -1,6 +1,6 @@
-// herdr falso con worktrees de git reales y agentes guionados. Cada prompt que recibe un agente
-// (el de fase, y la respuesta a una pregunta) dispara `onPrompt` en segundo plano; cuando el
-// guion termina el turno, el agente queda `done`, como Claude Code al terminar de responder.
+// Fake herdr with real git worktrees and scripted agents. Each prompt an agent receives
+// (the phase one, and the answer to a question) triggers `onPrompt` in the background; when the
+// script ends the turn, the agent is left `done`, like Claude Code when it finishes answering.
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { FakeHerdr, type HerdrAdapter } from "@lunasq/adapters";
@@ -9,7 +9,7 @@ import { git } from "./git.ts";
 export interface PromptedAgent {
   name: string;
   paneId: string;
-  /** Cwd del pane: el worktree de la tarea. */
+  /** Cwd of the pane: the task's worktree. */
   cwd: string;
   env: Record<string, string>;
   args: string[];
@@ -17,15 +17,15 @@ export interface PromptedAgent {
 }
 
 export interface ScriptedHerdrOptions {
-  /** Checkout del proyecto: de ahí salen los worktrees. */
+  /** Project checkout: the worktrees come out of it. */
   repo: string;
-  /** Carpeta de los worktrees de las tareas. */
+  /** Folder of the tasks' worktrees. */
   worktrees: string;
   onPrompt: (agent: PromptedAgent) => Promise<void>;
   onError: (error: Error, agent: string) => void;
 }
 
-// Un prompt nunca vence solo: el turno termina cuando el guion lo cierra.
+// A prompt never expires on its own: the turn ends when the script closes it.
 const NEVER = 2 ** 31 - 1;
 
 export class ScriptedHerdr extends FakeHerdr implements HerdrAdapter {
@@ -76,7 +76,7 @@ export class ScriptedHerdr extends FakeHerdr implements HerdrAdapter {
         this.#opts.onError(error instanceof Error ? error : new Error(String(error)), input.name),
       )
       .then(async () => {
-        // El agente pudo cerrarse mientras tanto (cerrar el Run libera su pane).
+        // The agent may have closed in the meantime (closing the Run frees its pane).
         if (await this.getAgent(input.name)) this.setAgentStatus(input.name, "done");
       });
     this.#running.add(job);
@@ -84,7 +84,7 @@ export class ScriptedHerdr extends FakeHerdr implements HerdrAdapter {
     return agent;
   }
 
-  /** Espera a que terminen los guiones en curso. */
+  /** Waits for the running scripts to finish. */
   async idle(): Promise<void> {
     while (this.#running.size > 0) await Promise.all([...this.#running]);
   }

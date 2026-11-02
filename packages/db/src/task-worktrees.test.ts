@@ -9,7 +9,7 @@ function setup() {
 }
 
 describe("TaskWorktreeRepository", () => {
-  it("lee estado, PR, branch y worktree de una tarea", () => {
+  it("reads state, PR, branch and worktree of a task", () => {
     const { db, project, repo } = setup();
     const task = insertTask(db, project.id, { state: "completed", prState: "open" });
     expect(repo.get(task.id)).toEqual({
@@ -25,7 +25,7 @@ describe("TaskWorktreeRepository", () => {
     expect(repo.get("no-existe")).toBeNull();
   });
 
-  it("guarda el worktree y al limpiarlo conserva el branch", () => {
+  it("stores the worktree and keeps the branch when clearing it", () => {
     const { db, project, repo } = setup();
     const task = insertTask(db, project.id);
     repo.recordWorktree(task.id, { branch: `lunasq/${task.id}`, worktreePath: "/wt/a" });
@@ -36,14 +36,14 @@ describe("TaskWorktreeRepository", () => {
     expect(repo.get(task.id)).toMatchObject({ branch: `lunasq/${task.id}`, worktreePath: null });
   });
 
-  it("recordWorktree lanza si la tarea no existe", () => {
+  it("recordWorktree throws if the task does not exist", () => {
     const { repo } = setup();
     expect(() => repo.recordWorktree("no-existe", { branch: "b", worktreePath: "/p" })).toThrow(
       /no-existe/,
     );
   });
 
-  it("releasable lista las tareas canceladas, mergeadas o con Resultado que conservan su worktree", () => {
+  it("releasable lists the canceled, merged or with-Result tasks that keep their worktree", () => {
     const { db, project, repo } = setup();
     const withWt = (overrides: Parameters<typeof insertTask>[2]) => {
       const task = insertTask(db, project.id, overrides);
