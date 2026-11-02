@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-// Los `tests/*.spec.ts` son de Playwright (`pnpm e2e`); vitest solo corre el harness.
+// The `tests/*.spec.ts` are Playwright's (`pnpm e2e`); vitest only runs the harness.
 export default defineConfig({
   test: { name: "e2e", include: ["harness/**/*.test.ts"], testTimeout: 30_000 },
 });

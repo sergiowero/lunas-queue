@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 const APP_PORT = Number(process.env.E2E_APP_PORT ?? 7461);
 const CONTROL_PORT = Number(process.env.E2E_CONTROL_PORT ?? 7462);
 
-// Un solo servidor con estado (la base, el repo, el DAG): los tests corren en serie.
+// A single stateful server (the database, the repo, the DAG): tests run in series.
 export default defineConfig({
   testDir: "tests",
   fullyParallel: false,
@@ -22,7 +22,7 @@ export default defineConfig({
     command: "node harness/main.ts",
     url: `http://127.0.0.1:${CONTROL_PORT}/health`,
     reuseExistingServer: false,
-    // SIGTERM deja que el harness cierre el runtime y borre su directorio temporal.
+    // SIGTERM lets the harness close the runtime and delete its temporary directory.
     gracefulShutdown: { signal: "SIGTERM", timeout: 15_000 },
     timeout: 60_000,
     stdout: "pipe",

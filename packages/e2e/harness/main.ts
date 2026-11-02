@@ -1,6 +1,6 @@
-// Servidor del piloto e2e: el runtime real de LunasQ (base SQLite, API, MCP, scheduler, dispatcher,
-// entrega, hooks y front end) con herdr y GitHub falsos y un agente guionado, sobre un repo git
-// real en un directorio temporal. Playwright lo arranca con `webServer`; `/control` lo maneja.
+// E2E pilot server: LunasQ's real runtime (SQLite database, API, MCP, scheduler, dispatcher,
+// delivery, hooks and front end) with fake herdr and GitHub and a scripted agent, on a real git repo
+// in a temporary directory. Playwright starts it with `webServer`; `/control` drives it.
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
@@ -18,9 +18,9 @@ const CONTROL_PORT = Number(process.env.E2E_CONTROL_PORT ?? 7462);
 const WEB_ROOT = fileURLToPath(new URL("../../web/dist/app", import.meta.url));
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
-// Los commits que hace LunasQ (evidencia, trailers, rebase) necesitan identidad de autor y de
-// committer: en CI no hay config de git y, a diferencia de macOS, git no la deduce del hostname.
-// Sin config global tampoco influyen la firma ni los hooks del git del desarrollador.
+// The commits LunasQ makes (evidence, trailers, rebase) need author and committer identity:
+// in CI there is no git config and, unlike macOS, git does not deduce it from the hostname.
+// Without a global config neither the developer's git signing nor hooks influence it.
 process.env.GIT_CONFIG_GLOBAL = "/dev/null";
 for (const role of ["AUTHOR", "COMMITTER"]) {
   process.env[`GIT_${role}_NAME`] = "LunasQ e2e";
@@ -78,12 +78,12 @@ const project = await api<{ id: string }>("/api/projects", {
   }),
 });
 
-/** Mergea el PR de la tarea: en GitHub (falso) y en el `main` del origin (git real). */
+/** Merges the task's PR: on (fake) GitHub and on the origin's `main` (real git). */
 async function mergeTask(taskId: string): Promise<{ url: string }> {
   const task = await api<{ branch: string | null }>(`/api/tasks/${taskId}`);
-  if (!task.branch) throw new Error(`la tarea ${taskId} no tiene branch`);
+  if (!task.branch) throw new Error(`task ${taskId} has no branch`);
   const pr = await github.findOpenPr({ head: task.branch, base: "main" });
-  if (!pr) throw new Error(`la tarea ${taskId} no tiene un PR abierto`);
+  if (!pr) throw new Error(`task ${taskId} has no open PR`);
   mergeIntoMain(fixture, task.branch);
   github.merge(pr.url);
   return { url: pr.url };
@@ -114,7 +114,7 @@ async function shutdown() {
   if (stopping) return;
   stopping = true;
   control.close();
-  // Un guion colgado no debe impedir el cierre ni dejar el directorio temporal.
+  // A hung script must not prevent shutdown or leave the temporary directory behind.
   await Promise.race([
     herdr.idle(),
     new Promise((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS)),
