@@ -1,9 +1,9 @@
-// Reglas del veredicto de verificación (docs/design.md §Verificación con subagentes, ADR
-// uw-23-verificacion): lo que el approver reporta de cada revisor debe coincidir con lo que los
-// hooks SubagentStart y SubagentStop registraron en el Run. Leer esos registros es de db.
+// Rules of the verification verdict (docs/design.md §Verification with subagents, ADR
+// uw-23-verificacion): what the approver reports for each reviewer must match what the
+// SubagentStart and SubagentStop hooks recorded in the Run. Reading those records belongs to db.
 import { type HandoffError, REVIEWER_NAMES, type VerificationBody } from "@lunasq/schemas";
 
-/** Una ejecución de subagente registrada por los hooks del Run. */
+/** A subagent execution recorded by the Run's hooks. */
 export interface SubagentEvidence {
   agentType: string;
   startedAt: Date | null;
@@ -11,9 +11,9 @@ export interface SubagentEvidence {
 }
 
 /**
- * Errores del veredicto frente a los hooks; vacío si cuadra. Un revisor `ran` debe tener al menos
- * una ejecución terminada; uno `skipped` no puede tenerla, porque el approver descartaría su
- * reporte. Un must-fix o un refutado no puede venir de un revisor omitido.
+ * Verdict errors against the hooks; empty if it adds up. A `ran` reviewer must have at least
+ * one finished execution; a `skipped` one cannot have it, because the approver would discard its
+ * report. A must-fix or a refuted one cannot come from a skipped reviewer.
  */
 export function checkReviewerEvidence(
   body: VerificationBody,
@@ -31,14 +31,14 @@ export function checkReviewerEvidence(
         path,
         message:
           runs.length === 0
-            ? `${name} se reporta ejecutado pero no aparece en los hooks del Run`
-            : `${name} se reporta ejecutado pero no terminó (sin SubagentStop)`,
+            ? `${name} is reported as run but does not appear in the Run's hooks`
+            : `${name} is reported as run but did not finish (no SubagentStop)`,
       });
     }
     if (report.status === "skipped" && done) {
       issues.push({
         path,
-        message: `${name} corrió y terminó en este Run pero se reporta omitido: incluye su reporte`,
+        message: `${name} ran and finished in this Run but is reported as skipped: include its report`,
       });
     }
   }
@@ -58,4 +58,5 @@ export function checkReviewerEvidence(
   return issues;
 }
 
-const omittedSource = (name: string) => `el hallazgo se atribuye a ${name}, que se reporta omitido`;
+const omittedSource = (name: string) =>
+  `the finding is attributed to ${name}, which is reported as skipped`;

@@ -1,6 +1,6 @@
-// Máquina de estados de la tarea (docs/design.md §Máquina de estados, ADR 0007).
-// TypeScript puro: los guards reciben hechos ya calculados por quien llama (gate de tests,
-// spec aprobada, veredicto), así el dominio no conoce base de datos, herdr ni gh.
+// Task state machine (docs/design.md §State machine, ADR 0007).
+// Pure TypeScript: the guards receive facts already computed by the caller (test gate,
+// approved spec, verdict), so the domain knows no database, herdr or gh.
 import {
   type Actor,
   type EscalationReason,
@@ -32,12 +32,12 @@ export type CommandInput =
       everyCriterionHasTest: boolean;
       hasCommits: boolean;
     }
-  // Tarea sin código: el Resultado reemplaza a la verificación y al PR (ADR 0007).
+  // Task without code: the Result replaces verification and the PR (ADR 0007).
   | { type: "submit_result"; resultKind: ResultKind }
   | { type: "verdict_rework"; maxIterations?: number }
   | {
       type: "verdict_pass";
-      // Veredicto pass registrado por el Run del verificador en la iteración actual.
+      // Pass verdict recorded by the verifier Run in the current iteration.
       verifierPassed: boolean;
       testGatePassed: boolean;
       testsCoherent: boolean;
@@ -47,14 +47,14 @@ export type CommandInput =
   | { type: "delivery_conflict" }
   | { type: "escalate"; reason: EscalationReason; note?: string }
   | { type: "cancel"; note?: string }
-  // deliveryInProgress: el Run del verificador sigue abierto con el handoff guardado (entrega).
+  // deliveryInProgress: the verifier Run is still open with the handoff saved (delivery).
   | { type: "pause"; deliveryInProgress: boolean }
-  // resetIteration: el humano concede un nuevo ciclo de verificación completo.
+  // resetIteration: the human grants a new complete verification cycle.
   | { type: "resume"; resumeTo: TaskState; resetIteration?: boolean }
   | { type: "dispatch" }
   | { type: "ask_human" }
   | { type: "answer"; agentAlive: boolean }
-  // attempt: Runs fallidos consecutivos en la fase, contando este.
+  // attempt: consecutive failed Runs in the phase, counting this one.
   | { type: "run_failed"; attempt: number; maxRetries?: number };
 
 export type TransitionErrorCode = "invalid_transition" | "actor_not_allowed" | "guard_failed";
@@ -63,7 +63,7 @@ export type TransitionResult =
   | { ok: true; next: TaskSnapshot; event: TaskTransitionedEvent }
   | { ok: false; error: { code: TransitionErrorCode; message: string } };
 
-/** Quién puede emitir cada comando (tabla de transiciones del diseño). */
+/** Who can emit each command (transition table of the design). */
 export const COMMAND_ACTORS: Readonly<Record<TaskCommand, readonly Actor[]>> = {
   submit_spec: ["agent"],
   request_changes: ["human"],
@@ -71,7 +71,7 @@ export const COMMAND_ACTORS: Readonly<Record<TaskCommand, readonly Actor[]>> = {
   submit_for_verification: ["agent"],
   submit_result: ["agent"],
   verdict_rework: ["agent"],
-  // El verificador registra su veredicto en el handoff; la entrega emite el pass tras el PR.
+  // The verifier records its verdict in the handoff; delivery emits the pass after the PR.
   verdict_pass: ["system"],
   delivery_conflict: ["system"],
   escalate: ["system"],
@@ -89,7 +89,7 @@ const TERMINAL_STATES: readonly TaskState[] = ["completed", "cancelled"];
 const PAUSABLE_STATES: readonly TaskState[] = ["draft", "refined", "in_progress", "verification"];
 const RESUMABLE_STATES: readonly TaskState[] = ["draft", "refined", "in_progress", "verification"];
 
-/** Sub-estado con el que se entra a un estado: queued si lleva agente, null si no. */
+/** Sub-state with which a state is entered: queued if it carries an agent, null if not. */
 export function subStateFor(state: TaskState): SubState | null {
   return AGENT_STATES.includes(state) ? "queued" : null;
 }
@@ -116,7 +116,7 @@ type Outcome = {
   reason?: EscalationReason;
 };
 type Rule = {
-  // Orígenes (estado y sub-estado) desde los que aplica el comando.
+  // Origins (state and sub-state) from which the command applies.
   from: (task: TaskSnapshot) => boolean;
   guard?: () => string | undefined;
   outcome: () => Outcome;
@@ -170,7 +170,7 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
       };
     case "submit_result":
       return {
-        // Desde el primer refinamiento o desde la implementación, con el agente vivo.
+        // From the first refinement or from implementation, with the agent alive.
         from: (t) => at("draft", "running")(t) || at("in_progress", "running")(t),
         outcome: () => ({ to: "completed" }),
       };
@@ -178,7 +178,7 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
       const max = command.maxIterations ?? DEFAULT_MAX_ITERATIONS;
       return {
         from: at("verification", "running"),
-        guard: () => (isPositiveInt(max) ? undefined : "maxIterations debe ser entero positivo"),
+        guard: () => (isPositiveInt(max) ? undefined : "maxIterations must be a positive integer"),
         outcome: () =>
           iteration < max
             ? { to: "in_progress", iteration: iteration + 1 }
@@ -199,8 +199,8 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
       };
     case "delivery_conflict":
       return {
-        // Desde completed: el PR abierto quedó en conflicto con la base después de entregarse
-        // (otro PR se mergeó antes). Es la única salida de completed.
+        // From completed: the open PR conflicted with the base after delivery
+        // (another PR was merged first). It is the only exit from completed.
         from: (t) => at("verification", "running")(t) || at("completed", null)(t),
         outcome: () => ({ to: "in_progress" }),
       };
@@ -217,10 +217,10 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
     case "pause":
       return {
         from: (t) => PAUSABLE_STATES.includes(t.state),
-        // La entrega (PR) corre con el Run del verificador abierto: pausar la dejaría a medias.
+        // Delivery (PR) runs with the verifier Run open: pausing it would leave it half done.
         guard: () =>
           task.state === "verification" && command.deliveryInProgress
-            ? "la entrega está en curso"
+            ? "delivery is in progress"
             : undefined,
         outcome: () => ({ to: "paused" }),
       };
@@ -230,7 +230,7 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
         guard: () =>
           RESUMABLE_STATES.includes(command.resumeTo)
             ? undefined
-            : `no se puede reanudar hacia ${command.resumeTo}`,
+            : `cannot resume to ${command.resumeTo}`,
         outcome: () =>
           command.resetIteration
             ? { to: command.resumeTo, iteration: 0 }
@@ -258,7 +258,7 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
         guard: () =>
           isPositiveInt(command.attempt) && isPositiveInt(max)
             ? undefined
-            : "attempt y maxRetries deben ser enteros positivos",
+            : "attempt and maxRetries must be positive integers",
         outcome: () =>
           command.attempt <= max
             ? { to: task.state, subState: "queued" }
@@ -269,8 +269,8 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
 }
 
 /**
- * Aplica un comando a la tarea. No tiene efectos: devuelve el estado siguiente y el evento
- * que lo registra, o por qué se rechaza. Quien persiste escribe ambos en la misma transacción.
+ * Applies a command to the task. It has no effects: it returns the next state and the event
+ * that records it, or why it is rejected. Whoever persists writes both in the same transaction.
  */
 export function transition(
   task: TaskSnapshot,
@@ -285,11 +285,11 @@ export function transition(
   if (!isCoherent(task) || !r.from(task)) {
     return fail(
       "invalid_transition",
-      `${command.type} no aplica desde ${task.state}/${task.subState ?? "-"}`,
+      `${command.type} does not apply from ${task.state}/${task.subState ?? "-"}`,
     );
   }
   if (!COMMAND_ACTORS[command.type].includes(actor)) {
-    return fail("actor_not_allowed", `${actor} no puede emitir ${command.type}`);
+    return fail("actor_not_allowed", `${actor} cannot emit ${command.type}`);
   }
   const guardError = r.guard?.();
   if (guardError) return fail("guard_failed", `${command.type}: ${guardError}`);
@@ -308,12 +308,12 @@ export function transition(
   };
   if (outcome.reason) payload.reason = outcome.reason;
   if ("note" in command && command.note !== undefined) payload.note = command.note;
-  // El tipo de Resultado viaja en la nota del evento.
+  // The Result type travels in the event note.
   if (command.type === "submit_result") payload.note = command.resultKind;
-  // Valida el evento contra su esquema: lo que entra al log debe poder leerse después.
+  // Validates the event against its schema: what enters the log must be readable later.
   const event = TaskTransitionedEvent.safeParse({ type: TASK_TRANSITIONED, actor, payload });
   if (!event.success) {
-    return fail("guard_failed", `${command.type}: evento inválido: ${event.error.message}`);
+    return fail("guard_failed", `${command.type}: invalid event: ${event.error.message}`);
   }
   return { ok: true, next, event: event.data };
 }

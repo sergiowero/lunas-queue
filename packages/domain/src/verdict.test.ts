@@ -16,7 +16,7 @@ const finding = { severity: "major" as const, file: "src/a.ts", evidence: "falta
 function body(overrides: Partial<VerificationBody> = {}): VerificationBody {
   return {
     verdict: "reject",
-    criteriaVerdicts: [{ criterionId: "AC-1", verdict: "fail", evidence: "no cumple" }],
+    criteriaVerdicts: [{ criterionId: "AC-1", verdict: "fail", evidence: "not met" }],
     reviewers: {
       "lunasq-security-reviewer": { status: "ran", findings: [] },
       "lunasq-ux-reviewer": { status: "skipped", justification: "sin front end" },
@@ -33,67 +33,67 @@ function body(overrides: Partial<VerificationBody> = {}): VerificationBody {
 const ranBoth = [finished("lunasq-security-reviewer"), finished("lunasq-code-reviewer")];
 
 describe("checkReviewerEvidence", () => {
-  it("acepta revisores ran con su ejecución terminada y omitidos justificados", () => {
+  it("accepts ran reviewers with their execution finished and justified skipped ones", () => {
     expect(checkReviewerEvidence(body(), ranBoth)).toEqual([]);
   });
 
-  it("acepta hallazgos del approver aunque ningún revisor los reporte", () => {
+  it("accepts approver findings even if no reviewer reports them", () => {
     const b = body({ mustFix: [{ ...finding, source: "approver" }] });
     expect(checkReviewerEvidence(b, ranBoth)).toEqual([]);
   });
 
-  it("rechaza un revisor ran que no aparece en los hooks", () => {
+  it("rejects a ran reviewer that does not appear in the hooks", () => {
     expect(checkReviewerEvidence(body(), [finished("lunasq-code-reviewer")])).toEqual([
       {
         path: "body.reviewers.lunasq-security-reviewer",
-        message: expect.stringContaining("no aparece en los hooks"),
+        message: expect.stringContaining("does not appear in the Run's hooks"),
       },
     ]);
   });
 
-  it("rechaza un revisor ran que empezó pero no terminó", () => {
+  it("rejects a ran reviewer that started but did not finish", () => {
     const started = { agentType: "lunasq-security-reviewer", startedAt: t0, stoppedAt: null };
     const issues = checkReviewerEvidence(body(), [started, finished("lunasq-code-reviewer")]);
     expect(issues).toEqual([
       {
         path: "body.reviewers.lunasq-security-reviewer",
-        message: expect.stringContaining("no terminó"),
+        message: expect.stringContaining("did not finish"),
       },
     ]);
   });
 
-  it("acepta un revisor ran con varias ejecuciones si alguna terminó", () => {
+  it("accepts a ran reviewer with several executions if one finished", () => {
     const retry = { agentType: "lunasq-security-reviewer", startedAt: t0, stoppedAt: null };
     expect(checkReviewerEvidence(body(), [retry, ...ranBoth])).toEqual([]);
   });
 
-  it("rechaza un revisor skipped que corrió y terminó", () => {
+  it("rejects a skipped reviewer that ran and finished", () => {
     const issues = checkReviewerEvidence(body(), [...ranBoth, finished("lunasq-ux-reviewer")]);
     expect(issues).toEqual([
       {
         path: "body.reviewers.lunasq-ux-reviewer",
-        message: expect.stringContaining("se reporta omitido"),
+        message: expect.stringContaining("is reported as skipped"),
       },
     ]);
   });
 
-  it("acepta un revisor skipped que empezó sin terminar (se cayó y se justificó)", () => {
+  it("accepts a skipped reviewer that started without finishing (it crashed and was justified)", () => {
     const crashed = { agentType: "lunasq-ux-reviewer", startedAt: t0, stoppedAt: null };
     expect(checkReviewerEvidence(body(), [...ranBoth, crashed])).toEqual([]);
   });
 
-  it("ignora subagentes que no son revisores", () => {
+  it("ignores subagents that are not reviewers", () => {
     expect(checkReviewerEvidence(body(), [...ranBoth, finished("Explore")])).toEqual([]);
   });
 
-  it("rechaza must-fix y refutados atribuidos a un revisor omitido", () => {
+  it("rejects must-fix and refuted attributed to a skipped reviewer", () => {
     const b = body({
       mustFix: [{ ...finding, source: "lunasq-ux-reviewer" }],
-      refuted: [{ finding, reason: "no aplica", source: "lunasq-ui-reviewer" }],
+      refuted: [{ finding, reason: "not applicable", source: "lunasq-ui-reviewer" }],
     });
     expect(checkReviewerEvidence(b, ranBoth)).toEqual([
-      { path: "body.mustFix[0].source", message: expect.stringContaining("omitido") },
-      { path: "body.refuted[0].source", message: expect.stringContaining("omitido") },
+      { path: "body.mustFix[0].source", message: expect.stringContaining("skipped") },
+      { path: "body.refuted[0].source", message: expect.stringContaining("skipped") },
     ]);
   });
 });

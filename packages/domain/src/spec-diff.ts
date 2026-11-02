@@ -1,6 +1,6 @@
-// Diff entre dos versiones de Spec para el gate humano (docs/design.md §Human-in-the-loop,
-// ADR 0013). Las listas con clave se comparan por clave y las de texto por valor: el orden no
-// cuenta como cambio.
+// Diff between two Spec versions for the human gate (docs/design.md §Human-in-the-loop,
+// ADR 0013). Keyed lists are compared by key and text lists by value: order does not
+// count as a change.
 import type { SpecContent, SpecContentDiff, TextListDiff } from "@lunasq/schemas";
 
 type KeyedDiff<T> = { added: T[]; removed: T[]; changed: { key: string; from: T; to: T }[] };
@@ -29,7 +29,7 @@ function texts(before: readonly string[], after: readonly string[]): TextListDif
   };
 }
 
-/** Cambios de `before` a `after`; con `before` null todo aparece como agregado. */
+/** Changes from `before` to `after`; with a null `before` everything appears as added. */
 export function diffSpecContent(before: SpecContent | null, after: SpecContent): SpecContentDiff {
   const a = before?.domainModel;
   const b = after.domainModel;

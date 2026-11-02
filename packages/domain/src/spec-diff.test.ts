@@ -4,28 +4,28 @@ import { describe, expect, it } from "vitest";
 import { diffSpecContent, isEmptyDiff } from "./spec-diff.ts";
 
 describe("diffSpecContent", () => {
-  it("dos versiones iguales no tienen cambios", () => {
+  it("two identical versions have no changes", () => {
     const diff = diffSpecContent(specContentExample(), specContentExample());
     expect(isEmptyDiff(diff)).toBe(true);
     expect(diff.criteria).toEqual({ added: [], removed: [], changed: [] });
     expect(diff.domainModel.boundedContext).toBeNull();
   });
 
-  it("criterios y tareas se comparan por id: agregados, quitados y cambiados", () => {
+  it("criteria and tasks are compared by id: added, removed and changed", () => {
     const before = specContentExample();
     const after = specContentExample();
     const [ac1, ac2] = before.criteria;
     after.criteria = [
       {
         id: "AC-1",
-        given: "un pedido pendiente",
-        when: "el cliente lo cancela",
-        outcome: "el pedido queda cancelado",
+        given: "a pending order",
+        when: "the customer cancels it",
+        outcome: "the order ends up cancelled",
       },
-      { id: "AC-3", given: "un pedido", when: "pasa algo", outcome: "otra cosa" },
+      { id: "AC-3", given: "an order", when: "something happens", outcome: "something else" },
     ];
     after.taskList = [
-      { id: "T-1", title: "Comando CancelOrder en el agregado", criterionIds: ["AC-1"] },
+      { id: "T-1", title: "CancelOrder command on the aggregate", criterionIds: ["AC-1"] },
       { id: "T-2", title: "Vista", criterionIds: ["AC-3"] },
     ];
     const diff = diffSpecContent(before, after);
@@ -40,14 +40,14 @@ describe("diffSpecContent", () => {
     expect(diff.taskList.removed).toEqual([]);
   });
 
-  it("los requerimientos e invariantes se comparan por texto", () => {
+  it("requirements and invariants are compared by text", () => {
     const before = specContentExample();
     const after = specContentExample();
-    after.requirements = [...before.requirements.slice(1), "Nuevo requerimiento"];
+    after.requirements = [...before.requirements.slice(1), "New requirement"];
     after.domainModel.invariants = [];
     const diff = diffSpecContent(before, after);
     expect(diff.requirements).toEqual({
-      added: ["Nuevo requerimiento"],
+      added: ["New requirement"],
       removed: [before.requirements[0]],
     });
     expect(diff.domainModel.invariants).toEqual({
@@ -56,7 +56,7 @@ describe("diffSpecContent", () => {
     });
   });
 
-  it("reordenar no es un cambio", () => {
+  it("reordering is not a change", () => {
     const before = specContentExample();
     const after = specContentExample();
     after.requirements.reverse();
@@ -64,26 +64,26 @@ describe("diffSpecContent", () => {
     expect(isEmptyDiff(diffSpecContent(before, after))).toBe(true);
   });
 
-  it("el modelo de dominio se compara por campo y por clave", () => {
+  it("the domain model is compared by field and by key", () => {
     const before = specContentExample();
     const after = specContentExample();
-    after.domainModel.boundedContext = "Facturación";
-    after.domainModel.glossary = [{ term: "Pedido pendiente", definition: "Otra definición" }];
+    after.domainModel.boundedContext = "Billing";
+    after.domainModel.glossary = [{ term: "Pending order", definition: "Another definition" }];
     after.domainModel.aggregates.push({ name: "Invoice", entities: [] });
     after.domainModel.events = [];
     const { domainModel } = diffSpecContent(before, after);
-    expect(domainModel.boundedContext).toEqual({ from: "Pedidos", to: "Facturación" });
-    expect(domainModel.glossary.changed.map((c) => c.key)).toEqual(["Pedido pendiente"]);
+    expect(domainModel.boundedContext).toEqual({ from: "Orders", to: "Billing" });
+    expect(domainModel.glossary.changed.map((c) => c.key)).toEqual(["Pending order"]);
     expect(domainModel.aggregates.added).toEqual([{ name: "Invoice", entities: [] }]);
     expect(domainModel.events.removed).toEqual(before.domainModel.events);
   });
 
-  it("sin versión anterior todo aparece como agregado", () => {
+  it("without a previous version everything appears as added", () => {
     const after: SpecContent = specContentExample();
     const diff = diffSpecContent(null, after);
     expect(diff.criteria.added).toEqual(after.criteria);
     expect(diff.requirements.added).toEqual(after.requirements);
-    expect(diff.domainModel.boundedContext).toEqual({ from: "", to: "Pedidos" });
+    expect(diff.domainModel.boundedContext).toEqual({ from: "", to: "Orders" });
     expect(diff.domainModel.glossary.added).toEqual(after.domainModel.glossary);
   });
 });

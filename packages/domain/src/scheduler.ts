@@ -1,6 +1,6 @@
-// Reglas del scheduler (docs/design.md §Scheduler, ADR 0014). TypeScript puro: quien llama lee un
-// snapshot de las tareas y del DAG; aquí se calculan el ready set, el score y qué se despacha sin
-// exceder ningún límite de concurrencia. Sin preemption: solo se reparten los slots libres.
+// Scheduler rules (docs/design.md §Scheduler, ADR 0014). Pure TypeScript: the caller reads a
+// snapshot of the tasks and the DAG; here the ready set, the score and what is dispatched are computed
+// without exceeding any concurrency limit. No preemption: only the free slots are distributed.
 import type {
   AgentKind,
   AgentProviderSettings,
@@ -18,35 +18,35 @@ import { type ProjectConfigReader, phaseProfile } from "./project-config.ts";
 import { ALL_PROVIDERS_ENABLED, effectiveAgentKind } from "./providers.ts";
 import { isTerminal } from "./state-machine.ts";
 
-/** Lo que el scheduler necesita de una tarea. */
+/** What the scheduler needs from a task. */
 export type SchedulerTask = {
   id: string;
   projectId: string;
   state: TaskState;
   subState: SubState | null;
-  /** Prioridad base capturada por el humano; la efectiva se calcula. */
+  /** Base priority captured by the human; the effective one is computed. */
   priority: number;
   prState: PrState | null;
-  /** Resultado de una tarea completada sin código (submit_result); null o ausente si no tiene. */
+  /** Result of a task completed without code (submit_result); null or absent if it has none. */
   resultKind?: ResultKind | null;
   createdAt: Date;
-  /** Desde cuándo la tarea espera en su posición actual: la base del aging. */
+  /** Since when the task has waited in its current position: the base of aging. */
   readySince: Date;
-  /** Runs fallidos seguidos de su fase pendiente y cuándo terminó el último: base del backoff. */
+  /** Consecutive failed Runs of its pending phase and when the last one ended: base of the backoff. */
   retry?: RetryState;
-  /** Proveedor con el que corre su agente vivo (el del Run abierto, que puede ser un fallback). */
+  /** Provider its live agent runs with (that of the open Run, which may be a fallback). */
   agentKind?: AgentKind;
 };
 
 export type RetryState = { failures: number; lastFailedAt: Date };
 
 /**
- * Tareas vivas (no terminales), las terminales de las que alguna viva depende, y las aristas de
- * las vivas.
+ * Live (non-terminal) tasks, the terminal ones that some live task depends on, and the edges.
+ * the live ones.
  */
 export type SchedulerSnapshot = { tasks: SchedulerTask[]; edges: DependencyEdge[] };
 
-/** Puerto de lectura: el scheduler toma un snapshot por pasada. */
+/** Read port: the scheduler takes a snapshot per pass. */
 export interface SchedulerStateReader {
   snapshot(): SchedulerSnapshot;
 }
@@ -57,11 +57,11 @@ export type DispatchDecision = {
   phase: SchedulablePhase;
   agentKind: AgentKind;
   score: number;
-  /** Posición leída; el claim la usa para rechazar si la tarea ya se movió. */
+  /** Position read; the claim uses it to reject if the task has already moved. */
   expected: StatePosition;
 };
 
-/** Dependiente de una tarea que ya no se entregará (PR cerrado sin merge o cancelada). */
+/** Dependent of a task that will no longer be delivered (PR closed without merge or cancelled). */
 export type DependencyEscalation = {
   taskId: string;
   dependsOnId: string;
@@ -78,7 +78,7 @@ const PHASE_BY_STATE: Partial<Record<TaskState, SchedulablePhase>> = {
   verification: "verify",
 };
 
-/** Fase cuyo agente espera una tarea en este estado; null si el estado no lleva agente. */
+/** Phase whose agent a task in this state awaits; null if the state carries no agent. */
 export function pendingPhase(state: TaskState): SchedulablePhase | null {
   return PHASE_BY_STATE[state] ?? null;
 }
@@ -86,13 +86,13 @@ export function pendingPhase(state: TaskState): SchedulablePhase | null {
 const HOUR_MS = 3_600_000;
 
 /**
- * Cuándo puede volver a despacharse una tarea tras `failures` Runs fallidos seguidos:
- * `retryBackoffMs·2^(failures-1)` desde el último fallo, con tope en `maxRetryBackoffMs`.
- * null si no hay fallos que esperar.
+ * When a task may be dispatched again after `failures` consecutive failed Runs:
+ * `retryBackoffMs·2^(failures-1)` from the last failure, capped at `maxRetryBackoffMs`.
+ * null if there are no failures to wait for.
  */
 export function retryAt(retry: RetryState | undefined, config: SchedulerConfig): Date | null {
   if (!retry || retry.failures < 1) return null;
-  // El exponente se acota antes de calcular: 2^40 ya excede cualquier tope razonable.
+  // The exponent is bounded before computing: 2^40 already exceeds any reasonable cap.
   const wait = Math.min(
     config.retryBackoffMs * 2 ** Math.min(retry.failures - 1, 40),
     config.maxRetryBackoffMs,
@@ -100,7 +100,7 @@ export function retryAt(retry: RetryState | undefined, config: SchedulerConfig):
   return new Date(retry.lastFailedAt.getTime() + wait);
 }
 
-/** Agente vivo: running, o waiting_human (la pregunta puede contestarse con el agente vivo). */
+/** Live agent: running, or waiting_human (the question can be answered with the agent alive). */
 function holdsSlot(task: SchedulerTask): boolean {
   return (
     pendingPhase(task.state) !== null &&
@@ -108,21 +108,21 @@ function holdsSlot(task: SchedulerTask): boolean {
   );
 }
 
-/** Una dependencia se satisface con su PR mergeado o completada con Resultado (ADR 0007). */
+/** A dependency is satisfied by its merged PR or by being completed with a Result (ADR 0007). */
 function satisfies(dep: SchedulerTask | undefined): boolean {
   if (!dep) return false;
   return dep.prState === "merged" || (dep.state === "completed" && Boolean(dep.resultKind));
 }
 
-/** Una dependencia que ya no se entregará: su dependiente quedaría esperando para siempre. */
+/** A dependency that will no longer be delivered: its dependent would wait forever. */
 function failed(dep: SchedulerTask): boolean {
   return dep.prState === "closed" || (dep.state === "cancelled" && dep.prState !== "merged");
 }
 
 /**
- * Ready set ordenado por score, de mayor a menor; empates por antigüedad y luego por id.
- * score = prioridad efectiva + aging + boost. La prioridad efectiva hereda la mayor prioridad
- * base de las tareas vivas que la tarea bloquea; el boost cuenta esas tareas.
+ * Ready set ordered by score, from highest to lowest; ties by age and then by id.
+ * score = effective priority + aging + boost. The effective priority inherits the highest base
+ * priority of the live tasks that the task blocks; the boost counts those tasks.
  */
 export function rankReady(
   snapshot: SchedulerSnapshot,
@@ -158,7 +158,7 @@ export function rankReady(
   );
 }
 
-/** Contador de agentes vivos por clave contra su límite (sin límite, siempre cabe). */
+/** Counter of live agents per key against its limit (without a limit, it always fits). */
 class Slots<K> {
   readonly #used = new Map<K, number>();
 
@@ -171,12 +171,12 @@ class Slots<K> {
   }
 }
 
-/** Un agente vivo o por despachar; `agentKind` falta sin configuración de proyecto o sin proveedor habilitado. */
+/** A live or to-be-dispatched agent; `agentKind` is missing without project configuration or without an enabled provider. */
 export type Slot = { projectId: string; phase: SchedulablePhase; agentKind: AgentKind | undefined };
 
 /**
- * Agentes vivos por nivel de límite. `schedule` la usa para planear y el claim del dispatcher
- * (UW-16) para volver a validar con un snapshot fresco, con las mismas reglas.
+ * Live agents per limit level. `schedule` uses it to plan and the dispatcher claim
+ * (UW-16) to revalidate with a fresh snapshot, with the same rules.
  */
 export class Occupancy {
   #global = 0;
@@ -195,10 +195,10 @@ export class Occupancy {
   }
 
   /**
-   * Ocupación de los agentes vivos del snapshot. `providers` son los proveedores habilitados vigentes
-   * (por defecto todos) y solo afectan a los slots nuevos: un agente vivo cuenta contra el proveedor
-   * con el que corre (`agentKind` de su Run; sin él, el primario de su perfil), porque cambiar la
-   * configuración nunca lo interrumpe.
+   * Occupancy of the snapshot's live agents. `providers` are the currently enabled providers
+   * (all by default) and only affect new slots: a live agent counts against the provider
+   * it runs with (`agentKind` of its Run; without it, the primary of its profile), because changing the
+   * configuration never interrupts it.
    */
   static of(
     snapshot: SchedulerSnapshot,
@@ -216,9 +216,9 @@ export class Occupancy {
   }
 
   /**
-   * El slot que ocuparía `task` en `phase`: el proveedor efectivo del perfil del proyecto (el
-   * primario si está habilitado, si no el primero habilitado del fallback). `agentKind` falta si el
-   * proyecto no tiene configuración o si no hay ningún proveedor habilitado.
+   * The slot `task` would take in `phase`: the effective provider of the project profile (the
+   * primary if enabled, otherwise the first enabled one of the fallback). `agentKind` is missing if the
+   * project has no configuration or if no provider is enabled.
    */
   slotFor(task: Pick<SchedulerTask, "projectId">, phase: SchedulablePhase): Slot {
     return this.#slot(task, phase, this.#providers);
@@ -249,7 +249,7 @@ export class Occupancy {
     return this.#global >= config.globalConcurrency;
   }
 
-  /** Si un agente más en `slot` cabe en los cuatro niveles; sin configuración de proyecto, no. */
+  /** Whether one more agent in `slot` fits at the four levels; without project configuration, no. */
   fits(slot: Slot, config: SchedulerConfig): boolean {
     const settings = this.#projects(slot.projectId);
     if (!settings || !slot.agentKind) return false;
@@ -263,10 +263,10 @@ export class Occupancy {
 }
 
 /**
- * Qué despachar y qué escalar en esta pasada. Las decisiones respetan, sumadas a los agentes
- * vivos del snapshot, los límites global, por proyecto, por fase y por tipo de agente. Solo se
- * despacha a proveedores habilitados (por defecto todos): si el primario está deshabilitado se usa
- * el primero habilitado del fallback y, sin ninguno, no se despacha nada.
+ * What to dispatch and what to escalate in this pass. The decisions respect, added to the live
+ * agents of the snapshot, the global, per-project, per-phase and per-agent-kind limits. Only
+ * enabled providers are dispatched to (all by default): if the primary is disabled the first
+ * enabled one of the fallback is used and, with none, nothing is dispatched.
  */
 export function schedule(
   snapshot: SchedulerSnapshot,
@@ -295,9 +295,9 @@ export function schedule(
 }
 
 /**
- * Dependientes vivos con una dependencia que ya no se entregará. Se omiten los que están en
- * needs_human o paused (escalate se rechaza en paused) y los que tienen un agente vivo: escalarlos liberaría su slot con el agente todavía
- * corriendo; se escalan cuando su Run termina y vuelven a queued o salen del estado.
+ * Live dependents with a dependency that will no longer be delivered. Those in
+ * needs_human or paused are omitted (escalate is rejected in paused) and those with a live agent: escalating them would free their slot with the agent still
+ * running; they are escalated when their Run ends and return to queued or leave the state.
  */
 function blockedForever(snapshot: SchedulerSnapshot): DependencyEscalation[] {
   const byId = new Map(snapshot.tasks.map((t) => [t.id, t]));
@@ -340,7 +340,7 @@ function copyTask(task: SchedulerTask): SchedulerTask {
   };
 }
 
-/** Lo que el snapshot conserva: las vivas, las terminales de las que dependen y sus aristas. */
+/** What the snapshot keeps: the live ones, the terminal ones they depend on and their edges. */
 export function liveSnapshot(
   tasks: readonly SchedulerTask[],
   edges: readonly DependencyEdge[],
@@ -354,13 +354,13 @@ export function liveSnapshot(
   };
 }
 
-/** Reader en memoria para tests de los módulos que consumen el snapshot; devuelve copias. */
+/** In-memory reader for tests of the modules that consume the snapshot; returns copies. */
 export class InMemorySchedulerStateReader implements SchedulerStateReader {
   readonly #tasks: SchedulerTask[];
   readonly #edges: DependencyEdge[];
 
   constructor(tasks: readonly SchedulerTask[] = [], edges: readonly DependencyEdge[] = []) {
-    // Guarda todo; el filtro se aplica en cada snapshot.
+    // Keeps everything; the filter is applied on each snapshot.
     this.#tasks = tasks.map(copyTask);
     this.#edges = edges.map((e) => ({ ...e }));
   }

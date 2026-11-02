@@ -1,6 +1,6 @@
-// Reglas puras del despacho de una fase (docs/design.md §Secuencia de despacho y §Identidad de
-// sesión por Run, ADR 0002, ADR uw-16-dispatcher): nombre del agente en herdr, entorno del pane,
-// args de arranque, prompt de fase y qué identidad de sesión guarda el Run.
+// Pure rules for dispatching a phase (docs/design.md §Dispatch sequence and §Session identity per
+// Run, ADR 0002, ADR uw-16-dispatcher): agent name in herdr, pane environment,
+// startup args, phase prompt and which session identity the Run keeps.
 import {
   RESOURCE_ATTRIBUTES,
   RUN_ENV,
@@ -16,24 +16,24 @@ export class DispatchRuleError extends Error {
   }
 }
 
-/** Nombres de agente que acepta herdr 0.9.5 (`api schema`). */
+/** Agent names accepted by herdr 0.9.5 (`api schema`). */
 export const AGENT_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 
-/** Dígitos del task id en el nombre: un UUID entero no cabe en 32 caracteres. */
+/** Digits of the task id in the name: a whole UUID does not fit in 32 characters. */
 const TASK_ID_DIGITS = 12;
 
 /**
- * `t<12 hex del task id>-<fase>-<n>`, con `n` el ordinal del Run en esa fase. Determinístico: un
- * despacho que se retoma encuentra el mismo agente en vez de arrancar otro.
+ * `t<12 hex of the task id>-<phase>-<n>`, with `n` the ordinal of the Run in that phase. Deterministic: a
+ * dispatch that is resumed finds the same agent instead of starting another.
  */
 export function agentName(taskId: string, phase: SchedulablePhase, ordinal: number): string {
   if (!Number.isInteger(ordinal) || ordinal < 1) {
-    throw new DispatchRuleError(`ordinal de Run inválido: ${ordinal}`);
+    throw new DispatchRuleError(`invalid Run ordinal: ${ordinal}`);
   }
   const digits = taskId.replaceAll("-", "").slice(0, TASK_ID_DIGITS);
   const name = `t${digits}-${phase}-${ordinal}`;
   if (!/^[A-Za-z0-9]+$/.test(digits) || !AGENT_NAME_PATTERN.test(name)) {
-    throw new DispatchRuleError(`nombre de agente inválido para herdr: ${JSON.stringify(name)}`);
+    throw new DispatchRuleError(`invalid agent name for herdr: ${JSON.stringify(name)}`);
   }
   return name;
 }
@@ -42,7 +42,7 @@ const AGENT_NAME_RE = new RegExp(
   `^t[A-Za-z0-9]{${TASK_ID_DIGITS}}-(refine|implement|verify)-([1-9][0-9]*)$`,
 );
 
-/** Si `name` tiene la forma de los agentes de LunasQ (`agentName`): sirve para hallar huérfanos. */
+/** Whether `name` has the form of LunasQ agents (`agentName`): used to find orphans. */
 export function isAgentName(name: string): boolean {
   return AGENT_NAME_RE.test(name);
 }
@@ -54,7 +54,7 @@ export type RunIdentity = {
   phase: SchedulablePhase;
 };
 
-/** Entorno del pane del Run; `pane split --env` lo fija, `agent start` no lo acepta (ADR 0004). */
+/** Environment of the Run pane; `pane split --env` sets it, `agent start` does not accept it (ADR 0004). */
 export function runEnv(run: RunIdentity): Record<string, string> {
   return {
     [RUN_ENV.runToken]: run.runToken,
@@ -65,9 +65,9 @@ export function runEnv(run: RunIdentity): Record<string, string> {
 }
 
 /**
- * Entorno OTLP propio de cada Run (ADR uw-20-usage-collector): los atributos de tarea, Run y fase
- * que Claude Code copia a cada log, y el run token como header con el que el usage collector
- * autentica y atribuye el consumo. Los ids y el token no llevan caracteres que escapar.
+ * OTLP environment specific to each Run (ADR uw-20-usage-collector): the task, Run and phase attributes
+ * that Claude Code copies to each log, and the run token as the header with which the usage collector
+ * authenticates and attributes consumption. The ids and the token carry no characters to escape.
  */
 export function telemetryRunEnv(run: RunIdentity): Record<string, string> {
   return {
@@ -86,22 +86,22 @@ const PHASE_SKILL: Record<SchedulablePhase, string> = {
   verify: "verify-task",
 };
 
-/** Prompt corto de fase: el contexto completo llega por MCP, no por el prompt. */
+/** Short phase prompt: the full context arrives through MCP, not through the prompt. */
 export function phasePrompt(phase: SchedulablePhase, taskId: string): string {
-  return `Usa la skill ${PHASE_SKILL[phase]} para la tarea ${taskId} de LunasQ. Empieza llamando get_task_context del MCP lunasq y termina con su tool de salida.`;
+  return `Use the skill ${PHASE_SKILL[phase]} for LunasQ task ${taskId}. Start by calling get_task_context from the lunasq MCP and finish with its exit tool.`;
 }
 
 /**
- * Nudge (docs/design.md §Señales): el agente se detuvo sin la señal MCP de fin de fase. Le
- * recuerda que la fase sigue abierta y cómo cerrarla.
+ * Nudge (docs/design.md §Signals): the agent stopped without the MCP end-of-phase signal. It
+ * reminds it that the phase is still open and how to close it.
  */
 export function nudgePrompt(phase: SchedulablePhase, taskId: string): string {
-  return `LunasQ: la fase ${phase} de la tarea ${taskId} sigue abierta. Si ya terminaste, llama la tool de salida de la skill ${PHASE_SKILL[phase]}; si no puedes seguir, usa report_failure o ask_human del MCP lunasq. Si no, continúa con la fase.`;
+  return `LunasQ: phase ${phase} of task ${taskId} is still open. If you are done, call the exit tool of the skill ${PHASE_SKILL[phase]}; if you cannot continue, use report_failure or ask_human from the lunasq MCP. Otherwise, continue with the phase.`;
 }
 
 /**
- * Respuesta del humano a una Question (docs/design.md §Preguntas del agente y bloqueos): entra al
- * pane del agente vivo como prompt nuevo. Una sola línea, porque un salto de línea enviaría el
+ * The human's answer to a Question (docs/design.md §Agent questions and blocks): it enters the
+ * pane of the live agent as a new prompt. A single line, because a line break would send
  * prompt a medias.
  */
 export function answerPrompt(
@@ -110,12 +110,12 @@ export function answerPrompt(
   input: { question: string; answer: string },
 ): string {
   const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
-  return `LunasQ: respuesta a tu pregunta de la tarea ${taskId}. Pregunta: "${oneLine(input.question)}". Respuesta: "${oneLine(input.answer)}". Continúa la fase ${phase} con la skill ${PHASE_SKILL[phase]} y cierra con su tool de salida.`;
+  return `LunasQ: answer to your question for task ${taskId}. Question: "${oneLine(input.question)}". Answer: "${oneLine(input.answer)}". Continue phase ${phase} with the skill ${PHASE_SKILL[phase]} and close with its exit tool.`;
 }
 
 export type SessionIdentity = { value: string; source: SessionSource };
 
-/** Lo mejor disponible, en el orden del diseño: nativo, el de herdr, el nombre del agente. */
+/** The best available, in the order of the design: native, herdr's, the agent name. */
 export function resolveSession(input: {
   nativeId?: string | null;
   herdr?: { value: string } | undefined;

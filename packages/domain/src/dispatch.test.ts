@@ -15,23 +15,23 @@ import {
 const TASK = "0f3c9a2e-7b41-4d2a-9e0c-5a6b7c8d9e10";
 
 describe("agentName", () => {
-  it("es determinístico y cumple el patrón de nombres de herdr", () => {
+  it("is deterministic and meets the herdr name pattern", () => {
     const name = agentName(TASK, "implement", 3);
     expect(name).toBe("t0f3c9a2e7b41-implement-3");
     expect(agentName(TASK, "implement", 3)).toBe(name);
     expect(name).toMatch(AGENT_NAME_PATTERN);
   });
 
-  it("cabe en 32 caracteres con la fase más larga y ordinales grandes", () => {
+  it("fits in 32 characters with the longest phase and large ordinals", () => {
     expect(agentName(TASK, "implement", 9999).length).toBeLessThanOrEqual(32);
   });
 
-  it("distingue fase y ordinal", () => {
+  it("distinguishes phase and ordinal", () => {
     expect(agentName(TASK, "refine", 1)).not.toBe(agentName(TASK, "verify", 1));
     expect(agentName(TASK, "refine", 1)).not.toBe(agentName(TASK, "refine", 2));
   });
 
-  it("rechaza ordinales no positivos y nombres que no caben", () => {
+  it("rejects non-positive ordinals and names that do not fit", () => {
     expect(() => agentName(TASK, "refine", 0)).toThrow(DispatchRuleError);
     expect(() => agentName(TASK, "implement", 10 ** 12)).toThrow(DispatchRuleError);
     expect(() => agentName("x!", "refine", 1)).toThrow(DispatchRuleError);
@@ -39,7 +39,7 @@ describe("agentName", () => {
 });
 
 describe("runEnv", () => {
-  it("lleva token, tarea, Run y fase con los nombres de tech-stack", () => {
+  it("carries token, task, Run and phase with the tech-stack names", () => {
     expect(runEnv({ runToken: "tok", taskId: TASK, runId: "run-1", phase: "verify" })).toEqual({
       LUNASQ_RUN_TOKEN: "tok",
       LUNASQ_TASK_ID: TASK,
@@ -50,7 +50,7 @@ describe("runEnv", () => {
 });
 
 describe("telemetryRunEnv", () => {
-  it("fija tarea, Run y fase como atributos de recurso y el run token como header OTLP", () => {
+  it("sets task, Run and phase as resource attributes and the run token as the OTLP header", () => {
     expect(
       telemetryRunEnv({ runToken: "tok", taskId: TASK, runId: "run-1", phase: "verify" }),
     ).toEqual({
@@ -61,7 +61,7 @@ describe("telemetryRunEnv", () => {
 });
 
 describe("phasePrompt", () => {
-  it("invoca la skill de la fase con el task id y manda al contexto por MCP", () => {
+  it("invokes the skill of the phase with the task id and sends context through MCP", () => {
     const prompt = phasePrompt("refine", TASK);
     expect(prompt).toContain("refine-task");
     expect(prompt).toContain(TASK);
@@ -70,13 +70,13 @@ describe("phasePrompt", () => {
     expect(phasePrompt("verify", TASK)).toContain("verify-task");
   });
 
-  it("es una sola línea: herdr la manda como un solo prompt", () => {
+  it("is a single line: herdr sends it as a single prompt", () => {
     expect(phasePrompt("verify", TASK)).not.toContain("\n");
   });
 });
 
 describe("isAgentName", () => {
-  it("reconoce los nombres que arma agentName y nada más", () => {
+  it("recognizes the names that agentName builds and nothing else", () => {
     expect(isAgentName(agentName(TASK, "verify", 3))).toBe(true);
     expect(isAgentName("t0f3c9a2e7b41-deliver-1")).toBe(false);
     expect(isAgentName("t0f3c9a2e7b41-refine-0")).toBe(false);
@@ -86,7 +86,7 @@ describe("isAgentName", () => {
 });
 
 describe("nudgePrompt", () => {
-  it("recuerda la fase abierta y las tools de salida, en una sola línea", () => {
+  it("reminds of the open phase and the exit tools, on a single line", () => {
     const prompt = nudgePrompt("implement", TASK);
     expect(prompt).toContain(TASK);
     expect(prompt).toContain("implement-task");
@@ -97,14 +97,14 @@ describe("nudgePrompt", () => {
 });
 
 describe("answerPrompt", () => {
-  it("entrega pregunta y respuesta al agente en una sola línea", () => {
+  it("delivers question and answer to the agent on a single line", () => {
     const prompt = answerPrompt("implement", TASK, {
-      question: "¿Borro la tabla?",
-      answer: "Sí,\nbórrala\n\ny migra los datos",
+      question: "Do I drop the table?",
+      answer: "Yes,\ndrop it\n\nand migrate the data",
     });
     expect(prompt).toContain(TASK);
-    expect(prompt).toContain("¿Borro la tabla?");
-    expect(prompt).toContain("Sí, bórrala y migra los datos");
+    expect(prompt).toContain("Do I drop the table?");
+    expect(prompt).toContain("Yes, drop it and migrate the data");
     expect(prompt).toContain("implement-task");
     expect(prompt).not.toContain("\n");
   });
@@ -113,21 +113,21 @@ describe("answerPrompt", () => {
 describe("resolveSession", () => {
   const name = "t0f3c9a2e7b41-refine-1";
 
-  it("prefiere el session id nativo", () => {
+  it("prefers the native session id", () => {
     expect(resolveSession({ nativeId: "n-1", herdr: { value: "h-1" }, agentName: name })).toEqual({
       value: "n-1",
       source: "native",
     });
   });
 
-  it("si no hay nativo usa el que reporta herdr", () => {
+  it("if there is no native one it uses the one herdr reports", () => {
     expect(resolveSession({ herdr: { value: "h-1" }, agentName: name })).toEqual({
       value: "h-1",
       source: "herdr",
     });
   });
 
-  it("como respaldo usa el nombre determinístico del agente", () => {
+  it("as a fallback it uses the deterministic name of the agent", () => {
     expect(resolveSession({ nativeId: null, agentName: name })).toEqual({
       value: name,
       source: "name",

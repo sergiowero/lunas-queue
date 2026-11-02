@@ -8,11 +8,11 @@ import { dependencyGraphReaderContract } from "./testing.ts";
 
 const edge = (taskId: string, dependsOnId: string): DependencyEdge => ({ taskId, dependsOnId });
 
-// d depende de b y c; b y c dependen de a; e depende de d.  a ← b,c ← d ← e
+// d depends on b and c; b and c depend on a; e depends on d.  a ← b,c ← d ← e
 const diamond = [edge("b", "a"), edge("c", "a"), edge("d", "b"), edge("d", "c"), edge("e", "d")];
 
 describe("DependencyGraph", () => {
-  it("expone dependencias y dependientes directos", () => {
+  it("exposes direct dependencies and dependents", () => {
     const graph = DependencyGraph.from(diamond);
     expect(graph.dependenciesOf("d")).toEqual(["b", "c"]);
     expect(graph.dependentsOf("a")).toEqual(["b", "c"]);
@@ -20,25 +20,25 @@ describe("DependencyGraph", () => {
     expect(graph.dependentsOf("desconocida")).toEqual([]);
   });
 
-  it("ancestros: todas las tareas de las que depende, por distancia y sin repetir", () => {
+  it("ancestors: every task it depends on, by distance and without repeats", () => {
     const graph = DependencyGraph.from(diamond);
     expect(graph.ancestors("e")).toEqual(["d", "b", "c", "a"]);
     expect(graph.ancestors("a")).toEqual([]);
   });
 
-  it("descendientes: todas las tareas que bloquea, por distancia y sin repetir", () => {
+  it("descendants: every task it blocks, by distance and without repeats", () => {
     const graph = DependencyGraph.from(diamond);
     expect(graph.descendants("a")).toEqual(["b", "c", "d", "e"]);
     expect(graph.descendants("e")).toEqual([]);
   });
 
-  it("ignora aristas duplicadas", () => {
+  it("ignores duplicate edges", () => {
     const graph = DependencyGraph.from([edge("b", "a"), edge("b", "a")]);
     expect(graph.dependenciesOf("b")).toEqual(["a"]);
     expect(graph.edges()).toEqual([edge("b", "a")]);
   });
 
-  it("devolver arreglos nuevos: mutarlos no cambia el grafo", () => {
+  it("returns new arrays: mutating them does not change the graph", () => {
     const graph = DependencyGraph.from(diamond);
     graph.ancestors("e").push("z");
     graph.dependenciesOf("d").push("z");
@@ -49,21 +49,21 @@ describe("DependencyGraph", () => {
   });
 
   describe("findCycle", () => {
-    it("detecta una tarea que depende de sí misma", () => {
+    it("detects a task that depends on itself", () => {
       expect(DependencyGraph.from([]).findCycle(edge("a", "a"))).toEqual(["a", "a"]);
     });
 
-    it("detecta un ciclo directo con su camino", () => {
+    it("detects a direct cycle with its path", () => {
       const graph = DependencyGraph.from([edge("b", "a")]);
       expect(graph.findCycle(edge("a", "b"))).toEqual(["a", "b", "a"]);
     });
 
-    it("detecta un ciclo transitivo con el camino más corto", () => {
+    it("detects a transitive cycle with the shortest path", () => {
       const graph = DependencyGraph.from(diamond);
       expect(graph.findCycle(edge("a", "e"))).toEqual(["a", "e", "d", "b", "a"]);
     });
 
-    it("acepta aristas que no cierran ciclo, incluido un nuevo diamante", () => {
+    it("accepts edges that do not close a cycle, including a new diamond", () => {
       const graph = DependencyGraph.from(diamond);
       expect(graph.findCycle(edge("e", "a"))).toBeNull();
       expect(graph.findCycle(edge("e", "b"))).toBeNull();
@@ -71,13 +71,13 @@ describe("DependencyGraph", () => {
       expect(graph.findCycle(edge("c", "b"))).toBeNull();
     });
 
-    it("no se confunde con una arista que ya existe", () => {
+    it("is not confused by an edge that already exists", () => {
       expect(DependencyGraph.from(diamond).findCycle(edge("d", "b"))).toBeNull();
     });
   });
 });
 
-dependencyGraphReaderContract("en memoria", (edges) => ({
+dependencyGraphReaderContract("in memory", (edges) => ({
   reader: new InMemoryDependencyGraphReader(edges),
   idOf: (name) => name,
 }));

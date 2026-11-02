@@ -9,8 +9,13 @@ import {
 } from "./delivery.ts";
 
 const criteria = [
-  { id: "AC-1", given: "un pedido pendiente", when: "se cancela", outcome: "queda cancelado" },
-  { id: "AC-2", given: "un pedido enviado", when: "se cancela", outcome: "se rechaza" },
+  {
+    id: "AC-1",
+    given: "a pending order",
+    when: "it is cancelled",
+    outcome: "it ends up cancelled",
+  },
+  { id: "AC-2", given: "a shipped order", when: "it is cancelled", outcome: "it is rejected" },
 ];
 
 const verification = (
@@ -22,7 +27,7 @@ const verification = (
   criteriaVerdicts: verdicts.map((v, i) => ({
     criterionId: `AC-${i + 1}`,
     verdict: v,
-    evidence: `prueba del criterio ${i + 1}`,
+    evidence: `test of criterion ${i + 1}`,
   })),
   reviewers,
   refuted: [{ reason: "falso positivo" }],
@@ -37,7 +42,7 @@ describe("deliveryFacts", () => {
     ],
   };
 
-  it("un pass con todos los criterios en pass y con test es completo", () => {
+  it("a pass with every criterion at pass and with a test is complete", () => {
     expect(
       deliveryFacts({ criteria, implementation, verification: verification(["pass", "pass"]) }),
     ).toEqual({
@@ -47,7 +52,7 @@ describe("deliveryFacts", () => {
     });
   });
 
-  it("un criterio sin veredicto o en fail no cuenta como pasado", () => {
+  it("a criterion without a verdict or at fail does not count as passed", () => {
     expect(
       deliveryFacts({ criteria, implementation, verification: verification(["pass"]) })
         .allCriteriaPassed,
@@ -58,7 +63,7 @@ describe("deliveryFacts", () => {
     ).toBe(false);
   });
 
-  it("un criterio sin tests, o sin handoff de implementación, no es coherente", () => {
+  it("a criterion without tests, or without an implementation handoff, is not coherent", () => {
     const partial = { criterionTests: [{ criterionId: "AC-1", tests: [{}] }] };
     const v = verification(["pass", "pass"]);
     expect(
@@ -81,7 +86,7 @@ describe("deliveryFacts", () => {
     );
   });
 
-  it("un reject no es un pass del verificador", () => {
+  it("a reject is not a verifier pass", () => {
     expect(
       deliveryFacts({
         criteria,
@@ -99,7 +104,7 @@ describe("commitTrailers", () => {
     { id: "impl-2", phase: "implement" as const, startedAt: new Date("2026-01-01T12:00:00Z") },
   ];
 
-  it("cada commit lleva la tarea y el Run de implementación que estaba vivo al crearlo", () => {
+  it("each commit carries the task and the implementation Run that was alive when it was created", () => {
     const commits = [
       { sha: "a", authoredAt: new Date("2026-01-01T10:30:00Z") },
       { sha: "b", authoredAt: new Date("2026-01-01T12:30:00Z") },
@@ -110,7 +115,7 @@ describe("commitTrailers", () => {
     });
   });
 
-  it("un commit anterior a todo Run de implementación usa el primero; sin Runs, el de respaldo", () => {
+  it("a commit before every implementation Run uses the first one; without Runs, the fallback", () => {
     const early = [{ sha: "a", authoredAt: new Date("2025-12-31T00:00:00Z") }];
     expect(commitTrailers({ taskId: "t1", commits: early, runs, fallbackRunId: "v" }).a).toEqual({
       "LunasQ-Task": "t1",
@@ -126,36 +131,34 @@ describe("commitTrailers", () => {
 });
 
 describe("prTitle", () => {
-  it("usa la primera línea del intent, sin espacios de más", () => {
-    expect(prTitle("  Permitir   cancelar pedidos\n\ncon motivo")).toBe(
-      "Permitir cancelar pedidos",
-    );
+  it("uses the first line of the intent, without extra spaces", () => {
+    expect(prTitle("  Allow   cancelling orders\n\nwith a reason")).toBe("Allow cancelling orders");
   });
 
-  it("recorta a 72 caracteres", () => {
+  it("truncates to 72 characters", () => {
     const title = prTitle("x".repeat(200));
     expect(title).toHaveLength(72);
     expect(title.endsWith("…")).toBe(true);
   });
 
-  it("prefiere el título de la tarea al intent", () => {
-    expect(prTitle("Permitir cancelar pedidos\n\ncon motivo", "  Cancelar   pedidos ")).toBe(
-      "Cancelar pedidos",
+  it("prefers the task title over the intent", () => {
+    expect(prTitle("Allow cancelling orders\n\nwith a reason", "  Cancel   orders ")).toBe(
+      "Cancel orders",
     );
   });
 
-  it("sin título (null o vacío) cae al intent", () => {
-    expect(prTitle("Permitir cancelar pedidos", null)).toBe("Permitir cancelar pedidos");
-    expect(prTitle("Permitir cancelar pedidos", " ")).toBe("Permitir cancelar pedidos");
+  it("without a title (null or empty) falls back to the intent", () => {
+    expect(prTitle("Allow cancelling orders", null)).toBe("Allow cancelling orders");
+    expect(prTitle("Allow cancelling orders", " ")).toBe("Allow cancelling orders");
   });
 
-  it("un intent vacío da un título genérico", () => {
-    expect(prTitle("  \n ")).toBe("Tarea de LunasQ");
+  it("an empty intent gives a generic title", () => {
+    expect(prTitle("  \n ")).toBe("LunasQ task");
   });
 });
 
 describe("riskPrLabel", () => {
-  it("una etiqueta por nivel de riesgo, con color distinto", () => {
+  it("one label per risk level, with a distinct color", () => {
     const labels = (["low", "medium", "high"] as const).map(riskPrLabel);
     expect(labels.map((l) => l.name)).toEqual([
       "lunasq:risk-low",
@@ -170,38 +173,38 @@ describe("prBody", () => {
   const input = {
     taskId: "t1",
     runId: "verify-1",
-    intent: "Permitir cancelar pedidos",
+    intent: "Allow cancelling orders",
     specVersion: 2,
     criteria,
     verification: verification(["pass", "pass"], "pass", {
       "lunasq-security-reviewer": { status: "ran" },
-      "lunasq-ux-reviewer": { status: "skipped", justification: "no hay UI" },
+      "lunasq-ux-reviewer": { status: "skipped", justification: "no UI" },
     }),
     evidencePath: "lunasq/tasks/t1.md",
     baseBranch: "main",
   };
 
-  it("incluye intent, criterios con su evidencia, riesgo y trailers", () => {
+  it("includes intent, criteria with their evidence, risk and trailers", () => {
     const body = prBody(input);
-    expect(body).toContain("## Intent\n\nPermitir cancelar pedidos");
+    expect(body).toContain("## Intent\n\nAllow cancelling orders");
     expect(body).toContain("**AC-1**");
-    expect(body).toContain("un pedido pendiente");
-    expect(body).toContain("prueba del criterio 1");
-    expect(body).toContain("Riesgo: **medio**");
+    expect(body).toContain("a pending order");
+    expect(body).toContain("test of criterion 1");
+    expect(body).toContain("Risk: **medium**");
     expect(body).toContain("LunasQ-Task: t1");
     expect(body).toContain("LunasQ-Run: verify-1");
     expect(body).toContain("`lunasq/tasks/t1.md`");
   });
 
-  it("lista los revisores que corrieron y los omitidos con su justificación", () => {
+  it("lists the reviewers that ran and the skipped ones with their justification", () => {
     const body = prBody(input);
     expect(body).toContain("lunasq-security-reviewer");
     expect(body).toContain("lunasq-ux-reviewer");
-    expect(body).toContain("no hay UI");
-    expect(body).toContain("1 hallazgo refutado");
+    expect(body).toContain("no UI");
+    expect(body).toContain("1 finding refuted");
   });
 
-  it("un cuerpo enorme se recorta con un aviso", () => {
+  it("a huge body is truncated with a notice", () => {
     const body = prBody({
       ...input,
       verification: {

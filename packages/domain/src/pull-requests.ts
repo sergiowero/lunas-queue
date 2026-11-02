@@ -1,11 +1,11 @@
-// Seguimiento del PR de una tarea (ADR uw-14-adapter-github). El poller de merges observa el PR
-// en GitHub y registra el cambio en la base; el scheduler reacciona al evento (ADR 0014): un merge
-// libera a los dependientes y un cierre sin merge los escala a needs_human.
+// Tracking of a task's PR (ADR uw-14-adapter-github). The merge poller watches the PR
+// on GitHub and records the change in the database; the scheduler reacts to the event (ADR 0014): a merge
+// releases the dependents and a close without merge escalates them to needs_human.
 import type { ClosedPrState, PrState } from "@lunasq/schemas";
 
 /**
- * Cambio que se registra al observar `observed` con la tarea en `current`: solo open → merged o
- * closed. Un PR mergeado o cerrado no vuelve atrás; uno nuevo se registra con recordPrOpened.
+ * Change recorded when observing `observed` with the task at `current`: only open → merged or
+ * closed. A merged or closed PR does not go back; a new one is registered with recordPrOpened.
  */
 export function prStateChange(current: PrState | null, observed: PrState): ClosedPrState | null {
   if (current !== "open" || observed === "open") return null;
@@ -17,18 +17,18 @@ export type TrackedPr = { taskId: string; url: string };
 export type ObservedPrState = { url: string; state: PrState; at: Date | null };
 
 export interface PrTrackingStore {
-  /** Tareas con PR abierto: las que el poller consulta. */
+  /** Tasks with an open PR: the ones the poller queries. */
   listOpen(): TrackedPr[];
-  /** Registra un PR abierto para la tarea. false si ya estaba registrado así. */
+  /** Records an open PR for the task. false if it was already registered that way. */
   recordPrOpened(taskId: string, url: string): boolean;
-  /** Registra lo observado si es un cambio válido del PR actual de la tarea; si no, false. */
+  /** Records what was observed if it is a valid change of the task's current PR; otherwise, false. */
   recordPrState(taskId: string, observed: ObservedPrState): boolean;
   /**
-   * El PR abierto de una tarea completed choca con la base: la regresa a in_progress para que el
-   * implementador integre la base (ADR pr-en-conflicto). false si la tarea no está completed o el
-   * PR ya no es el suyo, así repetirlo mientras el PR sigue en conflicto no hace nada.
+   * The open PR of a completed task conflicts with the base: it returns it to in_progress so that the
+   * implementer integrates the base (ADR pr-en-conflicto). false if the task is not completed or the
+   * PR is no longer its own, so repeating it while the PR remains in conflict does nothing.
    */
   recordPrConflict(taskId: string, url: string): boolean;
-  /** Un PR abierto de una tarea completed tiene checks fallidos; regresa la tarea a implementación. */
+  /** An open PR of a completed task has failed checks; returns the task to implementation. */
   recordPrCiFailure(taskId: string, url: string, output: string): boolean;
 }

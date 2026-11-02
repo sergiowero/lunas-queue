@@ -11,7 +11,7 @@ import {
   transition,
 } from "./index.ts";
 
-// Comando con todos sus guards en verde: así la tabla de abajo prueba solo estado y sub-estado.
+// Command with all its guards green: this way the table below tests only state and sub-state.
 const passing: { [K in CommandInput["type"]]: Extract<CommandInput, { type: K }> } = {
   submit_spec: { type: "submit_spec", specComplete: true },
   request_changes: { type: "request_changes", hasComments: true },
@@ -46,14 +46,14 @@ const COMMANDS = Object.keys(passing) as CommandInput["type"][];
 
 const actorFor = (command: CommandInput["type"]): Actor => {
   const [actor] = COMMAND_ACTORS[command];
-  if (!actor) throw new Error(`${command} sin actor`);
+  if (!actor) throw new Error(`${command} without actor`);
   return actor;
 };
 
 const AGENT_STATES = ["draft", "in_progress", "verification"] as const;
 const SUB_STATES = ["queued", "running", "waiting_human"] as const;
 
-// Las 14 combinaciones coherentes de estado y sub-estado.
+// The 14 coherent combinations of state and sub-state.
 const SNAPSHOTS: [TaskState, SubState | null][] = [
   ...AGENT_STATES.flatMap((s) => SUB_STATES.map((sub): [TaskState, SubState] => [s, sub])),
   ["refined", null],
@@ -65,7 +65,7 @@ const SNAPSHOTS: [TaskState, SubState | null][] = [
 
 const key = (state: TaskState, sub: SubState | null) => `${state}/${sub ?? "-"}`;
 
-// Todas las transiciones válidas: origen, comando → destino. Lo que no está aquí se rechaza.
+// All the valid transitions: origin, command → destination. What is not here is rejected.
 const VALID: Record<string, string> = {};
 const add = (from: string, command: CommandInput["type"], to: string) => {
   VALID[`${from} ${command}`] = to;
@@ -105,7 +105,7 @@ const snap = (
   verificationIteration = 0,
 ): TaskSnapshot => ({ state, subState, verificationIteration });
 
-describe("transition: tabla completa de estados × comandos", () => {
+describe("transition: full table of states × commands", () => {
   for (const [state, sub] of SNAPSHOTS) {
     for (const command of COMMANDS) {
       const expected = VALID[`${key(state, sub)} ${command}`];
@@ -131,7 +131,7 @@ describe("transition: tabla completa de estados × comandos", () => {
     }
   }
 
-  it("la tabla cubre las 14 combinaciones y los 16 comandos", () => {
+  it("the table covers the 14 combinations and the 16 commands", () => {
     expect(SNAPSHOTS).toHaveLength(14);
     expect(COMMANDS).toHaveLength(16);
     expect(Object.keys(VALID)).toHaveLength(56);
@@ -147,7 +147,7 @@ describe("transition: sub-estado incoherente", () => {
     ["needs_human", "waiting_human"],
   ];
   for (const [state, sub] of incoherent) {
-    it(`${key(state, sub)} rechaza todos los comandos`, () => {
+    it(`${key(state, sub)} rejects every command`, () => {
       for (const command of COMMANDS) {
         expect(transition(snap(state, sub), passing[command], actorFor(command))).toMatchObject({
           ok: false,
@@ -157,7 +157,7 @@ describe("transition: sub-estado incoherente", () => {
     });
   }
 
-  it("rechaza iteraciones negativas o no enteras", () => {
+  it("rejects negative or non-integer iterations", () => {
     for (const iteration of [-1, 0.5, Number.NaN]) {
       expect(
         transition(snap("draft", "queued", iteration), passing.dispatch, "system"),
@@ -187,7 +187,7 @@ describe("transition: actores", () => {
     submit_result: snap("draft", "running"),
   };
 
-  it("cada comando tiene los actores del diseño", () => {
+  it("each command has the actors of the design", () => {
     expect(COMMAND_ACTORS).toEqual({
       submit_spec: ["agent"],
       request_changes: ["human"],
@@ -209,7 +209,7 @@ describe("transition: actores", () => {
   });
 
   for (const command of COMMANDS) {
-    it(`${command} rechaza actores no permitidos`, () => {
+    it(`${command} rejects disallowed actors`, () => {
       for (const actor of ALL_ACTORS) {
         const result = transition(from[command], passing[command], actor);
         expect(result.ok).toBe(COMMAND_ACTORS[command].includes(actor));
@@ -230,11 +230,11 @@ describe("transition: guards", () => {
     rejects(snap("draft", "running"), { type: "submit_spec", specComplete: false }, "agent");
   });
 
-  it("request_changes exige comentarios del humano", () => {
+  it("request_changes requires comments from the human", () => {
     rejects(snap("refined", null), { type: "request_changes", hasComments: false }, "human");
   });
 
-  it("approve exige una versión de spec aprobada", () => {
+  it("approve requires an approved spec version", () => {
     rejects(snap("refined", null), { type: "approve", specApproved: false }, "human");
   });
 
@@ -248,7 +248,7 @@ describe("transition: guards", () => {
     }
   });
 
-  it("verdict_pass exige veredicto del verificador, gate verde, tests coherentes, criterios en pass y PR", () => {
+  it("verdict_pass requires a verifier verdict, green gate, coherent tests, criteria at pass and PR", () => {
     for (const field of [
       "verifierPassed",
       "testGatePassed",
@@ -264,17 +264,17 @@ describe("transition: guards", () => {
     }
   });
 
-  it("resume solo vuelve a un estado no terminal distinto de needs_human", () => {
+  it("resume only returns to a non-terminal state other than needs_human", () => {
     for (const resumeTo of ["completed", "cancelled", "needs_human"] as const) {
       rejects(snap("needs_human", null), { type: "resume", resumeTo }, "human");
     }
   });
 
-  it("pause desde verification se rechaza mientras la entrega está en curso", () => {
+  it("pause from verification is rejected while delivery is in progress", () => {
     rejects(snap("verification", "running"), { type: "pause", deliveryInProgress: true }, "human");
   });
 
-  it("pause con la entrega en curso solo se rechaza en verification", () => {
+  it("pause with delivery in progress is only rejected in verification", () => {
     expect(
       transition(
         snap("in_progress", "running"),
@@ -284,28 +284,28 @@ describe("transition: guards", () => {
     ).toMatchObject({ ok: true, next: snap("paused", null) });
   });
 
-  it("el evento debe cumplir su esquema: nota vacía o larga y razón fuera del enum se rechazan", () => {
+  it("the event must meet its schema: an empty or long note and a reason outside the enum are rejected", () => {
     const from = snap("in_progress", "running");
     rejects(from, { type: "escalate", reason: "blocked", note: "" }, "system");
     rejects(from, { type: "escalate", reason: "blocked", note: "x".repeat(2001) }, "system");
-    rejects(from, { type: "escalate", reason: "aburrido" as never }, "system");
+    rejects(from, { type: "escalate", reason: "boring" as never }, "system");
     rejects(snap("refined", null), { type: "cancel", note: "" }, "human");
   });
 
-  it("run_failed exige un intento entero positivo", () => {
+  it("run_failed requires a positive integer attempt", () => {
     for (const attempt of [0, -1, 1.5]) {
       rejects(snap("draft", "running"), { type: "run_failed", attempt }, "system");
     }
   });
 
-  it("verdict_rework y run_failed exigen límites enteros positivos", () => {
+  it("verdict_rework and run_failed require positive integer limits", () => {
     rejects(snap("verification", "running"), { type: "verdict_rework", maxIterations: 0 }, "agent");
     rejects(snap("draft", "running"), { type: "run_failed", attempt: 1, maxRetries: -1 }, "system");
   });
 });
 
-describe("transition: loop de verificación", () => {
-  it("rework sube la iteración en uno", () => {
+describe("transition: verification loop", () => {
+  it("rework raises the iteration by one", () => {
     const result = transition(snap("verification", "running", 1), passing.verdict_rework, "agent");
     expect(result).toMatchObject({
       ok: true,
@@ -313,7 +313,7 @@ describe("transition: loop de verificación", () => {
     });
   });
 
-  it(`con ${DEFAULT_MAX_ITERATIONS} iteraciones por defecto, la siguiente rework va a needs_human`, () => {
+  it(`with ${DEFAULT_MAX_ITERATIONS} iterations by default, the next rework goes to needs_human`, () => {
     expect(DEFAULT_MAX_ITERATIONS).toBe(3);
     let task = snap("verification", "running", 0);
     for (let i = 1; i <= DEFAULT_MAX_ITERATIONS; i++) {
@@ -330,7 +330,7 @@ describe("transition: loop de verificación", () => {
     });
   });
 
-  it("respeta un máximo configurado", () => {
+  it("respects a configured maximum", () => {
     const result = transition(
       snap("verification", "running", 1),
       { type: "verdict_rework", maxIterations: 1 },
@@ -339,7 +339,7 @@ describe("transition: loop de verificación", () => {
     expect(result).toMatchObject({ ok: true, next: { state: "needs_human" } });
   });
 
-  it("delivery_conflict regresa a in progress sin subir la iteración", () => {
+  it("delivery_conflict returns to in progress without raising the iteration", () => {
     const result = transition(
       snap("verification", "running", 2),
       passing.delivery_conflict,
@@ -348,14 +348,14 @@ describe("transition: loop de verificación", () => {
     expect(result).toMatchObject({ ok: true, next: snap("in_progress", "queued", 2) });
   });
 
-  it("verdict_pass conserva la iteración", () => {
+  it("verdict_pass keeps the iteration", () => {
     const result = transition(snap("verification", "running", 2), passing.verdict_pass, "system");
     expect(result).toMatchObject({ ok: true, next: snap("completed", null, 2) });
   });
 });
 
 describe("transition: reintentos de Run", () => {
-  it(`hasta ${DEFAULT_MAX_RETRIES} reintentos vuelven a la cola; el siguiente fallo escala`, () => {
+  it(`up to ${DEFAULT_MAX_RETRIES} retries return to the queue; the next failure escalates`, () => {
     expect(DEFAULT_MAX_RETRIES).toBe(3);
     for (let attempt = 1; attempt <= DEFAULT_MAX_RETRIES; attempt++) {
       expect(
@@ -376,27 +376,27 @@ describe("transition: reintentos de Run", () => {
   });
 });
 
-describe("transition: humano en el loop", () => {
-  it("answer con el agente muerto vuelve a la cola para un Run nuevo", () => {
+describe("transition: human in the loop", () => {
+  it("answer with the agent dead returns to the queue for a new Run", () => {
     expect(
       transition(snap("draft", "waiting_human"), { type: "answer", agentAlive: false }, "human"),
     ).toMatchObject({ ok: true, next: { state: "draft", subState: "queued" } });
   });
 
-  it("escalate guarda razón y nota en el evento", () => {
+  it("escalate stores reason and note in the event", () => {
     const result = transition(
       snap("in_progress", "running", 1),
-      { type: "escalate", reason: "blocked", note: "permiso pendiente" },
+      { type: "escalate", reason: "blocked", note: "permission pending" },
       "system",
     );
     expect(result).toMatchObject({
       ok: true,
       next: snap("needs_human", null, 1),
-      event: { payload: { reason: "blocked", note: "permiso pendiente" } },
+      event: { payload: { reason: "blocked", note: "permission pending" } },
     });
   });
 
-  it("resume vuelve al estado indicado con su sub-estado inicial y la misma iteración", () => {
+  it("resume returns to the indicated state with its initial sub-state and the same iteration", () => {
     const cases: [TaskState, SubState | null][] = [
       ["draft", "queued"],
       ["refined", null],
@@ -410,7 +410,7 @@ describe("transition: humano en el loop", () => {
     }
   });
 
-  it("resume con resetIteration concede un ciclo de verificación nuevo", () => {
+  it("resume with resetIteration grants a new verification cycle", () => {
     expect(
       transition(
         snap("needs_human", null, 3),
@@ -420,13 +420,13 @@ describe("transition: humano en el loop", () => {
     ).toMatchObject({ ok: true, next: snap("in_progress", "queued", 0) });
   });
 
-  it("cancel guarda la nota en el evento", () => {
+  it("cancel stores the note in the event", () => {
     const result = transition(
       snap("refined", null),
-      { type: "cancel", note: "ya no aplica" },
+      { type: "cancel", note: "no longer applies" },
       "human",
     );
-    expect(result).toMatchObject({ ok: true, event: { payload: { note: "ya no aplica" } } });
+    expect(result).toMatchObject({ ok: true, event: { payload: { note: "no longer applies" } } });
   });
 });
 
@@ -435,7 +435,7 @@ describe("transition: pausa", () => {
     ["draft", "refined", "in_progress", "verification"].includes(state),
   );
 
-  it("pause deja la tarea en paused sin sub-estado, conserva la iteración y registra el origen", () => {
+  it("pause leaves the task in paused without a sub-state, keeps the iteration and records the origin", () => {
     for (const [state, sub] of pausable) {
       const result = transition(snap(state, sub, 2), passing.pause, "human");
       expect(result).toMatchObject({
@@ -455,7 +455,7 @@ describe("transition: pausa", () => {
     }
   });
 
-  it("pause se rechaza en completed, cancelled, needs_human y paused", () => {
+  it("pause is rejected in completed, cancelled, needs_human and paused", () => {
     for (const state of ["completed", "cancelled", "needs_human", "paused"] as const) {
       expect(transition(snap(state, null), passing.pause, "human")).toMatchObject({
         ok: false,
@@ -464,7 +464,7 @@ describe("transition: pausa", () => {
     }
   });
 
-  it("pause por el sistema o el agente se rechaza con actor_not_allowed", () => {
+  it("pause by the system or the agent is rejected with actor_not_allowed", () => {
     for (const actor of ["system", "agent"] as const) {
       expect(transition(snap("in_progress", "running"), passing.pause, actor)).toMatchObject({
         ok: false,
@@ -473,7 +473,7 @@ describe("transition: pausa", () => {
     }
   });
 
-  it("resume desde paused vuelve a in_progress/queued conservando la iteración", () => {
+  it("resume from paused returns to in_progress/queued keeping the iteration", () => {
     expect(
       transition(snap("paused", null, 2), { type: "resume", resumeTo: "in_progress" }, "human"),
     ).toMatchObject({
@@ -483,20 +483,20 @@ describe("transition: pausa", () => {
     });
   });
 
-  it("resume desde paused hacia refined deja el sub-estado en null", () => {
+  it("resume from paused to refined leaves the sub-state at null", () => {
     expect(
       transition(snap("paused", null), { type: "resume", resumeTo: "refined" }, "human"),
     ).toMatchObject({ ok: true, next: snap("refined", null) });
   });
 
-  it("cancel desde paused deja la tarea en cancelled", () => {
+  it("cancel from paused leaves the task in cancelled", () => {
     expect(transition(snap("paused", null), { type: "cancel" }, "human")).toMatchObject({
       ok: true,
       next: snap("cancelled", null),
     });
   });
 
-  it("una tarea paused rechaza escalate y todo comando distinto de resume y cancel", () => {
+  it("a paused task rejects escalate and every command other than resume and cancel", () => {
     for (const command of COMMANDS) {
       if (command === "resume" || command === "cancel") continue;
       for (const actor of ["human", "agent", "system"] as const) {
@@ -512,7 +512,7 @@ describe("transition: submit_result", () => {
     ["in_progress", "already_implemented"],
     ["in_progress", "not_resolvable"],
   ] as const)(
-    "%s/running con el tipo %s completa la tarea y lo deja en el evento",
+    "%s/running with type %s completes the task and leaves it in the event",
     (state, kind) => {
       const result = transition(
         snap(state, "running", 2),
@@ -532,7 +532,7 @@ describe("transition: submit_result", () => {
   );
 
   it.each([["queued"], ["waiting_human"]] as const)(
-    "se rechaza desde un sub-estado %s",
+    "is rejected from a %s sub-state",
     (subState) => {
       const result = transition(
         snap("in_progress", subState),
@@ -543,7 +543,7 @@ describe("transition: submit_result", () => {
     },
   );
 
-  it("se rechaza desde verification, refined y completed", () => {
+  it("is rejected from verification, refined and completed", () => {
     for (const [state, sub] of [
       ["verification", "running"],
       ["refined", null],
@@ -558,7 +558,7 @@ describe("transition: submit_result", () => {
     }
   });
 
-  it("se rechaza con un actor que no es agente", () => {
+  it("is rejected with a non-agent actor", () => {
     for (const actor of ["human", "system"] as const) {
       const result = transition(
         snap("draft", "running"),
@@ -571,7 +571,7 @@ describe("transition: submit_result", () => {
 });
 
 describe("helpers", () => {
-  it("subStateFor da queued a los estados con agente y null al resto", () => {
+  it("subStateFor gives queued to states with an agent and null to the rest", () => {
     expect(subStateFor("draft")).toBe("queued");
     expect(subStateFor("in_progress")).toBe("queued");
     expect(subStateFor("verification")).toBe("queued");
@@ -580,7 +580,7 @@ describe("helpers", () => {
     }
   });
 
-  it("completed y cancelled son terminales", () => {
+  it("completed and cancelled are terminal", () => {
     expect(isTerminal("completed")).toBe(true);
     expect(isTerminal("cancelled")).toBe(true);
     expect(isTerminal("needs_human")).toBe(false);

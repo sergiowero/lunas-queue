@@ -1,5 +1,5 @@
-// Suites de contrato de los puertos del dominio: corren contra la implementación en memoria y
-// contra la de @lunasq/db, para que ambas se comporten igual.
+// Contract suites of the domain ports: they run against the in-memory implementation and
+// against the @lunasq/db one, so that both behave the same.
 import {
   Project,
   ProjectCreate,
@@ -15,13 +15,13 @@ import type { SchedulerStateReader } from "./scheduler.ts";
 
 let seq = 0;
 
-/** UUID v4 válido y determinístico (domain no tiene `crypto`). */
+/** Valid and deterministic UUID v4 (domain has no `crypto`). */
 export function fakeUuid(): string {
   seq += 1;
   return `00000000-0000-4000-8000-${String(seq).padStart(12, "0")}`;
 }
 
-/** Proyecto completo y validado, como lo devuelve un ProjectConfigReader. */
+/** Complete and validated project, as a ProjectConfigReader returns it. */
 export function sampleProject(name: string, overrides: Partial<ProjectCreate> = {}): Project {
   const now = new Date();
   return Project.parse({
@@ -44,8 +44,8 @@ export function projectConfigReaderContract(
   name: string,
   setup: (configs: Project[]) => ProjectConfigReader,
 ): void {
-  describe(`contrato de ProjectConfigReader: ${name}`, () => {
-    it("devuelve la configuración completa de un proyecto", () => {
+  describe(`ProjectConfigReader contract: ${name}`, () => {
+    it("returns the complete configuration of a project", () => {
       const config = sampleProject("beta", {
         agentProfiles: { verify: { kind: "claude", model: "sonnet", args: ["--x"] } },
         limits: { concurrency: 2, phaseTimeoutMinutes: { implement: 60 } },
@@ -56,21 +56,21 @@ export function projectConfigReaderContract(
       expect(reader.get(config.id)).toEqual(config);
     });
 
-    it("devuelve null si el proyecto no existe", () => {
+    it("returns null if the project does not exist", () => {
       const reader = setup([sampleProject("alfa")]);
       expect(reader.get(fakeUuid())).toBeNull();
     });
 
-    it("lista los proyectos ordenados por nombre", () => {
+    it("lists the projects ordered by name", () => {
       const reader = setup([sampleProject("gamma"), sampleProject("alfa"), sampleProject("beta")]);
       expect(reader.list().map((p) => p.name)).toEqual(["alfa", "beta", "gamma"]);
     });
 
-    it("modificar lo leído no cambia la configuración", () => {
+    it("changing what was read does not change the configuration", () => {
       const config = sampleProject("alfa");
       const reader = setup([config]);
       const read = reader.get(config.id);
-      if (!read) throw new Error("sin proyecto");
+      if (!read) throw new Error("no project");
       read.agentProfiles.refine.args.push("--mutado");
       read.createdAt.setFullYear(1990);
       expect(reader.get(config.id)?.agentProfiles.refine.args).toEqual([]);
@@ -80,9 +80,9 @@ export function projectConfigReaderContract(
 }
 
 /**
- * Suite de contrato de DependencyGraphReader: corre contra el reader en memoria y contra el
- * repositorio de tareas de @lunasq/db. Las aristas usan nombres; `setup` crea una tarea por
- * nombre y devuelve el reader y cómo traducir un nombre a su id.
+ * Contract suite of DependencyGraphReader: runs against the in-memory reader and against the
+ * task repository of @lunasq/db. Edges use names; `setup` creates one task per
+ * name and returns the reader and how to translate a name to its id.
  */
 export function dependencyGraphReaderContract(
   name: string,
@@ -91,8 +91,8 @@ export function dependencyGraphReaderContract(
     idOf: (name: string) => string;
   },
 ): void {
-  describe(`contrato de DependencyGraphReader: ${name}`, () => {
-    it("el snapshot refleja todas las aristas", () => {
+  describe(`DependencyGraphReader contract: ${name}`, () => {
+    it("the snapshot reflects all the edges", () => {
       const { reader, idOf } = setup([
         { taskId: "b", dependsOnId: "a" },
         { taskId: "c", dependsOnId: "b" },
@@ -103,14 +103,14 @@ export function dependencyGraphReaderContract(
       expect(graph.descendants(idOf("a"))).toEqual([idOf("b"), idOf("c")]);
     });
 
-    it("sin aristas devuelve un grafo vacío", () => {
+    it("without edges returns an empty graph", () => {
       const graph = setup([]).reader.snapshot();
       expect(graph.edges()).toEqual([]);
     });
   });
 }
 
-/** Tarea sembrada para la suite de SchedulerStateReader; los campos omitidos toman su default. */
+/** Task seeded for the SchedulerStateReader suite; omitted fields take their default. */
 export type SchedulerSeed = {
   name: string;
   state: TaskState;
@@ -121,10 +121,10 @@ export type SchedulerSeed = {
 };
 
 /**
- * Suite de contrato de SchedulerStateReader: corre contra el reader en memoria y contra el de
- * @lunasq/db. `setup` crea las tareas y aristas por nombre (sub-estado null por default) y
- * devuelve el reader y cómo traducir un nombre a su id. readySince lo calcula cada
- * implementación y se prueba aparte.
+ * Contract suite of SchedulerStateReader: runs against the in-memory reader and against the one of
+ * @lunasq/db. `setup` creates the tasks and edges by name (sub-state null by default) and
+ * returns the reader and how to translate a name to its id. readySince is computed by each
+ * implementation and tested separately.
  */
 export function schedulerStateReaderContract(
   name: string,
@@ -133,8 +133,8 @@ export function schedulerStateReaderContract(
     edges: DependencyEdge[],
   ) => { reader: SchedulerStateReader; idOf: (name: string) => string },
 ): void {
-  describe(`contrato de SchedulerStateReader: ${name}`, () => {
-    it("devuelve las tareas vivas con su estado, sub-estado, prioridad y PR", () => {
+  describe(`SchedulerStateReader contract: ${name}`, () => {
+    it("returns the live tasks with their state, sub-state, priority and PR", () => {
       const { reader, idOf } = setup(
         [
           { name: "a", state: "draft", subState: "queued", priority: 300 },
@@ -159,7 +159,7 @@ export function schedulerStateReaderContract(
       }
     });
 
-    it("incluye las terminales que son dependencia de una viva y omite las demás", () => {
+    it("includes the terminal ones that are a dependency of a live one and omits the rest", () => {
       const { reader, idOf } = setup(
         [
           { name: "hecha", state: "completed", prState: "merged" },
@@ -179,7 +179,7 @@ export function schedulerStateReaderContract(
         [idOf("hecha"), idOf("cancelada"), idOf("viva")].sort(),
       );
       expect(snapshot.tasks.find((t) => t.id === idOf("hecha"))?.prState).toBe("merged");
-      // Solo las aristas de las tareas vivas: las terminales ya no esperan nada.
+      // Only the edges of the live tasks: the terminal ones no longer wait for anything.
       expect(snapshot.edges).toHaveLength(2);
       expect(snapshot.edges).toEqual(
         expect.arrayContaining([
@@ -189,7 +189,7 @@ export function schedulerStateReaderContract(
       );
     });
 
-    it("expone el Resultado de una dependencia completada sin PR", () => {
+    it("exposes the Result of a dependency completed without a PR", () => {
       const { reader, idOf } = setup(
         [
           { name: "investigada", state: "completed", resultKind: "research" },
@@ -201,14 +201,14 @@ export function schedulerStateReaderContract(
       expect(dep).toMatchObject({ state: "completed", prState: null, resultKind: "research" });
     });
 
-    it("modificar el snapshot no cambia el siguiente", () => {
+    it("changing the snapshot does not change the next one", () => {
       const { reader } = setup(
         [{ name: "a", state: "draft", subState: "queued", priority: 100 }],
         [],
       );
       const first = reader.snapshot();
       const t = first.tasks[0];
-      if (!t) throw new Error("sin tareas");
+      if (!t) throw new Error("no tasks");
       t.priority = 999;
       t.createdAt.setFullYear(1990);
       first.edges.push({ taskId: "x", dependsOnId: "y" });
