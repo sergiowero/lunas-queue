@@ -1,8 +1,8 @@
 // Settings routes (docs/decisions/settings-proveedores.md): which agent providers the dispatcher may use
-// and the global limit of concurrent agents. Validation lives in
-// AgentProviderPatch and ConcurrencySettings; saving publishes settings.updated.
+// the global limit of concurrent agents and the global verification iteration cap. Validation lives in
+// AgentProviderPatch, ConcurrencySettings and VerificationSettings; saving publishes settings.updated.
 import type { SettingsRepository } from "@lunasq/db";
-import { AgentProviderPatch, ConcurrencySettings } from "@lunasq/schemas";
+import { AgentProviderPatch, ConcurrencySettings, VerificationSettings } from "@lunasq/schemas";
 import { Hono } from "hono";
 import { invalidInput, localOriginOnly, readJson } from "./http.ts";
 
@@ -25,5 +25,13 @@ export function settingsRoutes(settings: SettingsRepository, defaultConcurrency:
       const input = ConcurrencySettings.safeParse(json.body);
       if (!input.success) return invalidInput(c, input.error);
       return c.json(settings.saveConcurrency(input.data, "human", defaultConcurrency));
+    })
+    .get("/verification", (c) => c.json(settings.verification()))
+    .put("/verification", async (c) => {
+      const json = await readJson(c);
+      if (!json.ok) return c.json({ error: "invalid_json" }, 400);
+      const input = VerificationSettings.safeParse(json.body);
+      if (!input.success) return invalidInput(c, input.error);
+      return c.json(settings.saveVerification(input.data));
     });
 }

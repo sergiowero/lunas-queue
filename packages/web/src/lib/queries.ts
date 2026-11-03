@@ -47,6 +47,8 @@ export const queries = {
     queryOptions({ queryKey: ["settings", "providers"], queryFn: api.providerSettings }),
   concurrencySettings: () =>
     queryOptions({ queryKey: ["settings", "concurrency"], queryFn: api.concurrencySettings }),
+  verificationSettings: () =>
+    queryOptions({ queryKey: ["settings", "verification"], queryFn: api.verificationSettings }),
   blocked: () =>
     queryOptions({
       queryKey: ["blocked"],

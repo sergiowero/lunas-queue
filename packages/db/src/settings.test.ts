@@ -160,3 +160,71 @@ describe("SettingsRepository: concurrency", () => {
     expect(new SettingsRepository(db).concurrency(5)).toEqual({ globalConcurrency: 5 });
   });
 });
+
+describe("SettingsRepository: verification iteration cap", () => {
+  it("with no saved value it returns the default 5", () => {
+    const repo = new SettingsRepository(migratedDatabase());
+    expect(repo.verification()).toEqual({ maxVerificationIterations: 5 });
+  });
+
+  it("saves the cap, returns it and publishes settings.updated with maxVerificationIterations", () => {
+    const db = migratedDatabase();
+    const repo = new SettingsRepository(db);
+    expect(repo.saveVerification({ maxVerificationIterations: 8 })).toEqual({
+      maxVerificationIterations: 8,
+    });
+    expect(repo.verification()).toEqual({ maxVerificationIterations: 8 });
+    const [pending, ...rest] = listPendingOutbox(db);
+    expect(rest).toEqual([]);
+    expect(pending?.message).toMatchObject({
+      topic: SETTINGS_UPDATED,
+      taskId: null,
+      actor: "human",
+      payload: { maxVerificationIterations: 8 },
+    });
+    expect(db.select().from(events).all()).toHaveLength(1);
+  });
+
+  it("saving the value in force neither writes nor publishes another event", () => {
+    const db = migratedDatabase();
+    const repo = new SettingsRepository(db);
+    repo.saveVerification({ maxVerificationIterations: 8 });
+    repo.saveVerification({ maxVerificationIterations: 8 });
+    expect(listPendingOutbox(db)).toHaveLength(1);
+    expect(db.select().from(events).all()).toHaveLength(1);
+    expect(db.select().from(appSettings).all()).toHaveLength(1);
+  });
+
+  it("saving, with no prior value, the default that already applies publishes nothing", () => {
+    const db = migratedDatabase();
+    new SettingsRepository(db).saveVerification({ maxVerificationIterations: 5 });
+    expect(listPendingOutbox(db)).toEqual([]);
+    expect(db.select().from(appSettings).all()).toEqual([]);
+  });
+
+  it.each([[0], [21], [1.5], ["4"]])("rejects %s and keeps what was saved", (value) => {
+    const db = migratedDatabase();
+    const repo = new SettingsRepository(db);
+    repo.saveVerification({ maxVerificationIterations: 3 });
+    expect(() => repo.saveVerification({ maxVerificationIterations: value })).toThrow();
+    expect(repo.verification()).toEqual({ maxVerificationIterations: 3 });
+    expect(listPendingOutbox(db)).toHaveLength(1);
+  });
+
+  it("does not touch the provider or concurrency configuration", () => {
+    const repo = new SettingsRepository(migratedDatabase());
+    repo.saveProviders({ claude: false });
+    repo.saveConcurrency({ globalConcurrency: 2 });
+    repo.saveVerification({ maxVerificationIterations: 9 });
+    expect(repo.providers()).toEqual({ claude: false, copilot: true, codex: true });
+    expect(repo.concurrency(5)).toEqual({ globalConcurrency: 2 });
+  });
+
+  it("a stored value that no longer validates falls back to the default 5", () => {
+    const db = migratedDatabase();
+    db.insert(appSettings)
+      .values({ key: "verification", value: { maxVerificationIterations: 0 } })
+      .run();
+    expect(new SettingsRepository(db).verification()).toEqual({ maxVerificationIterations: 5 });
+  });
+});

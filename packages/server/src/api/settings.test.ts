@@ -189,6 +189,109 @@ describe("PUT /api/settings/concurrency", () => {
   });
 });
 
+function verificationSetup() {
+  const db = migratedDatabase();
+  const app = createApp({ db });
+  const send = (
+    method: string,
+    body?: unknown,
+    headers: Record<string, string> = {},
+    peer?: string,
+  ) =>
+    app.request(
+      "/api/settings/verification",
+      {
+        method,
+        headers: { "content-type": "application/json", ...headers },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      },
+      peer === undefined ? undefined : { incoming: { socket: { remoteAddress: peer } } },
+    );
+  return { db, send };
+}
+
+describe("GET /api/settings/verification", () => {
+  it("without a saved cap it returns the default of 5", async () => {
+    const { send } = verificationSetup();
+    const res = await send("GET");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ maxVerificationIterations: 5 });
+  });
+
+  it("returns the saved cap", async () => {
+    const { db, send } = verificationSetup();
+    new SettingsRepository(db).saveVerification({ maxVerificationIterations: 9 });
+    expect(await (await send("GET")).json()).toEqual({ maxVerificationIterations: 9 });
+  });
+});
+
+describe("PUT /api/settings/verification", () => {
+  it("saves the cap, returns it and records settings.updated once", async () => {
+    const { db, send } = verificationSetup();
+    const res = await send("PUT", { maxVerificationIterations: 8 });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ maxVerificationIterations: 8 });
+    expect(await (await send("GET")).json()).toEqual({ maxVerificationIterations: 8 });
+    expect(listPendingOutbox(db).map((e) => [e.message.topic, e.message.payload])).toEqual([
+      [SETTINGS_UPDATED, { maxVerificationIterations: 8 }],
+    ]);
+  });
+
+  it("sending the cap in force answers 200 and records no event", async () => {
+    const { db, send } = verificationSetup();
+    await send("PUT", { maxVerificationIterations: 8 });
+    const res = await send("PUT", { maxVerificationIterations: 8 });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ maxVerificationIterations: 8 });
+    expect(listPendingOutbox(db)).toHaveLength(1);
+  });
+
+  it.each([
+    ["zero", { maxVerificationIterations: 0 }],
+    ["more than 20", { maxVerificationIterations: 21 }],
+    ["a decimal", { maxVerificationIterations: 2.5 }],
+    ["a text", { maxVerificationIterations: "4" }],
+    ["an unknown field", { maxVerificationIterations: 2, other: true }],
+    ["a body without the field", {}],
+  ])("answers 400 invalid_input with %s and keeps what was saved", async (_name, body) => {
+    const { db, send } = verificationSetup();
+    new SettingsRepository(db).saveVerification({ maxVerificationIterations: 3 });
+    const before = listPendingOutbox(db).length;
+    const res = await send("PUT", body);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "invalid_input" });
+    expect(await (await send("GET")).json()).toEqual({ maxVerificationIterations: 3 });
+    expect(listPendingOutbox(db)).toHaveLength(before);
+  });
+
+  it("answers 400 invalid_json if the body is not JSON", async () => {
+    const { db } = verificationSetup();
+    const res = await createApp({ db }).request("/api/settings/verification", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: "{no json",
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "invalid_json" });
+  });
+
+  it.each([
+    ["a foreign Host", { host: "evil.example.com" }, undefined],
+    ["a foreign Origin", { origin: "https://evil.example.com" }, undefined],
+    ["a non-loopback socket", { host: "localhost" }, "192.168.1.20"],
+  ])("answers 403 forbidden_origin to GET and PUT with %s", async (_name, headers, peer) => {
+    const { db, send } = verificationSetup();
+    const put = await send("PUT", { maxVerificationIterations: 2 }, headers, peer);
+    expect(put.status).toBe(403);
+    expect(await put.json()).toEqual({ error: "forbidden_origin" });
+    const get = await send("GET", undefined, headers, peer);
+    expect(get.status).toBe(403);
+    expect(await get.json()).toEqual({ error: "forbidden_origin" });
+    expect(new SettingsRepository(db).verification()).toEqual({ maxVerificationIterations: 5 });
+    expect(listPendingOutbox(db)).toEqual([]);
+  });
+});
+
 describe("request origin for /api/settings", () => {
   it.each([
     ["a Host that is not localhost (DNS rebinding)", { host: "evil.example.com" }],

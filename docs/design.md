@@ -548,7 +548,7 @@ The tool does not wait for the answer inside the MCP call: MCP clients have time
 
 - The verifier runs in a new agent, with the approved spec and the diff, without the implementer's context.
 - Rework returns the task to in progress with the findings as structured input; the iteration counter goes up.
-- On reaching 3 iterations (configurable per project with `limits.maxVerificationIterations`), the task moves to *needs human* instead of continuing the loop.
+- On reaching the iteration cap, the task moves to *needs human* instead of continuing the loop. The cap is the project's `limits.maxVerificationIterations` if defined, otherwise the global cap saved in Settings, otherwise 5.
 - The review is done by the specialized subagents that apply to the diff and the main session decides as approver (see Verification with subagents).
 
 **Delivery (completed)**
@@ -678,7 +678,7 @@ Summary of what has already been decided; each point is reflected in its section
 | Liveness | No heartbeat or lease; herdr signals + phase timeout (default 30 min) |
 | Permissions | Auto mode (no confirmations) in all phases, defined in the agent profile's args |
 | Escalation | If an agent stays blocked or a Question stays open after 1 minute, it is notified through herdr and the UI |
-| Retries | 3 retries with backoff on crash; maximum 3 verification iterations; then Needs human |
+| Retries | 3 retries with backoff on crash; maximum 5 verification iterations by default (configurable globally in Settings and per project); then Needs human |
 | Closing | The pane is closed when the phase ends; the worktree is kept until the merge; each Run stores the agent's session identity |
 | Manual intervention | Allowed in any pane; the dispatcher only reacts to MCP signals and herdr state, so what is typed by hand does not end up in the task's history |
 | Factory model | Lights‑on: human gate on the spec and on the merge; no direct commits to main; deployment only via the project's hooks |

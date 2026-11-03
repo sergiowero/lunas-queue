@@ -23,6 +23,7 @@ import type {
   TaskDependencies,
   TaskEvidence,
   TaskUsage,
+  VerificationSettings,
 } from "@lunasq/schemas";
 
 export type Json<T> = T extends Date
@@ -140,6 +141,12 @@ export const api = {
   concurrencySettings: () => request<ConcurrencySettings>("/api/settings/concurrency"),
   updateConcurrencySettings: (input: ConcurrencySettings) =>
     request<ConcurrencySettings>("/api/settings/concurrency", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+  verificationSettings: () => request<VerificationSettings>("/api/settings/verification"),
+  updateVerificationSettings: (input: VerificationSettings) =>
+    request<VerificationSettings>("/api/settings/verification", {
       method: "PUT",
       body: JSON.stringify(input),
     }),

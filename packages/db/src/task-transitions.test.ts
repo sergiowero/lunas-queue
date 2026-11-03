@@ -1,3 +1,4 @@
+import { DEFAULT_MAX_ITERATIONS } from "@lunasq/domain";
 import { TaskTransitionedPayload } from "@lunasq/schemas";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
@@ -220,13 +221,13 @@ describe("transitionTask", () => {
     const t = insertTask(db, insertProject(db).id, {
       state: "verification",
       subState: "running",
-      verificationIteration: 3,
+      verificationIteration: DEFAULT_MAX_ITERATIONS,
     });
     expect(
       apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } }).task.state,
     ).toBe("needs_human");
     // Resuming after exhausted iterations goes back to implementation (there are pending must-fixes), not to
-    // verification, and grants a new cycle of three reworks.
+    // verification, and grants a new full cycle of reworks.
     expect(
       apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } }).task,
     ).toMatchObject({ state: "in_progress", subState: "queued", verificationIteration: 0 });

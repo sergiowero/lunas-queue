@@ -264,19 +264,19 @@ describe("implementation ↔ verification loop", { timeout: 60_000 }, () => {
     ]);
   });
 
-  it("the fourth verification that rejects ends in needs_human", async () => {
+  it("the sixth verification that rejects (default cap 5) ends in needs_human", async () => {
     const l = await loop();
-    for (let n = 1; n <= 3; n += 1) {
+    for (let n = 1; n <= 5; n += 1) {
       await l.implement(n);
       await l.verify(n, "reject");
     }
-    await l.implement(4);
-    await l.verify(4, "reject");
+    await l.implement(6);
+    await l.verify(6, "reject");
 
     expect(l.tasks.get(l.task.id)).toMatchObject({
       state: "needs_human",
       subState: null,
-      verificationIteration: 3,
+      verificationIteration: 5,
     });
     const escalation = listEvents(l.db, l.task.id)
       .filter((e) => e.type === "task.transitioned")
@@ -286,8 +286,8 @@ describe("implementation ↔ verification loop", { timeout: 60_000 }, () => {
       to: { state: "needs_human" },
       reason: "iterations_exhausted",
     });
-    // A fifth implementer is not dispatched.
+    // A seventh implementer is not dispatched.
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(l.runs.forTask(l.task.id).filter((r) => r.phase === "implement")).toHaveLength(4);
+    expect(l.runs.forTask(l.task.id).filter((r) => r.phase === "implement")).toHaveLength(6);
   });
 });
