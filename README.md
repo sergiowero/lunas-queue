@@ -100,19 +100,13 @@ pnpm lunasq install            # optional: --port <n> to change the port
 # 3. Check that everything is green
 pnpm lunasq doctor
 
-# 4. Start LunasQ on localhost (port 7360 by default)
-pnpm lunasq start
+# 4. Start the server and the UI
+pnpm dev
 ```
 
-`install` installs nothing if requirements are missing and lists the ones that are. `start` prints the UI URL.
+`install` installs nothing if requirements are missing and lists the ones that are. `dev` runs the LunasQ server (port 7360 by default) and Vite together, and Vite prints the UI URL (normally `http://localhost:5173`). Ctrl-C stops both.
 
-### Front end in development
-
-To work on the UI, start Vite pointing at the LunasQ server (the proxy defaults to port 4310, so pass 7360):
-
-```bash
-LUNASQ_API=http://localhost:7360 pnpm --filter @lunasq/web dev
-```
+To run only the server, use `pnpm lunasq start`. It serves the UI on its own port once the front end is built with `pnpm --filter @lunasq/web build`.
 
 ## Usage
 

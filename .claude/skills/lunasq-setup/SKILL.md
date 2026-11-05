@@ -59,13 +59,15 @@ Typical errors: `LunasQ is not installed` → step 4; port in use → `lunasq in
 
 ## 6. Front end (optional)
 
-`lunasq start` does not mount the front end build today (`webRoot` is not passed from `startRuntime`), so the UI is run with Vite pointing at the server:
+To run the server and the UI together, use this instead of step 5:
 
 ```sh
-LUNASQ_API=http://127.0.0.1:7360 pnpm --filter @lunasq/web dev
+pnpm dev
 ```
 
-`LUNASQ_API` is necessary: the proxy in `vite.config.ts` uses 4310 by default, not `start`'s 7360. Vite prints the URL (normally `http://localhost:5173`).
+It starts `lunasq start` and Vite in one terminal, with the output labelled `[api]` and `[web]`, and points Vite's proxy at the configured port. Vite prints the URL (normally `http://localhost:5173`). Ctrl-C stops both, and if one ends the other is stopped.
+
+`lunasq start` also serves the front end build on its own port if it exists (`pnpm --filter @lunasq/web build`).
 
 ## Repo verification
 

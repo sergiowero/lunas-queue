@@ -35,6 +35,7 @@ Strict TypeScript on Node.js 26 LTS, pnpm, SQLite (better-sqlite3 + Drizzle), Ho
 | Action | Command |
 | --- | --- |
 | Install | `pnpm install` |
+| Run the server and the UI | `pnpm dev` |
 | Tests | `pnpm test` |
 | Tests of one package | `pnpm --filter <package> test` |
 | Lint and format | `pnpm lint` / `pnpm format` |
