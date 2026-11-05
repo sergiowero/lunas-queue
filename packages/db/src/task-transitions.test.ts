@@ -5,7 +5,7 @@ import type { LunasqDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
 import { tasks } from "./schema.ts";
 import { type TransitionTaskInput, transitionTask } from "./task-transitions.ts";
-import { insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
+import { insertProject, insertTask, migratedDatabase, setTaskPosition } from "./test-helpers.ts";
 
 const taskRow = (db: LunasqDatabase, id: string) => {
   const row = db.select().from(tasks).where(eq(tasks.id, id)).get();
@@ -202,6 +202,7 @@ describe("transitionTask", () => {
       state: "verification",
       subState: "queued",
       verificationIteration: 2,
+      verificationCycleStart: 0,
     });
 
     apply(db, { taskId: t.id, actor: "system", command: { type: "dispatch" } });
@@ -226,10 +227,74 @@ describe("transitionTask", () => {
       apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } }).task.state,
     ).toBe("needs_human");
     // Resuming after exhausted iterations goes back to implementation (there are pending must-fixes), not to
-    // verification, and grants a new cycle of three reworks.
+    // verification. The cumulative iteration is kept and a new cycle of three reworks starts at it.
+    const resumed = apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } });
+    expect(resumed.task).toMatchObject({
+      state: "in_progress",
+      subState: "queued",
+      verificationIteration: 3,
+      verificationCycleStart: 3,
+    });
+    expect(TaskTransitionedPayload.parse(resumed.event.payload)).toMatchObject({
+      command: "resume",
+      verificationIteration: 3,
+    });
+  });
+
+  it("after an exhausted resume the iteration keeps rising and a full new cycle is granted", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id, {
+      state: "verification",
+      subState: "running",
+      verificationIteration: 3,
+    });
+    apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } });
+    apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } });
+    const goToVerification = () => {
+      setTaskPosition(db, t.id, {
+        state: "verification",
+        subState: "running",
+        verificationIteration: taskRow(db, t.id).verificationIteration,
+      });
+    };
+    const iterations: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      goToVerification();
+      const rework = apply(db, {
+        taskId: t.id,
+        actor: "agent",
+        command: { type: "verdict_rework" },
+      });
+      expect(rework.task.state).toBe("in_progress");
+      iterations.push(rework.task.verificationIteration);
+    }
+    expect(iterations).toEqual([4, 5, 6]);
+    goToVerification();
+    expect(
+      apply(db, { taskId: t.id, actor: "agent", command: { type: "verdict_rework" } }).task,
+    ).toMatchObject({
+      state: "needs_human",
+      verificationIteration: 6,
+      verificationCycleStart: 3,
+    });
+  });
+
+  it("resuming a paused task keeps the iteration and the cycle start", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id, {
+      state: "in_progress",
+      subState: "running",
+      verificationIteration: 5,
+      verificationCycleStart: 3,
+    });
+    apply(db, {
+      taskId: t.id,
+      actor: "human",
+      command: { type: "pause", deliveryInProgress: false },
+    });
     expect(
       apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } }).task,
-    ).toMatchObject({ state: "in_progress", subState: "queued", verificationIteration: 0 });
+    ).toMatchObject({ state: "in_progress", verificationIteration: 5, verificationCycleStart: 3 });
   });
 
   it("a payload outside the schema does not reach the log and the task stays resumable", () => {

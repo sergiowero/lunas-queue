@@ -110,6 +110,8 @@ export const tasks = sqliteTable(
     // Only the states with an agent have a sub-state; consistency with state is enforced by the state machine.
     subState: text("sub_state", { enum: values(SubState) }).default("queued"),
     verificationIteration: integer("verification_iteration").notNull().default(0),
+    // Iteration at which the current verification cycle began (ADR 0007); never above the iteration.
+    verificationCycleStart: integer("verification_cycle_start").notNull().default(0),
     branch: text("branch"),
     worktreePath: text("worktree_path"),
     prUrl: text("pr_url"),
@@ -131,6 +133,11 @@ export const tasks = sqliteTable(
       sql`${isInteger(t.priority)} and ${t.priority} between 0 and ${sql.raw(String(Number.MAX_SAFE_INTEGER))}`,
     ),
     unsignedInt("tasks_verification_iteration_unsigned", t.verificationIteration),
+    unsignedInt("tasks_verification_cycle_start_unsigned", t.verificationCycleStart),
+    check(
+      "tasks_verification_cycle_start_in_range",
+      sql`${t.verificationCycleStart} <= ${t.verificationIteration}`,
+    ),
     inEnum("tasks_state_enum", t.state, values(TaskState)),
     inEnum("tasks_sub_state_enum", t.subState, values(SubState)),
     inEnum("tasks_pr_state_enum", t.prState, values(PrState)),

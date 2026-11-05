@@ -95,7 +95,10 @@ export function insertRun(
 export function setTaskPosition(
   db: LunasqDatabase,
   taskId: string,
-  position: Pick<typeof tasks.$inferInsert, "state" | "subState" | "verificationIteration">,
+  position: Pick<
+    typeof tasks.$inferInsert,
+    "state" | "subState" | "verificationIteration" | "verificationCycleStart"
+  >,
 ) {
   db.update(tasks).set(position).where(eq(tasks.id, taskId)).run();
 }

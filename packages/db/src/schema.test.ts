@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -286,6 +287,20 @@ describe("tasks", () => {
     expect(() => insertTask(db, p.id, { verificationIteration: -1 })).toThrow(CHECK);
   });
 
+  it("verification cycle start defaults to 0 and cannot be negative or exceed the iteration", () => {
+    const db = migratedDatabase();
+    const p = insertProject(db);
+    expect(insertTask(db, p.id).verificationCycleStart).toBe(0);
+    expect(
+      insertTask(db, p.id, { verificationIteration: 3, verificationCycleStart: 3 })
+        .verificationCycleStart,
+    ).toBe(3);
+    expect(() => insertTask(db, p.id, { verificationCycleStart: -1 })).toThrow(CHECK);
+    expect(() =>
+      insertTask(db, p.id, { verificationIteration: 2, verificationCycleStart: 3 }),
+    ).toThrow(CHECK);
+  });
+
   it("project_id must exist", () => {
     const db = migratedDatabase();
     expect(() => insertTask(db, "no-existe")).toThrow(FK);
@@ -468,14 +483,21 @@ describe("runs", () => {
       cpSync(migrationsFolder, previous, { recursive: true });
       const journalFile = join(previous, "meta", "_journal.json");
       const journal = JSON.parse(readFileSync(journalFile, "utf8"));
-      journal.entries = journal.entries.filter(
-        (e: { tag: string }) => e.tag !== "0015_agent_kind_codex",
+      // Drizzle applies by timestamp: the previous state is every migration before 0015.
+      const codexIndex = journal.entries.findIndex(
+        (e: { tag: string }) => e.tag === "0015_agent_kind_codex",
       );
+      journal.entries = journal.entries.slice(0, codexIndex);
       writeFileSync(journalFile, JSON.stringify(journal));
       const { db } = freshDatabase();
       migrate(db, { migrationsFolder: previous });
-      const task = insertTask(db, insertProject(db).id);
-      const run = insertRun(db, task.id);
+      // Raw insert: the current Drizzle schema names columns the previous database does not have yet.
+      const project = insertProject(db);
+      const taskId = randomUUID();
+      db.$client
+        .prepare("insert into tasks (id, project_id, intent, priority) values (?, ?, 'Do it', 100)")
+        .run(taskId, project.id);
+      const run = insertRun(db, taskId);
       db.insert(usageRecords).values({ runId: run.id, model: "gpt-5.4", source: "otel" }).run();
 
       migrateDatabase(db);

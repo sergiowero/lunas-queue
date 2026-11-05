@@ -103,7 +103,8 @@ const snap = (
   state: TaskState,
   subState: SubState | null,
   verificationIteration = 0,
-): TaskSnapshot => ({ state, subState, verificationIteration });
+  verificationCycleStart = 0,
+): TaskSnapshot => ({ state, subState, verificationIteration, verificationCycleStart });
 
 describe("transition: full table of states × commands", () => {
   for (const [state, sub] of SNAPSHOTS) {
@@ -161,6 +162,21 @@ describe("transition: inconsistent sub-state", () => {
     for (const iteration of [-1, 0.5, Number.NaN]) {
       expect(
         transition(snap("draft", "queued", iteration), passing.dispatch, "system"),
+      ).toMatchObject({ ok: false, error: { code: "invalid_transition" } });
+    }
+  });
+});
+
+describe("transition: incoherent verification cycle start", () => {
+  it("rejects a cycle start that is negative, non-integer or greater than the iteration", () => {
+    for (const [iteration, cycleStart] of [
+      [3, -1],
+      [3, 0.5],
+      [3, Number.NaN],
+      [2, 3],
+    ] as const) {
+      expect(
+        transition(snap("draft", "queued", iteration, cycleStart), passing.dispatch, "system"),
       ).toMatchObject({ ok: false, error: { code: "invalid_transition" } });
     }
   });
@@ -330,6 +346,34 @@ describe("transition: verification loop", () => {
     });
   });
 
+  it("a resumed task keeps raising the cumulative iteration (AC-2, AC-3)", () => {
+    expect(
+      transition(snap("verification", "running", 3, 3), passing.verdict_rework, "agent"),
+    ).toMatchObject({ ok: true, next: snap("in_progress", "queued", 4, 3) });
+    expect(
+      transition(snap("verification", "running", 5, 3), passing.verdict_rework, "agent"),
+    ).toMatchObject({ ok: true, next: snap("in_progress", "queued", 6, 3) });
+  });
+
+  it("a resumed task escalates once its own cycle is spent, keeping the iteration (AC-4)", () => {
+    expect(
+      transition(snap("verification", "running", 6, 3), passing.verdict_rework, "agent"),
+    ).toMatchObject({
+      ok: true,
+      next: snap("needs_human", null, 6, 3),
+      event: { payload: { reason: "iterations_exhausted", verificationIteration: 6 } },
+    });
+  });
+
+  it("a never-resumed task behaves as before at and below the maximum (AC-5)", () => {
+    expect(
+      transition(snap("verification", "running", 2, 0), passing.verdict_rework, "agent"),
+    ).toMatchObject({ ok: true, next: snap("in_progress", "queued", 3, 0) });
+    expect(
+      transition(snap("verification", "running", 3, 0), passing.verdict_rework, "agent"),
+    ).toMatchObject({ ok: true, next: snap("needs_human", null, 3, 0) });
+  });
+
   it("respects a configured maximum", () => {
     const result = transition(
       snap("verification", "running", 1),
@@ -410,14 +454,31 @@ describe("transition: human in the loop", () => {
     }
   });
 
-  it("resume with resetIteration grants a new verification cycle", () => {
+  it("resume with newCycle keeps the iteration and starts a new verification cycle at it (AC-1)", () => {
     expect(
       transition(
         snap("needs_human", null, 3),
-        { type: "resume", resumeTo: "in_progress", resetIteration: true },
+        { type: "resume", resumeTo: "in_progress", newCycle: true },
         "human",
       ),
-    ).toMatchObject({ ok: true, next: snap("in_progress", "queued", 0) });
+    ).toMatchObject({
+      ok: true,
+      next: snap("in_progress", "queued", 3, 3),
+      event: { payload: { command: "resume", verificationIteration: 3 } },
+    });
+  });
+
+  it("resume without newCycle keeps both the iteration and the cycle start (AC-6)", () => {
+    expect(
+      transition(snap("paused", null, 2, 0), { type: "resume", resumeTo: "in_progress" }, "human"),
+    ).toMatchObject({ ok: true, next: snap("in_progress", "queued", 2, 0) });
+    expect(
+      transition(
+        snap("needs_human", null, 5, 3),
+        { type: "resume", resumeTo: "verification" },
+        "human",
+      ),
+    ).toMatchObject({ ok: true, next: snap("verification", "queued", 5, 3) });
   });
 
   it("cancel stores the note in the event", () => {
@@ -520,7 +581,7 @@ describe("transition: submit_result", () => {
         "agent",
       );
       if (!result.ok) throw new Error(result.error.message);
-      expect(result.next).toEqual({ state: "completed", subState: null, verificationIteration: 2 });
+      expect(result.next).toEqual(snap("completed", null, 2));
       expect(result.event.payload).toEqual({
         command: "submit_result",
         from: { state, subState: "running" },

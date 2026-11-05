@@ -89,15 +89,16 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
     }
     // Exhausted iterations in verification: there is an unfixed must-fix. Resuming to verification
     // would verify the same unchanged diff again and escalate again; the destination is implement.
-    // And since the human resumes so the agent fixes it, a new cycle of
-    // iterations is granted (resetIteration); otherwise, the first reject would escalate again at once.
+    // And since the human resumes so the agent fixes it, a new cycle of iterations starts at the
+    // current one (newCycle); the cumulative iteration is kept. Otherwise, the first reject would
+    // escalate again at once.
     const exhausted =
       origin !== undefined &&
       origin.from === "verification" &&
       origin.reason === "iterations_exhausted";
     const resumeTo = exhausted ? "in_progress" : (origin?.from ?? current.state);
     command = exhausted
-      ? { ...input.command, resumeTo, resetIteration: true }
+      ? { ...input.command, resumeTo, newCycle: true }
       : { ...input.command, resumeTo };
   } else {
     command = input.command;
@@ -107,6 +108,7 @@ export function applyTransition(tx: Tx, input: TransitionTaskInput): TransitionT
     state: current.state,
     subState: current.subState,
     verificationIteration: current.verificationIteration,
+    verificationCycleStart: current.verificationCycleStart,
   };
   const result = transition(snapshot, command, input.actor);
   if (!result.ok) return result;

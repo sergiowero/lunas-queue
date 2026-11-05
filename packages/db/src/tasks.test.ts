@@ -57,6 +57,7 @@ describe("TaskRepository.create", () => {
       state: "draft",
       subState: "queued",
       verificationIteration: 0,
+      verificationCycleStart: 0,
       causedBy: null,
     });
     const [event] = listEvents(db, task.id);

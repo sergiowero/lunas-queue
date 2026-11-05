@@ -19,7 +19,10 @@ export const DEFAULT_MAX_RETRIES = 3;
 export type TaskSnapshot = {
   state: TaskState;
   subState: SubState | null;
+  /** Cumulative number of reworks; it never decreases. */
   verificationIteration: number;
+  /** Iteration at which the current verification cycle began (0 if never resumed after exhaustion). */
+  verificationCycleStart: number;
 };
 
 export type CommandInput =
@@ -49,8 +52,9 @@ export type CommandInput =
   | { type: "cancel"; note?: string }
   // deliveryInProgress: the verifier Run is still open with the handoff saved (delivery).
   | { type: "pause"; deliveryInProgress: boolean }
-  // resetIteration: the human grants a new complete verification cycle.
-  | { type: "resume"; resumeTo: TaskState; resetIteration?: boolean }
+  // newCycle: the human grants a new complete verification cycle that starts at the current
+  // iteration; the cumulative iteration is not reset.
+  | { type: "resume"; resumeTo: TaskState; newCycle?: boolean }
   | { type: "dispatch" }
   | { type: "ask_human" }
   | { type: "answer"; agentAlive: boolean }
@@ -101,10 +105,14 @@ export function isTerminal(state: TaskState): boolean {
 function isCoherent(task: TaskSnapshot): boolean {
   const iterationOk =
     Number.isInteger(task.verificationIteration) && task.verificationIteration >= 0;
+  const cycleStartOk =
+    Number.isInteger(task.verificationCycleStart) &&
+    task.verificationCycleStart >= 0 &&
+    task.verificationCycleStart <= task.verificationIteration;
   const subStateOk = AGENT_STATES.includes(task.state)
     ? task.subState !== null
     : task.subState === null;
-  return iterationOk && subStateOk;
+  return iterationOk && cycleStartOk && subStateOk;
 }
 
 const isPositiveInt = (n: number) => Number.isInteger(n) && n > 0;
@@ -113,6 +121,7 @@ type Outcome = {
   to: TaskState;
   subState?: SubState | null;
   iteration?: number;
+  cycleStart?: number;
   reason?: EscalationReason;
 };
 type Rule = {
@@ -180,7 +189,8 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
         from: at("verification", "running"),
         guard: () => (isPositiveInt(max) ? undefined : "maxIterations must be a positive integer"),
         outcome: () =>
-          iteration < max
+          // The cycle is counted from where the last resume after exhaustion left the iteration.
+          iteration - task.verificationCycleStart < max
             ? { to: "in_progress", iteration: iteration + 1 }
             : { to: "needs_human", reason: "iterations_exhausted" },
       };
@@ -232,8 +242,8 @@ function rule(task: TaskSnapshot, command: CommandInput): Rule {
             ? undefined
             : `cannot resume to ${command.resumeTo}`,
         outcome: () =>
-          command.resetIteration
-            ? { to: command.resumeTo, iteration: 0 }
+          command.newCycle
+            ? { to: command.resumeTo, cycleStart: iteration }
             : { to: command.resumeTo },
       };
     case "dispatch":
@@ -299,6 +309,7 @@ export function transition(
     state: outcome.to,
     subState: outcome.subState !== undefined ? outcome.subState : subStateFor(outcome.to),
     verificationIteration: outcome.iteration ?? task.verificationIteration,
+    verificationCycleStart: outcome.cycleStart ?? task.verificationCycleStart,
   };
   const payload: TaskTransitionedPayload = {
     command: command.type,

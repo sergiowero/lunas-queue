@@ -63,7 +63,10 @@ export const Task = z.strictObject({
   priority: Priority,
   state: TaskState,
   subState: SubState.nullable(),
+  // Cumulative number of reworks; it never decreases, not even when the task is resumed.
   verificationIteration: z.int().min(0),
+  // Iteration at which the current verification cycle began; never above verificationIteration.
+  verificationCycleStart: z.int().min(0),
   branch: z.string().nullable(),
   worktreePath: z.string().nullable(),
   prUrl: z.string().nullable(),
