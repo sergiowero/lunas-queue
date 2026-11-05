@@ -4,7 +4,7 @@ import type { QueueEntry } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type CellContext, createColumnHelper } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
 import { PauseTaskButton, ResumeTaskButton } from "../components/task-actions.tsx";
@@ -14,6 +14,7 @@ import type { Json } from "../lib/api.ts";
 import { canPause, canResume, cappedTaskLabel, formatCost, formatTokens } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
+import { useProjectFilter, useTabFilters } from "../lib/tab-filters.tsx";
 
 type Entry = Json<QueueEntry>;
 const column = createColumnHelper<Entry>();
@@ -39,8 +40,9 @@ function ActionsCell({ row }: CellContext<Entry, unknown>) {
 
 export function QueuePage() {
   const t = useT();
-  const [projectId, setProjectId] = useState("");
+  const [, setFilters] = useTabFilters("queue");
   const projects = useQuery(queries.projects());
+  const projectId = useProjectFilter("queue", projects.data);
   const queue = useQuery(queries.queue(projectId || undefined));
   const names = useMemo(
     () => new Map((projects.data ?? []).map((p) => [p.id, p.name])),
@@ -100,7 +102,7 @@ export function QueuePage() {
           <Select
             id="queue-project"
             value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
+            onChange={(e) => setFilters({ projectId: e.target.value })}
           >
             <option value="">{t.allProjects}</option>
             {(projects.data ?? []).map((p) => (

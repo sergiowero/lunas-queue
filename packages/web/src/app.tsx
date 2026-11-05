@@ -2,6 +2,7 @@ import { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { useLayoutEffect } from "react";
 import { initLanguage } from "./lib/i18n.ts";
+import { TabFiltersProvider } from "./lib/tab-filters.tsx";
 import { initTheme } from "./lib/theme.ts";
 import type { createAppRouter } from "./router.tsx";
 
@@ -18,7 +19,9 @@ export function App({
   useLayoutEffect(initLanguage, []);
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <TabFiltersProvider>
+        <RouterProvider router={router} />
+      </TabFiltersProvider>
     </QueryClientProvider>
   );
 }

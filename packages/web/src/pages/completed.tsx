@@ -15,6 +15,7 @@ import type { Json } from "../lib/api.ts";
 import { cappedTaskLabel } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
+import { useProjectFilter, useTabFilters } from "../lib/tab-filters.tsx";
 
 type Row = Json<Task>;
 const column = createColumnHelper<Row>();
@@ -27,10 +28,11 @@ const REST_PAGE_SIZE = 20;
 
 export function CompletedPage() {
   const t = useT();
-  const [projectId, setProjectId] = useState("");
-  const [prFilter, setPrFilter] = useState("");
+  const [filters, setFilters] = useTabFilters("completed");
+  const { prFilter } = filters;
   const [restPage, setRestPage] = useState(0);
   const projects = useQuery(queries.projects());
+  const projectId = useProjectFilter("completed", projects.data);
   const tasks = useQuery(queries.tasks(projectId || undefined));
   const names = useMemo(
     () => new Map((projects.data ?? []).map((project) => [project.id, project.name])),
@@ -121,7 +123,7 @@ export function CompletedPage() {
               id="completed-project"
               value={projectId}
               onChange={(event) => {
-                setProjectId(event.target.value);
+                setFilters({ projectId: event.target.value });
                 setRestPage(0);
               }}
             >
@@ -139,7 +141,7 @@ export function CompletedPage() {
               id="completed-pr-state"
               value={prFilter}
               onChange={(event) => {
-                setPrFilter(event.target.value);
+                setFilters({ prFilter: event.target.value });
                 setRestPage(0);
               }}
             >

@@ -512,4 +512,32 @@ describe("Completed tab", () => {
       expect(within(rest()).getAllByRole("row")).toHaveLength(21);
     });
   });
+
+  describe("filters across navigation", () => {
+    const completed = { state: "completed", subState: null } as const;
+
+    it("keeps project and PR state when the user goes to another tab and comes back", async () => {
+      const fake = new FakeApi();
+      const one = fake.addProject({ name: "uno" });
+      const two = fake.addProject({ name: "dos" });
+      fake.addTask(one.id, { ...completed, intent: "Merged de uno", prState: "merged" });
+      fake.addTask(two.id, { ...completed, intent: "Merged de dos", prState: "merged" });
+      fake.addTask(one.id, { ...completed, intent: "Open de uno", prState: "open" });
+      const { user, router } = renderApp("/completed", fake);
+      await screen.findByText("Merged de dos");
+      await user.selectOptions(screen.getByLabelText("Proyecto"), one.id);
+      await user.selectOptions(screen.getByLabelText("Estado del PR"), "merged");
+      await waitFor(() => expect(screen.queryByText("Merged de dos")).toBeNull());
+
+      await router.navigate({ to: "/in-progress" });
+      await screen.findByRole("heading", { name: "En curso" });
+      await router.navigate({ to: "/completed" });
+
+      await screen.findByText("Merged de uno");
+      expect((screen.getByLabelText("Proyecto") as HTMLSelectElement).value).toBe(one.id);
+      expect((screen.getByLabelText("Estado del PR") as HTMLSelectElement).value).toBe("merged");
+      expect(screen.queryByText("Merged de dos")).toBeNull();
+      expect(screen.queryByText("Open de uno")).toBeNull();
+    });
+  });
 });
