@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { FakeProcessRunner } from "./fake.ts";
-import { isProcessError, OUTPUT_LIMIT_BYTES, ShellProcessRunner } from "./real.ts";
+import {
+  findWindowsShell,
+  isProcessError,
+  OUTPUT_LIMIT_BYTES,
+  ShellProcessRunner,
+} from "./real.ts";
 import type { ProcessRunner } from "./types.ts";
 
 const dirs: string[] = [];
@@ -101,6 +106,25 @@ describe("ShellProcessRunner", () => {
       .run({ command: "true", cwd: join(tempDir(), "no-existe") })
       .catch((e) => e);
     expect(isProcessError(err, "spawn_failed")).toBe(true);
+  });
+});
+
+describe("findWindowsShell", () => {
+  const execPath = "C:/Program Files/Git/mingw64/libexec/git-core";
+  const only = (path: string) => (candidate: string) => candidate === path;
+
+  it("finds Git for Windows' sh.exe from git's exec path", () => {
+    const sh = "C:\\Program Files\\Git\\bin\\sh.exe";
+    expect(findWindowsShell(execPath, only(sh))).toBe(sh);
+  });
+
+  it("finds the usr/bin one when the installation has no bin/sh.exe", () => {
+    const sh = "C:\\Program Files\\Git\\usr\\bin\\sh.exe";
+    expect(findWindowsShell(execPath, only(sh))).toBe(sh);
+  });
+
+  it("returns undefined if there is none up to the root", () => {
+    expect(findWindowsShell(execPath, () => false)).toBeUndefined();
   });
 });
 

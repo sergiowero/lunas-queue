@@ -136,7 +136,7 @@ export async function checkHerdr(ctx: MachineContext): Promise<CheckResult[]> {
 export async function claudeIntegrationState(ctx: MachineContext): Promise<string | undefined> {
   const res = await run(ctx, "herdr integration status");
   if (res.exitCode !== 0) return undefined;
-  return /^claude:\s*(.+?)(?:\s+\(\/.*\))?\s*$/m.exec(res.stdout)?.[1];
+  return /^claude:\s*(.+?)(?:\s+\((?:\/|[A-Za-z]:).*\))?\s*$/m.exec(res.stdout)?.[1];
 }
 
 export async function checkHerdrIntegration(ctx: MachineContext): Promise<CheckResult> {

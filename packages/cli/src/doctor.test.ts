@@ -152,6 +152,17 @@ describe("doctor", () => {
     });
   });
 
+  it("leaves the Windows path of the herdr integration out of its state", async () => {
+    const { ctx, responses } = await installed();
+    responses["herdr integration status"] = {
+      stdout: "claude: current (v11) (C:\\Users\\h\\.claude\\hooks\\herdr-agent-state.ps1)\n",
+    };
+    expect(byId(await runDoctor(ctx), "herdr-integration")).toMatchObject({
+      status: "ok",
+      summary: "herdr integration for Claude Code: current (v11)",
+    });
+  });
+
   it("warns with herdr toasts off (default) and not with another delivery", async () => {
     const { ctx } = await installed();
     expect(byId(await runDoctor(ctx), "herdr-toast")?.status).toBe("warn");

@@ -1,7 +1,13 @@
-// Real runner: `sh -c` in its own process group, so the timeout also kills the children.
-import { spawn } from "node:child_process";
+// Real runner: `sh -c` in its own process group, so the timeout also kills the children. Windows has
+// neither /bin/sh nor process groups: it uses Git for Windows' sh.exe and kills the process tree
+// (ADR windows-shell).
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { constants } from "node:os";
+import { win32 } from "node:path";
 import type { ProcessInput, ProcessResult, ProcessRunner } from "./types.ts";
+
+const IS_WINDOWS = process.platform === "win32";
 
 /** After the shell exits, how long to wait for the children to release stdout/stderr before killing them. */
 export const EXIT_GRACE_MS = 200;
@@ -50,14 +56,58 @@ class Tail {
   }
 }
 
+/**
+ * Git for Windows' sh.exe, looking upwards from `git --exec-path`. `sh` and `bash` from the PATH are
+ * not used: the first is usually not there and the second may be the WSL launcher, which would run
+ * the command inside a Linux distribution.
+ */
+export function findWindowsShell(
+  gitExecPath: string,
+  exists: (path: string) => boolean = existsSync,
+): string | undefined {
+  for (let dir = gitExecPath; ; dir = win32.dirname(dir)) {
+    const found = [win32.join(dir, "bin", "sh.exe"), win32.join(dir, "usr", "bin", "sh.exe")].find(
+      exists,
+    );
+    if (found) return found;
+    if (win32.dirname(dir) === dir) return undefined;
+  }
+}
+
+function gitExecPath(): string | undefined {
+  try {
+    return execFileSync("git", ["--exec-path"], { encoding: "utf8", windowsHide: true }).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+let windowsShell: string | undefined;
+
+function shell(): string {
+  if (!IS_WINDOWS) return "/bin/sh";
+  if (windowsShell) return windowsShell;
+  const execPath = gitExecPath();
+  windowsShell = execPath === undefined ? undefined : findWindowsShell(execPath);
+  if (!windowsShell) {
+    throw new ProcessError(
+      "spawn_failed",
+      "sh.exe not found: install Git for Windows and make sure `git` is on the PATH",
+    );
+  }
+  return windowsShell;
+}
+
 export class ShellProcessRunner implements ProcessRunner {
   run(input: ProcessInput): Promise<ProcessResult> {
     return new Promise((resolve, reject) => {
-      const child = spawn("/bin/sh", ["-c", input.command], {
+      const child = spawn(shell(), ["-c", input.command], {
         cwd: input.cwd,
         env: { ...inheritedEnv(input.envAllowlist), ...input.env },
         stdio: ["ignore", "pipe", "pipe"],
-        detached: true,
+        // On Windows `detached` means a new console, not a process group.
+        detached: !IS_WINDOWS,
+        windowsHide: true,
       });
       const stdout = new Tail(OUTPUT_LIMIT_BYTES);
       const stderr = new Tail(OUTPUT_LIMIT_BYTES);
@@ -70,7 +120,7 @@ export class ShellProcessRunner implements ProcessRunner {
           ? undefined
           : setTimeout(() => {
               timedOut = true;
-              killGroup(child.pid);
+              killGroup(child);
             }, input.timeoutMs);
 
       let grace: NodeJS.Timeout | undefined;
@@ -100,14 +150,14 @@ export class ShellProcessRunner implements ProcessRunner {
       // of its group is killed; a child that went to another session (setsid) loses the pipes, it does not hang.
       child.on("exit", (code, signal) => {
         grace = setTimeout(() => {
-          killGroup(child.pid);
+          killGroup(child);
           child.stdout.destroy();
           child.stderr.destroy();
           finish(code, signal);
         }, EXIT_GRACE_MS);
       });
       child.on("close", (code, signal) => {
-        killGroup(child.pid);
+        killGroup(child);
         finish(code, signal);
       });
     });
@@ -122,8 +172,18 @@ function inheritedEnv(allowlist: string[] | undefined): NodeJS.ProcessEnv {
   );
 }
 
-function killGroup(pid: number | undefined) {
+function killGroup(child: ChildProcess) {
+  const pid = child.pid;
   if (pid === undefined) return;
+  if (IS_WINDOWS) {
+    // `taskkill /T` walks down from the shell, so it can only find the children while the shell lives.
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    }).on("error", () => {});
+    return;
+  }
   try {
     process.kill(-pid, "SIGKILL");
   } catch {
