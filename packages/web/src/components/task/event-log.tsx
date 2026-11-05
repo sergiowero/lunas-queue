@@ -81,6 +81,8 @@ export function EventLogPanel({ taskId }: { taskId: string }) {
   const t = useT();
   const events = useQuery(queries.events(taskId));
   const count = events.data?.length;
+  // Newest first; the cached array (write order) must not be mutated.
+  const newestFirst = events.data ? [...events.data].reverse() : [];
   return (
     <Section title={t.eventLog.title}>
       {events.error ? (
@@ -95,7 +97,7 @@ export function EventLogPanel({ taskId }: { taskId: string }) {
             {t.eventLog.show(count ?? 0)}
           </summary>
           <ol className="mt-3 flex flex-col gap-3 text-sm">
-            {events.data.map((event) => (
+            {newestFirst.map((event) => (
               <li
                 key={event.id}
                 className="flex flex-wrap items-baseline gap-2 border-b pb-3 last:border-b-0"
