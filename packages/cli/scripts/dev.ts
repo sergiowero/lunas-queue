@@ -1,7 +1,8 @@
-// `pnpm dev`: the LunasQ server and Vite in one terminal. Vite sends /api to the port in the
-// configuration; if either process ends, the other one is stopped. Everything runs on this Node
-// without a shell, so it works the same on Windows, macOS and Linux.
-import { spawn } from "node:child_process";
+// `pnpm dev`: the LunasQ server in watch mode and Vite in one terminal. Vite sends /api to the port
+// in the configuration; if either process ends, the other one is stopped. A server that crashes does
+// not end: `node --watch` waits for the next change. Everything runs on this Node without a shell,
+// so it works the same on Windows, macOS and Linux.
+import { type ChildProcess, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { baseUrl, ConfigError, readConfig } from "../src/config.ts";
 import { resolvePaths } from "../src/paths.ts";
@@ -33,6 +34,22 @@ function labelled(label: string, write: Write) {
 }
 
 /**
+ * On Windows `kill` ends only that process: it would leave the server that `node --watch` started
+ * running, with the port taken.
+ */
+function killTree(child: ChildProcess) {
+  if (process.platform !== "win32" || child.pid === undefined) {
+    child.kill();
+    return;
+  }
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
+    stdio: "ignore",
+    windowsHide: true,
+  }).on("error", () => child.kill());
+}
+
+/**
  * Runs the processes until one ends or a signal arrives, stops the rest and resolves with the exit
  * code: that of the first to end, or 0 after a signal. A second signal ends the process as usual.
  */
@@ -48,7 +65,7 @@ export function supervise(
       result = code;
       process.off("SIGINT", onSignal);
       process.off("SIGTERM", onSignal);
-      for (const child of children) child.kill();
+      for (const child of children) killTree(child);
     };
     const onSignal = () => stop(0);
     process.on("SIGINT", onSignal);
@@ -96,7 +113,7 @@ async function main(): Promise<number> {
   }
   const path = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
   return supervise([
-    { label: "api", args: [path("../src/bin.ts"), "start"] },
+    { label: "api", args: ["--watch", path("../src/bin.ts"), "start"] },
     {
       label: "web",
       args: [path("../../web/node_modules/vite/bin/vite.js")],

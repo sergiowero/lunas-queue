@@ -104,7 +104,7 @@ pnpm lunasq doctor
 pnpm dev
 ```
 
-`install` installs nothing if requirements are missing and lists the ones that are. `dev` runs the LunasQ server (port 7360 by default) and Vite together, and Vite prints the UI URL (normally `http://localhost:5173`). Ctrl-C stops both.
+`install` installs nothing if requirements are missing and lists the ones that are. `dev` runs the LunasQ server (port 7360 by default) in watch mode and Vite together, and Vite prints the UI URL (normally `http://localhost:5173`). Ctrl-C stops both.
 
 To run only the server, use `pnpm lunasq start`. It serves the UI on its own port once the front end is built with `pnpm --filter @lunasq/web build`.
 

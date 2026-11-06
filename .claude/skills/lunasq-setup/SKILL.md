@@ -65,7 +65,7 @@ To run the server and the UI together, use this instead of step 5:
 pnpm dev
 ```
 
-It starts `lunasq start` and Vite in one terminal, with the output labelled `[api]` and `[web]`, and points Vite's proxy at the configured port. Vite prints the URL (normally `http://localhost:5173`). Ctrl-C stops both, and if one ends the other is stopped.
+It starts `lunasq start` in watch mode (`node --watch`) and Vite in one terminal, with the output labelled `[api]` and `[web]`, and points Vite's proxy at the configured port. Vite prints the URL (normally `http://localhost:5173`). The server restarts when a file it imports changes, and after a crash it waits for the next change. Ctrl-C stops both.
 
 `lunasq start` also serves the front end build on its own port if it exists (`pnpm --filter @lunasq/web build`).
 
