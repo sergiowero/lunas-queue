@@ -98,7 +98,7 @@ export const tasks = sqliteTable(
     projectId: text("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "restrict" }),
-    intent: text("intent").notNull(),
+    goal: text("goal").notNull(),
     // Set by the first refinement and never changes again.
     title: text("title"),
     tags: text("tags", { mode: "json" }).$type<string[]>().notNull().default([]),

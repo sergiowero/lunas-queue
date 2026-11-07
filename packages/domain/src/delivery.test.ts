@@ -131,7 +131,7 @@ describe("commitTrailers", () => {
 });
 
 describe("prTitle", () => {
-  it("uses the first line of the intent, without extra spaces", () => {
+  it("uses the first line of the goal, without extra spaces", () => {
     expect(prTitle("  Allow   cancelling orders\n\nwith a reason")).toBe("Allow cancelling orders");
   });
 
@@ -141,18 +141,18 @@ describe("prTitle", () => {
     expect(title.endsWith("…")).toBe(true);
   });
 
-  it("prefers the task title over the intent", () => {
+  it("prefers the task title over the goal", () => {
     expect(prTitle("Allow cancelling orders\n\nwith a reason", "  Cancel   orders ")).toBe(
       "Cancel orders",
     );
   });
 
-  it("without a title (null or empty) falls back to the intent", () => {
+  it("without a title (null or empty) falls back to the goal", () => {
     expect(prTitle("Allow cancelling orders", null)).toBe("Allow cancelling orders");
     expect(prTitle("Allow cancelling orders", " ")).toBe("Allow cancelling orders");
   });
 
-  it("an empty intent gives a generic title", () => {
+  it("an empty goal gives a generic title", () => {
     expect(prTitle("  \n ")).toBe("LunasQ task");
   });
 });
@@ -173,7 +173,7 @@ describe("prBody", () => {
   const input = {
     taskId: "t1",
     runId: "verify-1",
-    intent: "Allow cancelling orders",
+    goal: "Allow cancelling orders",
     specVersion: 2,
     criteria,
     verification: verification(["pass", "pass"], "pass", {
@@ -184,9 +184,9 @@ describe("prBody", () => {
     baseBranch: "main",
   };
 
-  it("includes intent, criteria with their evidence, risk and trailers", () => {
+  it("includes goal, criteria with their evidence, risk and trailers", () => {
     const body = prBody(input);
-    expect(body).toContain("## Intent\n\nAllow cancelling orders");
+    expect(body).toContain("## Goal\n\nAllow cancelling orders");
     expect(body).toContain("**AC-1**");
     expect(body).toContain("a pending order");
     expect(body).toContain("test of criterion 1");

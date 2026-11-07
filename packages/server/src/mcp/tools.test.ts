@@ -23,7 +23,7 @@ const verifying = { state: "verification", subState: "running" } as const;
 const runOf = (h: ReturnType<typeof mcpHarness>, id: string) => new RunRepository(h.db).get(id);
 
 describe("get_task_context", () => {
-  it("implementation receives intent, project, approved spec and checklist", async () => {
+  it("implementation receives goal, project, approved spec and checklist", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.session("implement", implementing);
     const { isError, body } = await call("get_task_context");
@@ -32,7 +32,7 @@ describe("get_task_context", () => {
       task: {
         id: task.id,
         number: task.number,
-        intent: task.intent,
+        goal: task.goal,
         state: "in_progress",
         worktreePath: "/wt/tarea",
       },

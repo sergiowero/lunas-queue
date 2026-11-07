@@ -55,7 +55,7 @@ describe("pause", () => {
 });
 
 describe("cappedTaskLabel", () => {
-  const task = (title: string | null, intent: string) => ({ title, intent });
+  const task = (title: string | null, goal: string) => ({ title, goal });
 
   it("leaves a label of exactly the cap unchanged", () => {
     const label = "a".repeat(TASK_TITLE_MAX);
@@ -68,7 +68,7 @@ describe("cappedTaskLabel", () => {
     expect(capped).toHaveLength(TASK_TITLE_MAX);
   });
 
-  it("caps the intent while there is no title", () => {
+  it("caps the goal while there is no title", () => {
     expect(cappedTaskLabel(task(null, "c".repeat(200)))).toBe(`${"c".repeat(69)}...`);
   });
 

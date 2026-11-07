@@ -75,7 +75,7 @@ beforeEach(() => {
   service = new EvidenceService({ db, git: new RealGit(), transcripts });
   wt = worktree();
   const project = insertProject(db);
-  taskId = insertTask(db, project.id, { intent: "Agregar login" }).id;
+  taskId = insertTask(db, project.id, { goal: "Agregar login" }).id;
   new TaskWorktreeRepository(db).recordWorktree(taskId, { branch: "uw-01", worktreePath: wt });
 });
 

@@ -6,15 +6,15 @@ import { redactSecrets } from "./redact.ts";
 /** Any Run section: the id is what is captured. */
 const SECTION = /<!-- lunasq:run:start (\S+) -->\n[\s\S]*?\n<!-- lunasq:run:end \1 -->\n/g;
 
-export function evidenceHeader(input: { taskId: string; intent: string }): string {
-  const intent = redactSecrets(input.intent)
+export function evidenceHeader(input: { taskId: string; goal: string }): string {
+  const goal = redactSecrets(input.goal)
     .replaceAll("<!-- lunasq:", "<!-- lunasq-escaped:")
     .trim()
     .replace(/\s*\n\s*/g, " ");
   return [
     `# Evidence for task ${input.taskId}`,
     "",
-    `> ${intent}`,
+    `> ${goal}`,
     "",
     "One section per Run, written by LunasQ when it closes. It is not edited by hand: it is rewritten.",
     "",

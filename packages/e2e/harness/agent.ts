@@ -1,5 +1,5 @@
 // The scripted agent: does what Claude Code would do in each phase, but with the real LunasQ MCP, the
-// subagent hooks over HTTP and real git. The script is decided by the phase and the task's intent:
+// subagent hooks over HTTP and real git. The script is decided by the phase and the task's goal:
 //   · `[pregunta]` → the refinement asks before delivering the spec.
 //   · `[rework]`   → the first verification verdict is reject.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -21,7 +21,7 @@ function handoff(example: Example, ids: { taskId: string; runId: string }, summa
 }
 
 interface Context {
-  task: { intent: string; worktreePath: string | null };
+  task: { goal: string; worktreePath: string | null };
   run: { iteration: number };
   questions: { status: string; answer: string | null }[];
   verificationHistory: unknown[];
@@ -121,13 +121,13 @@ export async function runTurn(agent: PromptedAgent, env: AgentEnv): Promise<void
   const mcp = await McpSession.open(env.baseUrl, token);
   try {
     const context = await mcp.call<Context>("get_task_context");
-    const intent = context.task.intent;
+    const goal = context.task.goal;
 
     if (phase === "refine") {
-      if (intent.includes("[pregunta]") && context.questions.length === 0) {
+      if (goal.includes("[pregunta]") && context.questions.length === 0) {
         await mcp.call("ask_human", {
           question: "¿La cancelación debe notificar al cliente por correo?",
-          context: "El intent no lo dice y cambia los criterios de aceptación.",
+          context: "El objetivo no lo dice y cambia los criterios de aceptación.",
         });
         return;
       }
@@ -135,9 +135,9 @@ export async function runTurn(agent: PromptedAgent, env: AgentEnv): Promise<void
       const summary = answered
         ? `Spec with the human's answer: ${answered.answer}`.slice(0, 280)
         : undefined;
-      // The title is the intent: the pilot looks tasks up by that text in the UI.
+      // The title is the goal: the pilot looks tasks up by that text in the UI.
       const refinement = handoff("refinement", ids, summary) as Json & { body: Json };
-      refinement.body = { ...refinement.body, title: intent };
+      refinement.body = { ...refinement.body, title: goal };
       await mcp.call("submit_spec", { handoff: refinement });
     } else if (phase === "implement") {
       const worktree = context.task.worktreePath ?? agent.cwd;
@@ -147,7 +147,7 @@ export async function runTurn(agent: PromptedAgent, env: AgentEnv): Promise<void
       implementation.body = { ...implementation.body, commits: [sha] };
       await mcp.call("submit_for_verification", { handoff: implementation });
     } else if (phase === "verify") {
-      const reject = intent.includes("[rework]") && context.verificationHistory.length === 0;
+      const reject = goal.includes("[rework]") && context.verificationHistory.length === 0;
       const verdict = handoff(reject ? "verification-reject" : "verification-pass", ids) as Json & {
         body: { reviewers: Record<string, { status: string }> };
       };

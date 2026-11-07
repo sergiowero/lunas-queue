@@ -27,7 +27,7 @@ function setup() {
   const create = async (overrides: object = {}): Promise<TaskBody> => {
     const res = await send("POST", "/api/tasks", {
       projectId: project.id,
-      intent: "Hacer algo",
+      goal: "Hacer algo",
       priority: 100,
       ...overrides,
     });
@@ -45,7 +45,7 @@ describe("POST /api/tasks", () => {
       id: expect.stringMatching(/^[0-9a-f-]{36}$/),
       number: 1,
       projectId: project.id,
-      intent: "Hacer algo",
+      goal: "Hacer algo",
       tags: ["auth"],
       priority: 100,
       state: "draft",
@@ -58,7 +58,7 @@ describe("POST /api/tasks", () => {
     expect((await send("POST", "/api/tasks", "{")).status).toBe(400);
     const res = await send("POST", "/api/tasks", {
       projectId: project.id,
-      intent: "x",
+      goal: "x",
       priority: -1,
     });
     expect(res.status).toBe(400);
@@ -75,7 +75,7 @@ describe("POST /api/tasks", () => {
     const { send, project } = setup();
     const res = await send("POST", "/api/tasks", {
       projectId: project.id,
-      intent: "Hacer algo",
+      goal: "Hacer algo",
       priority: 100,
       ...overrides,
     });
@@ -148,7 +148,7 @@ describe("GET and PATCH /api/tasks/:id", () => {
     expect(listed[0]).toMatchObject({ resultKind: "already_implemented" });
   });
 
-  it("updates intent, tags and priority", async () => {
+  it("updates goal, tags and priority", async () => {
     const { send, create } = setup();
     const task = await create();
     const res = await send("PATCH", `/api/tasks/${task.id}`, { priority: 900, tags: ["ui"] });

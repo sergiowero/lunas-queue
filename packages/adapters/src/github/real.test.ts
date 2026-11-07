@@ -37,7 +37,7 @@ const input = {
   head: "lunasq/t1",
   base: "main",
   title: "-t: título con $(comillas) 'raras'",
-  body: "## Intent\nalgo",
+  body: "## Goal\nalgo",
 };
 
 describe("RealGitHub", () => {

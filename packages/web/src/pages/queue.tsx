@@ -53,7 +53,7 @@ export function QueuePage() {
     () => [
       column.display({ id: "position", header: "#", cell: (c) => c.row.index + 1 }),
       column.accessor((e) => cappedTaskLabel(e.task), {
-        id: "intent",
+        id: "goal",
         header: t.columns.task,
         cell: (c) => (
           <span className="flex items-baseline gap-2">

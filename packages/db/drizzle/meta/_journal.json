@@ -120,6 +120,13 @@
       "when": 1793658665538,
       "tag": "0016_task_verification_cycle_start",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1793700000000,
+      "tag": "0017_task_goal",
+      "breakpoints": true
     }
   ]
 }

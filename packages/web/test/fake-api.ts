@@ -188,7 +188,7 @@ export class FakeApi {
       id: uuid(),
       number: this.tasks.length + 1,
       projectId,
-      intent: "Hacer algo",
+      goal: "Hacer algo",
       title: null,
       tags: [],
       priority: 100,
@@ -209,7 +209,7 @@ export class FakeApi {
       ...overrides,
     };
     this.tasks.push(task);
-    this.event(task.id, "task.created", "human", { intent: task.intent });
+    this.event(task.id, "task.created", "human", { goal: task.goal });
     return task;
   }
 
@@ -667,7 +667,7 @@ export class FakeApi {
       return [422, { error: "dependency_not_found", message: "the dependency does not exist" }];
     }
     const task = this.addTask(input.projectId, {
-      intent: input.intent,
+      goal: input.goal,
       tags: input.tags,
       priority: input.priority,
     });
@@ -819,7 +819,7 @@ export class FakeApi {
         taskId: other.id,
         number: other.number,
         projectId: other.projectId,
-        intent: other.intent,
+        goal: other.goal,
         title: other.title,
         state: other.state,
         prState: other.prState,

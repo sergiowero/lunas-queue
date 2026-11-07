@@ -94,7 +94,7 @@ export class EvidenceService {
 
       const path = join(worktreePath, evidencePath(run.taskId));
       const current = await readFile(path, "utf8").catch(() => null);
-      const header = evidenceHeader({ taskId: run.taskId, intent: task.intent });
+      const header = evidenceHeader({ taskId: run.taskId, goal: task.goal });
       const next = upsertRunSection(current, header, run.id, section);
       if (next === current) return { status: "unchanged", path } as const;
       await writeAtomic(worktreePath, path, next);

@@ -86,11 +86,11 @@ export function commitTrailers(input: {
 const MAX_TITLE_CHARS = 72;
 
 /**
- * PR title: the task's and, while it has none, the first line of the intent, on one line
+ * PR title: the task's and, while it has none, the first line of the goal, on one line
  * and up to 72 characters.
  */
-export function prTitle(intent: string, title?: string | null): string {
-  const line = [title ?? "", ...intent.split("\n")]
+export function prTitle(goal: string, title?: string | null): string {
+  const line = [title ?? "", ...goal.split("\n")]
     .map((l) => l.replace(/\s+/g, " ").trim())
     .find((l) => l !== "");
   if (!line) return "LunasQ task";
@@ -131,14 +131,14 @@ const clip = (text: string, limit: number) =>
   text.length <= limit ? text : `${text.slice(0, limit - 1)}…`;
 
 /**
- * PR description: intent, criteria with their evidence, risk label, review and the
+ * PR description: goal, criteria with their evidence, risk label, review and the
  * traceability trailers (docs/design.md §Delivery). It comes from the handoffs: delivery has no
  * agente (ADR uw-18-skills-fase).
  */
 export function prBody(input: {
   taskId: string;
   runId: string;
-  intent: string;
+  goal: string;
   specVersion: number;
   criteria: readonly DeliveryCriterion[];
   verification: DeliveryVerdict;
@@ -161,7 +161,7 @@ export function prBody(input: {
   );
   const refuted = input.verification.refuted.length;
   const sections = [
-    `## Intent\n\n${input.intent.trim()}`,
+    `## Goal\n\n${input.goal.trim()}`,
     `## Acceptance criteria (spec v${input.specVersion})\n\n${criteria.join("\n")}`,
     `## Risk\n\nRisk: **${RISK_TEXT[input.verification.riskLabel]}** (label \`${RISK_LABELS[input.verification.riskLabel].name}\`), according to the verifier.`,
     `## Verification\n\n${reviewers.join("\n")}\n\n${refuted} finding${refuted === 1 ? "" : "s"} refuted by the approver. Branch integrated with \`${input.baseBranch}\` and test suite green before the push.`,

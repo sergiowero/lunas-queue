@@ -7,9 +7,9 @@ describe("global queue", () => {
   it("shows the tasks in the server order, with score, state, project and usage", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
-    const a = fake.addTask(project.id, { intent: "Primera", priority: 10 });
-    const b = fake.addTask(project.id, { intent: "Segunda", priority: 5 });
-    const running = fake.addTask(project.id, { intent: "Corriendo", subState: "running" });
+    const a = fake.addTask(project.id, { goal: "Primera", priority: 10 });
+    const b = fake.addTask(project.id, { goal: "Segunda", priority: 5 });
+    const running = fake.addTask(project.id, { goal: "Corriendo", subState: "running" });
     const usage = { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0 };
     fake.queue = [
       {
@@ -38,7 +38,7 @@ describe("global queue", () => {
 
     const rows = await screen.findAllByRole("row");
     const body = rows.slice(1).map((row) => within(row).getAllByRole("cell"));
-    // The task cell carries its #N before the intent.
+    // The task cell carries its #N before the goal.
     expect(body.map((cells) => cells[1]?.textContent)).toEqual([
       `#${b.number}Segunda`,
       `#${a.number}Primera`,
@@ -64,10 +64,10 @@ describe("global queue", () => {
   it("the Estado column shows a label per task, blue only for In progress", async () => {
     const fake = new FakeApi();
     const project = fake.addProject();
-    fake.addTask(project.id, { intent: "Borrador" });
-    fake.addTask(project.id, { intent: "Verificando", state: "verification", subState: "running" });
-    fake.addTask(project.id, { intent: "Bloqueada", state: "needs_human", subState: null });
-    fake.addTask(project.id, { intent: "Trabajando", state: "in_progress", subState: "running" });
+    fake.addTask(project.id, { goal: "Borrador" });
+    fake.addTask(project.id, { goal: "Verificando", state: "verification", subState: "running" });
+    fake.addTask(project.id, { goal: "Bloqueada", state: "needs_human", subState: null });
+    fake.addTask(project.id, { goal: "Trabajando", state: "in_progress", subState: "running" });
     fake.queue = fake.tasks.map((task) => ({
       task,
       ready: false,
@@ -83,10 +83,10 @@ describe("global queue", () => {
     }));
     renderApp("/queue", fake);
 
-    const row = async (intent: string) =>
-      within((await screen.findByRole("link", { name: intent })).closest("tr") as HTMLElement);
-    const variant = async (intent: string, label: string) =>
-      (await row(intent)).getByText(label).dataset.variant;
+    const row = async (goal: string) =>
+      within((await screen.findByRole("link", { name: goal })).closest("tr") as HTMLElement);
+    const variant = async (goal: string, label: string) =>
+      (await row(goal)).getByText(label).dataset.variant;
     expect(await variant("Trabajando", "In progress")).toBe("info");
     expect(await variant("Borrador", "Draft")).toBe("secondary");
     expect(await variant("Verificando", "Verification")).toBe("secondary");
@@ -110,23 +110,23 @@ describe("global queue", () => {
         },
       }));
     };
-    const rowOf = async (intent: string) =>
-      within((await screen.findByRole("link", { name: intent })).closest("tr") as HTMLElement);
+    const rowOf = async (goal: string) =>
+      within((await screen.findByRole("link", { name: goal })).closest("tr") as HTMLElement);
 
     it("the pausable one carries only the pause icon; the paused one and the needs_human one only the resume icon", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
-      fake.addTask(project.id, { intent: "Pausable", state: "in_progress", subState: "running" });
-      fake.addTask(project.id, { intent: "Pausada", state: "paused", subState: null });
-      fake.addTask(project.id, { intent: "Escalada", state: "needs_human", subState: null });
+      fake.addTask(project.id, { goal: "Pausable", state: "in_progress", subState: "running" });
+      fake.addTask(project.id, { goal: "Pausada", state: "paused", subState: null });
+      fake.addTask(project.id, { goal: "Escalada", state: "needs_human", subState: null });
       queueOf(fake);
       renderApp("/queue", fake);
 
       expect((await screen.findAllByRole("columnheader")).map((h) => h.textContent).at(-1)).toBe(
         "Acciones",
       );
-      const actions = async (intent: string) => {
-        const cells = (await rowOf(intent)).getAllByRole("cell");
+      const actions = async (goal: string) => {
+        const cells = (await rowOf(goal)).getAllByRole("cell");
         return cells[cells.length - 1] as HTMLElement;
       };
 
@@ -136,9 +136,9 @@ describe("global queue", () => {
       expect(pause.querySelector('svg[data-icon="pause"]')).not.toBeNull();
       expect(pausable.getAllByRole("button")).toHaveLength(1);
 
-      for (const intent of ["Pausada", "Escalada"]) {
-        const cell = within(await actions(intent));
-        const resume = cell.getByRole("button", { name: `Reanudar tarea ${intent}` });
+      for (const goal of ["Pausada", "Escalada"]) {
+        const cell = within(await actions(goal));
+        const resume = cell.getByRole("button", { name: `Reanudar tarea ${goal}` });
         expect(resume.textContent).toBe("");
         expect(resume.querySelector('svg[data-icon="resume"]')).not.toBeNull();
         expect(cell.getAllByRole("button")).toHaveLength(1);
@@ -149,7 +149,7 @@ describe("global queue", () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       const task = fake.addTask(project.id, {
-        intent: "Se pausa",
+        goal: "Se pausa",
         state: "refined",
         subState: null,
       });
@@ -170,8 +170,8 @@ describe("global queue", () => {
     it("if the API rejects the action it shows the error with role alert in that row", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
-      const task = fake.addTask(project.id, { intent: "Rechazada", state: "draft" });
-      fake.addTask(project.id, { intent: "Intacta", state: "draft" });
+      const task = fake.addTask(project.id, { goal: "Rechazada", state: "draft" });
+      fake.addTask(project.id, { goal: "Intacta", state: "draft" });
       const { user } = renderApp("/queue", fake);
       const button = await screen.findByRole("button", { name: "Pausar tarea Rechazada" });
       fake.task(task.id).state = "completed";
@@ -189,8 +189,8 @@ describe("global queue", () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
-    fake.addTask(one.id, { intent: "De uno" });
-    fake.addTask(two.id, { intent: "De dos" });
+    fake.addTask(one.id, { goal: "De uno" });
+    fake.addTask(two.id, { goal: "De dos" });
     const { user } = renderApp("/queue", fake);
 
     await screen.findByText("De dos");
@@ -210,8 +210,8 @@ describe("global queue", () => {
       const fake = new FakeApi();
       const one = fake.addProject({ name: "uno" });
       const two = fake.addProject({ name: "dos" });
-      fake.addTask(one.id, { intent: "De uno" });
-      fake.addTask(two.id, { intent: "De dos" });
+      fake.addTask(one.id, { goal: "De uno" });
+      fake.addTask(two.id, { goal: "De dos" });
       return { fake, one, two };
     }
 
@@ -235,18 +235,18 @@ describe("global queue", () => {
       const { fake, one, two } = twoProjects();
       const completed = { state: "completed", subState: null } as const;
       fake.addTask(one.id, {
-        intent: "Ejecutando de uno",
+        goal: "Ejecutando de uno",
         state: "in_progress",
         subState: "running",
       });
       fake.addTask(two.id, {
-        intent: "Ejecutando de dos",
+        goal: "Ejecutando de dos",
         state: "in_progress",
         subState: "queued",
       });
-      fake.addTask(one.id, { ...completed, intent: "Merged de uno", prState: "merged" });
-      fake.addTask(two.id, { ...completed, intent: "Merged de dos", prState: "merged" });
-      fake.addTask(two.id, { ...completed, intent: "Open de dos", prState: "open" });
+      fake.addTask(one.id, { ...completed, goal: "Merged de uno", prState: "merged" });
+      fake.addTask(two.id, { ...completed, goal: "Merged de dos", prState: "merged" });
+      fake.addTask(two.id, { ...completed, goal: "Open de dos", prState: "open" });
       const { user, router } = renderApp("/queue", fake);
       const project = () => screen.getByLabelText("Proyecto") as HTMLSelectElement;
       const prState = () => screen.getByLabelText("Estado del PR") as HTMLSelectElement;
@@ -317,23 +317,23 @@ describe("global queue", () => {
       const { fake } = twoProjects();
       const completed = { state: "completed", subState: null } as const;
       fake.addTask(fake.projects[0]?.id as string, {
-        intent: "Ejecutando de uno",
+        goal: "Ejecutando de uno",
         state: "in_progress",
         subState: "running",
       });
       fake.addTask(fake.projects[1]?.id as string, {
-        intent: "Ejecutando de dos",
+        goal: "Ejecutando de dos",
         state: "in_progress",
         subState: "queued",
       });
       fake.addTask(fake.projects[0]?.id as string, {
         ...completed,
-        intent: "Merged de uno",
+        goal: "Merged de uno",
         prState: "merged",
       });
       fake.addTask(fake.projects[1]?.id as string, {
         ...completed,
-        intent: "Open de dos",
+        goal: "Open de dos",
         prState: "open",
       });
       const { router, user, unmount } = renderApp("/queue", fake);

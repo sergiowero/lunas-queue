@@ -60,7 +60,7 @@ export function insertTask(
 ) {
   const [row] = db
     .insert(tasks)
-    .values({ projectId, intent: "Hacer algo", priority: 100, ...overrides })
+    .values({ projectId, goal: "Hacer algo", priority: 100, ...overrides })
     .returning({ id: tasks.id })
     .all();
   if (!row) throw new Error("task insert without a row");

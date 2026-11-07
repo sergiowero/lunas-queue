@@ -76,7 +76,7 @@ describe("header New task button", () => {
     await user.click(await newTaskButton());
     expect(router.state.location.pathname).toBe("/tasks/new");
     expect(await screen.findByLabelText("Proyecto")).toBeTruthy();
-    expect(screen.getByLabelText("Intención")).toBeTruthy();
+    expect(screen.getByLabelText("Objetivo")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Crear tarea" })).toBeTruthy();
   });
 });

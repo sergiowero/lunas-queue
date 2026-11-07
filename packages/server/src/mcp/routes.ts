@@ -49,7 +49,7 @@ function buildServer(service: LunasqMcpService, token: string | undefined): McpS
     "get_task_context",
     {
       description:
-        "Intent, approved spec, previous handoffs, Questions, checklist and project conventions. Mandatory before any other tool of the Run.",
+        "Goal, approved spec, previous handoffs, Questions, checklist and project conventions. Mandatory before any other tool of the Run.",
       inputSchema: GetTaskContextInput,
     },
     () => guarded("get_task_context", (run) => service.getTaskContext(run)),

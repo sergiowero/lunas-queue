@@ -33,7 +33,7 @@ function setup() {
       { point: "after_merge", hooks: [] },
     ],
   });
-  const task = fake.addTask(project.id, { intent: "Subir versión" });
+  const task = fake.addTask(project.id, { goal: "Subir versión" });
   return { fake, project, task };
 }
 
@@ -46,7 +46,7 @@ function execution(
   fake.hookExecutions.unshift({
     eventId,
     taskId,
-    taskIntent: fake.task(taskId).intent,
+    taskGoal: fake.task(taskId).goal,
     taskTitle: fake.task(taskId).title,
     at: new Date(Date.UTC(2026, 9, 29, 12, eventId)).toISOString(),
     point: "before_delivery",
@@ -88,7 +88,7 @@ describe("hooks view", () => {
 
   it("shows the latest executions per task with exit code, duration and output", async () => {
     const { fake, project, task } = setup();
-    const other = fake.addTask(project.id, { intent: "Otra tarea" });
+    const other = fake.addTask(project.id, { goal: "Otra tarea" });
     execution(fake, task.id, 1, { exitCode: 1, passed: false, output: "falló el bump" });
     execution(fake, task.id, 2, { output: "v1.2.3" });
     execution(fake, other.id, 3, {
@@ -159,7 +159,7 @@ describe("hooks view", () => {
     const { fake, project, task } = setup();
     execution(fake, task.id, 1, { point: "after_merge", script: "deploy" });
     for (let i = 0; i < 12; i++) {
-      const t = fake.addTask(project.id, { intent: `Tarea ${i}` });
+      const t = fake.addTask(project.id, { goal: `Tarea ${i}` });
       execution(fake, t.id, 10 + i);
     }
     const hooks = fake.hooks.get(project.id);

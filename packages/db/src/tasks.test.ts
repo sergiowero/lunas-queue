@@ -31,7 +31,7 @@ function repository() {
   const project = insertProject(db);
   const repo = new TaskRepository(db);
   const create = (overrides: Partial<TaskCreate> = {}) =>
-    repo.create({ projectId: project.id, intent: "Hacer algo", priority: 100, ...overrides });
+    repo.create({ projectId: project.id, goal: "Hacer algo", priority: 100, ...overrides });
   return { db, repo, project, create };
 }
 
@@ -51,7 +51,7 @@ describe("TaskRepository.create", () => {
     const task = create({ tags: ["auth"] });
     expect(task).toMatchObject({
       projectId: project.id,
-      intent: "Hacer algo",
+      goal: "Hacer algo",
       tags: ["auth"],
       priority: 100,
       state: "draft",
@@ -66,7 +66,7 @@ describe("TaskRepository.create", () => {
       actor: "human",
       payload: {
         projectId: project.id,
-        intent: "Hacer algo",
+        goal: "Hacer algo",
         tags: ["auth"],
         priority: 100,
         causedBy: null,
@@ -157,7 +157,7 @@ describe("TaskRepository.update", () => {
     const { db, repo, create } = repository();
     const task = create({ tags: ["a"] });
     const updated = repo.update(task.id, { priority: 900, tags: ["a"] });
-    expect(updated).toMatchObject({ priority: 900, tags: ["a"], intent: "Hacer algo" });
+    expect(updated).toMatchObject({ priority: 900, tags: ["a"], goal: "Hacer algo" });
     expect(listEvents(db, task.id).at(-1)).toMatchObject({
       type: TASK_UPDATED,
       actor: "human",
@@ -297,7 +297,7 @@ describe("TaskRepository edges", () => {
 
   it("dependencies lists direct dependencies and dependents with their state", () => {
     const { repo, create } = repository();
-    const a = create({ intent: "Base" });
+    const a = create({ goal: "Base" });
     const b = create({ dependsOn: [a.id] });
     const c = create({ dependsOn: [b.id] });
     const deps = repo.dependencies(b.id);
@@ -306,7 +306,7 @@ describe("TaskRepository edges", () => {
         taskId: a.id,
         number: a.number,
         projectId: a.projectId,
-        intent: "Base",
+        goal: "Base",
         title: null,
         state: "draft",
         prState: null,
@@ -356,7 +356,7 @@ dependencyGraphReaderContract("TaskRepository", (edges) => {
   const idOf = (name: string) => {
     let id = ids.get(name);
     if (!id) {
-      id = create({ intent: name }).id;
+      id = create({ goal: name }).id;
       ids.set(name, id);
     }
     return id;
@@ -487,7 +487,7 @@ describe("task number", () => {
     const { db, repo, create } = repository();
     for (let i = 0; i < 3; i++) create();
     const other = insertProject(db);
-    const task = repo.create({ projectId: other.id, intent: "Otra cosa", priority: 1 });
+    const task = repo.create({ projectId: other.id, goal: "Otra cosa", priority: 1 });
     expect(task.number).toBe(4);
     expect(task.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(repo.get(task.id)?.number).toBe(4);
@@ -508,9 +508,7 @@ describe("task number", () => {
     for (let i = 0; i < 6; i++) create();
     const task = create();
     expect(task.number).toBe(7);
-    expect(repo.update(task.id, { intent: "Otro intent", tags: ["x"], priority: 5 })?.number).toBe(
-      7,
-    );
+    expect(repo.update(task.id, { goal: "Otro goal", tags: ["x"], priority: 5 })?.number).toBe(7);
     const cancelled = repo.cancel(task.id);
     expect(cancelled.ok && cancelled.task.number).toBe(7);
     expect(repo.get(task.id)?.number).toBe(7);

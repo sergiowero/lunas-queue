@@ -9,7 +9,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 function setup(state: "draft" | "paused" = "draft") {
   const fake = new FakeApi();
-  const task = fake.addTask(fake.addProject().id, { intent: "Migrar", state, subState: null });
+  const task = fake.addTask(fake.addProject().id, { goal: "Migrar", state, subState: null });
   const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
   vi.stubGlobal("fetch", fake.fetch);

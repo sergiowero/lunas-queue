@@ -57,7 +57,7 @@ const reviewerModel = process.env.LUNASQ_REVIEWER_MODEL ?? "haiku";
 const assets = new URL("../../../../assets/", import.meta.url);
 const BRANCH = "lunasq/test";
 
-const INTENT =
+const GOAL =
   "Add the divide(a, b) operation to the calculator in src/divide.js: it returns a / b and " +
   "rejects division by zero with an error that says so.";
 
@@ -130,7 +130,7 @@ describe.skipIf(!enabled)("phase skills against real Claude Code", { timeout: 1_
     migrateDatabase(db);
     const project = insertProject(db, { localPath: repo, testCommand: "node --test" });
     taskId = insertTask(db, project.id, {
-      intent: INTENT,
+      goal: GOAL,
       branch: BRANCH,
       worktreePath: repo,
     }).id;

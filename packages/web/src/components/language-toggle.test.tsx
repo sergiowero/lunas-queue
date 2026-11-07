@@ -186,7 +186,7 @@ describe("language-dependent table cells follow a language switch", () => {
   it("the result type of a completed task without a PR is translated after the switch", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, {
-      intent: "Hecha",
+      goal: "Hecha",
       state: "completed",
       subState: null,
       resultKind: "research",
@@ -201,12 +201,12 @@ describe("language-dependent table cells follow a language switch", () => {
     expect(after).not.toBe(before);
   });
 
-  it("the New task labels Intent and Tags come from the dictionary", async () => {
+  it("the New task labels Goal and Tags come from the dictionary", async () => {
     const { user } = renderApp("/tasks/new");
-    expect(await screen.findByLabelText("Intención")).toBeTruthy();
+    expect(await screen.findByLabelText("Objetivo")).toBeTruthy();
     expect(screen.getByLabelText("Etiquetas")).toBeTruthy();
     await user.click(await toggle("Cambiar a inglés"));
-    expect(await screen.findByLabelText("Intent")).toBeTruthy();
+    expect(await screen.findByLabelText("Goal")).toBeTruthy();
     expect(screen.getByLabelText("Tags")).toBeTruthy();
   });
 });

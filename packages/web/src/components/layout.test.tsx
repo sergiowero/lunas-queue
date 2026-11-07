@@ -46,12 +46,12 @@ describe("In progress link counter", () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
-    fake.addTask(one.id, { intent: "A", state: "in_progress", subState: "queued" });
-    fake.addTask(two.id, { intent: "B", state: "in_progress", subState: "waiting_human" });
-    fake.addTask(two.id, { intent: "C", state: "verification", subState: "running" });
-    fake.addTask(one.id, { intent: "Borrador" });
-    fake.addTask(one.id, { intent: "Esperando", state: "verification", subState: "waiting_human" });
-    fake.addTask(two.id, { intent: "Terminada", state: "completed", subState: null });
+    fake.addTask(one.id, { goal: "A", state: "in_progress", subState: "queued" });
+    fake.addTask(two.id, { goal: "B", state: "in_progress", subState: "waiting_human" });
+    fake.addTask(two.id, { goal: "C", state: "verification", subState: "running" });
+    fake.addTask(one.id, { goal: "Borrador" });
+    fake.addTask(one.id, { goal: "Esperando", state: "verification", subState: "waiting_human" });
+    fake.addTask(two.id, { goal: "Terminada", state: "completed", subState: null });
     renderApp("/queue", fake);
 
     const link = await screen.findByRole("link", { name: "En curso, 3 tareas" });
@@ -69,7 +69,7 @@ describe("In progress link counter", () => {
 
   it("without tasks in progress the link shows only its text", async () => {
     const fake = new FakeApi();
-    fake.addTask(fake.addProject().id, { intent: "Borrador" });
+    fake.addTask(fake.addProject().id, { goal: "Borrador" });
     renderApp("/queue", fake);
 
     await screen.findByText("Borrador");
@@ -83,11 +83,11 @@ describe("In progress link counter", () => {
     const fake = new FakeApi();
     const project = fake.addProject();
     const task = fake.addTask(project.id, {
-      intent: "Sale",
+      goal: "Sale",
       state: "in_progress",
       subState: "running",
     });
-    const other = fake.addTask(project.id, { intent: "Entra" });
+    const other = fake.addTask(project.id, { goal: "Entra" });
     renderApp("/queue", fake);
     await screen.findByRole("link", { name: "En curso, 1 tarea" });
 
@@ -108,9 +108,9 @@ describe("In progress link counter", () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
-    fake.addTask(one.id, { intent: "U1", state: "in_progress", subState: "running" });
-    fake.addTask(one.id, { intent: "U2", state: "in_progress", subState: "queued" });
-    fake.addTask(two.id, { intent: "D1", state: "in_progress", subState: "running" });
+    fake.addTask(one.id, { goal: "U1", state: "in_progress", subState: "running" });
+    fake.addTask(one.id, { goal: "U2", state: "in_progress", subState: "queued" });
+    fake.addTask(two.id, { goal: "D1", state: "in_progress", subState: "running" });
     const { user } = renderApp("/in-progress", fake);
 
     await screen.findByText("D1");
@@ -180,7 +180,7 @@ describe("open PR counter on the Completed tab", () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "uno" });
     completed(fake, project.id, "open");
-    const refined = fake.addTask(project.id, { intent: "Spec" });
+    const refined = fake.addTask(project.id, { goal: "Spec" });
     fake.addSpec(refined.id);
     fake.transition(refined.id, "refined", null);
     renderApp("/queue", fake);

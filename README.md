@@ -2,7 +2,7 @@
 
 # LunasQ
 
-**A multi‑project task queue that dispatches coding agents: you define the intent, they refine, implement and verify it, and deliver it as a PR.**
+**A multi‑project task queue that dispatches coding agents: you define the goal, they refine, implement and verify it, and deliver it as a PR.**
 
 [![CI](https://github.com/sergiowero/lunas-queue/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2026-5FA04E?logo=node.js&logoColor=white)](.node-version)
@@ -28,13 +28,13 @@ LunasQ is a **lights‑on** *AI software factory*: specialized agents work on th
 
 ## What is LunasQ
 
-A human writes a task's *intent* («I want a professional README»). LunasQ turns it into a PR ready for review without you having to sit down with the agent:
+A human writes a task's *goal* («I want a professional README»). LunasQ turns it into a PR ready for review without you having to sit down with the agent:
 
 ```text
-intent → refinement → spec gate (human) → implementation → verification → PR → merge (human)
+goal → refinement → spec gate (human) → implementation → verification → PR → merge (human)
 ```
 
-1. **Refinement.** An agent reads the repo, clarifies the intent (if in doubt, it asks you in the Inbox) and writes a *spec*: domain model, requirements, Given / When / Then acceptance criteria and a task list.
+1. **Refinement.** An agent reads the repo, clarifies the goal (if in doubt, it asks you in the Inbox) and writes a *spec*: domain model, requirements, Given / When / Then acceptance criteria and a task list.
 2. **Spec gate.** You approve it or request changes. Without approval no code is written.
 3. **Implementation.** Another agent works with TDD in the task's own worktree, checks off the task list and declares the end with a structured handoff. LunasQ runs the project's test command as a gate.
 4. **Verification.** An independent session acts as *approver*: it launches the reviewers that apply (code, security, UI, UX), verifies each criterion and issues `pass` or `reject` with what needs fixing. A `reject` sends the task back to implementation (at most 3 iterations; after that it moves to *Needs human*).
@@ -111,7 +111,7 @@ To run only the server, use `pnpm lunasq start`. It serves the UI on its own por
 ## Usage
 
 1. **Create a project** with `POST /api/projects`: repo (`owner/name`), base branch, local path and test command. Optionally, per‑phase agent profile, concurrency limits and worktree bootstrap script.
-2. **Create tasks** from **Nueva tarea**: intent, priority (integer, higher = higher priority) and dependencies.
+2. **Create tasks** from **Nueva tarea**: goal, priority (integer, higher = higher priority) and dependencies.
 3. **Answer questions** in the **Bandeja** (Inbox) when the refiner has doubts; the agent resumes with your answer.
 4. **Review the spec.** Open it from «Specs por aprobar» in the Inbox and **approve** or use **Pedir cambios** with comments; each round creates a new version.
 5. **Follow progress** on the board: checklist, Runs, consumption and events of each task.

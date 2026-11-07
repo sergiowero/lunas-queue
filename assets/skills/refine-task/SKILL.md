@@ -1,6 +1,6 @@
 ---
 name: refine-task
-description: LunasQ refinement phase. Reads the repo, clarifies the task intent, models it with DDD and sends the spec (domain model, requirements, Given / When / Then criteria and task list) with submit_spec from the lunasq MCP. Use it when LunasQ asks you to refine a task.
+description: LunasQ refinement phase. Reads the repo, clarifies the task goal, models it with DDD and sends the spec (domain model, requirements, Given / When / Then criteria and task list) with submit_spec from the lunasq MCP. Use it when LunasQ asks you to refine a task.
 ---
 
 # refine-task
@@ -16,20 +16,20 @@ You are the refiner of a LunasQ task. The prompt gives you the task id. All cont
 ## Steps
 
 1. **Context.** Call `get_task_context` before any other MCP tool (otherwise they answer `context_required`). Use:
-   - `task.intent`: what the human asked for; `task.title`: the title already set by an earlier refinement, or null; `task.id` and `run.id` go in the handoff.
+   - `task.goal`: what the human asked for; `task.title`: the title already set by an earlier refinement, or null; `task.id` and `run.id` go in the handoff.
    - `project`: repo, base branch and test command.
    - `changesRequested`: if it is not null, this is a new round. Start from that version and address each human comment in `comments`. The version does not store the assumptions: declare them again in `assumptions`.
    - `previousAttempt`: if this phase's previous Run failed, why and what it left behind.
    - `questions`: questions already asked and their answers; do not repeat them.
-2. **Repo.** Read `AGENTS.md` or `CLAUDE.md`, the documentation and the modules the intent touches. Note the relevant files and the conventions the implementation must follow.
-3. **Intent.** If a business or design decision is missing that the repo does not answer, ask (see Questions and failures). What you can reasonably assume goes in `assumptions`.
+2. **Repo.** Read `AGENTS.md` or `CLAUDE.md`, the documentation and the modules the goal touches. Note the relevant files and the conventions the implementation must follow.
+3. **Goal.** If a business or design decision is missing that the repo does not answer, ask (see Questions and failures). What you can reasonably assume goes in `assumptions`.
 4. **Domain model (DDD).**
    - `boundedContext`: the affected bounded context.
    - `glossary`: the ubiquitous language glossary, one term per entry and no repeats.
    - `aggregates`: the aggregates and their entities.
    - `invariants`: the invariants the code must protect.
    - `events`: the domain events the change emits or consumes.
-5. **Title.** `body.title`: a concise task title, up to 72 characters, on one line and without a final period (for example «Cancel orders before shipping»). It describes what is achieved, it does not copy the intent. It is used as the task's name in the UI and as the PR title. LunasQ only stores it on the first refinement: in a round with `changesRequested` the task already has a title (`task.title` in the context) and the one you send is ignored, but it is still required; repeat `task.title`.
+5. **Title.** `body.title`: a concise task title, up to 72 characters, on one line and without a final period (for example «Cancel orders before shipping»). It describes what is achieved, it does not copy the goal. It is used as the task's name in the UI and as the PR title. LunasQ only stores it on the first refinement: in a round with `changesRequested` the task already has a title (`task.title` in the context) and the one you send is ignored, but it is still required; repeat `task.title`.
 6. **Deliverable.** Set `body.deliverable` to `code` for software changes. Set it to `docs` only when the human explicitly asked to add or update documentation in the repository; the human sees this choice at the approval gate. An investigation, analysis or synthesis whose product is text is `research`, not repository documentation.
 7. **Requirements and criteria.** `requirements` in short sentences. Each criterion in `criteria` has an id `AC-1`, `AC-2`… and is written Given / When / Then in the `given`, `when` and `outcome` fields (not `then`). Cover the model's invariants and edge cases.
 8. **Task list.** `taskList` with ids `T-1`, `T-2`…, small steps in implementation order; each one points in `criterionIds` to criteria of this same spec. The implementer will check them off one by one.
@@ -96,8 +96,8 @@ It is passed as a JSON object in `handoff`, not as a serialized string. It is st
 
 If on reading the repo you see the task needs no code change, do not write a spec: deliver a Result with `submit_result`. The task goes straight to Completed, without an approval gate, without verification and without a PR. Use it when:
 
-- `research`: the intent asks for an investigation, an analysis or a synthesis and the product is the text.
-- `already_implemented`: what the intent asks for is already in the repo; say where (files, commits, tests).
+- `research`: the goal asks for an investigation, an analysis or a synthesis and the product is the text.
+- `already_implemented`: what the goal asks for is already in the repo; say where (files, commits, tests).
 - `not_resolvable`: the request has no resolution (it is contradictory, impossible or does not apply); explain why.
 
 For research, analysis and synthesis, put the findings in the `result` text. Do not create a report file, edit `AGENTS.md`, or add documentation that links to a report. The `AGENTS.md` instruction to update documentation in the same PR applies to code tasks when implementation changes a documented decision.
@@ -137,13 +137,13 @@ A rejection leaves the Run open: fix it and call again in the same Run. Error re
 ## Questions and failures
 
 - `ask_human` with `{ "question": "...", "context": "...", "options": [...] }` (`context` and `options` are optional) records the question and returns immediately. End your turn after calling it: the answer arrives as a new prompt or, if the Run was closed, in `questions` of the next `get_task_context`. If the question is choosing among concrete alternatives, add `options`: 2 to 6 objects `{ "label": "...", "description": "..." }` (`description` is optional), with short, unique labels (case and surrounding spaces are not distinguished). The human picks one or writes «Otra respuesta» (the UI's other-answer option), so do not include a catch-all option; the answer arrives as the chosen label or their free text. Without clear alternatives, omit `options` and the question is open.
-- `report_failure` with `{ "reason": "..." }` when you cannot continue (impossible intent, inaccessible repo). It closes the Run as failed; do not use it for a rejection you can fix.
+- `report_failure` with `{ "reason": "..." }` when you cannot continue (impossible goal, inaccessible repo). It closes the Run as failed; do not use it for a rejection you can fix.
 
 ## Memory with engram (optional)
 
 If the engram MCP is available (`mem_*` tools), use it like this; if it is not available, continue without it: no part of the phase depends on engram and LunasQ does not read it.
 
-- **On start:** `mem_context` of the project and `mem_search` of the module the intent touches.
+- **On start:** `mem_context` of the project and `mem_search` of the module the goal touches.
 - **When searching:** queries of 1 or 2 terms; engram combines the words with AND, so a long query almost never returns anything.
 - **During refinement:** save each decision with `mem_save` and a stable `topic_key` (`<project>/decision/<topic>`), and keep the domain glossary under a fixed `topic_key` (`<project>/glossary`).
 - **On closing:** `mem_session_summary` with what you learned, right before the exit tool: after it you call no more tools.

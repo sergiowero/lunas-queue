@@ -334,7 +334,7 @@ describe("TaskViewRepository.hookExecutions", () => {
     expect(rows.map((r) => r.eventId)).toEqual([e2.id, e1.id]);
     expect(rows[0]).toMatchObject({
       taskId: task.id,
-      taskIntent: "Hacer algo",
+      taskGoal: "Hacer algo",
       point: "after_merge",
       script: "deploy",
       exitCode: 1,
@@ -346,7 +346,7 @@ describe("TaskViewRepository.hookExecutions", () => {
 
   it("leaves the most recent run of each task in each script", () => {
     const { db, project, task, views } = setup();
-    const other = insertTask(db, project.id, { intent: "Otra" });
+    const other = insertTask(db, project.id, { goal: "Otra" });
     const add = (taskId: string, over: Record<string, unknown>) =>
       appendEvent(db, {
         taskId,
@@ -365,7 +365,7 @@ describe("TaskViewRepository.hookExecutions", () => {
 
   it("limits the tasks per point and script without a hook displacing another", () => {
     const { db, project, views } = setup();
-    const old = insertTask(db, project.id, { intent: "Vieja" });
+    const old = insertTask(db, project.id, { goal: "Vieja" });
     appendEvent(db, {
       taskId: old.id,
       type: "hook.executed",

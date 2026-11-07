@@ -8,20 +8,20 @@ describe("per-project board", () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
     const other = fake.addProject();
-    fake.addTask(project.id, { intent: "Por refinar" });
+    fake.addTask(project.id, { goal: "Por refinar" });
     fake.addTask(project.id, {
-      intent: "Implementando",
+      goal: "Implementando",
       state: "in_progress",
       subState: "running",
     });
     fake.addTask(project.id, {
-      intent: "Entregada",
+      goal: "Entregada",
       state: "completed",
       subState: null,
       prUrl: "https://github.com/o/r/pull/7",
       prState: "merged",
     });
-    fake.addTask(other.id, { intent: "Ajena" });
+    fake.addTask(other.id, { goal: "Ajena" });
     renderApp(`/projects/${project.id}`, fake);
 
     expect(await screen.findByRole("heading", { name: "lunas-queue" })).toBeTruthy();
@@ -39,23 +39,23 @@ describe("per-project board", () => {
   it("a paused task appears in the Paused column with its label", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
-    fake.addTask(project.id, { intent: "En pausa", state: "paused", subState: null });
+    fake.addTask(project.id, { goal: "En pausa", state: "paused", subState: null });
     renderApp(`/projects/${project.id}`, fake);
 
     const column = within(await screen.findByRole("region", { name: "Paused" }));
     expect(column.getByRole("link", { name: "En pausa" })).toBeTruthy();
   });
 
-  it("shows the task's title and, while there is none, its intent", async () => {
+  it("shows the task's title and, while there is none, its goal", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
-    fake.addTask(project.id, { intent: "Intent largo de la primera", title: "Título corto" });
-    fake.addTask(project.id, { intent: "Sin refinar todavía" });
+    fake.addTask(project.id, { goal: "Goal largo de la primera", title: "Título corto" });
+    fake.addTask(project.id, { goal: "Sin refinar todavía" });
     renderApp(`/projects/${project.id}`, fake);
 
     expect(await screen.findByRole("link", { name: "Título corto" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Sin refinar todavía" })).toBeTruthy();
-    expect(screen.queryByText("Intent largo de la primera")).toBeNull();
+    expect(screen.queryByText("Goal largo de la primera")).toBeNull();
   });
 
   it("links to task creation with the chosen project", async () => {

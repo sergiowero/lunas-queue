@@ -18,22 +18,22 @@ import {
 const projectId = "00000000-0000-4000-8000-000000000001";
 const otherId = "00000000-0000-4000-8000-000000000002";
 
-const validCreate = { projectId, intent: "Agregar login con GitHub", priority: 100 };
+const validCreate = { projectId, goal: "Agregar login con GitHub", priority: 100 };
 
 describe("TaskCreate", () => {
   it("accepts the minimum and fills in empty tags and dependencies", () => {
     expect(TaskCreate.parse(validCreate)).toEqual({ ...validCreate, tags: [], dependsOn: [] });
   });
 
-  it("trims the intent and the tags and removes duplicates", () => {
+  it("trims the goal and the tags and removes duplicates", () => {
     const parsed = TaskCreate.parse({
       ...validCreate,
-      intent: "  Agregar login  ",
+      goal: "  Agregar login  ",
       tags: [" auth ", "auth", "ui"],
       dependsOn: [otherId, otherId],
     });
     expect(parsed).toMatchObject({
-      intent: "Agregar login",
+      goal: "Agregar login",
       tags: ["auth", "ui"],
       dependsOn: [otherId],
     });
@@ -43,7 +43,7 @@ describe("TaskCreate", () => {
     ["negative priority", { priority: -1 }],
     ["non-integer priority", { priority: 1.5 }],
     ["priority greater than MAX_SAFE_INTEGER", { priority: Number.MAX_SAFE_INTEGER + 1 }],
-    ["empty intent", { intent: "   " }],
+    ["empty goal", { goal: "   " }],
     ["empty tag", { tags: [""] }],
     ["projectId that is not a uuid", { projectId: "p1" }],
     ["dependency that is not a uuid", { dependsOn: ["t1"] }],
@@ -62,7 +62,7 @@ describe("TaskCreate", () => {
 });
 
 describe("TaskUpdate", () => {
-  it("accepts a subset of intent, tags and priority", () => {
+  it("accepts a subset of goal, tags and priority", () => {
     expect(TaskUpdate.parse({ priority: 900 })).toEqual({ priority: 900 });
     expect(TaskUpdate.parse({})).toEqual({});
   });
@@ -89,7 +89,7 @@ describe("Task", () => {
     id: otherId,
     number: 7,
     projectId,
-    intent: "Agregar login",
+    goal: "Agregar login",
     title: null,
     tags: [],
     priority: 100,
@@ -150,7 +150,7 @@ describe("DependencyLink", () => {
       taskId: otherId,
       number: 3,
       projectId,
-      intent: "Base",
+      goal: "Base",
       title: "Esquema base",
       state: "completed",
       prState: "merged",
@@ -174,7 +174,7 @@ describe("task events", () => {
   it("task.created records what was captured on creation", () => {
     const payload = {
       projectId,
-      intent: "Agregar login",
+      goal: "Agregar login",
       tags: ["auth"],
       priority: 100,
       causedBy: null,

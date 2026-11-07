@@ -22,26 +22,26 @@ describe("In progress tab", () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
-    fake.addTask(one.id, { intent: "Borrador" });
+    fake.addTask(one.id, { goal: "Borrador" });
     const verifying = fake.addTask(one.id, {
-      intent: "Verificando",
+      goal: "Verificando",
       state: "verification",
       subState: "running",
     });
     fake.addTask(two.id, {
-      intent: "Verificando en espera",
+      goal: "Verificando en espera",
       state: "verification",
       subState: "waiting_human",
     });
-    fake.addTask(two.id, { intent: "Terminada", state: "completed", subState: null });
+    fake.addTask(two.id, { goal: "Terminada", state: "completed", subState: null });
     const running = fake.addTask(one.id, {
-      intent: "Corriendo en uno",
+      goal: "Corriendo en uno",
       state: "in_progress",
       subState: "running",
       priority: 300,
     });
     const waiting = fake.addTask(two.id, {
-      intent: "Esperando en dos",
+      goal: "Esperando en dos",
       state: "in_progress",
       subState: "waiting_human",
       priority: 50,
@@ -87,14 +87,14 @@ describe("In progress tab", () => {
   it("the Estado column shows the task's state (not just the sub-state), like the Cola tab", async () => {
     const fake = new FakeApi();
     const project = fake.addProject();
-    fake.addTask(project.id, { intent: "Refinando", state: "draft", subState: "running" });
+    fake.addTask(project.id, { goal: "Refinando", state: "draft", subState: "running" });
     fake.addTask(project.id, {
-      intent: "Implementando",
+      goal: "Implementando",
       state: "in_progress",
       subState: "waiting_human",
     });
     fake.addTask(project.id, {
-      intent: "Verificando",
+      goal: "Verificando",
       state: "verification",
       subState: "running",
     });
@@ -102,8 +102,8 @@ describe("In progress tab", () => {
 
     await screen.findByRole("link", { name: "Refinando" });
     await waitFor(() => expect(screen.queryAllByText("…")).toHaveLength(0));
-    const stateCell = (intent: string) =>
-      within(screen.getByRole("link", { name: intent }).closest("tr") as HTMLElement).getAllByRole(
+    const stateCell = (goal: string) =>
+      within(screen.getByRole("link", { name: goal }).closest("tr") as HTMLElement).getAllByRole(
         "cell",
       )[2] as HTMLElement;
     expect(within(stateCell("Refinando")).getByText("Draft")).toBeTruthy();
@@ -117,7 +117,7 @@ describe("In progress tab", () => {
   it("a task's Estado cell is identical in En curso and in Cola", async () => {
     const fake = new FakeApi();
     const project = fake.addProject();
-    fake.addTask(project.id, { intent: "En ambas", state: "verification", subState: "running" });
+    fake.addTask(project.id, { goal: "En ambas", state: "verification", subState: "running" });
     fake.queue = fake.tasks.map((task) => ({
       task,
       ready: false,
@@ -155,8 +155,8 @@ describe("In progress tab", () => {
     it("each row has a button with a pause icon and an accessible name with the task, without visible text", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
-      fake.addTask(project.id, { intent: "Una", state: "in_progress", subState: "running" });
-      fake.addTask(project.id, { intent: "Otra", state: "verification", subState: "running" });
+      fake.addTask(project.id, { goal: "Una", state: "in_progress", subState: "running" });
+      fake.addTask(project.id, { goal: "Otra", state: "verification", subState: "running" });
       renderApp("/in-progress", fake);
 
       // The rows are remounted when the Runs arrive: wait for them to stop loading.
@@ -174,11 +174,11 @@ describe("In progress tab", () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       const task = fake.addTask(project.id, {
-        intent: "Se pausa",
+        goal: "Se pausa",
         state: "in_progress",
         subState: "running",
       });
-      fake.addTask(project.id, { intent: "Sigue", state: "in_progress", subState: "queued" });
+      fake.addTask(project.id, { goal: "Sigue", state: "in_progress", subState: "queued" });
       const { user } = renderApp("/in-progress", fake);
 
       await user.click(await screen.findByRole("button", { name: "Pausar tarea Se pausa" }));
@@ -193,11 +193,11 @@ describe("In progress tab", () => {
       const fake = new FakeApi();
       const project = fake.addProject();
       const task = fake.addTask(project.id, {
-        intent: "Rechazada",
+        goal: "Rechazada",
         state: "in_progress",
         subState: "running",
       });
-      fake.addTask(project.id, { intent: "Intacta", state: "in_progress", subState: "queued" });
+      fake.addTask(project.id, { goal: "Intacta", state: "in_progress", subState: "queued" });
       const { user } = renderApp("/in-progress", fake);
       const button = await screen.findByRole("button", { name: "Pausar tarea Rechazada" });
       // It left the pausable states while the list stayed open.
@@ -222,8 +222,8 @@ describe("In progress tab", () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
-    fake.addTask(one.id, { intent: "De uno", state: "in_progress", subState: "running" });
-    fake.addTask(two.id, { intent: "De dos", state: "in_progress", subState: "queued" });
+    fake.addTask(one.id, { goal: "De uno", state: "in_progress", subState: "running" });
+    fake.addTask(two.id, { goal: "De dos", state: "in_progress", subState: "queued" });
     const { user } = renderApp("/in-progress", fake);
 
     await screen.findByText("De dos");
@@ -238,7 +238,7 @@ describe("In progress tab", () => {
 
   it("explains there are no tasks in progress, without an empty table", async () => {
     const fake = new FakeApi();
-    fake.addTask(fake.addProject().id, { intent: "Borrador" });
+    fake.addTask(fake.addProject().id, { goal: "Borrador" });
     renderApp("/in-progress", fake);
 
     expect(await screen.findByText("No hay tareas en curso.")).toBeTruthy();
@@ -260,7 +260,7 @@ describe("In progress tab", () => {
 
     it("table headers: the existing ones, the three Run ones and Acciones at the end", async () => {
       const fake = new FakeApi();
-      fake.addTask(fake.addProject().id, { intent: "Una", state: "in_progress" });
+      fake.addTask(fake.addProject().id, { goal: "Una", state: "in_progress" });
       renderApp("/in-progress", fake);
 
       await screen.findByRole("link", { name: "Una" });
@@ -280,7 +280,7 @@ describe("In progress tab", () => {
     it("shows iteration, agent with model and pane of the open Run", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject({ name: "uno" }).id, {
-        intent: "Con run",
+        goal: "Con run",
         state: "in_progress",
         subState: "running",
         priority: 10,
@@ -304,7 +304,7 @@ describe("In progress tab", () => {
     it("uses the most recent Run when there is an earlier finished one", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject().id, {
-        intent: "Dos runs",
+        goal: "Dos runs",
         state: "in_progress",
         subState: "running",
       });
@@ -324,7 +324,7 @@ describe("In progress tab", () => {
     it("the most recent Run is decided by startedAt, not by the response order", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject().id, {
-        intent: "Desordenados",
+        goal: "Desordenados",
         state: "in_progress",
       });
       const older = fake.startRun(task.id, "implement");
@@ -341,7 +341,7 @@ describe("In progress tab", () => {
     it("without Runs, the three columns show «—» and the rest of the row is kept", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject({ name: "uno" }).id, {
-        intent: "Sin runs",
+        goal: "Sin runs",
         state: "in_progress",
         subState: "queued",
         priority: 5,
@@ -362,7 +362,7 @@ describe("In progress tab", () => {
     it("without model or pane, Agente shows only the agentKind and Pane «—»", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject().id, {
-        intent: "Sin modelo",
+        goal: "Sin modelo",
         state: "in_progress",
       });
       const run = fake.startRun(task.id, "implement");
@@ -398,7 +398,7 @@ describe("In progress tab", () => {
       vi.stubGlobal("EventSource", FakeEventSource);
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject().id, {
-        intent: "En vivo",
+        goal: "En vivo",
         state: "in_progress",
         subState: "running",
       });
@@ -422,8 +422,8 @@ describe("In progress tab", () => {
     it("a failed Runs query shows «error» and not «—», without affecting the other rows", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
-      const broken = fake.addTask(project.id, { intent: "Rota", state: "in_progress" });
-      const fine = fake.addTask(project.id, { intent: "Sana", state: "in_progress" });
+      const broken = fake.addTask(project.id, { goal: "Rota", state: "in_progress" });
+      const fine = fake.addTask(project.id, { goal: "Sana", state: "in_progress" });
       fake.startRun(broken.id, "implement");
       fake.startRun(fine.id, "implement").herdrPane = "p-ok";
       fake.runsFail.add(broken.id);
@@ -435,7 +435,7 @@ describe("In progress tab", () => {
 
     it("the last Run's pane id of the task focuses its agent in herdr", async () => {
       const fake = new FakeApi();
-      const task = fake.addTask(fake.addProject().id, { intent: "Con foco", state: "in_progress" });
+      const task = fake.addTask(fake.addProject().id, { goal: "Con foco", state: "in_progress" });
       const older = fake.startRun(task.id, "implement");
       fake.endRun(older.id, {});
       const latest = fake.startRun(task.id, "verify");
@@ -459,11 +459,11 @@ describe("In progress tab", () => {
     it("while loading, with an error or without Runs the Pane cell is text, without a focus button", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
-      fake.addTask(project.id, { intent: "Sin runs", state: "in_progress" });
-      const broken = fake.addTask(project.id, { intent: "Rota", state: "in_progress" });
+      fake.addTask(project.id, { goal: "Sin runs", state: "in_progress" });
+      const broken = fake.addTask(project.id, { goal: "Rota", state: "in_progress" });
       fake.startRun(broken.id, "implement");
       fake.runsFail.add(broken.id);
-      const noPane = fake.addTask(project.id, { intent: "Sin pane", state: "in_progress" });
+      const noPane = fake.addTask(project.id, { goal: "Sin pane", state: "in_progress" });
       fake.startRun(noPane.id, "implement").herdrPane = null;
       renderApp("/in-progress", fake);
 
@@ -476,7 +476,7 @@ describe("In progress tab", () => {
     it("while the Runs load the Pane cell says «…» as text, without a focus button", async () => {
       const fake = new FakeApi();
       const task = fake.addTask(fake.addProject().id, {
-        intent: "Pendiente",
+        goal: "Pendiente",
         state: "in_progress",
       });
       fake.startRun(task.id, "implement");
@@ -505,7 +505,7 @@ describe("In progress tab", () => {
     it("if a Runs refetch fails with previous cached data the Pane cell says «error», without a focus button", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
-      const task = fake.addTask(project.id, { intent: "Se rompe", state: "in_progress" });
+      const task = fake.addTask(project.id, { goal: "Se rompe", state: "in_progress" });
       const run = fake.startRun(task.id, "implement");
       const { queryClient } = renderApp("/in-progress", fake);
 
@@ -523,8 +523,8 @@ describe("In progress tab", () => {
     it("if the focus fails it shows the error next to that pane without touching the other rows", async () => {
       const fake = new FakeApi();
       const project = fake.addProject();
-      const a = fake.addTask(project.id, { intent: "Falla", state: "in_progress" });
-      const b = fake.addTask(project.id, { intent: "Intacta", state: "in_progress" });
+      const a = fake.addTask(project.id, { goal: "Falla", state: "in_progress" });
+      const b = fake.addTask(project.id, { goal: "Intacta", state: "in_progress" });
       const runA = fake.startRun(a.id, "implement");
       const runB = fake.startRun(b.id, "implement");
       fake.focusError = { status: 502, error: "herdr_error", message: "herdr no responde" };
@@ -546,8 +546,8 @@ describe("In progress tab", () => {
       const fake = new FakeApi();
       const one = fake.addProject({ name: "uno" });
       const two = fake.addProject({ name: "dos" });
-      const a = fake.addTask(one.id, { intent: "De uno", state: "in_progress" });
-      const b = fake.addTask(two.id, { intent: "De dos", state: "in_progress" });
+      const a = fake.addTask(one.id, { goal: "De uno", state: "in_progress" });
+      const b = fake.addTask(two.id, { goal: "De dos", state: "in_progress" });
       const runA = fake.startRun(a.id, "implement");
       runA.herdrPane = "p-a";
       runA.iteration = 3;
@@ -567,8 +567,8 @@ describe("In progress tab", () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
-    fake.addTask(one.id, { intent: "De uno", state: "in_progress", subState: "running" });
-    fake.addTask(two.id, { intent: "De dos", state: "in_progress", subState: "queued" });
+    fake.addTask(one.id, { goal: "De uno", state: "in_progress", subState: "running" });
+    fake.addTask(two.id, { goal: "De dos", state: "in_progress", subState: "queued" });
     const { user, router } = renderApp("/in-progress", fake);
     await screen.findByText("De dos");
     await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
