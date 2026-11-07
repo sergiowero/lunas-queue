@@ -13,6 +13,7 @@ import {
   ProjectRepository,
   RunRepository,
   type RunRow,
+  readVerificationSettings,
   SpecRepository,
   TaskPrRepository,
   TaskRepository,
@@ -324,7 +325,11 @@ export class DeliveryService {
   ): Promise<DeliveryResult> {
     const { taskId, run, project } = ctx;
     const previous = this.#conflicts(taskId);
-    if (previous >= maxVerificationIterations(project)) {
+    const cap = maxVerificationIterations(
+      project,
+      readVerificationSettings(this.#deps.db).maxVerificationIterations,
+    );
+    if (previous >= cap) {
       return this.#escalate(
         taskId,
         run,

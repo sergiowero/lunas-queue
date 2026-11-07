@@ -13,7 +13,7 @@ import {
   type TaskTransitionedPayload,
 } from "@lunasq/schemas";
 
-export const DEFAULT_MAX_ITERATIONS = 3;
+export const DEFAULT_MAX_ITERATIONS = 5;
 export const DEFAULT_MAX_RETRIES = 3;
 
 export type TaskSnapshot = {

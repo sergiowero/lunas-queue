@@ -1,12 +1,15 @@
 // Settings: the human enables or disables each agent provider and sets the global limit of
 // concurrent agents (docs/decisions/settings-proveedores.md). Turning a provider off applies the
 // fallback rules; turning both off pauses dispatch. Live agents are never interrupted, neither
-// when turning a provider off nor when lowering the limit.
+// when turning a provider off nor when lowering the limit. The global verification iteration cap
+// (a project's own value overrides it) is saved here too.
 import {
   AgentKind,
   type AgentProviderPatch,
   ConcurrencySettings,
   MAX_GLOBAL_CONCURRENCY,
+  MAX_VERIFICATION_ITERATIONS,
+  VerificationSettings,
 } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useId, useState } from "react";
@@ -67,6 +70,7 @@ export function SettingsPage() {
       <h1 className="text-xl font-semibold">{t.settings.title}</h1>
       <ProvidersSection />
       <ConcurrencySection />
+      <VerificationSection />
     </div>
   );
 }
@@ -174,6 +178,110 @@ function ConcurrencySection() {
         {update.error && effective !== undefined && (
           <p role="alert" className="text-sm text-destructive">
             {t.settings.limitSaveFailed(effective, errorText(update.error))}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function VerificationSection() {
+  const t = useT();
+  const errorText = useErrorText();
+  const inputId = useId();
+  const messageId = useId();
+  const settings = useQuery(queries.verificationSettings());
+  const queryClient = useQueryClient();
+  // null: the field follows the value read; a text: what the human is typing.
+  const [draft, setDraft] = useState<string | null>(null);
+  const [invalid, setInvalid] = useState(false);
+  // Last cap a PUT saved and that no later read managed to read (see ConcurrencySection).
+  const [unread, setUnread] = useState<{ value: number; at: number } | null>(null);
+  const update = useMutation({
+    mutationFn: (input: VerificationSettings) => api.updateVerificationSettings(input),
+    onSuccess: async (saved) => {
+      const queryKey = queries.verificationSettings().queryKey;
+      await queryClient.invalidateQueries({ queryKey });
+      if (queryClient.getQueryState(queryKey)?.status === "error") {
+        setDraft(String(saved.maxVerificationIterations));
+        setUnread({ value: saved.maxVerificationIterations, at: Date.now() });
+      } else {
+        setDraft(null);
+        setUnread(null);
+      }
+    },
+  });
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (update.isPending || !settings.data) return;
+    const text = draft ?? String(settings.data.maxVerificationIterations);
+    const parsed = VerificationSettings.safeParse({
+      maxVerificationIterations: text.trim() === "" ? Number.NaN : Number(text),
+    });
+    if (!parsed.success) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    update.mutate(parsed.data);
+  }
+
+  const savedUnread = unread && (settings.dataUpdatedAt ?? 0) < unread.at ? unread.value : null;
+  const effective = savedUnread ?? settings.data?.maxVerificationIterations;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t.settings.verificationTitle}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t.settings.verificationHelp}</p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {!settings.data && !settings.error && <Loading />}
+        {settings.data && (
+          <form onSubmit={submit} noValidate className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor={inputId}>{t.settings.maxIterations}</Label>
+              <Input
+                id={inputId}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_VERIFICATION_ITERATIONS}
+                step={1}
+                className="w-28"
+                value={draft ?? String(settings.data.maxVerificationIterations)}
+                aria-invalid={invalid}
+                aria-describedby={invalid ? messageId : undefined}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  setInvalid(false);
+                }}
+              />
+            </div>
+            <Button type="submit" disabled={update.isPending}>
+              {t.settings.saveIterations}
+            </Button>
+            {invalid && (
+              <p id={messageId} className="basis-full text-sm text-destructive">
+                {t.settings.iterationsInvalid(MAX_VERIFICATION_ITERATIONS)}
+              </p>
+            )}
+          </form>
+        )}
+        {settings.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {settings.data
+              ? savedUnread === null
+                ? t.settings.iterationsUpdateFailed
+                : t.settings.iterationsSavedUnread(savedUnread)
+              : t.settings.iterationsReadFailed}
+            {errorText(settings.error)}
+          </p>
+        )}
+        {update.error && effective !== undefined && (
+          <p role="alert" className="text-sm text-destructive">
+            {t.settings.iterationsSaveFailed(effective, errorText(update.error))}
           </p>
         )}
       </CardContent>

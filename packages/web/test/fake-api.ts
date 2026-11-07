@@ -35,6 +35,7 @@ import {
   SpecEditAndApprove,
   SpecRequestChanges,
   TaskCreate,
+  VerificationSettings,
 } from "@lunasq/schemas";
 import type { Json } from "../src/lib/api.ts";
 
@@ -137,6 +138,14 @@ export class FakeApi {
   concurrencyReadFails = false;
   /** If set, the concurrency PUT waits for this promise before answering. */
   holdConcurrencyPut: Promise<void> | null = null;
+  /** Saved global iteration cap; 5 by default, like the server without configuration. */
+  verification = { maxVerificationIterations: 5 };
+  /** If set, PUT /api/settings/verification answers this error. */
+  verificationError: { status: number; error: string; message: string } | null = null;
+  /** If true, GET /api/settings/verification answers 500. */
+  verificationReadFails = false;
+  /** If set, the verification PUT waits for this promise before answering. */
+  holdVerificationPut: Promise<void> | null = null;
   /** If the agent that asked is still alive: the answer goes to the pane; if not, to a new Run. */
   agentAlive = false;
   /** If set, GET /api/queue answers this as is. */
@@ -334,6 +343,9 @@ export class FakeApi {
     if (method === "PUT" && url.pathname === "/api/settings/concurrency") {
       await this.holdConcurrencyPut;
     }
+    if (method === "PUT" && url.pathname === "/api/settings/verification") {
+      await this.holdVerificationPut;
+    }
     const [status, payload] = this.route(method, url, body);
     return new Response(status === 204 ? null : JSON.stringify(payload), {
       status,
@@ -393,6 +405,22 @@ export class FakeApi {
     return [200, { ...this.concurrency }];
   }
 
+  private verificationSettings(method: string, body: unknown): [number, unknown] {
+    if (method === "GET") {
+      if (this.verificationReadFails) return [500, { error: "internal", message: "no connection" }];
+      return [200, this.verification];
+    }
+    if (method !== "PUT") return [404, { error: "not_found" }];
+    if (this.verificationError) {
+      const { status, ...error } = this.verificationError;
+      return [status, error];
+    }
+    const input = validate(VerificationSettings, body);
+    if (!input.ok) return input.response;
+    this.verification = { ...input.data };
+    return [200, { ...this.verification }];
+  }
+
   private route(method: string, url: URL, body: unknown): [number, unknown] {
     const parts = url.pathname.split("/").filter(Boolean).slice(1);
     const [resource, id, sub, version, action] = parts;
@@ -407,6 +435,9 @@ export class FakeApi {
     if (resource === "settings" && id === "providers") return this.providerSettings(method, body);
     if (resource === "settings" && id === "concurrency") {
       return this.concurrencySettings(method, body);
+    }
+    if (resource === "settings" && id === "verification") {
+      return this.verificationSettings(method, body);
     }
     if (resource === "questions") return this.question(method, url, id, sub, body);
     if (resource === "blocked") {

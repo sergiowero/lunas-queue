@@ -43,14 +43,20 @@ describe("phaseProfile", () => {
 });
 
 describe("maxVerificationIterations", () => {
-  it("uses 3 if the project sets no cap", () => {
+  it("uses 5 if neither the project nor Settings set a cap", () => {
     expect(maxVerificationIterations(project())).toBe(DEFAULT_MAX_ITERATIONS);
-    expect(DEFAULT_MAX_ITERATIONS).toBe(3);
+    expect(maxVerificationIterations(project(), undefined)).toBe(5);
+    expect(DEFAULT_MAX_ITERATIONS).toBe(5);
   });
 
-  it("respects the project cap", () => {
-    const config = project({ limits: { maxVerificationIterations: 5 } });
-    expect(maxVerificationIterations(config)).toBe(5);
+  it("uses the global cap if the project sets none", () => {
+    expect(maxVerificationIterations(project(), 7)).toBe(7);
+  });
+
+  it("the project cap overrides the global cap", () => {
+    const config = project({ limits: { maxVerificationIterations: 2 } });
+    expect(maxVerificationIterations(config, 7)).toBe(2);
+    expect(maxVerificationIterations(config)).toBe(2);
   });
 });
 
