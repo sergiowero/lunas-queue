@@ -21,7 +21,7 @@ The pilot has two parts. The e2e suite (`pnpm e2e`, [ADR uw-29-e2e](decisions/uw
 
 ## What to record
 
-Each deviation from the script is a finding. Turn it into a LunasQ task (intent with the symptom, the script step and what you expected) and link it with **originated by** to the task where it appeared.
+Each deviation from the script is a finding. Turn it into a LunasQ task (goal with the symptom, the script step and what you expected) and link it with **originated by** to the task where it appeared.
 
 ## e2e suite findings (ready to queue)
 

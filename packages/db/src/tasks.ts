@@ -81,7 +81,7 @@ function findRow(db: Reader, taskId: string): Row | undefined {
   return db.select().from(tasks).where(eq(tasks.id, taskId)).get();
 }
 
-const EDITABLE = ["intent", "tags", "priority"] as const;
+const EDITABLE = ["goal", "tags", "priority"] as const;
 
 export class TaskRepository implements DependencyGraphReader {
   private readonly db: LunasqDatabase;
@@ -146,7 +146,7 @@ export class TaskRepository implements DependencyGraphReader {
       const payload: TaskCreatedPayload = {
         number: row.number ?? undefined,
         projectId: row.projectId,
-        intent: row.intent,
+        goal: row.goal,
         tags: row.tags,
         priority: row.priority,
         causedBy: row.causedBy,
@@ -302,13 +302,13 @@ export class TaskRepository implements DependencyGraphReader {
     const task = findRow(db, taskId);
     if (!task) return null;
     const link = (
-      other: Pick<Row, "id" | "number" | "projectId" | "intent" | "title" | "state" | "prState">,
+      other: Pick<Row, "id" | "number" | "projectId" | "goal" | "title" | "state" | "prState">,
       createdAt: Date,
     ): DependencyLink => ({
       taskId: other.id,
       number: requireTaskNumber(other.number),
       projectId: other.projectId,
-      intent: other.intent,
+      goal: other.goal,
       title: other.title,
       state: other.state,
       prState: other.prState,
@@ -319,7 +319,7 @@ export class TaskRepository implements DependencyGraphReader {
       id: tasks.id,
       number: tasks.number,
       projectId: tasks.projectId,
-      intent: tasks.intent,
+      goal: tasks.goal,
       title: tasks.title,
       state: tasks.state,
       prState: tasks.prState,

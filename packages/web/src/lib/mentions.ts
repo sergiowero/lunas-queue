@@ -1,4 +1,4 @@
-// #N mentions in a task's intent (ADR 0015): `#` followed by digits, without a letter, digit
+// #N mentions in a task's goal (ADR 0015): `#` followed by digits, without a letter, digit
 // or `#` stuck before nor a letter or digit stuck after. This way `a#5`, `#5x` and `#abc` are text.
 export type Mention = { number: number; text: string };
 

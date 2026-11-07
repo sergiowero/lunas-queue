@@ -14,7 +14,7 @@ schedulerStateReaderContract("SchedulerStateRepository", (seeds, edges) => {
   const ids = new Map<string, string>();
   for (const seed of seeds) {
     const row = insertTask(db, project.id, {
-      intent: seed.name,
+      goal: seed.name,
       state: seed.state,
       subState: seed.subState ?? null,
       priority: seed.priority ?? 100,

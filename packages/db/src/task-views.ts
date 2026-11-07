@@ -205,13 +205,13 @@ export class TaskViewRepository {
     const rows = this.db.all<{
       eventId: number;
       taskId: string;
-      taskIntent: string;
+      taskGoal: string;
       taskTitle: string | null;
       at: number;
       payload: string | null;
     }>(sql`
       with latest as (
-        select e.id, e.task_id, t.intent, t.title, e.created_at, e.payload,
+        select e.id, e.task_id, t.goal, t.title, e.created_at, e.payload,
           row_number() over (
             partition by e.task_id, ${hook("e.")} order by e.id desc
           ) as per_task
@@ -221,7 +221,7 @@ export class TaskViewRepository {
         select *, row_number() over (partition by ${hook("")} order by id desc) as per_hook
         from latest where per_task = 1
       )
-      select id as eventId, task_id as taskId, intent as taskIntent, title as taskTitle, created_at as at, payload
+      select id as eventId, task_id as taskId, goal as taskGoal, title as taskTitle, created_at as at, payload
       from ranked where per_hook <= ${perHook} order by id desc
     `);
     const result: HookExecutionView[] = [];

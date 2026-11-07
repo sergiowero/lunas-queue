@@ -27,7 +27,7 @@ function setup() {
   const create = async (overrides: object = {}): Promise<TaskBody> => {
     const res = await send("POST", "/api/tasks", {
       projectId: project.id,
-      intent: "Hacer algo",
+      goal: "Hacer algo",
       priority: 100,
       ...overrides,
     });
@@ -45,7 +45,7 @@ describe("POST /api/tasks", () => {
       id: expect.stringMatching(/^[0-9a-f-]{36}$/),
       number: 1,
       projectId: project.id,
-      intent: "Hacer algo",
+      goal: "Hacer algo",
       tags: ["auth"],
       priority: 100,
       state: "draft",
@@ -58,13 +58,38 @@ describe("POST /api/tasks", () => {
     expect((await send("POST", "/api/tasks", "{")).status).toBe(400);
     const res = await send("POST", "/api/tasks", {
       projectId: project.id,
-      intent: "x",
+      goal: "x",
       priority: -1,
     });
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string; issues: { path: string[] }[] };
     expect(body.error).toBe("invalid_input");
     expect(body.issues[0]?.path).toEqual(["priority"]);
+  });
+
+  it("answers 400 if a task is created or patched with the former intent field", async () => {
+    const { send, project } = setup();
+    const created = await send("POST", "/api/tasks", {
+      projectId: project.id,
+      intent: "x",
+      priority: 1,
+    });
+    expect(created.status).toBe(400);
+    const withBoth = await send("POST", "/api/tasks", {
+      projectId: project.id,
+      goal: "x",
+      intent: "x",
+      priority: 1,
+    });
+    expect(withBoth.status).toBe(400);
+    const task = (await (
+      await send("POST", "/api/tasks", {
+        projectId: project.id,
+        goal: "x",
+        priority: 1,
+      })
+    ).json()) as { id: string };
+    expect((await send("PATCH", `/api/tasks/${task.id}`, { intent: "y" })).status).toBe(400);
   });
 
   it.each([
@@ -75,7 +100,7 @@ describe("POST /api/tasks", () => {
     const { send, project } = setup();
     const res = await send("POST", "/api/tasks", {
       projectId: project.id,
-      intent: "Hacer algo",
+      goal: "Hacer algo",
       priority: 100,
       ...overrides,
     });
@@ -148,12 +173,26 @@ describe("GET and PATCH /api/tasks/:id", () => {
     expect(listed[0]).toMatchObject({ resultKind: "already_implemented" });
   });
 
-  it("updates intent, tags and priority", async () => {
-    const { send, create } = setup();
+  it("updates goal, tags and priority", async () => {
+    const { db, send, create } = setup();
     const task = await create();
-    const res = await send("PATCH", `/api/tasks/${task.id}`, { priority: 900, tags: ["ui"] });
+    const res = await send("PATCH", `/api/tasks/${task.id}`, {
+      goal: "A sharper goal",
+      priority: 900,
+      tags: ["ui"],
+    });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ priority: 900, tags: ["ui"] });
+    expect(await res.json()).toMatchObject({ goal: "A sharper goal", priority: 900, tags: ["ui"] });
+    const updated = listEvents(db, task.id).at(-1);
+    expect(updated).toMatchObject({ type: "task.updated", actor: "human" });
+    const payload = updated?.payload as {
+      from: Record<string, unknown>;
+      to: Record<string, unknown>;
+    };
+    expect(payload.from.goal).toBe(task.goal);
+    expect(payload.to.goal).toBe("A sharper goal");
+    expect(payload.from).not.toHaveProperty("intent");
+    expect(payload.to).not.toHaveProperty("intent");
   });
 
   it("answers 400 if it tries to change the state, 404 if it does not exist and 409 if it is terminal", async () => {

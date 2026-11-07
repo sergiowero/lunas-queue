@@ -250,7 +250,7 @@ export class LunasqMcpService {
       task: {
         id: task.id,
         number: task.number,
-        intent: task.intent,
+        goal: task.goal,
         title: task.title,
         tags: task.tags,
         state: task.state,

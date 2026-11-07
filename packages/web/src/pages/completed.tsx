@@ -56,7 +56,7 @@ export function CompletedPage() {
   const columns = useMemo(
     () => [
       column.accessor(cappedTaskLabel, {
-        id: "intent",
+        id: "goal",
         header: t.columns.task,
         cell: (cell) => (
           <span className="flex items-baseline gap-2">

@@ -12,9 +12,9 @@ vi.mock("../lib/format.ts", async (importOriginal) => {
 function seeded() {
   const fake = new FakeApi();
   const project = fake.addProject({ name: "lunas-queue" });
-  const dep = fake.addTask(project.id, { intent: "Esquema de usuarios" });
+  const dep = fake.addTask(project.id, { goal: "Esquema de usuarios" });
   const task = fake.addTask(project.id, {
-    intent: "Login con email",
+    goal: "Login con email",
     tags: ["auth"],
     priority: 200,
     worktreePath: "/w/login",
@@ -37,11 +37,11 @@ describe("task detail", () => {
     expect(screen.getByText("lunasq/login")).toBeTruthy();
     expect(await screen.findByRole("link", { name: "lunas-queue" })).toBeTruthy();
     expect(
-      await (await section("Dependencias")).findByRole("link", { name: dep.intent }),
+      await (await section("Dependencias")).findByRole("link", { name: dep.goal }),
     ).toBeTruthy();
   });
 
-  it("with a title it shows it as the heading and leaves the intent below", async () => {
+  it("with a title it shows it as the heading and leaves the goal below", async () => {
     const { fake, task } = seeded();
     task.title = "Login por correo";
     renderApp(`/tasks/${task.id}`, fake);
@@ -63,27 +63,27 @@ describe("task detail", () => {
   it("adds and removes dependencies while the task is in draft", async () => {
     const { fake, project, task, dep } = seeded();
     const other = fake.addProject({ name: "api" });
-    const extra = fake.addTask(other.id, { intent: "Endpoint de login" });
-    fake.addTask(project.id, { intent: "Ya cancelada", state: "cancelled", subState: null });
+    const extra = fake.addTask(other.id, { goal: "Endpoint de login" });
+    fake.addTask(project.id, { goal: "Ya cancelada", state: "cancelled", subState: null });
     const { user } = renderApp(`/tasks/${task.id}`, fake);
 
     const deps = await section("Dependencias");
     const select = await deps.findByLabelText("Agregar dependencia");
-    // The options carry the #N in front («#N · intent»): it is looked up by the end of the name.
+    // The options carry the #N in front («#N · goal»): it is looked up by the end of the name.
     expect(select.querySelectorAll("option")).toHaveLength(2);
-    expect(deps.queryByRole("option", { name: new RegExp(`· ${dep.intent}$`) })).toBeNull();
+    expect(deps.queryByRole("option", { name: new RegExp(`· ${dep.goal}$`) })).toBeNull();
     expect(deps.queryByRole("option", { name: /· Ya cancelada$/ })).toBeNull();
-    expect(deps.queryByRole("option", { name: new RegExp(`· ${task.intent}$`) })).toBeNull();
-    expect(deps.getByRole("option", { name: new RegExp(`· ${extra.intent}$`) })).toBeTruthy();
+    expect(deps.queryByRole("option", { name: new RegExp(`· ${task.goal}$`) })).toBeNull();
+    expect(deps.getByRole("option", { name: new RegExp(`· ${extra.goal}$`) })).toBeTruthy();
     await user.selectOptions(select, extra.id);
     await user.click(deps.getByRole("button", { name: "Agregar" }));
 
-    expect(await deps.findByRole("link", { name: extra.intent })).toBeTruthy();
+    expect(await deps.findByRole("link", { name: extra.goal })).toBeTruthy();
     expect(deps.getByText("otro proyecto")).toBeTruthy();
     expect(fake.edges).toContainEqual({ taskId: task.id, dependsOnId: extra.id });
 
-    await user.click(deps.getByRole("button", { name: `Quitar dependencia ${dep.intent}` }));
-    await waitFor(() => expect(deps.queryByRole("link", { name: dep.intent })).toBeNull());
+    await user.click(deps.getByRole("button", { name: `Quitar dependencia ${dep.goal}` }));
+    await waitFor(() => expect(deps.queryByRole("link", { name: dep.goal })).toBeNull());
     expect(fake.edges).toEqual([{ taskId: task.id, dependsOnId: extra.id }]);
   });
 
@@ -748,10 +748,10 @@ describe("task detail", () => {
   });
 });
 
-describe("#N mentions in the detail's intent", () => {
+describe("#N mentions in the detail's goal", () => {
   it("a mention of an existing task is a link to its detail", async () => {
     const { fake, project, dep } = seeded();
-    const task = fake.addTask(project.id, { intent: `Depende de #${dep.number} para arrancar` });
+    const task = fake.addTask(project.id, { goal: `Depende de #${dep.number} para arrancar` });
     renderApp(`/tasks/${task.id}`, fake);
 
     const heading = await screen.findByRole("heading", {
@@ -764,21 +764,21 @@ describe("#N mentions in the detail's intent", () => {
   it("a nonexistent number, #abc or a#5 are shown as is, without a link", async () => {
     const { fake, project, dep } = seeded();
     // The last mention does exist: when it is a link, the tasks have already loaded.
-    const intent = `Ver #999, #abc, a#${dep.number} y #${dep.number}`;
-    const task = fake.addTask(project.id, { intent });
+    const goal = `Ver #999, #abc, a#${dep.number} y #${dep.number}`;
+    const task = fake.addTask(project.id, { goal });
     renderApp(`/tasks/${task.id}`, fake);
 
-    const heading = await screen.findByRole("heading", { name: intent });
+    const heading = await screen.findByRole("heading", { name: goal });
     await within(heading).findByRole("link", { name: `#${dep.number}` });
     expect(within(heading).getAllByRole("link")).toHaveLength(1);
   });
 });
 
 describe("#N mentions in cards and rows that are already a link", () => {
-  it("the board and the queue show the intent as plain text, without nested links", async () => {
+  it("the board and the queue show the goal as plain text, without nested links", async () => {
     const { fake, project, dep } = seeded();
-    const intent = `Depende de #${dep.number}`;
-    const task = fake.addTask(project.id, { intent });
+    const goal = `Depende de #${dep.number}`;
+    const task = fake.addTask(project.id, { goal });
     fake.queue = [
       {
         task,
@@ -795,12 +795,12 @@ describe("#N mentions in cards and rows that are already a link", () => {
       },
     ];
     const board = renderApp(`/projects/${project.id}`, fake);
-    const card = await screen.findByRole("link", { name: intent });
+    const card = await screen.findByRole("link", { name: goal });
     expect(card.querySelector("a")).toBeNull();
     board.unmount();
 
     renderApp("/queue", fake);
-    const row = await screen.findByRole("link", { name: intent });
+    const row = await screen.findByRole("link", { name: goal });
     expect(row.querySelector("a")).toBeNull();
   });
 });

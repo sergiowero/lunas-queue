@@ -11,11 +11,7 @@ const EXACT = "e".repeat(TASK_TITLE_MAX);
 type View = {
   name: string;
   path: string;
-  seed: (
-    fake: FakeApi,
-    projectId: string,
-    label: { title: string | null; intent: string },
-  ) => string;
+  seed: (fake: FakeApi, projectId: string, label: { title: string | null; goal: string }) => string;
 };
 
 const views: View[] = [
@@ -66,7 +62,7 @@ const views: View[] = [
   },
 ];
 
-function setup(view: View, label: { title: string | null; intent: string }) {
+function setup(view: View, label: { title: string | null; goal: string }) {
   const fake = new FakeApi();
   const project = fake.addProject({ name: "lunas-queue" });
   const taskId = view.seed(fake, project.id, label);
@@ -85,24 +81,24 @@ const taskLink = (taskId: string) =>
 
 describe.each(views)("$name view caps the task label", (view) => {
   it("shows the first 69 characters and «...» for a title over the cap", async () => {
-    const { taskId } = setup(view, { title: LONG, intent: "intención corta" });
+    const { taskId } = setup(view, { title: LONG, goal: "objetivo corta" });
     const link = await taskLink(taskId);
     expect(link.textContent).toBe(CAPPED);
     expect(link.textContent).toHaveLength(TASK_TITLE_MAX);
   });
 
-  it("caps the intent when the task has no title yet", async () => {
-    const { taskId } = setup(view, { title: null, intent: LONG });
+  it("caps the goal when the task has no title yet", async () => {
+    const { taskId } = setup(view, { title: null, goal: LONG });
     expect((await taskLink(taskId)).textContent).toBe(CAPPED);
   });
 
   it("leaves a label of exactly the cap unchanged", async () => {
-    const { taskId } = setup(view, { title: EXACT, intent: "x" });
+    const { taskId } = setup(view, { title: EXACT, goal: "x" });
     expect((await taskLink(taskId)).textContent).toBe(EXACT);
   });
 
   it("leaves a short label unchanged, without an ellipsis", async () => {
-    const { taskId } = setup(view, { title: null, intent: "Login con email" });
+    const { taskId } = setup(view, { title: null, goal: "Login con email" });
     expect((await taskLink(taskId)).textContent).toBe("Login con email");
   });
 });
@@ -111,15 +107,15 @@ describe("task detail keeps the full label", () => {
   it("shows the full stored title", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
-    const task = fake.addTask(project.id, { title: LONG, intent: "corta" });
+    const task = fake.addTask(project.id, { title: LONG, goal: "corta" });
     renderApp(`/tasks/${task.id}`, fake);
     expect(await screen.findByRole("heading", { name: LONG })).toBeTruthy();
   });
 
-  it("shows the full stored intent while there is no title", async () => {
+  it("shows the full stored goal while there is no title", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
-    const task = fake.addTask(project.id, { intent: LONG });
+    const task = fake.addTask(project.id, { goal: LONG });
     renderApp(`/tasks/${task.id}`, fake);
     expect(await screen.findByRole("heading", { name: LONG })).toBeTruthy();
     expect(within(document.body).queryByText(CAPPED)).toBeNull();

@@ -1,13 +1,13 @@
-// Intent with its #N mentions linked to the mentioned task's detail (ADR 0015). Only for
-// where the intent is not already inside a link: cards and rows show it as plain text.
+// Goal with its #N mentions linked to the mentioned task's detail (ADR 0015). Only for
+// where the goal is not already inside a link: cards and rows show it as plain text.
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { splitMentions } from "../../lib/mentions.ts";
 import { queries } from "../../lib/queries.ts";
 
-export function IntentText({ intent }: { intent: string }) {
-  const parts = useMemo(() => splitMentions(intent), [intent]);
+export function GoalText({ goal }: { goal: string }) {
+  const parts = useMemo(() => splitMentions(goal), [goal]);
   const hasMentions = parts.some((part) => typeof part !== "string");
   // Without mentions there is no need to resolve numbers: the tasks are not requested.
   const tasks = useQuery({ ...queries.tasks(), enabled: hasMentions });

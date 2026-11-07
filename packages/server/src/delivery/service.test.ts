@@ -57,7 +57,7 @@ describe("DeliveryService.deliver", () => {
       await h.git.resolveCommit({ cwd: WORKTREE, ref: "HEAD" }),
     );
 
-    // The PR carries intent, criteria, evidence, risk and trailers, and its label.
+    // The PR carries goal, criteria, evidence, risk and trailers, and its label.
     const [input] = h.github.created;
     expect(input).toMatchObject({ cwd: WORKTREE, head: BRANCH, base: "main" });
     expect(input?.title).toBe("Permitir cancelar pedidos pendientes");

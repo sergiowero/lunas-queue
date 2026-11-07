@@ -8,7 +8,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 function setup(extraEvents: string[]) {
   const fake = new FakeApi();
-  const task = fake.addTask(fake.addProject().id, { intent: "Migrar" });
+  const task = fake.addTask(fake.addProject().id, { goal: "Migrar" });
   for (const type of extraEvents) fake.event(task.id, type, "agent");
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   vi.stubGlobal("fetch", fake.fetch);
@@ -53,7 +53,7 @@ describe("EventLogPanel", () => {
 
   it("shows the empty message when the task has no events", async () => {
     const fake = new FakeApi();
-    const task = fake.addTask(fake.addProject().id, { intent: "Migrar" });
+    const task = fake.addTask(fake.addProject().id, { goal: "Migrar" });
     fake.events.length = 0;
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     vi.stubGlobal("fetch", fake.fetch);

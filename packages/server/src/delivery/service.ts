@@ -1,7 +1,7 @@
 // Delivery phase (docs/design.md §Delivery, ADR uw-26-entrega). It runs inside the verifier's
 // Run, without an agent, once it recorded a pass: `before_delivery` hook, rebase onto the
 // base, trailers on the commits, final suite, closing the Run and evidence file, push, PR with
-// intent, criteria, evidence and risk label, `after_delivery` and `verdict_pass`. A conflict
+// goal, criteria, evidence and risk label, `after_delivery` and `verdict_pass`. A conflict
 // or a red suite send the task back to in_progress; any other failure escalates it. Each step
 // can be repeated: a half-done delivery is resumed with `deliver` or `recover`.
 import type { GitAdapter, GitHubAdapter } from "@lunasq/adapters";
@@ -155,7 +155,7 @@ export class DeliveryService {
     try {
       return await this.#run({
         taskId,
-        intent: task.intent,
+        goal: task.goal,
         title: task.title,
         run,
         project,
@@ -170,7 +170,7 @@ export class DeliveryService {
 
   async #run(ctx: {
     taskId: string;
-    intent: string;
+    goal: string;
     title: string | null;
     run: RunRow;
     project: Project;
@@ -238,11 +238,11 @@ export class DeliveryService {
       cwd: worktree.path,
       head: worktree.branch,
       base,
-      title: prTitle(ctx.intent, ctx.title),
+      title: prTitle(ctx.goal, ctx.title),
       body: prBody({
         taskId,
         runId: run.id,
-        intent: ctx.intent,
+        goal: ctx.goal,
         specVersion: ctx.spec.version,
         criteria: ctx.spec.content.criteria,
         verification: ctx.verification.body,

@@ -11,7 +11,7 @@ const C = "Exportar los pedidos cancelados a CSV";
 
 interface TaskView {
   id: string;
-  intent: string;
+  goal: string;
   state: string;
   subState: string | null;
   verificationIteration: number;
@@ -30,16 +30,16 @@ async function tasks(page: Page): Promise<TaskView[]> {
   return (await res.json()) as TaskView[];
 }
 
-async function taskId(page: Page, intent: string): Promise<string> {
-  const task = (await tasks(page)).find((t) => t.intent === intent);
-  if (!task) throw new Error(`task «${intent}» does not exist`);
+async function taskId(page: Page, goal: string): Promise<string> {
+  const task = (await tasks(page)).find((t) => t.goal === goal);
+  if (!task) throw new Error(`task «${goal}» does not exist`);
   return task.id;
 }
 
-async function createTask(page: Page, intent: string, dependsOn: string[] = []) {
+async function createTask(page: Page, goal: string, dependsOn: string[] = []) {
   await page.goto("/tasks/new");
   await page.getByLabel("Proyecto").selectOption({ label: "Piloto" });
-  await page.getByLabel("Intención").fill(intent);
+  await page.getByLabel("Objetivo").fill(goal);
   for (const dependency of dependsOn) {
     await page.getByLabel("Depende de").selectOption({ value: await taskId(page, dependency) });
     await expect(
@@ -50,19 +50,19 @@ async function createTask(page: Page, intent: string, dependsOn: string[] = []) 
   }
   await page.getByRole("button", { name: "Crear tarea" }).click();
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { level: 1, name: intent })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: goal })).toBeVisible();
 }
 
 /** From the task detail, approves the spec the refinement delivered; the inbox only links. */
-async function approveSpec(page: Page, intent: string) {
-  const id = await taskId(page, intent);
+async function approveSpec(page: Page, goal: string) {
+  const id = await taskId(page, goal);
   await page.goto("/inbox");
-  await expect(page.getByRole("link", { name: intent })).toBeVisible();
+  await expect(page.getByRole("link", { name: goal })).toBeVisible();
   await page.goto(`/tasks/${id}`);
   await page.getByRole("button", { name: /^Aprobar v\d+$/ }).click();
   await waitForState(page, id, (t) => t.state !== "refined");
   await page.goto("/inbox");
-  await expect(page.getByRole("link", { name: intent })).toBeHidden();
+  await expect(page.getByRole("link", { name: goal })).toBeHidden();
 }
 
 /** The task waits for its dependency: after several scheduler ticks it is still in draft and without Runs. */
@@ -193,12 +193,12 @@ test.describe("pilot", () => {
     await waitForState(page, c, (t) => t.state === "completed" && t.prUrl !== null);
     await control(`/merge/${c}`, "POST");
 
-    for (const id of await Promise.all([A, B, C].map((intent) => taskId(page, intent)))) {
+    for (const id of await Promise.all([A, B, C].map((goal) => taskId(page, goal)))) {
       await waitForState(page, id, (t) => t.state === "completed" && t.prState === "merged");
     }
 
     // after_merge ran once per merged PR: each task leaves it in its Event log.
-    for (const id of await Promise.all([A, B, C].map((intent) => taskId(page, intent)))) {
+    for (const id of await Promise.all([A, B, C].map((goal) => taskId(page, goal)))) {
       await expect
         .poll(async () => {
           const res = await page.request.get(`/api/tasks/${id}/events`);

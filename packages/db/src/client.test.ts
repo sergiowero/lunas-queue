@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { TaskCreatedPayload, TaskUpdatedPayload } from "@lunasq/schemas";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { describe, expect, it } from "vitest";
 import { migrateDatabase, migrationsFolder, openDatabase } from "./client.ts";
@@ -39,6 +40,8 @@ describe("openDatabase", () => {
     expect(db.$client.pragma("busy_timeout", { simple: true })).toBeGreaterThan(0);
   });
 });
+
+const PROJECT_UUID = "6f1c1c1e-2b7a-4c58-9d3e-0a1b2c3d4e5f";
 
 describe("migrations", () => {
   it("apply cleanly on an empty database and create all the tables", () => {
@@ -144,6 +147,81 @@ describe("migrations", () => {
     expect(
       new QuestionRepository(db).answer("q", { answer: "Sí", agentAlive: true }),
     ).toMatchObject({ ok: true, question: { options: null, answer: "Sí" } });
+  });
+
+  it("the goal migration renames the task column and rewrites the stored event payloads", () => {
+    const { db } = freshDatabase();
+    // Database before migration 0017: the journal is trimmed to the first seventeen.
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-migrations-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8")) as { entries: unknown[] };
+      journal.entries = journal.entries.slice(0, 17);
+      writeFileSync(journalFile, JSON.stringify(journal));
+      migrate(db, { migrationsFolder: previous });
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
+    const sqlite = db.$client;
+    sqlite
+      .prepare(
+        "insert into projects (id, name, repo, base_branch, local_path) values ('p', 'p', 'o/p', 'main', '/tmp/p')",
+      )
+      .run();
+    sqlite
+      .prepare(
+        "insert into tasks (id, project_id, number, intent, state, sub_state, priority) values ('t', 'p', 1, 'Do it', 'draft', 'queued', 0)",
+      )
+      .run();
+    const insertEvent = sqlite.prepare(
+      "insert into events (task_id, type, actor, payload) values ('t', ?, 'human', ?)",
+    );
+    insertEvent.run(
+      "task.created",
+      JSON.stringify({
+        projectId: PROJECT_UUID,
+        intent: "Do it",
+        tags: [],
+        priority: 0,
+        causedBy: null,
+        dependsOn: [],
+      }),
+    );
+    insertEvent.run(
+      "task.updated",
+      JSON.stringify({ from: { intent: "Do it" }, to: { intent: "Do more", priority: 3 } }),
+    );
+    insertEvent.run("task.updated", JSON.stringify({ from: { priority: 0 }, to: { priority: 3 } }));
+
+    migrateDatabase(db);
+
+    const columns = (
+      sqlite.prepare("select name from pragma_table_info('tasks')").pluck().all() as string[]
+    ).filter((name) => name === "goal" || name === "intent");
+    expect(columns).toEqual(["goal"]);
+    expect(sqlite.prepare("select goal from tasks where id = 't'").pluck().get()).toBe("Do it");
+    const payloads = (
+      sqlite.prepare("select payload from events order by id").pluck().all() as string[]
+    ).map((p) => JSON.parse(p));
+    expect(payloads).toEqual([
+      {
+        projectId: PROJECT_UUID,
+        goal: "Do it",
+        tags: [],
+        priority: 0,
+        causedBy: null,
+        dependsOn: [],
+      },
+      { from: { goal: "Do it" }, to: { goal: "Do more", priority: 3 } },
+      { from: { priority: 0 }, to: { priority: 3 } },
+    ]);
+    expect(() => TaskCreatedPayload.parse(payloads[0])).not.toThrow();
+    expect(() => TaskUpdatedPayload.parse(payloads[1])).not.toThrow();
+    expect(() => TaskUpdatedPayload.parse(payloads[2])).not.toThrow();
+    // The log is still append-only once the migration is done.
+    expect(() => sqlite.prepare("update events set payload = null").run()).toThrow(/append-only/);
+    expect(sqlite.pragma("foreign_key_check")).toEqual([]);
   });
 
   it("are in sync with the Drizzle schema", () => {

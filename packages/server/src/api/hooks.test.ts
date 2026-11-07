@@ -86,8 +86,8 @@ describe("GET /api/projects/:id/hooks", () => {
 describe("GET /api/projects/:id/hooks/executions", () => {
   it("lists the project's latest executions with their task and respects the per-hook limit", async () => {
     const { db, project, get } = setup();
-    const task = insertTask(db, project.id, { intent: "Subir versión" });
-    const second = insertTask(db, project.id, { intent: "Segunda" });
+    const task = insertTask(db, project.id, { goal: "Subir versión" });
+    const second = insertTask(db, project.id, { goal: "Segunda" });
     for (const [t, script] of [
       [task.id, "10-a"],
       [second.id, "10-a"],
@@ -104,7 +104,7 @@ describe("GET /api/projects/:id/hooks/executions", () => {
     expect(res.status).toBe(200);
     // One task per script: the most recent of 10-a is "Segunda".
     expect(res.body).toMatchObject([
-      { taskId: task.id, taskIntent: "Subir versión", script: "20-b", exitCode: 2, passed: false },
+      { taskId: task.id, taskGoal: "Subir versión", script: "20-b", exitCode: 2, passed: false },
       { taskId: second.id, script: "10-a", output: "listo", durationMs: 40 },
     ]);
   });

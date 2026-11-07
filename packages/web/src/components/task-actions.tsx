@@ -9,7 +9,7 @@ import { PauseIcon, ResumeIcon } from "./icons.tsx";
 import { MutationError } from "./status.tsx";
 import { Button } from "./ui/button.tsx";
 
-type ActionTask = Pick<Json<Task>, "id" | "title" | "intent">;
+type ActionTask = Pick<Json<Task>, "id" | "title" | "goal">;
 type Variant = "text" | "icon";
 
 /** Moves the task: refreshes its detail, the Queue and the lists. */

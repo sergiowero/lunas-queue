@@ -15,12 +15,12 @@ describe("Event log", () => {
       taskId: t.id,
       type: "task.created",
       actor: "human",
-      payload: { intent: "x" },
+      payload: { goal: "x" },
     });
     appendEvent(db, { taskId: other.id, type: "task.created", actor: "human" });
     const second = appendEvent(db, { taskId: t.id, type: "task.note", actor: "system" });
 
-    expect(first).toMatchObject({ taskId: t.id, type: "task.created", payload: { intent: "x" } });
+    expect(first).toMatchObject({ taskId: t.id, type: "task.created", payload: { goal: "x" } });
     expect(first.createdAt).toBeInstanceOf(Date);
     expect(listEvents(db, t.id).map((e) => e.id)).toEqual([first.id, second.id]);
   });

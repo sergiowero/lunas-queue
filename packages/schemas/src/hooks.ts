@@ -109,7 +109,7 @@ export type ProjectHooksView = z.infer<typeof ProjectHooksView>;
 export const HookExecutionView = z.strictObject({
   eventId: z.int().min(1),
   taskId: z.uuid(),
-  taskIntent: z.string(),
+  taskGoal: z.string(),
   taskTitle: z.string().nullable(),
   at: z.date(),
   ...HookExecutedPayload.shape,

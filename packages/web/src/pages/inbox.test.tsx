@@ -44,7 +44,7 @@ describe("inbox", () => {
 
   it("lists the spec to approve as a link to the task with its project", async () => {
     const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Login con email" });
+    const task = fake.addTask(project.id, { goal: "Login con email" });
     fake.addSpec(task.id);
     fake.transition(task.id, "refined", null);
     renderApp("/inbox", fake);
@@ -58,7 +58,7 @@ describe("inbox", () => {
 
   it("the specs list shows neither the spec nor its gate", async () => {
     const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Login con email" });
+    const task = fake.addTask(project.id, { goal: "Login con email" });
     fake.addSpec(task.id);
     fake.transition(task.id, "refined", null);
     renderApp("/inbox", fake);
@@ -78,8 +78,8 @@ describe("inbox", () => {
 
   it("each task in refined appears only once in the specs list", async () => {
     const { fake, project } = seeded();
-    for (const intent of ["Login con email", "Logout", "Reset de contraseña"]) {
-      const task = fake.addTask(project.id, { intent });
+    for (const goal of ["Login con email", "Logout", "Reset de contraseña"]) {
+      const task = fake.addTask(project.id, { goal });
       fake.addSpec(task.id);
       fake.addSpec(task.id);
       fake.transition(task.id, "refined", null);
@@ -97,7 +97,7 @@ describe("inbox", () => {
 
   it("the spec link leads to the task detail with its gate", async () => {
     const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Login con email" });
+    const task = fake.addTask(project.id, { goal: "Login con email" });
     fake.addSpec(task.id);
     fake.transition(task.id, "refined", null);
     const { user, router } = renderApp("/inbox", fake);
@@ -113,7 +113,7 @@ describe("inbox", () => {
 
   it("lists the task in needs_human and counts it in the menu", async () => {
     const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Migrar a Postgres" });
+    const task = fake.addTask(project.id, { goal: "Migrar a Postgres" });
     fake.transition(task.id, "needs_human", null);
     renderApp("/inbox", fake);
 
@@ -126,9 +126,9 @@ describe("inbox", () => {
 
   it("a paused task is not in the inbox nor adds to the menu; the needs_human one does", async () => {
     const { fake, project } = seeded();
-    const paused = fake.addTask(project.id, { intent: "Pausada por mí" });
+    const paused = fake.addTask(project.id, { goal: "Pausada por mí" });
     fake.transition(paused.id, "paused", null);
-    const escalated = fake.addTask(project.id, { intent: "Escalada" });
+    const escalated = fake.addTask(project.id, { goal: "Escalada" });
     fake.transition(escalated.id, "needs_human", null);
     renderApp("/inbox", fake);
 
@@ -140,7 +140,7 @@ describe("inbox", () => {
 
   it("shows the open question with its context and answers it", async () => {
     const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Migrar usuarios" });
+    const task = fake.addTask(project.id, { goal: "Migrar usuarios" });
     fake.transition(task.id, "in_progress", "running");
     fake.startRun(task.id, "implement");
     fake.ask(task.id, "¿Borro la tabla vieja?", "Hay dos tablas de usuarios");
@@ -170,7 +170,7 @@ describe("inbox", () => {
     ];
     function asked(options: typeof OPTIONS | null = OPTIONS) {
       const { fake, project } = seeded();
-      const task = fake.addTask(project.id, { intent: "Elegir motor" });
+      const task = fake.addTask(project.id, { goal: "Elegir motor" });
       fake.transition(task.id, "in_progress", "running");
       fake.ask(task.id, "¿Qué motor uso?", null, options);
       return renderApp("/inbox", fake);
@@ -241,7 +241,7 @@ describe("inbox", () => {
 
   it("if the question is no longer open it shows the server's error", async () => {
     const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Migrar usuarios" });
+    const task = fake.addTask(project.id, { goal: "Migrar usuarios" });
     fake.transition(task.id, "in_progress", "running");
     const asked = fake.ask(task.id, "¿Borro la tabla vieja?");
     const { user } = renderApp("/inbox", fake);
@@ -259,7 +259,7 @@ describe("inbox", () => {
 
   it("shows the blocked agent and focuses its pane in herdr", async () => {
     const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Agregar índice" });
+    const task = fake.addTask(project.id, { goal: "Agregar índice" });
     fake.transition(task.id, "in_progress", "running");
     const run = fake.startRun(task.id, "implement");
     const blocked = fake.block(run);
@@ -279,7 +279,7 @@ describe("inbox", () => {
 
   it("if herdr no longer has the agent it says so", async () => {
     const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Agregar índice" });
+    const task = fake.addTask(project.id, { goal: "Agregar índice" });
     fake.block(fake.startRun(task.id, "implement"));
     fake.focusError = {
       status: 409,
@@ -295,7 +295,7 @@ describe("inbox", () => {
 
   it("the unblocked agent leaves the inbox on refresh", async () => {
     const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Agregar índice" });
+    const task = fake.addTask(project.id, { goal: "Agregar índice" });
     fake.block(fake.startRun(task.id, "implement"));
     const { refresh } = renderApp("/inbox", fake);
     await item("Agentes bloqueados", "Agregar índice");
@@ -307,10 +307,10 @@ describe("inbox", () => {
 
   it("the menu shows how many things wait for the human", async () => {
     const { fake, project } = seeded();
-    const refined = fake.addTask(project.id, { intent: "Spec" });
+    const refined = fake.addTask(project.id, { goal: "Spec" });
     fake.addSpec(refined.id);
     fake.transition(refined.id, "refined", null);
-    const asking = fake.addTask(project.id, { intent: "Pregunta" });
+    const asking = fake.addTask(project.id, { goal: "Pregunta" });
     fake.transition(asking.id, "in_progress", "running");
     fake.ask(asking.id, "¿Sí?");
     fake.block(fake.startRun(asking.id, "implement"));
@@ -324,14 +324,14 @@ describe("inbox", () => {
 
   it("questions and blocks are resolved in the inbox and the spec in the detail", async () => {
     const { fake, project } = seeded();
-    const refined = fake.addTask(project.id, { intent: "Spec pendiente" });
+    const refined = fake.addTask(project.id, { goal: "Spec pendiente" });
     fake.addSpec(refined.id);
     fake.transition(refined.id, "refined", null);
-    const asking = fake.addTask(project.id, { intent: "Pregunta pendiente" });
+    const asking = fake.addTask(project.id, { goal: "Pregunta pendiente" });
     fake.transition(asking.id, "in_progress", "running");
     fake.startRun(asking.id, "implement");
     fake.ask(asking.id, "¿Mantengo la API vieja?");
-    const stuck = fake.addTask(project.id, { intent: "Permiso pendiente" });
+    const stuck = fake.addTask(project.id, { goal: "Permiso pendiente" });
     fake.transition(stuck.id, "in_progress", "running");
     fake.block(fake.startRun(stuck.id, "implement"));
     const { user, refresh } = renderApp("/inbox", fake);
@@ -365,7 +365,7 @@ describe("inbox", () => {
     ["edita y aprueba", "in_progress"],
   ] as const)("si el humano %s en el detalle la spec sale de la bandeja", async (action, state) => {
     const { fake, project } = seeded();
-    const task = fake.addTask(project.id, { intent: "Login con email" });
+    const task = fake.addTask(project.id, { goal: "Login con email" });
     fake.addSpec(task.id);
     fake.transition(task.id, "refined", null);
     const { user } = renderApp("/inbox", fake);

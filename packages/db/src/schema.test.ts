@@ -251,7 +251,7 @@ describe("tasks", () => {
     expect(() =>
       db.$client
         .prepare(
-          "insert into tasks (id, project_id, intent, priority) values ('big', ?, 'x', 9007199254740992)",
+          "insert into tasks (id, project_id, goal, priority) values ('big', ?, 'x', 9007199254740992)",
         )
         .run(p.id),
     ).toThrow(CHECK);
@@ -263,7 +263,7 @@ describe("tasks", () => {
     expect(() => insertTask(db, p.id, { priority: -1 })).toThrow(CHECK);
     expect(() => insertTask(db, p.id, { priority: 1.5 })).toThrow(CHECK);
     const raw = db.$client.prepare(
-      "insert into tasks (id, project_id, intent, priority, created_at, updated_at) values (?, ?, 'x', ?, 0, 0)",
+      "insert into tasks (id, project_id, goal, priority, created_at, updated_at) values (?, ?, 'x', ?, 0, 0)",
     );
     expect(() => raw.run("t-text", p.id, "cien")).toThrow(CHECK);
     expect(() => raw.run("t-null", p.id, null)).toThrow(NOT_NULL);
@@ -626,7 +626,7 @@ describe("events and outbox", () => {
     const t = insertTask(db, insertProject(db).id);
     const [e1] = db
       .insert(events)
-      .values({ taskId: t.id, type: "task.created", actor: "human", payload: { intent: "x" } })
+      .values({ taskId: t.id, type: "task.created", actor: "human", payload: { goal: "x" } })
       .returning()
       .all();
     const [e2] = db
@@ -634,7 +634,7 @@ describe("events and outbox", () => {
       .values({ taskId: t.id, type: "task.refined", actor: "agent" })
       .returning()
       .all();
-    expect(e1?.payload).toEqual({ intent: "x" });
+    expect(e1?.payload).toEqual({ goal: "x" });
     expect(e2?.id).toBeGreaterThan(e1?.id ?? Number.POSITIVE_INFINITY);
     expect(() =>
       db.insert(events).values({ taskId: "x", type: "t", actor: "system" }).run(),

@@ -1,4 +1,4 @@
-// Task creation: intent, tags, priority and initial dependencies (TaskCreate, ADR 0010). The
+// Task creation: goal, tags, priority and initial dependencies (TaskCreate, ADR 0010). The
 // validation is the server's; here only its issues are shown. Dependencies are added one by
 // one with a selector and end up in a list of chosen ones, in the order they were added. They can be
 // from any project; those from another are flagged as a risk, like in the detail.
@@ -41,7 +41,7 @@ export function NewTaskPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [projectId, setProjectId] = useState(search.projectId ?? "");
-  const [intent, setIntent] = useState("");
+  const [goal, setGoal] = useState("");
   const [tags, setTags] = useState("");
   const [priority, setPriority] = useState(String(DEFAULT_PRIORITY));
   const [dependsOn, setDependsOn] = useState<string[]>([]);
@@ -61,7 +61,7 @@ export function NewTaskPage() {
     event.preventDefault();
     create.mutate({
       projectId,
-      intent,
+      goal,
       tags: parseTags(tags),
       priority: Number(priority),
       dependsOn,
@@ -111,14 +111,14 @@ export function NewTaskPage() {
         </Select>
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor="task-intent">{t.newTask.intent}</Label>
+        <Label htmlFor="task-goal">{t.newTask.goal}</Label>
         <Textarea
-          id="task-intent"
+          id="task-goal"
           required
           rows={5}
-          value={intent}
-          onChange={(e) => setIntent(e.target.value)}
-          placeholder={t.newTask.intentPlaceholder}
+          value={goal}
+          onChange={(e) => setGoal(e.target.value)}
+          placeholder={t.newTask.goalPlaceholder}
         />
       </div>
       <div className="flex gap-4">
@@ -177,7 +177,7 @@ export function NewTaskPage() {
                   className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5"
                 >
                   <TaskNumber number={task.number} />
-                  <span data-intent className="flex-1">
+                  <span data-goal className="flex-1">
                     {taskLabel(task)}
                   </span>
                   {task.projectId !== projectId && (
@@ -188,7 +188,7 @@ export function NewTaskPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    aria-label={t.newTask.removeAria(task.intent)}
+                    aria-label={t.newTask.removeAria(task.goal)}
                     onClick={() => remove(task.id)}
                   >
                     {t.newTask.remove}

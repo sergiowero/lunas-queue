@@ -8,7 +8,7 @@ import { Loading, QueryError, StateBadges } from "../components/status.tsx";
 import { DependenciesPanel } from "../components/task/dependencies.tsx";
 import { EventLogPanel } from "../components/task/event-log.tsx";
 import { EvidencePanel } from "../components/task/evidence.tsx";
-import { IntentText } from "../components/task/intent-text.tsx";
+import { GoalText } from "../components/task/goal-text.tsx";
 import { ResultPanel } from "../components/task/result.tsx";
 import { RunsPanel } from "../components/task/runs.tsx";
 import { SpecPanel } from "../components/task/spec.tsx";
@@ -89,12 +89,12 @@ function Header({ task }: { task: Json<Task> }) {
           <div className="flex items-baseline gap-2">
             <TaskNumber number={task.number} className="text-base" />
             <h1 className="text-xl font-semibold whitespace-pre-wrap">
-              {task.title ?? <IntentText intent={task.intent} />}
+              {task.title ?? <GoalText goal={task.goal} />}
             </h1>
           </div>
           {task.title && (
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-              <IntentText intent={task.intent} />
+              <GoalText goal={task.goal} />
             </p>
           )}
         </div>

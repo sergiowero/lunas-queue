@@ -10,15 +10,15 @@ describe("Completed tab", () => {
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
     const complete = fake.addTask(one.id, {
-      intent: "Tarea terminada",
+      goal: "Tarea terminada",
       title: "Entrega lista",
       state: "completed",
       subState: null,
       prUrl: "https://github.com/o/r/pull/7",
       prState: "merged",
     });
-    fake.addTask(two.id, { intent: "Otra completada", state: "completed", subState: null });
-    fake.addTask(one.id, { intent: "En curso", state: "in_progress", subState: "running" });
+    fake.addTask(two.id, { goal: "Otra completada", state: "completed", subState: null });
+    fake.addTask(one.id, { goal: "En curso", state: "in_progress", subState: "running" });
     const { user, router } = renderApp("/queue", fake);
     const nav = within(await screen.findByRole("navigation"));
     const link = nav.getByRole("link", { name: "Completed" });
@@ -45,8 +45,8 @@ describe("Completed tab", () => {
     const fake = new FakeApi();
     const one = fake.addProject({ name: "uno" });
     const two = fake.addProject({ name: "dos" });
-    fake.addTask(one.id, { intent: "De uno", state: "completed", subState: null });
-    fake.addTask(two.id, { intent: "De dos", state: "completed", subState: null });
+    fake.addTask(one.id, { goal: "De uno", state: "completed", subState: null });
+    fake.addTask(two.id, { goal: "De dos", state: "completed", subState: null });
     const { user } = renderApp("/completed", fake);
 
     await screen.findByText("De dos");
@@ -63,21 +63,21 @@ describe("Completed tab", () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "uno" });
     fake.addTask(project.id, {
-      intent: "Investigar la cola",
+      goal: "Investigar la cola",
       state: "completed",
       subState: null,
       resultKind: "research",
       result: "# Hallazgos",
     });
     fake.addTask(project.id, {
-      intent: "Ya estaba hecha",
+      goal: "Ya estaba hecha",
       state: "completed",
       subState: null,
       resultKind: "already_implemented",
       result: "Vive en src/x.ts",
     });
     fake.addTask(project.id, {
-      intent: "Con PR mergeado",
+      goal: "Con PR mergeado",
       state: "completed",
       subState: null,
       prUrl: "https://github.com/o/r/pull/9",
@@ -103,10 +103,10 @@ describe("Completed tab", () => {
     function seedAllStates() {
       const fake = new FakeApi();
       const project = fake.addProject({ name: "uno" });
-      fake.addTask(project.id, { ...completed, intent: "Con merged", prState: "merged" });
-      fake.addTask(project.id, { ...completed, intent: "Con open", prState: "open" });
-      fake.addTask(project.id, { ...completed, intent: "Con closed", prState: "closed" });
-      fake.addTask(project.id, { ...completed, intent: "Sin ningún PR", prState: null });
+      fake.addTask(project.id, { ...completed, goal: "Con merged", prState: "merged" });
+      fake.addTask(project.id, { ...completed, goal: "Con open", prState: "open" });
+      fake.addTask(project.id, { ...completed, goal: "Con closed", prState: "closed" });
+      fake.addTask(project.id, { ...completed, goal: "Sin ningún PR", prState: null });
       return fake;
     }
 
@@ -156,8 +156,8 @@ describe("Completed tab", () => {
       await user.selectOptions(screen.getByLabelText("Estado del PR"), "Todos");
 
       await waitFor(() => expect(screen.getByText("Con merged")).toBeTruthy());
-      for (const intent of ["Con open", "Con closed", "Sin ningún PR"]) {
-        expect(screen.getByText(intent)).toBeTruthy();
+      for (const goal of ["Con open", "Con closed", "Sin ningún PR"]) {
+        expect(screen.getByText(goal)).toBeTruthy();
       }
     });
 
@@ -165,9 +165,9 @@ describe("Completed tab", () => {
       const fake = new FakeApi();
       const one = fake.addProject({ name: "uno" });
       const two = fake.addProject({ name: "dos" });
-      fake.addTask(one.id, { ...completed, intent: "Merged de uno", prState: "merged" });
-      fake.addTask(two.id, { ...completed, intent: "Merged de dos", prState: "merged" });
-      fake.addTask(one.id, { ...completed, intent: "Open de uno", prState: "open" });
+      fake.addTask(one.id, { ...completed, goal: "Merged de uno", prState: "merged" });
+      fake.addTask(two.id, { ...completed, goal: "Merged de dos", prState: "merged" });
+      fake.addTask(one.id, { ...completed, goal: "Open de uno", prState: "open" });
       const { user } = renderApp("/completed", fake);
 
       await screen.findByText("Merged de dos");
@@ -183,12 +183,12 @@ describe("Completed tab", () => {
       const fake = new FakeApi();
       const project = fake.addProject({ name: "uno" });
       fake.addTask(project.id, {
-        intent: "En curso con PR",
+        goal: "En curso con PR",
         state: "in_progress",
         subState: "running",
         prState: "open",
       });
-      fake.addTask(project.id, { ...completed, intent: "Ya mergeada", prState: "merged" });
+      fake.addTask(project.id, { ...completed, goal: "Ya mergeada", prState: "merged" });
       const { user } = renderApp("/completed", fake);
 
       await screen.findByText("Ya mergeada");
@@ -202,7 +202,7 @@ describe("Completed tab", () => {
   it("explains when there are no completed tasks", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, {
-      intent: "En cola",
+      goal: "En cola",
       state: "draft",
       subState: "queued",
     });
@@ -214,7 +214,7 @@ describe("Completed tab", () => {
   it("shows the PR as a small outline button that opens in another tab", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, {
-      intent: "Con PR",
+      goal: "Con PR",
       state: "completed",
       subState: null,
       prUrl: "https://github.com/o/r/pull/7",
@@ -235,7 +235,7 @@ describe("Completed tab", () => {
   it("the PR button carries a decorative external link icon", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, {
-      intent: "Con PR",
+      goal: "Con PR",
       state: "completed",
       subState: null,
       prUrl: "https://github.com/o/r/pull/7",
@@ -252,7 +252,7 @@ describe("Completed tab", () => {
   it("without prUrl the PR cell is text, without link or icon", async () => {
     const fake = new FakeApi();
     fake.addTask(fake.addProject().id, {
-      intent: "Sin PR",
+      goal: "Sin PR",
       state: "completed",
       subState: null,
       prUrl: null,
@@ -277,16 +277,16 @@ describe("Completed tab", () => {
       const project = fake.addProject({ name: "uno" });
       fake.addTask(project.id, {
         ...completed,
-        intent: "Con open",
+        goal: "Con open",
         prUrl: "https://github.com/o/r/pull/1",
         prState: "open",
       });
-      fake.addTask(project.id, { ...completed, intent: "Con merged", prState: "merged" });
-      fake.addTask(project.id, { ...completed, intent: "Con closed", prState: "closed" });
-      fake.addTask(project.id, { ...completed, intent: "Sin PR ni resultado", prState: null });
+      fake.addTask(project.id, { ...completed, goal: "Con merged", prState: "merged" });
+      fake.addTask(project.id, { ...completed, goal: "Con closed", prState: "closed" });
+      fake.addTask(project.id, { ...completed, goal: "Sin PR ni resultado", prState: null });
       fake.addTask(project.id, {
         ...completed,
-        intent: "Investigar la cola",
+        goal: "Investigar la cola",
         resultKind: "research",
         result: "# Hallazgos",
       });
@@ -299,7 +299,7 @@ describe("Completed tab", () => {
       for (let i = 1; i <= openCount; i++) {
         fake.addTask(project.id, {
           ...completed,
-          intent: `Abierta ${String(i).padStart(2, "0")}`,
+          goal: `Abierta ${String(i).padStart(2, "0")}`,
           prUrl: `https://github.com/o/r/pull/${i}`,
           prState: "open",
         });
@@ -307,7 +307,7 @@ describe("Completed tab", () => {
       for (let i = 1; i <= restCount; i++) {
         fake.addTask(project.id, {
           ...completed,
-          intent: `Resto ${String(i).padStart(2, "0")}`,
+          goal: `Resto ${String(i).padStart(2, "0")}`,
           prState: "merged",
         });
       }
@@ -319,14 +319,14 @@ describe("Completed tab", () => {
 
       await screen.findByText("Con open");
       expect(openList().getByText("Con open")).toBeTruthy();
-      for (const intent of [
+      for (const goal of [
         "Con merged",
         "Con closed",
         "Sin PR ni resultado",
         "Investigar la cola",
       ]) {
-        expect(openList().queryByText(intent)).toBeNull();
-        expect(within(rest()).getByText(intent)).toBeTruthy();
+        expect(openList().queryByText(goal)).toBeNull();
+        expect(within(rest()).getByText(goal)).toBeTruthy();
       }
       expect(within(rest()).queryByText("Con open")).toBeNull();
     });
@@ -364,7 +364,7 @@ describe("Completed tab", () => {
     it("AC-5: an in_progress task with prState open appears in neither list", async () => {
       const fake = seedMixed();
       fake.addTask(fake.addProject({ name: "otro" }).id, {
-        intent: "En curso con PR",
+        goal: "En curso con PR",
         state: "in_progress",
         subState: "running",
         prState: "open",
@@ -379,10 +379,10 @@ describe("Completed tab", () => {
       const fake = new FakeApi();
       const one = fake.addProject({ name: "uno" });
       const two = fake.addProject({ name: "dos" });
-      fake.addTask(one.id, { ...completed, intent: "Open de uno", prState: "open" });
-      fake.addTask(one.id, { ...completed, intent: "Merged de uno", prState: "merged" });
-      fake.addTask(two.id, { ...completed, intent: "Open de dos", prState: "open" });
-      fake.addTask(two.id, { ...completed, intent: "Merged de dos", prState: "merged" });
+      fake.addTask(one.id, { ...completed, goal: "Open de uno", prState: "open" });
+      fake.addTask(one.id, { ...completed, goal: "Merged de uno", prState: "merged" });
+      fake.addTask(two.id, { ...completed, goal: "Open de dos", prState: "open" });
+      fake.addTask(two.id, { ...completed, goal: "Merged de dos", prState: "merged" });
       const { user } = renderApp("/completed", fake);
 
       await screen.findByText("Open de dos");
@@ -409,7 +409,7 @@ describe("Completed tab", () => {
 
     it("AC-8: without open PRs the first list has its empty state and the rest stays collapsed", async () => {
       const fake = new FakeApi();
-      fake.addTask(fake.addProject().id, { ...completed, intent: "Mergeada", prState: "merged" });
+      fake.addTask(fake.addProject().id, { ...completed, goal: "Mergeada", prState: "merged" });
       renderApp("/completed", fake);
 
       await screen.findByText("Mergeada");
@@ -422,7 +422,7 @@ describe("Completed tab", () => {
       const project = fake.addProject({ name: "uno" });
       const task = fake.addTask(project.id, {
         ...completed,
-        intent: "Con open",
+        goal: "Con open",
         prUrl: "https://github.com/o/r/pull/1",
         prState: "open",
       });
@@ -477,7 +477,7 @@ describe("Completed tab", () => {
       for (let i = 1; i <= 25; i++) {
         fake.addTask(second.id, {
           ...completed,
-          intent: `Dos ${String(i).padStart(2, "0")}`,
+          goal: `Dos ${String(i).padStart(2, "0")}`,
           prState: "closed",
         });
       }
@@ -520,9 +520,9 @@ describe("Completed tab", () => {
       const fake = new FakeApi();
       const one = fake.addProject({ name: "uno" });
       const two = fake.addProject({ name: "dos" });
-      fake.addTask(one.id, { ...completed, intent: "Merged de uno", prState: "merged" });
-      fake.addTask(two.id, { ...completed, intent: "Merged de dos", prState: "merged" });
-      fake.addTask(one.id, { ...completed, intent: "Open de uno", prState: "open" });
+      fake.addTask(one.id, { ...completed, goal: "Merged de uno", prState: "merged" });
+      fake.addTask(two.id, { ...completed, goal: "Merged de dos", prState: "merged" });
+      fake.addTask(one.id, { ...completed, goal: "Open de uno", prState: "open" });
       const { user, router } = renderApp("/completed", fake);
       await screen.findByText("Merged de dos");
       await user.selectOptions(screen.getByLabelText("Proyecto"), one.id);

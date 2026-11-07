@@ -15,7 +15,7 @@ function ExecutionRow({ execution: e }: { execution: Execution }) {
     <TableRow>
       <TableCell>
         <Link to="/tasks/$taskId" params={{ taskId: e.taskId }} className="hover:underline">
-          {e.taskTitle ?? e.taskIntent}
+          {e.taskTitle ?? e.taskGoal}
         </Link>
       </TableCell>
       <TableCell>{formatDate(e.at)}</TableCell>

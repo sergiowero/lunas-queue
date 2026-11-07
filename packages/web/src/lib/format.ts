@@ -1,9 +1,9 @@
 import { TASK_TITLE_MAX, type TaskState, type UsageTotals } from "@lunasq/schemas";
 import { currentLanguage, LOCALE } from "./i18n.ts";
 
-/** Name of a task in the UI: its title and, until refinement generates it, the intent. */
-export function taskLabel(task: { title: string | null; intent: string }): string {
-  return task.title ?? task.intent;
+/** Name of a task in the UI: its title and, until refinement generates it, the goal. */
+export function taskLabel(task: { title: string | null; goal: string }): string {
+  return task.title ?? task.goal;
 }
 
 const ELLIPSIS = "...";
@@ -12,7 +12,7 @@ const ELLIPSIS = "...";
  * Task name for list views: `taskLabel` capped at TASK_TITLE_MAX characters. A longer label
  * keeps its first (max - 3) characters plus «...». Presentation only: the data is untouched.
  */
-export function cappedTaskLabel(task: { title: string | null; intent: string }): string {
+export function cappedTaskLabel(task: { title: string | null; goal: string }): string {
   const label = taskLabel(task);
   const chars = Array.from(label);
   if (chars.length <= TASK_TITLE_MAX) return label;

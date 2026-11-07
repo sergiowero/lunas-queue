@@ -20,12 +20,12 @@ export function taskLabel(number: number): string {
   return `#${number}`;
 }
 
-const Intent = z.string().trim().min(1).max(10_000);
+const Goal = z.string().trim().min(1).max(10_000);
 const Tags = z.array(z.string().trim().min(1).max(64)).max(32).transform(unique);
 
 export const TaskCreate = z.strictObject({
   projectId: z.uuid(),
-  intent: Intent,
+  goal: Goal,
   tags: Tags.default(() => []),
   priority: Priority,
   // Task that originated this bugfix.
@@ -41,7 +41,7 @@ export type TaskCreate = z.input<typeof TaskCreate>;
 
 // PATCH: each present field replaces the stored one.
 export const TaskUpdate = z.strictObject({
-  intent: Intent.optional(),
+  goal: Goal.optional(),
   tags: Tags.optional(),
   priority: Priority.optional(),
 });
@@ -56,7 +56,7 @@ export const Task = z.strictObject({
   id: z.uuid(),
   number: TaskNumber,
   projectId: z.uuid(),
-  intent: z.string().min(1),
+  goal: z.string().min(1),
   // null until the first refinement; afterwards it does not change.
   title: TaskTitle.nullable(),
   tags: z.array(z.string()),
@@ -86,7 +86,7 @@ export const DependencyLink = z.strictObject({
   taskId: z.uuid(),
   number: TaskNumber,
   projectId: z.uuid(),
-  intent: z.string(),
+  goal: z.string(),
   title: TaskTitle.nullable(),
   state: TaskState,
   prState: PrState.nullable(),
@@ -112,7 +112,7 @@ export const TaskCreatedPayload = z.strictObject({
   // Optional: the task.created events before the number do not carry it.
   number: TaskNumber.optional(),
   projectId: z.uuid(),
-  intent: z.string(),
+  goal: z.string(),
   tags: z.array(z.string()),
   priority: Priority,
   causedBy: z.uuid().nullable(),
@@ -121,7 +121,7 @@ export const TaskCreatedPayload = z.strictObject({
 export type TaskCreatedPayload = z.infer<typeof TaskCreatedPayload>;
 
 const EditableFields = z.strictObject({
-  intent: z.string().optional(),
+  goal: z.string().optional(),
   tags: z.array(z.string()).optional(),
   priority: Priority.optional(),
 });

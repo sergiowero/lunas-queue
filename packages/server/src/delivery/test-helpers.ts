@@ -57,7 +57,7 @@ export function deliveryHarness(options: DeliveryHarnessOptions = {}) {
     testCommand: options.testCommand === undefined ? "pnpm test" : options.testCommand,
   });
   const task = insertTask(db, project.id, {
-    intent: "Permitir cancelar pedidos pendientes\n\ny rechazar los enviados",
+    goal: "Permitir cancelar pedidos pendientes\n\ny rechazar los enviados",
     state: "draft",
     subState: "running",
     worktreePath: WORKTREE,

@@ -39,8 +39,8 @@ type Entry = { task: { id: string }; ready: boolean; score: number | null; usage
 describe("task number in the views", () => {
   it("the queue and the dependencies carry each task's number", async () => {
     const { db, project, get } = setup();
-    const base = insertTask(db, project.id, { intent: "Base" });
-    const task = insertTask(db, project.id, { intent: "Depende" });
+    const base = insertTask(db, project.id, { goal: "Base" });
+    const task = insertTask(db, project.id, { goal: "Depende" });
     db.insert(taskDependencies).values({ taskId: task.id, dependsOnId: base.id }).run();
 
     const queue = (await get("/api/queue")).body as { task: { id: string; number: number } }[];

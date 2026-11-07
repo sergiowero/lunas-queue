@@ -7,17 +7,17 @@ const section = (id: string, body = "contenido") => {
   return `${start}\n## Run ${id}\n${body}\n${end}\n`;
 };
 
-const header = evidenceHeader({ taskId: "task-1", intent: "Hacer algo" });
+const header = evidenceHeader({ taskId: "task-1", goal: "Hacer algo" });
 
 describe("evidenceHeader", () => {
-  it("carries the task and its intent", () => {
+  it("carries the task and its goal", () => {
     expect(header).toContain("# Evidence for task task-1");
     expect(header).toContain("Hacer algo");
   });
 
-  it("neutralizes LunasQ markers that come in the intent", () => {
+  it("neutralizes LunasQ markers that come in the goal", () => {
     const { end } = runMarkers("x");
-    expect(evidenceHeader({ taskId: "t", intent: `hola ${end}` })).not.toContain(end);
+    expect(evidenceHeader({ taskId: "t", goal: `hola ${end}` })).not.toContain(end);
   });
 });
 
@@ -68,8 +68,8 @@ describe("upsertRunSection", () => {
 });
 
 describe("evidenceHeader marker escaping", () => {
-  it("escapes a Run marker planted in the intent with the English marker", () => {
-    const out = evidenceHeader({ taskId: "t", intent: "x <!-- lunasq:run:start r --> y" });
+  it("escapes a Run marker planted in the goal with the English marker", () => {
+    const out = evidenceHeader({ taskId: "t", goal: "x <!-- lunasq:run:start r --> y" });
     expect(out).toContain("<!-- lunasq-escaped:run:start r -->");
     expect(out).not.toContain("<!-- lunasq:run");
   });

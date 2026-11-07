@@ -43,7 +43,7 @@ describe("live updates over SSE", () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
     const project = fake.addProject();
-    const task = fake.addTask(project.id, { intent: "En vivo" });
+    const task = fake.addTask(project.id, { goal: "En vivo" });
     renderApp(`/tasks/${task.id}`, fake);
     expect(await screen.findByText("Draft")).toBeTruthy();
 
@@ -58,7 +58,7 @@ describe("live updates over SSE", () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
     const project = fake.addProject();
-    const a = fake.addTask(project.id, { intent: "Primera" });
+    const a = fake.addTask(project.id, { goal: "Primera" });
     fake.hooks.set(project.id, { baseRef: "a".repeat(40), configError: null, points: [] });
     renderApp(`/projects/${project.id}/hooks`, fake);
     await screen.findByRole("heading", { name: /Hooks/ });
@@ -103,10 +103,10 @@ describe("live updates over SSE", () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
     const project = fake.addProject();
-    const task = fake.addTask(project.id, { intent: "Saldrá de curso" });
+    const task = fake.addTask(project.id, { goal: "Saldrá de curso" });
     fake.transition(task.id, "in_progress", "running");
     fake.addTask(project.id, {
-      intent: "Sigue en curso",
+      goal: "Sigue en curso",
       state: "in_progress",
       subState: "queued",
     });
@@ -123,7 +123,7 @@ describe("live updates over SSE", () => {
   it("a change brings the new question to the inbox", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const fake = new FakeApi();
-    const task = fake.addTask(fake.addProject().id, { intent: "Pregunta en vivo" });
+    const task = fake.addTask(fake.addProject().id, { goal: "Pregunta en vivo" });
     fake.transition(task.id, "in_progress", "running");
     renderApp("/inbox", fake);
     await screen.findByText("Ningún agente espera una respuesta.");
