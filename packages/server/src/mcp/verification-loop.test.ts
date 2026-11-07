@@ -20,6 +20,7 @@ import {
   migratedDatabase,
   setTaskPosition,
 } from "@lunasq/db/test-helpers";
+import { DEFAULT_MAX_ITERATIONS } from "@lunasq/domain";
 import { REVIEWER_NAMES, TEST_GATE_EXECUTED, VERDICT_RECORDED } from "@lunasq/schemas";
 import { specContentExample } from "@lunasq/schemas/testing";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
@@ -293,37 +294,38 @@ describe("implementation ↔ verification loop", { timeout: 60_000 }, () => {
 
   it("keeps the iteration cumulative after resuming an exhausted task and grants a new cycle", async () => {
     const l = await loop();
-    for (let n = 1; n <= 4; n += 1) {
+    const cap = DEFAULT_MAX_ITERATIONS;
+    for (let n = 1; n <= cap + 1; n += 1) {
       await l.implement(n);
       await l.verify(n, "reject");
     }
     expect(l.tasks.get(l.task.id)).toMatchObject({
       state: "needs_human",
-      verificationIteration: 3,
+      verificationIteration: cap,
       verificationCycleStart: 0,
     });
 
-    // The human resumes: the iteration stays at 3 and a new cycle starts at it.
+    // The human resumes: the iteration stays at the cap and a new cycle starts at it.
     const resumed = await l.app.request(`/api/tasks/${l.task.id}/resume`, { method: "POST" });
     expect(resumed.status).toBe(200);
     expect(l.tasks.get(l.task.id)).toMatchObject({
       state: "in_progress",
-      verificationIteration: 3,
-      verificationCycleStart: 3,
+      verificationIteration: cap,
+      verificationCycleStart: cap,
     });
 
-    const fifth = await l.implement(5);
-    expect(fifth.run.iteration).toBe(3);
-    await l.verify(5, "reject");
+    const next = await l.implement(cap + 2);
+    expect(next.run.iteration).toBe(cap);
+    await l.verify(cap + 2, "reject");
 
     // One rework past the first exhausted cycle: the real count, not a reset to 1.
     const detail = (await (await l.app.request(`/api/tasks/${l.task.id}`)).json()) as {
       verificationIteration: number;
       verificationCycleStart: number;
     };
-    expect(detail).toMatchObject({ verificationIteration: 4, verificationCycleStart: 3 });
-    const sixth = await l.agent("implement", 6);
-    expect(sixth.run.iteration).toBe(4);
-    expect(sixth.context).toMatchObject({ task: { verificationIteration: 4 } });
+    expect(detail).toMatchObject({ verificationIteration: cap + 1, verificationCycleStart: cap });
+    const following = await l.agent("implement", cap + 3);
+    expect(following.run.iteration).toBe(cap + 1);
+    expect(following.context).toMatchObject({ task: { verificationIteration: cap + 1 } });
   });
 });

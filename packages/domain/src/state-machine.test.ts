@@ -357,21 +357,38 @@ describe("transition: verification loop", () => {
 
   it("a resumed task escalates once its own cycle is spent, keeping the iteration (AC-4)", () => {
     expect(
-      transition(snap("verification", "running", 6, 3), passing.verdict_rework, "agent"),
+      transition(
+        snap("verification", "running", DEFAULT_MAX_ITERATIONS * 2, DEFAULT_MAX_ITERATIONS),
+        passing.verdict_rework,
+        "agent",
+      ),
     ).toMatchObject({
       ok: true,
-      next: snap("needs_human", null, 6, 3),
-      event: { payload: { reason: "iterations_exhausted", verificationIteration: 6 } },
+      next: snap("needs_human", null, DEFAULT_MAX_ITERATIONS * 2, DEFAULT_MAX_ITERATIONS),
+      event: {
+        payload: {
+          reason: "iterations_exhausted",
+          verificationIteration: DEFAULT_MAX_ITERATIONS * 2,
+        },
+      },
     });
   });
 
   it("a never-resumed task behaves as before at and below the maximum (AC-5)", () => {
     expect(
-      transition(snap("verification", "running", 2, 0), passing.verdict_rework, "agent"),
-    ).toMatchObject({ ok: true, next: snap("in_progress", "queued", 3, 0) });
+      transition(
+        snap("verification", "running", DEFAULT_MAX_ITERATIONS - 1, 0),
+        passing.verdict_rework,
+        "agent",
+      ),
+    ).toMatchObject({ ok: true, next: snap("in_progress", "queued", DEFAULT_MAX_ITERATIONS, 0) });
     expect(
-      transition(snap("verification", "running", 3, 0), passing.verdict_rework, "agent"),
-    ).toMatchObject({ ok: true, next: snap("needs_human", null, 3, 0) });
+      transition(
+        snap("verification", "running", DEFAULT_MAX_ITERATIONS, 0),
+        passing.verdict_rework,
+        "agent",
+      ),
+    ).toMatchObject({ ok: true, next: snap("needs_human", null, DEFAULT_MAX_ITERATIONS, 0) });
   });
 
   it("respects a configured maximum", () => {
@@ -481,19 +498,20 @@ describe("transition: human in the loop", () => {
     ).toMatchObject({ ok: true, next: snap("verification", "queued", 5, 3) });
   });
 
-  it("after resetIteration, a rejection gets a full cycle of reworks before escalating again", () => {
+  it("after newCycle, a rejection gets a full cycle of reworks before escalating again", () => {
     const resumed = transition(
       snap("needs_human", null, DEFAULT_MAX_ITERATIONS),
-      { type: "resume", resumeTo: "verification", resetIteration: true },
+      { type: "resume", resumeTo: "verification", newCycle: true },
       "human",
     );
     if (!resumed.ok) throw new Error(resumed.error.message);
-    let task = snap("verification", "running", resumed.next.verificationIteration);
-    expect(task.verificationIteration).toBe(0);
+    const cycleStart = resumed.next.verificationCycleStart;
+    expect(cycleStart).toBe(DEFAULT_MAX_ITERATIONS);
+    let task = snap("verification", "running", resumed.next.verificationIteration, cycleStart);
     for (let i = 1; i <= DEFAULT_MAX_ITERATIONS; i++) {
       const result = transition(task, passing.verdict_rework, "agent");
       expect(result).toMatchObject({ ok: true, next: { state: "in_progress" } });
-      task = snap("verification", "running", i);
+      task = snap("verification", "running", cycleStart + i, cycleStart);
     }
     expect(transition(task, passing.verdict_rework, "agent")).toMatchObject({
       ok: true,
