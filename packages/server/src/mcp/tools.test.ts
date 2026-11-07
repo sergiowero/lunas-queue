@@ -9,6 +9,7 @@ import {
   RunSubagentRepository,
   SettingsRepository,
   SpecRepository,
+  transitionTask,
 } from "@lunasq/db";
 import { insertRun, setTaskPosition } from "@lunasq/db/test-helpers";
 import { specContentExample } from "@lunasq/schemas/testing";
@@ -1262,6 +1263,62 @@ describe("submit_verdict: reviewer evidence, cap, risk and hooks", () => {
     });
     expect(h.taskOf(atCap.task.id)).toMatchObject({ state: "needs_human", subState: null });
   });
+
+  it.each([
+    { source: "global", cap: 2 },
+    { source: "project", cap: 7 },
+  ])(
+    "after a human resume, the $source cap of $cap grants a full cycle of reworks through submit_verdict",
+    async ({ source, cap }) => {
+      const h = mcpHarness();
+      if (source === "global") {
+        new SettingsRepository(h.db).saveVerification({ maxVerificationIterations: cap });
+      } else {
+        new ProjectRepository(h.db).update(h.project.id, {
+          limits: { maxVerificationIterations: cap },
+        });
+      }
+      const reject = async (taskId: string) => {
+        const run = insertRun(h.db, taskId, { phase: "verify", agentKind: "claude" });
+        h.gated(taskId, h.commitVerifier.headSha);
+        const { call } = await h.connect(run.runToken);
+        const context = await call("get_task_context");
+        if (context.isError) throw new Error(JSON.stringify(context.body));
+        await call("submit_verdict", { handoff: h.verdictFor("verification-reject", run) });
+        return h.taskOf(taskId);
+      };
+
+      // The cycle is exhausted at the effective cap.
+      const first = await h.ready("verify", { ...verifying, verificationIteration: cap });
+      await first.call("submit_verdict", {
+        handoff: h.verdictFor("verification-reject", first.run),
+      });
+      const taskId = first.task.id;
+      expect(h.taskOf(taskId)).toMatchObject({ state: "needs_human", verificationIteration: cap });
+
+      // The human resumes: a new full cycle starts at the current iteration.
+      const resumed = transitionTask(h.db, { taskId, actor: "human", command: { type: "resume" } });
+      expect(resumed.ok).toBe(true);
+      expect(h.taskOf(taskId)).toMatchObject({
+        state: "in_progress",
+        verificationIteration: cap,
+        verificationCycleStart: cap,
+      });
+
+      for (let i = 1; i <= cap; i++) {
+        setTaskPosition(h.db, taskId, { ...verifying, verificationIteration: cap + i - 1 });
+        expect(await reject(taskId)).toMatchObject({
+          state: "in_progress",
+          verificationIteration: cap + i,
+        });
+      }
+      setTaskPosition(h.db, taskId, { ...verifying, verificationIteration: cap * 2 });
+      expect(await reject(taskId)).toMatchObject({
+        state: "needs_human",
+        verificationIteration: cap * 2,
+      });
+    },
+  );
 
   it("the project cap overrides the global cap", async () => {
     const h = mcpHarness();
