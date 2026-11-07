@@ -9,7 +9,7 @@
 // - Live Run nobody watches (after a restart) → it is watched again.
 // - Agent with a LunasQ name without an open Run → its pane is closed (orphan).
 // - Canceled or merged task that keeps its worktree → it is removed; and every so often, the orphan
-//   worktrees of each project (ADR 0012).
+//   worktrees of each project (ADR 0012). A canceled task's worktree is removed with force.
 import type { HerdrAdapter, HerdrAgent } from "@lunasq/adapters";
 import {
   type LunasqDatabase,
@@ -18,7 +18,12 @@ import {
   TaskRepository,
   TaskWorktreeRepository,
 } from "@lunasq/db";
-import { isAgentName, type ProjectConfigReader, pendingPhase } from "@lunasq/domain";
+import {
+  isAgentName,
+  type ProjectConfigReader,
+  pendingPhase,
+  worktreeForceRemovable,
+} from "@lunasq/domain";
 import {
   type OutboxMessage,
   TASK_PR_STATE_CHANGED,
@@ -242,7 +247,9 @@ export class Reconciler {
       if (this.runs.latestForTask(task.id)?.endedAt === null) continue;
       await this.guard(task.id, async () => {
         try {
-          const { removed } = await this.worktrees.remove(task.id);
+          const { removed } = await this.worktrees.remove(task.id, {
+            force: worktreeForceRemovable(task),
+          });
           if (removed) result.removedWorktrees.push(task.id);
           this.reported.delete(task.id);
         } catch (error) {
@@ -256,7 +263,9 @@ export class Reconciler {
     if (this.passes % this.orphanWorktreesEvery === 1 || this.orphanWorktreesEvery === 1) {
       for (const project of this.projects.list()) {
         await this.guard(project.id, async () => {
-          const cleanup = await this.worktrees.cleanupOrphans(project.id);
+          const cleanup = await this.worktrees.cleanupOrphans(project.id, {
+            skip: (taskId) => this.runs.latestForTask(taskId)?.endedAt === null,
+          });
           for (const failure of cleanup.failed) {
             this.onError(new Error(`${failure.code}: ${failure.path}`), project.id);
           }

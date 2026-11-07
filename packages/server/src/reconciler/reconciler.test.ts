@@ -1,4 +1,4 @@
-import { claimRun, transitionTask } from "@lunasq/db";
+import { claimRun, RunRepository, transitionTask } from "@lunasq/db";
 import { insertTask } from "@lunasq/db/test-helpers";
 import { SchedulerConfig } from "@lunasq/schemas";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -125,6 +125,62 @@ describe("Reconciler", () => {
     expect(await h.reconciler.run()).toMatchObject({ closed: [], removedWorktrees: [] });
   });
 
+  it("canceled task with uncommitted changes: removes the worktree with force and keeps the branch", async () => {
+    const h = setup();
+    const { taskId } = await h.launched();
+    const path = h.taskRow(taskId).worktreePath ?? "";
+    h.herdr.setWorktreeDirty(path);
+    cancel(h.db, taskId);
+
+    const result = await h.reconciler.run();
+
+    expect(result.removedWorktrees).toEqual([taskId]);
+    expect(h.taskRow(taskId).worktreePath).toBeNull();
+    expect(h.reconcileErrors).toEqual([]);
+    expect(h.herdr.branches(h.project.localPath)).toContain(`lunasq/${taskId}`);
+    // Already removed: another pass removes nothing and reports nothing.
+    expect(await h.reconciler.run()).toMatchObject({ closed: [], removedWorktrees: [] });
+    expect(h.reconcileErrors).toEqual([]);
+  });
+
+  it("canceled task whose last Run is still open: the worktree waits for another pass", async () => {
+    const h = setup();
+    const { taskId, run } = await h.launched();
+    h.herdr.setWorktreeDirty(h.taskRow(taskId).worktreePath ?? "");
+    cancel(h.db, taskId);
+    // The pass sees the task's last Run as still open (a launch that is stopping).
+    const open = vi
+      .spyOn(RunRepository.prototype, "latestForTask")
+      .mockReturnValue({ ...run, endedAt: null });
+
+    const first = await h.reconciler.run();
+    expect(first.removedWorktrees).toEqual([]);
+    expect(h.taskRow(taskId).worktreePath).not.toBeNull();
+
+    open.mockRestore();
+    expect((await h.reconciler.run()).removedWorktrees).toEqual([taskId]);
+  });
+
+  it("task completed with its PR merged and uncommitted changes: does not force and reports once", async () => {
+    const h = setup();
+    const { taskId } = await h.launched();
+    const path = h.taskRow(taskId).worktreePath ?? "";
+    h.herdr.setWorktreeDirty(path);
+    h.db.$client
+      .prepare(
+        "update tasks set state = 'completed', sub_state = null, pr_state = 'merged' where id = ?",
+      )
+      .run(taskId);
+
+    const first = await h.reconciler.run();
+    await h.reconciler.run();
+
+    expect(first.removedWorktrees).toEqual([]);
+    expect(h.taskRow(taskId).worktreePath).toBe(path);
+    expect(h.reconcileErrors.filter((e) => e.subject === taskId)).toHaveLength(1);
+    expect(h.reconcileErrors[0]?.error).toMatchObject({ code: "dirty_worktree" });
+  });
+
   it("task completed with a Result: closes the Run, stops the agent and removes the worktree", async () => {
     const h = setup();
     const { taskId, run, name } = await h.launched();
@@ -207,19 +263,6 @@ describe("Reconciler", () => {
       createdAt: new Date().toISOString(),
     });
     await vi.waitFor(() => expect(h.runs.get(run.id)?.result).toBe("cancelled"));
-  });
-
-  it("a worktree with changes is not forced and the failure is reported only once", async () => {
-    const h = setup();
-    const { taskId } = await h.launched();
-    h.herdr.setWorktreeDirty(h.taskRow(taskId).worktreePath ?? "");
-    cancel(h.db, taskId);
-
-    await h.reconciler.run();
-    await h.reconciler.run();
-
-    expect(h.taskRow(taskId).worktreePath).not.toBeNull();
-    expect(h.reconcileErrors.filter((e) => e.subject === taskId)).toHaveLength(1);
   });
 
   it("needs_human by timeout keeps the Run and the agent; on resuming the old Run is closed", async () => {

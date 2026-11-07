@@ -38,6 +38,14 @@ export function worktreeReleased(task: WorktreeTaskView): boolean {
   return task.state === "completed" && (task.prState === "merged" || Boolean(task.resultKind));
 }
 
+/**
+ * Removing the worktree may discard uncommitted changes (the branch is always kept). Only a cancelled
+ * task accepts that; merged or Result-completed tasks and orphans of unknown tasks never force.
+ */
+export function worktreeForceRemovable(task: WorktreeTaskView): boolean {
+  return task.state === "cancelled";
+}
+
 export type OrphanReason = "task_not_found" | "task_released";
 
 export type OrphanWorktree<W> = { worktree: W; taskId: string; reason: OrphanReason };

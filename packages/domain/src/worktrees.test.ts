@@ -3,6 +3,7 @@ import {
   findOrphanWorktrees,
   taskBranch,
   taskIdFromBranch,
+  worktreeForceRemovable,
   worktreeReleased,
 } from "./worktrees.ts";
 
@@ -57,6 +58,27 @@ describe("worktreeReleased", () => {
       "needs_human",
     ] as const) {
       expect(worktreeReleased({ state, prState: null }), state).toBe(false);
+    }
+  });
+});
+
+describe("worktreeForceRemovable", () => {
+  it("forces the removal only for a cancelled task", () => {
+    expect(worktreeForceRemovable({ state: "cancelled", prState: null })).toBe(true);
+    expect(worktreeForceRemovable({ state: "cancelled", prState: "open" })).toBe(true);
+    expect(worktreeForceRemovable({ state: "completed", prState: "merged" })).toBe(false);
+    expect(
+      worktreeForceRemovable({ state: "completed", prState: null, resultKind: "research" }),
+    ).toBe(false);
+    for (const state of [
+      "draft",
+      "refined",
+      "in_progress",
+      "verification",
+      "needs_human",
+      "completed",
+    ] as const) {
+      expect(worktreeForceRemovable({ state, prState: null }), state).toBe(false);
     }
   });
 });

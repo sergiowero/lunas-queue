@@ -10,6 +10,7 @@ import {
   type ProjectWorkspaceStore,
   type TaskWorktreeStore,
   taskBranch,
+  worktreeForceRemovable,
   worktreeReleased,
 } from "@lunasq/domain";
 import { type Project, taskLabel } from "@lunasq/schemas";
@@ -170,20 +171,28 @@ export class WorktreeService {
   }
 
   /**
-   * Removes the orphans without forcing: one with uncommitted changes is left in `failed` for a
-   * human to decide. A failure does not stop the others.
+   * Removes the orphans. Those of canceled tasks are forced (their uncommitted changes are discarded,
+   * the branch is kept); any other orphan with uncommitted changes is left in `failed` for a human to
+   * decide. `skip` leaves a task's orphan alone for now. A failure does not stop the others.
    */
-  async cleanupOrphans(projectId: string): Promise<OrphanCleanup> {
+  async cleanupOrphans(
+    projectId: string,
+    opts: { skip?: (taskId: string) => boolean } = {},
+  ): Promise<OrphanCleanup> {
     const project = this.project(projectId);
     const result: OrphanCleanup = { removed: [], failed: [] };
     for (const orphan of await this.findOrphans(projectId)) {
       const { taskId, reason, worktree } = orphan;
+      // E.g. a task whose agent is still stopping: its worktree waits for another pass.
+      if (opts.skip?.(taskId)) continue;
       try {
         await this.locks.run(taskId, async () => {
           // Revalidated under the lock: the task may have changed since it was listed.
           const task = this.tasks.get(taskId);
           if (task && !worktreeReleased(task)) return;
-          if (!(await this.removeBranch(project, taskBranch(taskId), false))) return;
+          // Only a canceled task's worktree is forced; merged, Result and unknown-task orphans are not.
+          const force = task ? worktreeForceRemovable(task) : false;
+          if (!(await this.removeBranch(project, taskBranch(taskId), force))) return;
           if (task) this.tasks.clearWorktreePath(taskId);
           result.removed.push({ taskId, path: worktree.path, reason });
         });

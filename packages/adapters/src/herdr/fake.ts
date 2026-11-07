@@ -117,6 +117,8 @@ export class FakeHerdr implements HerdrAdapter {
   private readonly agents = new Map<string, FakeAgent>();
   /** Worktrees per repo (project checkout) and branch. */
   private readonly worktrees = new Map<string, Map<string, FakeWorktree>>();
+  /** Branches ever created per repo: removing a worktree (forced or not) never deletes them. */
+  private readonly repoBranches = new Map<string, Set<string>>();
   private readonly subscriptions = new Set<FakeSubscription>();
   private readonly statusWaiters = new Set<() => void>();
 
@@ -201,6 +203,9 @@ export class FakeHerdr implements HerdrAdapter {
     const path = input.path ?? `~/.herdr/worktrees/${input.branch.replaceAll("/", "-")}`;
     const ws = this.createWorkspace(label, path, true, {});
     repo.set(input.branch, { path, workspaceId: ws.workspaceId });
+    const branches = this.repoBranches.get(project.repoPath) ?? new Set<string>();
+    branches.add(input.branch);
+    this.repoBranches.set(project.repoPath, branches);
     this.emit({ type: "worktree_created", workspaceId: ws.workspaceId });
     return { worktree: this.toWorktree(ws, input.branch, path), created: true };
   }
@@ -493,6 +498,11 @@ export class FakeHerdr implements HerdrAdapter {
   /** Each `sendKeys` call the agent received. */
   sentKeys(name: string): string[][] {
     return this.requireAgent(name).keys.map((k) => [...k]);
+  }
+
+  /** Branches of the repo checked out at `repoPath`, whether or not they still have a worktree. */
+  branches(repoPath: string): string[] {
+    return [...(this.repoBranches.get(repoPath) ?? [])];
   }
 
   /** Simulates uncommitted changes in the checkout `path`. */

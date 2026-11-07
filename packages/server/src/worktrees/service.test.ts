@@ -398,8 +398,8 @@ describe("WorktreeService: orphans", () => {
     expect(await service.cleanupOrphans(project.id)).toEqual({ removed: [], failed: [] });
   });
 
-  it("an orphan with uncommitted changes is reported and not deleted", async () => {
-    const { project, herdr, service, cancelled, workspaceId } = await scenario();
+  it("a dirty orphan of a canceled task is removed with force", async () => {
+    const { project, herdr, service, tasks, cancelled, workspaceId } = await scenario();
     const dirty = (await herdr.listWorktrees(workspaceId)).find(
       (w) => w.branch === taskBranch(cancelled.id),
     );
@@ -407,18 +407,45 @@ describe("WorktreeService: orphans", () => {
 
     const res = await service.cleanupOrphans(project.id);
 
-    expect(res.removed).toHaveLength(2);
-    expect(res.failed).toEqual([
-      {
-        taskId: cancelled.id,
-        path: dirty?.path,
-        code: "dirty_worktree",
-        message: expect.any(String),
-      },
-    ]);
+    expect(res.failed).toEqual([]);
+    expect(res.removed.map((r) => r.taskId)).toContain(cancelled.id);
+    expect((await herdr.listWorktrees(workspaceId)).map((w) => w.branch)).not.toContain(
+      taskBranch(cancelled.id),
+    );
+    expect(tasks.get(cancelled.id)?.worktreePath).toBeNull();
+    expect(herdr.branches(project.localPath)).toContain(taskBranch(cancelled.id));
+  });
+
+  it("cleanupOrphans leaves alone the tasks that `skip` names", async () => {
+    const { project, herdr, service, cancelled, workspaceId } = await scenario();
+
+    const res = await service.cleanupOrphans(project.id, { skip: (id) => id === cancelled.id });
+
+    expect(res.removed.map((r) => r.taskId)).not.toContain(cancelled.id);
     expect((await herdr.listWorktrees(workspaceId)).map((w) => w.branch)).toContain(
       taskBranch(cancelled.id),
     );
+  });
+
+  it("a dirty orphan of a merged task or of a task that does not exist is reported and not deleted", async () => {
+    const { project, herdr, service, merged, gone, workspaceId } = await scenario();
+    const worktrees = await herdr.listWorktrees(workspaceId);
+    const mergedPath = worktrees.find((w) => w.branch === taskBranch(merged.id))?.path ?? "";
+    const gonePath = worktrees.find((w) => w.branch === taskBranch(gone))?.path ?? "";
+    herdr.setWorktreeDirty(mergedPath);
+    herdr.setWorktreeDirty(gonePath);
+
+    const res = await service.cleanupOrphans(project.id);
+
+    expect(res.failed.map((f) => [f.taskId, f.code]).sort()).toEqual(
+      [
+        [merged.id, "dirty_worktree"],
+        [gone, "dirty_worktree"],
+      ].sort(),
+    );
+    const left = (await herdr.listWorktrees(workspaceId)).map((w) => w.branch);
+    expect(left).toContain(taskBranch(merged.id));
+    expect(left).toContain(taskBranch(gone));
   });
 
   it("does not treat an active task's worktree from another project of the same repo as an orphan", async () => {
