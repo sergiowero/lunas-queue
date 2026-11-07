@@ -241,7 +241,7 @@ One task = one worktree = one branch, from the first dispatch until the merge; a
 | Later phases and rework | Reopen the same worktree | The new agent inherits the code state, not the session's context |
 | Dependent task | Create its worktree from the base branch, which already includes the merge of its dependencies | No stacked branches |
 | Delivery | Rebase onto the base branch inside the worktree, push, PR | Conflicts send the task back to in progress |
-| After merge or cancellation | `worktree remove` | Does not delete the branch; requires forcing if there are uncommitted changes |
+| After merge or cancellation | `worktree remove` | Does not delete the branch. On cancellation it is forced (uncommitted changes are discarded); after a merge or a Result it is not forced, so uncommitted changes keep the worktree and report `dirty_worktree` |
 
 Constraints: two tasks never share a branch or worktree, and the reconciler detects orphan worktrees (nonexistent task, canceled or with its PR merged; ADR 0012) to clean them up. Cost to watch: disk and bootstrap time per task, which weighs more with many tasks in parallel.
 
