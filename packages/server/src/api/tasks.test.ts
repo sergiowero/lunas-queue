@@ -174,11 +174,25 @@ describe("GET and PATCH /api/tasks/:id", () => {
   });
 
   it("updates goal, tags and priority", async () => {
-    const { send, create } = setup();
+    const { db, send, create } = setup();
     const task = await create();
-    const res = await send("PATCH", `/api/tasks/${task.id}`, { priority: 900, tags: ["ui"] });
+    const res = await send("PATCH", `/api/tasks/${task.id}`, {
+      goal: "A sharper goal",
+      priority: 900,
+      tags: ["ui"],
+    });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ priority: 900, tags: ["ui"] });
+    expect(await res.json()).toMatchObject({ goal: "A sharper goal", priority: 900, tags: ["ui"] });
+    const updated = listEvents(db, task.id).at(-1);
+    expect(updated).toMatchObject({ type: "task.updated", actor: "human" });
+    const payload = updated?.payload as {
+      from: Record<string, unknown>;
+      to: Record<string, unknown>;
+    };
+    expect(payload.from.goal).toBe(task.goal);
+    expect(payload.to.goal).toBe("A sharper goal");
+    expect(payload.from).not.toHaveProperty("intent");
+    expect(payload.to).not.toHaveProperty("intent");
   });
 
   it("answers 400 if it tries to change the state, 404 if it does not exist and 409 if it is terminal", async () => {

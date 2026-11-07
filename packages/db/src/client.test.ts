@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { TaskCreatedPayload, TaskUpdatedPayload } from "@lunasq/schemas";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { describe, expect, it } from "vitest";
 import { migrateDatabase, migrationsFolder, openDatabase } from "./client.ts";
@@ -39,6 +40,8 @@ describe("openDatabase", () => {
     expect(db.$client.pragma("busy_timeout", { simple: true })).toBeGreaterThan(0);
   });
 });
+
+const PROJECT_UUID = "6f1c1c1e-2b7a-4c58-9d3e-0a1b2c3d4e5f";
 
 describe("migrations", () => {
   it("apply cleanly on an empty database and create all the tables", () => {
@@ -176,7 +179,14 @@ describe("migrations", () => {
     );
     insertEvent.run(
       "task.created",
-      JSON.stringify({ projectId: "p", intent: "Do it", tags: [], priority: 0 }),
+      JSON.stringify({
+        projectId: PROJECT_UUID,
+        intent: "Do it",
+        tags: [],
+        priority: 0,
+        causedBy: null,
+        dependsOn: [],
+      }),
     );
     insertEvent.run(
       "task.updated",
@@ -195,10 +205,20 @@ describe("migrations", () => {
       sqlite.prepare("select payload from events order by id").pluck().all() as string[]
     ).map((p) => JSON.parse(p));
     expect(payloads).toEqual([
-      { projectId: "p", goal: "Do it", tags: [], priority: 0 },
+      {
+        projectId: PROJECT_UUID,
+        goal: "Do it",
+        tags: [],
+        priority: 0,
+        causedBy: null,
+        dependsOn: [],
+      },
       { from: { goal: "Do it" }, to: { goal: "Do more", priority: 3 } },
       { from: { priority: 0 }, to: { priority: 3 } },
     ]);
+    expect(() => TaskCreatedPayload.parse(payloads[0])).not.toThrow();
+    expect(() => TaskUpdatedPayload.parse(payloads[1])).not.toThrow();
+    expect(() => TaskUpdatedPayload.parse(payloads[2])).not.toThrow();
     // The log is still append-only once the migration is done.
     expect(() => sqlite.prepare("update events set payload = null").run()).toThrow(/append-only/);
     expect(sqlite.pragma("foreign_key_check")).toEqual([]);
