@@ -67,6 +67,14 @@ describe("TaskUpdate", () => {
     expect(TaskUpdate.parse({})).toEqual({});
   });
 
+  it("rejects the former intent field", () => {
+    expect(TaskCreate.safeParse({ ...validCreate, goal: undefined, intent: "x" }).success).toBe(
+      false,
+    );
+    expect(TaskCreate.safeParse({ ...validCreate, intent: "x" }).success).toBe(false);
+    expect(TaskUpdate.safeParse({ intent: "x" }).success).toBe(false);
+  });
+
   it("does not allow changing the state, project or read-only fields", () => {
     for (const field of ["state", "projectId", "riskLabel", "prUrl"]) {
       expect(TaskUpdate.safeParse({ [field]: "x" }).success).toBe(false);

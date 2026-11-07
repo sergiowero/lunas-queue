@@ -46,6 +46,8 @@ describe("get_task_context", () => {
       questions: [],
       checklist: null,
     });
+    expect(body).toHaveProperty("task.goal");
+    expect(body).not.toHaveProperty("task.intent");
   });
 
   it("refinement after requested changes receives the version and its comments", async () => {

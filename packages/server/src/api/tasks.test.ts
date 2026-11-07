@@ -67,6 +67,31 @@ describe("POST /api/tasks", () => {
     expect(body.issues[0]?.path).toEqual(["priority"]);
   });
 
+  it("answers 400 if a task is created or patched with the former intent field", async () => {
+    const { send, project } = setup();
+    const created = await send("POST", "/api/tasks", {
+      projectId: project.id,
+      intent: "x",
+      priority: 1,
+    });
+    expect(created.status).toBe(400);
+    const withBoth = await send("POST", "/api/tasks", {
+      projectId: project.id,
+      goal: "x",
+      intent: "x",
+      priority: 1,
+    });
+    expect(withBoth.status).toBe(400);
+    const task = (await (
+      await send("POST", "/api/tasks", {
+        projectId: project.id,
+        goal: "x",
+        priority: 1,
+      })
+    ).json()) as { id: string };
+    expect((await send("PATCH", `/api/tasks/${task.id}`, { intent: "y" })).status).toBe(400);
+  });
+
   it.each([
     ["project_not_found", { projectId: missing }],
     ["dependency_not_found", { dependsOn: [missing] }],

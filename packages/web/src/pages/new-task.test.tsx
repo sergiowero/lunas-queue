@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
+import { LANGUAGE_KEY } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 /** The labels of the dependency selector's options (#N · goal), without the placeholder. */
@@ -27,6 +28,13 @@ function chosen(): string[] {
 }
 
 describe("task creation", () => {
+  it("labels the field Goal in English", async () => {
+    localStorage.setItem(LANGUAGE_KEY, "en");
+    renderApp("/tasks/new", new FakeApi());
+    expect(await screen.findByLabelText("Goal")).toBeTruthy();
+    expect(screen.queryByLabelText("Intent")).toBeNull();
+  });
+
   it("creates the task with tags, priority and dependencies and opens its detail", async () => {
     const fake = new FakeApi();
     const project = fake.addProject({ name: "lunas-queue" });
