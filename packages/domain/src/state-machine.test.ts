@@ -519,6 +519,33 @@ describe("transition: human in the loop", () => {
     });
   });
 
+  it.each([2, 7])(
+    "after newCycle, a non-default cap of %i grants a full cycle of that size before escalating",
+    (cap) => {
+      const resumed = transition(
+        snap("needs_human", null, cap),
+        { type: "resume", resumeTo: "verification", newCycle: true },
+        "human",
+      );
+      if (!resumed.ok) throw new Error(resumed.error.message);
+      const cycleStart = resumed.next.verificationCycleStart;
+      expect(cycleStart).toBe(cap);
+      let task = snap("verification", "running", resumed.next.verificationIteration, cycleStart);
+      for (let i = 1; i <= cap; i++) {
+        const result = transition(task, { type: "verdict_rework", maxIterations: cap }, "agent");
+        expect(result).toMatchObject({ ok: true, next: { state: "in_progress" } });
+        task = snap("verification", "running", cycleStart + i, cycleStart);
+      }
+      expect(
+        transition(task, { type: "verdict_rework", maxIterations: cap }, "agent"),
+      ).toMatchObject({
+        ok: true,
+        next: { state: "needs_human" },
+        event: { payload: { reason: "iterations_exhausted" } },
+      });
+    },
+  );
+
   it("cancel stores the note in the event", () => {
     const result = transition(
       snap("refined", null),

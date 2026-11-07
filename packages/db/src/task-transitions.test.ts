@@ -282,6 +282,46 @@ describe("transitionTask", () => {
     });
   });
 
+  it.each([2, 7])(
+    "after an exhausted resume with a non-default cap of %i a full cycle of that size is granted",
+    (cap) => {
+      const db = migratedDatabase();
+      const t = insertTask(db, insertProject(db).id, {
+        state: "verification",
+        subState: "running",
+        verificationIteration: cap,
+      });
+      const rework = () =>
+        apply(db, {
+          taskId: t.id,
+          actor: "agent",
+          command: { type: "verdict_rework", maxIterations: cap },
+        });
+      expect(rework().task.state).toBe("needs_human");
+      apply(db, { taskId: t.id, actor: "human", command: { type: "resume" } });
+      expect(taskRow(db, t.id)).toMatchObject({
+        verificationIteration: cap,
+        verificationCycleStart: cap,
+      });
+      const goToVerification = () =>
+        setTaskPosition(db, t.id, {
+          state: "verification",
+          subState: "running",
+          verificationIteration: taskRow(db, t.id).verificationIteration,
+        });
+      for (let i = 0; i < cap; i++) {
+        goToVerification();
+        expect(rework().task.state).toBe("in_progress");
+      }
+      goToVerification();
+      expect(rework().task).toMatchObject({
+        state: "needs_human",
+        verificationIteration: cap * 2,
+        verificationCycleStart: cap,
+      });
+    },
+  );
+
   it("resuming a paused task keeps the iteration and the cycle start", () => {
     const db = migratedDatabase();
     const t = insertTask(db, insertProject(db).id, {
