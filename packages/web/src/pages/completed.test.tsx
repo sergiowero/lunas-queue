@@ -269,6 +269,7 @@ describe("Completed tab", () => {
   describe("two lists: open PR and a collapsible rest", () => {
     const completed = { state: "completed", subState: null } as const;
     const openList = () => within(screen.getByRole("region", { name: "Con PR abierto" }));
+    const researchList = () => within(screen.getByRole("region", { name: "Investigaciones" }));
     const rest = () => screen.getByTestId("completed-rest") as HTMLDetailsElement;
     const restSummary = () => screen.getByText(/^Resto \(/);
 
@@ -289,6 +290,12 @@ describe("Completed tab", () => {
         goal: "Investigar la cola",
         resultKind: "research",
         result: "# Hallazgos",
+      });
+      fake.addTask(project.id, {
+        ...completed,
+        goal: "Ya estaba hecha",
+        resultKind: "already_implemented",
+        result: "Vive en src/x.ts",
       });
       return fake;
     }
@@ -314,21 +321,21 @@ describe("Completed tab", () => {
       return fake;
     }
 
-    it("AC-1: the first list only has the open PR and the second everything else", async () => {
+    it("AC-1: the open list, the research section and the rest split the completed tasks", async () => {
       renderApp("/completed", seedMixed());
 
       await screen.findByText("Con open");
       expect(openList().getByText("Con open")).toBeTruthy();
-      for (const goal of [
-        "Con merged",
-        "Con closed",
-        "Sin PR ni resultado",
-        "Investigar la cola",
-      ]) {
+      expect(researchList().getByText("Investigar la cola")).toBeTruthy();
+      for (const goal of ["Con merged", "Con closed", "Sin PR ni resultado", "Ya estaba hecha"]) {
         expect(openList().queryByText(goal)).toBeNull();
+        expect(researchList().queryByText(goal)).toBeNull();
         expect(within(rest()).getByText(goal)).toBeTruthy();
       }
+      expect(openList().queryByText("Investigar la cola")).toBeNull();
       expect(within(rest()).queryByText("Con open")).toBeNull();
+      expect(within(rest()).queryByText("Investigar la cola")).toBeNull();
+      expect(restSummary().textContent).toBe("Resto (4)");
     });
 
     it("AC-2: the rest section starts collapsed and the first list is visible", async () => {
@@ -351,13 +358,13 @@ describe("Completed tab", () => {
       expect(rest().open).toBe(false);
     });
 
-    it("AC-4: the task with a Result and without a PR shows its type and no PR link", async () => {
+    it("AC-4: a non-research Result shows its type in Rest and no PR link", async () => {
       const { user } = renderApp("/completed", seedMixed());
 
       await screen.findByText("Con open");
       await user.click(restSummary());
-      const row = within(within(rest()).getByRole("row", { name: /Investigar la cola/ }));
-      expect(row.getByText("Investigación")).toBeTruthy();
+      const row = within(within(rest()).getByRole("row", { name: /Ya estaba hecha/ }));
+      expect(row.getByText("Ya implementada")).toBeTruthy();
       expect(row.queryByRole("link", { name: /^PR / })).toBeNull();
     });
 
@@ -510,6 +517,190 @@ describe("Completed tab", () => {
       await user.click(restSummary());
       expect(within(rest()).getByText("Página 1 de 2")).toBeTruthy();
       expect(within(rest()).getAllByRole("row")).toHaveLength(21);
+    });
+  });
+
+  describe("research section", () => {
+    const completed = { state: "completed", subState: null } as const;
+    const researchList = () => within(screen.getByRole("region", { name: "Investigaciones" }));
+    const rest = () => screen.getByTestId("completed-rest") as HTMLDetailsElement;
+
+    function research(fake: FakeApi, projectId: string, goal: string, extra = {}) {
+      return fake.addTask(projectId, {
+        ...completed,
+        goal,
+        resultKind: "research",
+        result: "# Hallazgos",
+        ...extra,
+      });
+    }
+
+    function seedResearch(count: number) {
+      const fake = new FakeApi();
+      const project = fake.addProject({ name: "uno" });
+      for (let i = 1; i <= count; i++) {
+        research(fake, project.id, `Inv ${String(i).padStart(2, "0")}`);
+      }
+      return fake;
+    }
+
+    it("AC-2: the section is visible, between the open list and Rest, with a link and no PR link", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject({ name: "uno" });
+      fake.addTask(project.id, { ...completed, goal: "Con open", prState: "open" });
+      const task = research(fake, project.id, "Investigar la cola");
+      renderApp("/completed", fake);
+
+      const section = await screen.findByRole("region", { name: "Investigaciones" });
+      expect(section.closest("details")).toBeNull();
+      const open = screen.getByRole("region", { name: "Con PR abierto" });
+      const rest = screen.getByTestId("completed-rest");
+      expect(open.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(section.compareDocumentPosition(rest) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      const row = researchList().getByRole("row", { name: /Investigar la cola/ });
+      expect(
+        within(row).getByRole("link", { name: "Investigar la cola" }).getAttribute("href"),
+      ).toContain(`/tasks/${task.id}`);
+      expect(within(row).getByText("uno")).toBeTruthy();
+      expect(within(row).getByText("Investigación")).toBeTruthy();
+      expect(within(row).queryByRole("link", { name: /^PR / })).toBeNull();
+    });
+
+    it("AC-3: without research tasks the section shows its empty state", async () => {
+      const fake = new FakeApi();
+      fake.addTask(fake.addProject().id, { ...completed, goal: "Mergeada", prState: "merged" });
+      renderApp("/completed", fake);
+
+      await screen.findByText("Mergeada");
+      expect(researchList().getByText("No hay investigaciones completadas.")).toBeTruthy();
+    });
+
+    it("AC-4: a research task that is not completed appears in no list", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject({ name: "uno" });
+      research(fake, project.id, "Borrador de investigación", {
+        state: "draft",
+        subState: "queued",
+      });
+      research(fake, project.id, "Investigación en curso", {
+        state: "in_progress",
+        subState: "running",
+      });
+      fake.addTask(project.id, { ...completed, goal: "Mergeada", prState: "merged" });
+      renderApp("/completed", fake);
+
+      await screen.findByText("Mergeada");
+      expect(screen.queryByText("Borrador de investigación")).toBeNull();
+      expect(screen.queryByText("Investigación en curso")).toBeNull();
+      expect(researchList().getByText("No hay investigaciones completadas.")).toBeTruthy();
+    });
+
+    it("AC-5: filtering by project limits the section to that project", async () => {
+      const fake = new FakeApi();
+      const one = fake.addProject({ name: "uno" });
+      const two = fake.addProject({ name: "dos" });
+      research(fake, one.id, "Inv de uno");
+      research(fake, two.id, "Inv de dos");
+      const { user } = renderApp("/completed", fake);
+
+      await screen.findByText("Inv de dos");
+      await user.selectOptions(screen.getByLabelText("Proyecto"), one.id);
+
+      await waitFor(() => expect(screen.queryByText("Inv de dos")).toBeNull());
+      expect(researchList().getByText("Inv de uno")).toBeTruthy();
+    });
+
+    it("AC-6: with merged the section is empty and with Sin PR the research tasks come back", async () => {
+      const fake = new FakeApi();
+      const project = fake.addProject({ name: "uno" });
+      research(fake, project.id, "Investigar la cola");
+      fake.addTask(project.id, { ...completed, goal: "Mergeada", prState: "merged" });
+      const { user } = renderApp("/completed", fake);
+
+      await screen.findByText("Investigar la cola");
+      await user.selectOptions(screen.getByLabelText("Estado del PR"), "merged");
+      await waitFor(() => expect(screen.queryByText("Investigar la cola")).toBeNull());
+      expect(researchList().getByText("No hay investigaciones completadas.")).toBeTruthy();
+
+      await user.selectOptions(screen.getByLabelText("Estado del PR"), "Sin PR");
+      expect(await screen.findByText("Investigar la cola")).toBeTruthy();
+      expect(researchList().getByText("Investigar la cola")).toBeTruthy();
+    });
+
+    it("AC-7: 45 research tasks are paginated 20 at a time and 20 or fewer have no controls", async () => {
+      const { user } = renderApp("/completed", seedResearch(45));
+
+      await screen.findByText("Inv 01");
+      expect(researchList().getAllByRole("row")).toHaveLength(21);
+      expect(researchList().getByText("Inv 20")).toBeTruthy();
+      expect(researchList().queryByText("Inv 21")).toBeNull();
+      expect(researchList().getByText("Página 1 de 3")).toBeTruthy();
+
+      await user.click(researchList().getByRole("button", { name: "Siguiente" }));
+      expect(researchList().getByText("Inv 21")).toBeTruthy();
+      expect(researchList().getByText("Página 2 de 3")).toBeTruthy();
+    });
+
+    it("AC-7: with 20 research tasks there are no pagination controls", async () => {
+      renderApp("/completed", seedResearch(20));
+
+      await screen.findByText("Inv 01");
+      expect(researchList().getAllByRole("row")).toHaveLength(21);
+      expect(researchList().queryByRole("navigation", { name: "Paginación" })).toBeNull();
+    });
+
+    it("AC-8: changing a filter from page 3 goes back to page 1", async () => {
+      const fake = seedResearch(45);
+      const two = fake.addProject({ name: "dos" });
+      for (let i = 1; i <= 25; i++) {
+        research(fake, two.id, `Dos ${String(i).padStart(2, "0")}`);
+      }
+      const { user } = renderApp("/completed", fake);
+
+      await screen.findByText("Inv 01");
+      const next = () => researchList().getByRole("button", { name: "Siguiente" });
+      await user.click(next());
+      await user.click(next());
+      expect(researchList().getByText("Página 3 de 4")).toBeTruthy();
+
+      await user.selectOptions(screen.getByLabelText("Proyecto"), two.id);
+      await waitFor(() => expect(researchList().getByText("Página 1 de 2")).toBeTruthy());
+      expect(researchList().getByText("Dos 01")).toBeTruthy();
+
+      await user.click(next());
+      expect(researchList().getByText("Página 2 de 2")).toBeTruthy();
+      await user.selectOptions(screen.getByLabelText("Estado del PR"), "Sin PR");
+      await waitFor(() => expect(researchList().getByText("Página 1 de 2")).toBeTruthy());
+    });
+
+    it("the section's pagination is independent from Rest's", async () => {
+      const fake = seedResearch(45);
+      const project = fake.addProject({ name: "otro" });
+      for (let i = 1; i <= 25; i++) {
+        fake.addTask(project.id, {
+          ...completed,
+          goal: `Resto ${String(i).padStart(2, "0")}`,
+          prState: "merged",
+        });
+      }
+      const { user } = renderApp("/completed", fake);
+
+      await screen.findByText("Inv 01");
+      await user.click(researchList().getByRole("button", { name: "Siguiente" }));
+      expect(researchList().getByText("Página 2 de 3")).toBeTruthy();
+      expect(within(rest()).getByText("Página 1 de 2")).toBeTruthy();
+    });
+
+    it("AC-9: in English the heading reads Research and the empty state is in English", async () => {
+      const fake = new FakeApi();
+      fake.addTask(fake.addProject().id, { ...completed, goal: "Mergeada", prState: "merged" });
+      const { user } = renderApp("/completed", fake);
+
+      await screen.findByText("Mergeada");
+      await user.click(screen.getByRole("button", { name: "Cambiar a inglés" }));
+
+      const section = await screen.findByRole("region", { name: "Research" });
+      expect(within(section).getByText("There are no completed research tasks.")).toBeTruthy();
     });
   });
 

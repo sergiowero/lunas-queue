@@ -23,13 +23,14 @@ const column = createColumnHelper<Row>();
 // Selector value for completed tasks without a PR (prState null).
 const NO_PR = "none";
 
-// Rest rows shown at once inside the collapsible section.
-const REST_PAGE_SIZE = 20;
+// Rows shown at once in the Research section and inside the collapsible Rest.
+const PAGE_SIZE = 20;
 
 export function CompletedPage() {
   const t = useT();
   const [filters, setFilters] = useTabFilters("completed");
   const { prFilter } = filters;
+  const [researchPage, setResearchPage] = useState(0);
   const [restPage, setRestPage] = useState(0);
   const projects = useQuery(queries.projects());
   const projectId = useProjectFilter("completed", projects.data);
@@ -38,7 +39,7 @@ export function CompletedPage() {
     () => new Map((projects.data ?? []).map((project) => [project.id, project.name])),
     [projects.data],
   );
-  // Every completed task that passes the filters falls into exactly one of the two lists.
+  // Every completed task that passes the filters falls into exactly one of the three lists.
   const lists = useMemo(() => {
     if (!tasks.data) return undefined;
     const completed = tasks.data.filter(
@@ -47,9 +48,11 @@ export function CompletedPage() {
         (prFilter === "" ||
           (prFilter === NO_PR ? task.prState === null : task.prState === prFilter)),
     );
+    const isResearch = (task: Row) => task.resultKind === "research";
     return {
-      open: completed.filter((task) => task.prState === "open"),
-      rest: completed.filter((task) => task.prState !== "open"),
+      open: completed.filter((task) => task.prState === "open" && !isResearch(task)),
+      research: completed.filter(isResearch),
+      rest: completed.filter((task) => task.prState !== "open" && !isResearch(task)),
     };
   }, [tasks.data, prFilter]);
 
@@ -108,9 +111,15 @@ export function CompletedPage() {
   if (error) return <QueryError error={error} />;
   if (!projects.data || !lists) return <Loading />;
 
-  const pageCount = Math.ceil(lists.rest.length / REST_PAGE_SIZE);
-  const page = Math.min(restPage, Math.max(pageCount - 1, 0));
-  const restRows = lists.rest.slice(page * REST_PAGE_SIZE, (page + 1) * REST_PAGE_SIZE);
+  const researchPageCount = Math.ceil(lists.research.length / PAGE_SIZE);
+  const currentResearchPage = Math.min(researchPage, Math.max(researchPageCount - 1, 0));
+  const researchRows = lists.research.slice(
+    currentResearchPage * PAGE_SIZE,
+    (currentResearchPage + 1) * PAGE_SIZE,
+  );
+  const restPageCount = Math.ceil(lists.rest.length / PAGE_SIZE);
+  const currentRestPage = Math.min(restPage, Math.max(restPageCount - 1, 0));
+  const restRows = lists.rest.slice(currentRestPage * PAGE_SIZE, (currentRestPage + 1) * PAGE_SIZE);
 
   return (
     <div className="flex flex-col gap-4">
@@ -124,6 +133,7 @@ export function CompletedPage() {
               value={projectId}
               onChange={(event) => {
                 setFilters({ projectId: event.target.value });
+                setResearchPage(0);
                 setRestPage(0);
               }}
             >
@@ -142,6 +152,7 @@ export function CompletedPage() {
               value={prFilter}
               onChange={(event) => {
                 setFilters({ prFilter: event.target.value });
+                setResearchPage(0);
                 setRestPage(0);
               }}
             >
@@ -167,6 +178,22 @@ export function CompletedPage() {
           empty={t.completedPage.emptyOpen}
         />
       </section>
+      <section aria-labelledby="completed-research-heading" className="flex flex-col gap-2">
+        <h2 id="completed-research-heading" className="text-base font-semibold">
+          {t.completedPage.research}
+        </h2>
+        <DataTable
+          columns={columns}
+          data={researchRows}
+          getRowId={(task) => task.id}
+          empty={t.completedPage.emptyResearch}
+        />
+        <Pagination
+          page={currentResearchPage}
+          pageCount={researchPageCount}
+          onPageChange={setResearchPage}
+        />
+      </section>
       <details data-testid="completed-rest" className="rounded-md border border-border px-3 py-2">
         <summary className="cursor-pointer text-base font-semibold">
           {t.completedPage.rest(lists.rest.length)}
@@ -178,7 +205,7 @@ export function CompletedPage() {
             getRowId={(task) => task.id}
             empty={t.completedPage.emptyRest}
           />
-          <Pagination page={page} pageCount={pageCount} onPageChange={setRestPage} />
+          <Pagination page={currentRestPage} pageCount={restPageCount} onPageChange={setRestPage} />
         </div>
       </details>
     </div>

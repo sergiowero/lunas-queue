@@ -366,6 +366,8 @@ export const es = {
     noPr: "Sin PR",
     withOpenPr: "Con PR abierto",
     emptyOpen: "No hay tareas completadas con PR abierto.",
+    research: "Investigaciones",
+    emptyResearch: "No hay investigaciones completadas.",
     rest: (count: number) => `Resto (${count})`,
     emptyRest: "No hay otras tareas completadas.",
     pr: "PR",
