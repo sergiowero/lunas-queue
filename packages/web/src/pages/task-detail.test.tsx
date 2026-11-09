@@ -393,6 +393,112 @@ describe("task detail", () => {
     });
   });
 
+  describe("Markdown in the Result", () => {
+    const TABLE = "| Opción | Coste |\n| --- | --- |\n| SQLite | bajo |\n| Postgres | alto |";
+    const render = (result: string) => {
+      const { fake, task } = seeded();
+      Object.assign(task, { state: "completed", subState: null, resultKind: "research", result });
+      renderApp(`/tasks/${task.id}`, fake);
+      return section("Resultado");
+    };
+
+    it("AC-1: a GFM table is rendered with column headers and data cells", async () => {
+      const block = await render(`# Comparativa\n\n${TABLE}`);
+
+      const table = await block.findByRole("table");
+      expect(
+        within(table)
+          .getAllByRole("columnheader")
+          .map((c) => c.textContent),
+      ).toEqual(["Opción", "Coste"]);
+      const rows = within(table).getAllByRole("row");
+      expect(rows).toHaveLength(3);
+      expect(
+        within(rows[1] as HTMLElement)
+          .getAllByRole("cell")
+          .map((c) => c.textContent),
+      ).toEqual(["SQLite", "bajo"]);
+      expect(
+        within(rows[2] as HTMLElement)
+          .getAllByRole("cell")
+          .map((c) => c.textContent),
+      ).toEqual(["Postgres", "alto"]);
+    });
+
+    it("AC-2: an image is rendered with its alt text and src", async () => {
+      const block = await render("![Diagrama](https://example.com/d.png)");
+
+      const img = await block.findByRole("img", { name: "Diagrama" });
+      expect(img.getAttribute("src")).toBe("https://example.com/d.png");
+    });
+
+    it("AC-3: the table scrolls horizontally with bordered, padded cells and the image fits the section", async () => {
+      const block = await render(`${TABLE}\n\n![Diagrama](https://example.com/d.png)`);
+
+      const table = await block.findByRole("table");
+      expect(table.parentElement?.className).toContain("overflow-x-auto");
+      expect(table.className).toContain("border-collapse");
+      const cell = block.getByRole("columnheader", { name: "Opción" });
+      expect(cell.className).toMatch(/\bborder\b/);
+      expect(cell.className).toMatch(/\bpx-\d/);
+      expect(cell.className).toMatch(/\bpy-\d/);
+      expect(block.getByRole("cell", { name: "SQLite" }).className).toMatch(/\bborder\b/);
+      const img = block.getByRole("img", { name: "Diagrama" });
+      expect(img.className).toContain("max-w-full");
+      expect(img.className).toContain("h-auto");
+    });
+
+    it("AC-4: raw HTML is not interpreted", async () => {
+      const block = await render(
+        "Antes\n\n<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n<b>negrita</b>",
+      );
+
+      await block.findByText(/Antes/);
+      const region = screen.getByRole("region", { name: "Resultado" });
+      expect(region.querySelector("script")).toBeNull();
+      expect(region.querySelector("img")).toBeNull();
+      expect(region.querySelector("b")).toBeNull();
+    });
+
+    it("AC-5: an image with a javascript: URL does not keep it as src", async () => {
+      const block = await render(
+        "![malo](javascript:alert(1)) y ![bueno](https://example.com/b.png)",
+      );
+
+      await block.findByRole("img", { name: "bueno" });
+      const region = screen.getByRole("region", { name: "Resultado" });
+      for (const img of Array.from(region.querySelectorAll("img"))) {
+        expect(img.getAttribute("src") ?? "").not.toMatch(/javascript:/i);
+      }
+    });
+
+    it("AC-6: headings and bold text keep rendering next to a table", async () => {
+      const block = await render(`# Hallazgos\n\nSQLite basta para **un** proceso.\n\n${TABLE}`);
+
+      expect(await block.findByRole("heading", { name: "Hallazgos" })).toBeTruthy();
+      expect(block.getByText("un").tagName).toBe("STRONG");
+    });
+  });
+
+  it("AC-7: a GFM table in the evidence is rendered as an HTML table", async () => {
+    const { fake, task } = seeded();
+    fake.evidence.set(
+      task.id,
+      "# Evidencia\n\n| Check | Estado |\n| --- | --- |\n| tests | verde |",
+    );
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const block = await section("Evidencia");
+    await user.click(await block.findByRole("button", { name: "Mostrar evidencia" }));
+
+    const table = await block.findByRole("table");
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((c) => c.textContent),
+    ).toEqual(["Check", "Estado"]);
+    expect(within(table).getByRole("cell", { name: "verde" })).toBeTruthy();
+  });
+
   it("the Evidencia panel starts collapsed and does not show the evidence", async () => {
     const { fake, task } = seeded();
     fake.evidence.set(task.id, "# Evidencia\n\n## Run 1\n\nTodo **verde**.");

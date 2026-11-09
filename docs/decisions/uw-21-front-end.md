@@ -53,6 +53,7 @@ UW-21's criterion is that a task is created and followed end to end without usin
 | `@tanstack/react-table` 8.x | `web` | Chosen in tech-stack; line 8 is pinned because 9 changed its API and 8 is the one the team knows |
 | `class-variance-authority`, `clsx`, `tailwind-merge` | `web` | Standard shadcn/ui utilities for variants and classes |
 | `react-markdown` | `web` | Safe rendering of the evidence file («markdown render» in tech-stack) |
+| `remark-gfm` | `web` | GitHub Flavored Markdown (tables, strikethrough, task lists) in the rendered Result and evidence; raw HTML stays disabled |
 | `@tailwindcss/vite`, `@vitejs/plugin-react` | `web` (dev) | Vite plugins for Tailwind 4 and React |
 | `jsdom`, `@testing-library/react`, `@testing-library/dom`, `@testing-library/user-event` | `web` (dev) | Component and flow tests («Vitest + Testing Library» in tech-stack) |
 

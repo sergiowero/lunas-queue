@@ -92,7 +92,7 @@ Each component of the design is solved with pieces from the same base, with no a
 | Components and styles | shadcn/ui over Tailwind CSS 4 (`class-variance-authority`, `clsx`, `tailwind-merge`) |
 | Tables (queue, backlog, Runs) | TanStack Table 8.x |
 | Spec version diff | Text diff viewer |
-| Handoff and evidence rendering | JSON viewer and markdown rendering (`react-markdown`, no raw HTML) |
+| Handoff and evidence rendering | JSON viewer and markdown rendering (`react-markdown` with `remark-gfm` for tables, no raw HTML) |
 | Internationalization (ES/EN) | Own typed dictionaries in `packages/web/src/lib/dictionary/` and a `lang` attribute on `<html>`; no i18n library ([ADR i18n-es-en](decisions/i18n-es-en.md)) |
 
 ## `lunas-queue` repository structure
