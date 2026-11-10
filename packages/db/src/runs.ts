@@ -21,7 +21,9 @@ import {
   QUESTION_CREATED,
   QuestionCreatedPayload,
   type QuestionOptions,
+  RUN_FAILED,
   type RunResult,
+  RunFailedPayload,
   SchedulablePhase,
   type SchedulerConfig,
   type StatePosition,
@@ -560,29 +562,48 @@ export type CloseRunInput = {
 
 export type FailRunResult = { closed: boolean; transitioned: boolean; task?: TaskRow };
 
-/** Closes the Run if it is still open; false if it was already closed. */
+/**
+ * Closes the Run if it is still open; false if it was already closed. Closing as failure also appends
+ * and publishes `run.failed` in the same transaction, so the event exists exactly once per Run: a repeated
+ * close finds the Run closed and appends nothing.
+ */
 export function closeRun(
   db: Writer,
   runId: string,
   input: CloseRunInput,
   at = new Date(),
 ): boolean {
-  const closed = db
-    .update(runs)
-    .set({
-      endedAt: at,
-      result: input.result,
-      failureReason: input.failureReason ?? null,
-      ...(input.handoff === undefined ? {} : { handoff: input.handoff }),
-      ...(input.session && {
-        agentSession: input.session.value,
-        agentSessionSource: input.session.source,
-      }),
-    })
-    .where(and(eq(runs.id, runId), isNull(runs.endedAt)))
-    .returning({ id: runs.id })
-    .all();
-  return closed.length > 0;
+  return db.transaction((tx) => {
+    const [closed] = tx
+      .update(runs)
+      .set({
+        endedAt: at,
+        result: input.result,
+        failureReason: input.failureReason ?? null,
+        ...(input.handoff === undefined ? {} : { handoff: input.handoff }),
+        ...(input.session && {
+          agentSession: input.session.value,
+          agentSessionSource: input.session.source,
+        }),
+      })
+      .where(and(eq(runs.id, runId), isNull(runs.endedAt)))
+      .returning({ id: runs.id, taskId: runs.taskId, phase: runs.phase })
+      .all();
+    if (!closed) return false;
+    if (input.result === "failure") {
+      const payload = RunFailedPayload.parse({
+        runId: closed.id,
+        phase: closed.phase,
+        reason: (input.failureReason || "unspecified").slice(0, 2000),
+      });
+      appendEvent(
+        tx,
+        { taskId: closed.taskId, type: RUN_FAILED, actor: "system", payload },
+        { publish: true },
+      );
+    }
+    return true;
+  });
 }
 
 /**
