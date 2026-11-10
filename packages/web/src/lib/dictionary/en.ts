@@ -365,6 +365,8 @@ export const en: Dictionary = {
     noPr: "No PR",
     withOpenPr: "With open PR",
     emptyOpen: "There are no completed tasks with an open PR.",
+    research: "Research",
+    emptyResearch: "There are no completed research tasks.",
     rest: (count) => `Rest (${count})`,
     emptyRest: "There are no other completed tasks.",
     pr: "PR",
