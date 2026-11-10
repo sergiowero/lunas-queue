@@ -8,6 +8,7 @@ import {
   TRUST_ACCEPT_KEYS,
 } from "@lunasq/adapters";
 import {
+  appendEvent,
   claimRun,
   closeRun,
   ProjectRepository,
@@ -15,11 +16,20 @@ import {
   RunRepository,
   SettingsRepository,
   TaskWorktreeRepository,
+  transitionTask,
 } from "@lunasq/db";
 import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { agentName, type DispatchDecision, phasePrompt } from "@lunasq/domain";
-import { type Project, SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
+import {
+  HOOK_POINT_COMPLETED,
+  type HookPoint,
+  type Project,
+  RUN_FAILED,
+  SchedulerConfig,
+  type SchedulerConfigInput,
+} from "@lunasq/schemas";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { PhaseHookInput, PhaseHookResult, PhaseHooks } from "../mcp/ports.ts";
 import { Scheduler } from "../scheduler/scheduler.ts";
 import { WorktreeService } from "../worktrees/service.ts";
 import {
@@ -1128,5 +1138,220 @@ describe("PhaseDispatcher with the Scheduler", () => {
     expect(first.dispatched).toHaveLength(1);
     expect(second.dispatched).toEqual([]);
     expect((await herdr.snapshot()).agents).toHaveLength(1);
+  });
+});
+
+describe("PhaseDispatcher: before_refinement and before_implementation hooks", () => {
+  const passed: PhaseHookResult = {
+    outcome: "passed",
+    escalated: false,
+    failedScript: null,
+    error: null,
+  };
+
+  /** A HookService stand-in: records the calls and the herdr agents already started at each one. */
+  function hooksSetup(
+    ctx: ReturnType<typeof setup>,
+    result: (input: PhaseHookInput) => PhaseHookResult = () => passed,
+  ) {
+    const calls: { input: PhaseHookInput; agentsStarted: number }[] = [];
+    const hooks: PhaseHooks = {
+      run: async (input) => {
+        calls.push({ input, agentsStarted: (await ctx.herdr.snapshot()).agents.length });
+        const res = result(input);
+        if (res.outcome === "blocked") {
+          // What HookService does when a point with block policy fails.
+          transitionTask(ctx.db, {
+            taskId: input.taskId,
+            actor: "system",
+            command: { type: "escalate", reason: "hook_failed" },
+          });
+        }
+        return res;
+      },
+    };
+    return { hooks, calls };
+  }
+
+  const blocked: PhaseHookResult = {
+    outcome: "blocked",
+    escalated: true,
+    failedScript: "10-check.sh",
+    error: null,
+  };
+
+  const implement = (task: { id: string; projectId: string }): DispatchDecision => ({
+    ...refine(task),
+    phase: "implement",
+    expected: { state: "in_progress", subState: "queued" },
+  });
+
+  function implementReady(ctx: ReturnType<typeof setup>) {
+    return insertTask(ctx.db, ctx.project.id, { state: "in_progress" });
+  }
+
+  it("runs before_refinement with the Run id before the agent is started and prompted", async () => {
+    const ctx = setup();
+    const { hooks, calls } = hooksSetup(ctx);
+    const dispatcher = ctx.make({ hooks });
+    const task = insertTask(ctx.db, ctx.project.id);
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = ctx.runs.forTask(task.id);
+    expect(calls).toEqual([
+      {
+        input: { taskId: task.id, point: "before_refinement", runId: run?.id },
+        agentsStarted: 0,
+      },
+    ]);
+    expect(await ctx.herdr.readAgent({ name: run?.herdrName ?? "" })).toBe(
+      phasePrompt("refine", task.id),
+    );
+    expect(ctx.errors).toEqual([]);
+  });
+
+  it("runs before_implementation before the implement agent is started", async () => {
+    const ctx = setup();
+    const { hooks, calls } = hooksSetup(ctx);
+    const dispatcher = ctx.make({ hooks });
+    const task = implementReady(ctx);
+
+    await dispatcher.dispatch(implement(task));
+    await dispatcher.idle();
+
+    const [run] = ctx.runs.forTask(task.id);
+    expect(calls).toEqual([
+      {
+        input: { taskId: task.id, point: "before_implementation", runId: run?.id },
+        agentsStarted: 0,
+      },
+    ]);
+    expect((await ctx.herdr.snapshot()).agents).toHaveLength(1);
+  });
+
+  it.each([
+    ["before_refinement", "refine"],
+    ["before_implementation", "implement"],
+  ] as const)(
+    "a blocked %s starts no agent, cancels the Run with hook_blocked and spends no retry",
+    async (point, phase) => {
+      const ctx = setup();
+      const { hooks, calls } = hooksSetup(ctx, () => blocked);
+      const dispatcher = ctx.make({ hooks });
+      const task = phase === "refine" ? insertTask(ctx.db, ctx.project.id) : implementReady(ctx);
+
+      await dispatcher.dispatch(phase === "refine" ? refine(task) : implement(task));
+      await dispatcher.idle();
+
+      const [run] = ctx.runs.forTask(task.id);
+      expect(calls.map((c) => c.input.point)).toEqual([point]);
+      expect(run).toMatchObject({ result: "cancelled" });
+      expect(run?.failureReason).toMatch(/^hook_blocked/);
+      expect(run?.failureReason).toContain("10-check.sh");
+      expect(ctx.taskRow(task.id)).toMatchObject({ state: "needs_human", subState: null });
+      expect((await ctx.herdr.snapshot()).agents).toEqual([]);
+      expect(ctx.runs.consecutiveFailures(task.id, phase)).toBe(0);
+      const failed = ctx.db.$client
+        .prepare("select count(*) as n from events where task_id = ? and type = ?")
+        .get(task.id, RUN_FAILED) as { n: number };
+      expect(failed.n).toBe(0);
+      expect(ctx.errors).toEqual([]);
+    },
+  );
+
+  it("a warned before_implementation still starts and prompts the agent", async () => {
+    const ctx = setup();
+    const { hooks } = hooksSetup(ctx, () => ({ ...passed, outcome: "warned" }));
+    const dispatcher = ctx.make({ hooks });
+    const task = implementReady(ctx);
+
+    await dispatcher.dispatch(implement(task));
+    await dispatcher.idle();
+
+    const [run] = ctx.runs.forTask(task.id);
+    expect(run).toMatchObject({ result: null });
+    expect(run?.launchedAt).toBeInstanceOf(Date);
+    expect(await ctx.herdr.readAgent({ name: run?.herdrName ?? "" })).toBe(
+      phasePrompt("implement", task.id),
+    );
+  });
+
+  it.each(["passed", "warned"] as const)(
+    "a recovered launch does not run again a point that already completed as %s for the Run",
+    async (outcome) => {
+      const ctx = setup();
+      const { hooks, calls } = hooksSetup(ctx);
+      const task = insertTask(ctx.db, ctx.project.id);
+      const claim = claimRun(ctx.db, {
+        decision: refine(task),
+        config: SchedulerConfig.parse({}),
+        projects: new ProjectRepository(ctx.db),
+        sessionId: "sess-crash",
+      });
+      if (!claim.ok) throw new Error(claim.error.message);
+      appendEvent(ctx.db, {
+        taskId: task.id,
+        type: HOOK_POINT_COMPLETED,
+        actor: "system",
+        payload: {
+          point: "before_refinement" satisfies HookPoint,
+          baseRef: "a".repeat(40),
+          runId: claim.run.id,
+          outcome,
+          failedScript: null,
+          error: null,
+          commit: null,
+          commitSkipped: false,
+        },
+      });
+      const restarted = ctx.make({ hooks });
+
+      await restarted.recover();
+      await restarted.idle();
+
+      expect(calls).toEqual([]);
+      expect(ctx.runs.get(claim.run.id)?.launchedAt).toBeInstanceOf(Date);
+      expect((await ctx.herdr.snapshot()).agents).toHaveLength(1);
+    },
+  );
+
+  it("a point that completed for another Run of the task does run for this one", async () => {
+    const ctx = setup();
+    const { hooks, calls } = hooksSetup(ctx);
+    const task = insertTask(ctx.db, ctx.project.id);
+    appendEvent(ctx.db, {
+      taskId: task.id,
+      type: HOOK_POINT_COMPLETED,
+      actor: "system",
+      payload: {
+        point: "before_refinement",
+        baseRef: "a".repeat(40),
+        runId: "another-run",
+        outcome: "passed",
+        failedScript: null,
+        error: null,
+        commit: null,
+        commitSkipped: false,
+      },
+    });
+    const dispatcher = ctx.make({ hooks });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it("a dispatcher without hooks launches as before", async () => {
+    const ctx = setup();
+    const task = insertTask(ctx.db, ctx.project.id);
+
+    await ctx.dispatcher.dispatch(refine(task));
+    await ctx.dispatcher.idle();
+
+    expect(ctx.runs.forTask(task.id)[0]?.launchedAt).toBeInstanceOf(Date);
+    expect(ctx.errors).toEqual([]);
   });
 });

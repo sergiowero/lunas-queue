@@ -1,5 +1,7 @@
 import { agentName } from "@lunasq/domain";
 import {
+  RUN_FAILED,
+  RunFailedPayload,
   SchedulerConfig,
   type SchedulerConfigInput,
   TASK_TRANSITIONED,
@@ -671,5 +673,91 @@ describe("recordVerdict", () => {
       recordVerdict(db, task.id, { ...payload("no-uuid"), riskLabel: "x" } as never),
     ).toThrow();
     expect(db.select().from(tasks).where(eq(tasks.id, task.id)).get()?.riskLabel).toBeNull();
+  });
+});
+
+describe("run.failed", () => {
+  function claimedInProgress() {
+    const ctx = setup();
+    const task = insertTask(ctx.db, ctx.project.id, { state: "in_progress" });
+    const claimOnce = () => {
+      const res = ctx.claim(
+        decisionFor(task, "implement", { state: "in_progress", subState: "queued" }),
+      );
+      if (!res.ok) throw new Error(res.error.message);
+      return res.run;
+    };
+    return { ...ctx, task, claimOnce };
+  }
+  const failedEvents = (ctx: ReturnType<typeof claimedInProgress>) =>
+    ctx.db
+      .select()
+      .from(events)
+      .where(and(eq(events.taskId, ctx.task.id), eq(events.type, RUN_FAILED)))
+      .all();
+  const failedOutbox = (ctx: ReturnType<typeof claimedInProgress>) =>
+    ctx.db
+      .select()
+      .from(outbox)
+      .all()
+      .filter((m) => m.topic === RUN_FAILED);
+
+  it("a Run closed as failure appends and publishes run.failed with its id, phase and reason", () => {
+    const ctx = claimedInProgress();
+    const run = ctx.claimOnce();
+
+    ctx.runs.close(run.id, { result: "failure", failureReason: "pane cerrado" });
+
+    expect(failedEvents(ctx).map((e) => RunFailedPayload.parse(e.payload))).toEqual([
+      { runId: run.id, phase: "implement", reason: "pane cerrado" },
+    ]);
+    expect(failedOutbox(ctx)).toHaveLength(1);
+  });
+
+  it("RunRepository.fail emits it once, also when it exhausts the retries", () => {
+    const ctx = claimedInProgress();
+    const run = ctx.claimOnce();
+
+    ctx.runs.fail(run.id, "dispatch never launched", { providersUnavailable: true });
+
+    expect(failedEvents(ctx).map((e) => RunFailedPayload.parse(e.payload).reason)).toEqual([
+      "dispatch never launched",
+    ]);
+  });
+
+  it.each([
+    [
+      "success",
+      (ctx: ReturnType<typeof claimedInProgress>, id: string) =>
+        ctx.runs.close(id, { result: "success" }),
+    ],
+    [
+      "cancelled",
+      (ctx: ReturnType<typeof claimedInProgress>, id: string) =>
+        ctx.runs.close(id, { result: "cancelled", failureReason: "hook_blocked" }),
+    ],
+    [
+      "paused",
+      (ctx: ReturnType<typeof claimedInProgress>, id: string) =>
+        ctx.runs.pause(id, "all providers are disabled in Settings"),
+    ],
+  ])("a Run closed as %s does not emit run.failed", (_name, close) => {
+    const ctx = claimedInProgress();
+
+    close(ctx, ctx.claimOnce().id);
+
+    expect(failedEvents(ctx)).toEqual([]);
+    expect(failedOutbox(ctx)).toEqual([]);
+  });
+
+  it("closing or failing a Run that already failed does not append a second one", () => {
+    const ctx = claimedInProgress();
+    const run = ctx.claimOnce();
+
+    ctx.runs.close(run.id, { result: "failure", failureReason: "primero" });
+    ctx.runs.close(run.id, { result: "failure", failureReason: "segundo" });
+    ctx.runs.fail(run.id, "tercero");
+
+    expect(failedEvents(ctx)).toHaveLength(1);
   });
 });

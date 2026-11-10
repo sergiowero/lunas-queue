@@ -35,10 +35,13 @@
 - **`MCP_TOOL_TIMEOUT`.** `submit_for_verification` runs the test gate inside the call (20 min by default). The dispatcher sets `MCP_TOOL_TIMEOUT` in the pane to that timeout plus 5 minutes (`DEFAULT_MCP_TOOL_TIMEOUT_MS`); `paneEnv` can change it.
 - **Migration 0004 edited by hand.** It goes after UW-15's `0003_runs_context_read`. drizzle-kit recreated `runs` copying nonexistent columns, and the `DROP` would have cascade-deleted the `usage_records`. `ADD COLUMN` with CHECK is used, as in 0002.
 
+- **`before_refinement` and `before_implementation`.** `PhaseDispatcher` takes an optional `hooks` port (`PhaseHooks`, implemented by `HookService`) and runs the phase's point in `launchSteps`, after the worktree is ensured and before any agent or pane is started; verify Runs have no `before_*` here (`before_verification` belongs to the MCP, `before_delivery` to delivery). A point that already completed as `passed` or `warned` for the same Run (a `hook.point_completed` with that `runId`) is not run again when `recover` resumes the launch. If the point is `blocked`, `HookService` has already escalated the task to `needs_human` with `hook_failed`; the dispatcher closes the Run as `cancelled` with a `hook_blocked: …` reason, so it is not a failure: no `run.failed`, no `run_failed` transition and no retry consumed. Without the port (tests, other compositions) the points are not run.
+- **Composition.** `HookService` needs `orchestrator.worktrees`, so `runtime.ts` passes the `Orchestrator` a `phaseHooks` port that delegates to the `HookService` built right after it.
+
 ## Consequences
 
 - **UW-15**: no changes to its tools. They close the Run and the dispatcher cleans up the pane on seeing the transition through the outbox, so the `OutboxPublisher` must be running alongside the `Orchestrator`.
-- **UW-10**: the `before_*` points on dispatch and `on_failure` when a Run fails do not yet call `HookService.run`. They remain pending in this unit or another.
+- **UW-10**: the `before_refinement` and `before_implementation` points are connected (see Decision); `on_failure` hangs from the `run.failed` event that closing a Run as failure emits (ADR uw-10-hooks).
 - **UW-17**: implements `RunObserver` (per‑pane subscription, phase timeout) and uses `failRun` on a crash. Reconciliation can rely on `RunRepository.active()` and on `launch` to relaunch.
 - **UW-28**: chooses the MCP file's path and the server's URL and passes them to the `Orchestrator`. `doctor` can warn if the trust dialog changed its text, because then the dispatcher would fail with `agent_blocked`.
 - **Known window:** if the process crashes between `promptAgent` and `launched_at` while the agent is still `idle`, `recover` repeats the prompt. With Claude Code the agent goes to `working` immediately, so the window is minimal.

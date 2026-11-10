@@ -19,6 +19,7 @@ import {
   TASK_TRANSITIONED,
   TaskTransitionedPayload,
 } from "@lunasq/schemas";
+import type { PhaseHooks } from "../mcp/ports.ts";
 import type { Escalator } from "../notifications/escalator.ts";
 import { createNotifications } from "../notifications/index.ts";
 import type { OutboxPublisher } from "../outbox/publisher.ts";
@@ -53,6 +54,12 @@ export interface OrchestratorOptions {
   observer?: RunObserver;
   /** Evidence file: updated when each Run closes, also those the MCP closes. */
   evidence?: RunEvidenceSink;
+  /**
+   * Hooks the dispatcher runs before starting the agent of a refine or implement Run
+   * (`before_refinement`, `before_implementation`). HookService needs `orchestrator.worktrees`, so
+   * whoever composes it passes a port that delegates to it once it exists.
+   */
+  phaseHooks?: PhaseHooks;
   /**
    * Notices to the human: blocked, timeout, exhausted retries and loops. Without this, the notifications
    * module is built with herdr as the channel (`notifications` exposes it to mount the SSE).
@@ -132,6 +139,7 @@ export class Orchestrator {
       hookSettingsPath: opts.hooks.settingsPath,
       observer: opts.observer ?? this.watcher,
       ...(opts.evidence && { evidence: opts.evidence }),
+      ...(opts.phaseHooks && { hooks: opts.phaseHooks }),
       ...(opts.config && { config: opts.config }),
       ...(opts.paneEnv && { paneEnv: opts.paneEnv }),
       ...(opts.onDispatchError && { onError: opts.onDispatchError }),

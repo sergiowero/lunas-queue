@@ -304,10 +304,16 @@ export class LunasqMcpService {
     return { ok: true, data: context };
   }
 
-  submitSpec(run: RunRow, input: unknown): Outcome<{ specVersion: number }> {
+  async submitSpec(run: RunRow, input: unknown): Promise<Outcome<{ specVersion: number }>> {
     const parsed = this.#parse(run, input, "refinement");
     if (!parsed.ok) return parsed;
     const { assumptions: _assumptions, title, ...content } = parsed.data.body;
+    // After a blocked hook the task already escalated: a retry does not run the hooks again.
+    const moved = notRunning(this.#taskAndProject(run).task, "draft");
+    if (moved) return moved;
+    // The hooks see the validated handoff and run before the spec is recorded: if they block, nothing is.
+    const blocked = await this.#gated(run, () => this.#runHooks(run, "after_refinement"));
+    if (blocked) return blocked;
     return this.#write((tx) => {
       this.#close(tx, run, { result: "success", handoff: parsed.data });
       const result = this.#specs.applySubmit(tx, run.taskId, content);

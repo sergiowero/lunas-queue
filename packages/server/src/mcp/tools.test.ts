@@ -232,6 +232,68 @@ describe("submit_spec", () => {
     expect(listEvents(h.db, task.id).filter((e) => e.type === "task.titled")).toHaveLength(1);
   });
 
+  it("AC-7: after_refinement runs with the Run before the spec is recorded, then the task waits for approval", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("refine", refining, { approved: false });
+    const specs = new SpecRepository(h.db);
+    const taskId = task.id;
+    const specsWhenHookRan: number[] = [];
+    h.phaseHooks.onRun = () => {
+      specsWhenHookRan.push(specs.list(taskId)?.length ?? -1);
+    };
+
+    const result = await call("submit_spec", { handoff: handoffFor("refinement", run) });
+
+    expect(result).toEqual({ isError: false, body: { specVersion: 1 } });
+    expect(h.phaseHooks.calls).toEqual([
+      { taskId: task.id, point: "after_refinement", runId: run.id },
+    ]);
+    expect(specsWhenHookRan).toEqual([0]);
+    expect(h.taskOf(task.id)).toMatchObject({ state: "refined", subState: null });
+  });
+
+  it("AC-8: a blocked after_refinement answers hook_blocked and records no spec", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("refine", refining, { approved: false });
+    h.phaseHooks.results.after_refinement = {
+      outcome: "blocked",
+      escalated: true,
+      failedScript: "10-lint",
+      error: "spec lint failed",
+    };
+    // Like HookService: the blocked point escalates the task; the Run stays open.
+    h.phaseHooks.onRun = () =>
+      setTaskPosition(h.db, task.id, { state: "needs_human", subState: null });
+    const handoff = handoffFor("refinement", run);
+
+    const result = await call("submit_spec", { handoff });
+    const retry = await call("submit_spec", { handoff });
+
+    expect(result.body).toMatchObject({
+      error: "hook_blocked",
+      message: expect.stringContaining("needs_human"),
+      output: "spec lint failed",
+    });
+    expect(new SpecRepository(h.db).list(task.id)).toEqual([]);
+    expect(h.taskOf(task.id)).toMatchObject({ state: "needs_human", subState: null });
+    expect(runOf(h, run.id)?.endedAt).toBeNull();
+    // A retry finds the task escalated and does not run the hooks again.
+    expect(retry.body).toMatchObject({ error: "transition_rejected" });
+    expect(h.phaseHooks.calls).toHaveLength(1);
+  });
+
+  it("AC-9: an invalid handoff does not run after_refinement", async () => {
+    const h = mcpHarness();
+    const { run, call } = await h.ready("refine", refining, { approved: false });
+    const handoff = handoffFor("refinement", run);
+    handoff.body = { ...handoff.body, criteria: [] };
+
+    const result = await call("submit_spec", { handoff });
+
+    expect(result.body).toMatchObject({ error: "invalid_handoff" });
+    expect(h.phaseHooks.calls).toEqual([]);
+  });
+
   it("a handoff without a title is rejected", async () => {
     const h = mcpHarness();
     const { run, call } = await h.ready("refine", refining, { approved: false });

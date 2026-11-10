@@ -292,7 +292,7 @@ Each project can configure commands that LunasQ runs at the start and at the end
 | `before_verification` / `after_verification` | On receiving `submit_for_verification`, after `after_implementation` and before the gate, so the verifier is dispatched once it finished / on receiving `submit_verdict`, before recording the verdict | Deploy to an ephemeral environment for the UI and UX reviewers; coverage report |
 | `before_delivery` / `after_delivery` | Before the rebase, push and PR / after creating the PR | Version bump and changelog before the push; announce in a channel that there is a PR |
 | `after_merge` | When LunasQ detects the PR merged | Deploy to staging or production, publish release |
-| `on_failure` | When a Run ends unsuccessfully | Collect logs, notify through another channel |
+| `on_failure` | When a Run ends unsuccessfully (closed with result `failure`: `report_failure`, launch error, dead pane, phase timeout, no provider); never for a successful or cancelled Run. Its failure is only recorded | Collect logs, notify through another channel |
 
 **Where they are defined**
 

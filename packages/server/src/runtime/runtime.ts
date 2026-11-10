@@ -31,6 +31,7 @@ import { EvidenceService } from "../evidence/service.ts";
 import { AgentReviewerTranscriptSource, ClaudeTranscriptSource } from "../evidence/sources.ts";
 import { PrPoller } from "../github/poller.ts";
 import { subscribeAfterMergeHooks } from "../hooks/after-merge.ts";
+import { subscribeOnFailureHooks } from "../hooks/on-failure.ts";
 import { HookService } from "../hooks/service.ts";
 import { CodexCliReviewerExecutor } from "../mcp/codex-reviewer.ts";
 import { CopilotCliReviewerExecutor } from "../mcp/copilot-reviewer.ts";
@@ -68,6 +69,8 @@ export interface RuntimeOptions {
     git?: GitAdapter;
     processes?: ProcessRunner;
   };
+  /** Where the hook scripts run; by default, a pane of the task's workspace. Tests inject a fake. */
+  hookRunnerFor?: (parentPaneId: string) => ProcessRunner;
   log?: (message: string) => void;
 }
 
@@ -176,6 +179,9 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     hooks: { settingsPath: opts.hookSettingsPath, url: urls.hooks },
     publisher,
     paneEnv,
+    // HookService needs the orchestrator's worktrees, so it is built right after: the dispatcher only
+    // calls it from a launch, never while composing.
+    phaseHooks: { run: (input) => hooks.run(input) },
     ...(opts.scheduler && { config: opts.scheduler }),
     onDispatchError: (error, runId) => log(`dispatcher: run ${runId}: ${error.message}`),
     onSchedulerError: (error) => log(`scheduler: ${error.message}`),
@@ -189,6 +195,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     projects: new ProjectRepository(db),
     tasks: new TaskWorktreeRepository(db),
     worktrees: orchestrator.worktrees,
+    ...(opts.hookRunnerFor && { runnerFor: opts.hookRunnerFor }),
   });
   const testGate = new PaneTestGate({ db, git, herdr, worktrees: orchestrator.worktrees });
   const app = createApp({
@@ -221,6 +228,11 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     hooks,
     onError: (error, taskId) => log(`after_merge: ${taskId}: ${error.message}`),
   });
+  const unsubscribeOnFailure = subscribeOnFailureHooks({
+    publisher,
+    hooks,
+    onError: (error, taskId) => log(`on_failure: ${taskId}: ${error.message}`),
+  });
 
   // Delivery runs inside the verifier's Run when it records a pass (ADR uw-26-entrega).
   const delivery = new DeliveryService({
@@ -247,6 +259,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     poller,
     delivery,
     unsubscribeAfterMerge,
+    unsubscribeOnFailure,
     unsubscribeDelivery,
   };
 }
@@ -287,6 +300,7 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
     poller,
     delivery,
     unsubscribeAfterMerge,
+    unsubscribeOnFailure,
     unsubscribeDelivery,
   } = parts;
   // env carries the connection (incoming): without forwarding it, the loopback guard does not see the peer.
@@ -296,6 +310,7 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
   const stop = () => {
     stopping ??= (async () => {
       unsubscribeAfterMerge();
+      unsubscribeOnFailure();
       unsubscribeDelivery();
       await poller.stop();
       await orchestrator.stop();

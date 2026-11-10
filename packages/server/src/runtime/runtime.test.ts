@@ -2,9 +2,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { request } from "node:http";
 import { networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
-import { FakeGit, FakeGitHub, FakeHerdr, FakeProcessRunner } from "@lunasq/adapters";
-import { createQuestion, openDatabase, RunRepository } from "@lunasq/db";
+import { FakeGit, FakeGitHub, FakeHerdr, FakeProcessRunner, type FakeTree } from "@lunasq/adapters";
+import { createQuestion, listEvents, openDatabase, RunRepository } from "@lunasq/db";
 import { insertProject, insertRun, insertTask } from "@lunasq/db/test-helpers";
+import { taskBranch } from "@lunasq/domain";
+import { HOOK_POINT_COMPLETED } from "@lunasq/schemas";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SUBAGENT_HOOK_PATH } from "../subagents/routes.ts";
 import { prepareDatabase, type RuntimeOptions, startRuntime, telemetryEnv } from "./runtime.ts";
@@ -30,6 +32,58 @@ function options(overrides: Partial<RuntimeOptions> = {}): RuntimeOptions & { di
       processes: new FakeProcessRunner(),
     },
     ...overrides,
+  };
+}
+
+/** The project's base branch on the (fake) remote, where the hooks of each point are read from. */
+function seedBase(
+  opts: RuntimeOptions,
+  project: { localPath: string; baseBranch: string },
+  tree: FakeTree = {},
+) {
+  const git = opts.adapters?.git as FakeGit;
+  git.addCheckout(project.localPath, { branch: project.baseBranch, tree });
+}
+
+/** An executable hook script that succeeds, as the base branch holds it. */
+const hookScript = { content: "#!/bin/sh\nexit 0\n", executable: true };
+
+/**
+ * A runtime over fakes whose project has one hook script at `point` on its base branch, the task's
+ * worktree checkout in the fake git, and a fake runner for the scripts (the fake herdr's worktree path is not a
+ * real directory).
+ */
+function hookedRuntime(point: string) {
+  const runner = new FakeProcessRunner();
+  const opts = options({ hookRunnerFor: () => runner });
+  const seed = prepareDatabase(opts.dbPath);
+  const project = insertProject(seed);
+  const tree = { [`lunasq/hooks/${point}/10-script`]: hookScript };
+  seedBase(opts, project, tree);
+  const created = insertTask(seed, project.id);
+  seed.$client.close();
+  const git = opts.adapters?.git as FakeGit;
+  git.addCheckout(`~/.herdr/worktrees/${taskBranch(created.id).replaceAll("/", "-")}`, {
+    branch: taskBranch(created.id),
+    tree,
+  });
+  let db: ReturnType<typeof openDatabase> | undefined;
+  const open = () => {
+    if (!db) {
+      const opened = openDatabase(opts.dbPath);
+      db = opened;
+      cleanups.push(() => {
+        opened.$client.close();
+      });
+    }
+    return db;
+  };
+  return {
+    opts,
+    runner,
+    task: () => created,
+    db: open,
+    runs: () => new RunRepository(open()),
   };
 }
 
@@ -143,7 +197,9 @@ describe("startRuntime", () => {
   it("passes telemetry to each pane's environment unless it is turned off", async () => {
     const opts = options();
     const seed = prepareDatabase(opts.dbPath);
-    const task = insertTask(seed, insertProject(seed).id);
+    const project = insertProject(seed);
+    seedBase(opts, project);
+    const task = insertTask(seed, project.id);
     seed.$client.close();
     const herdr = opts.adapters?.herdr as FakeHerdr;
 
@@ -182,6 +238,7 @@ describe("startRuntime", () => {
     const opts = options();
     const seed = prepareDatabase(opts.dbPath);
     const project = insertProject(seed);
+    seedBase(opts, project);
     const task = insertTask(seed, project.id);
     const waiting = insertTask(seed, project.id, {
       state: "in_progress",
@@ -226,7 +283,9 @@ describe("startRuntime", () => {
   it("focuses in herdr the agent of a Run dispatched from the Runs table", async () => {
     const opts = options();
     const seed = prepareDatabase(opts.dbPath);
-    const task = insertTask(seed, insertProject(seed).id);
+    const project = insertProject(seed);
+    seedBase(opts, project);
+    const task = insertTask(seed, project.id);
     seed.$client.close();
     const herdr = opts.adapters?.herdr as FakeHerdr;
     const runtime = await start(opts);
@@ -241,6 +300,40 @@ describe("startRuntime", () => {
     const res = await fetch(`${runtime.url}/api/runs/${run?.id}/focus`, { method: "POST" });
     expect(res.status).toBe(204);
     expect(herdr.focused).toBe(run?.herdrName);
+  });
+
+  it("runs the project's before_refinement hooks with the Run id before the agent is started", async () => {
+    const { opts, runner, task, runs, db } = hookedRuntime("before_refinement");
+    await start(opts);
+
+    await vi.waitFor(() => expect(runs().forTask(task().id)[0]?.herdrPane).toBeTruthy());
+    const run = runs().forTask(task().id)[0];
+
+    expect(runner.calls).toHaveLength(1);
+    expect(runner.calls[0]?.env).toMatchObject({
+      LUNASQ_HOOK_POINT: "before_refinement",
+      LUNASQ_RUN_ID: run?.id,
+    });
+    const point = listEvents(db(), task().id).find((e) => e.type === HOOK_POINT_COMPLETED);
+    expect(point?.payload).toMatchObject({ point: "before_refinement", runId: run?.id });
+  });
+
+  it("a Run that fails runs the project's on_failure hooks with its id and reason", async () => {
+    const { opts, runner, task, runs } = hookedRuntime("on_failure");
+    await start(opts);
+    await vi.waitFor(() => expect(runs().forTask(task().id)[0]?.herdrPane).toBeTruthy());
+    const run = runs().forTask(task().id)[0];
+    expect(runner.calls).toHaveLength(0);
+
+    runs().fail(run?.id as string, "the agent crashed");
+
+    // The outbox publisher polls once a second.
+    await vi.waitFor(() => expect(runner.calls).toHaveLength(1), { timeout: 5_000 });
+    expect(runner.calls[0]?.env).toMatchObject({
+      LUNASQ_HOOK_POINT: "on_failure",
+      LUNASQ_RUN_ID: run?.id,
+      LUNASQ_PHASE_RESULT: "the agent crashed",
+    });
   });
 
   it("stop closes the server and is idempotent", async () => {
