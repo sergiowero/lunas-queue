@@ -235,9 +235,11 @@ describe("submit_spec", () => {
   it("AC-7: after_refinement runs with the Run before the spec is recorded, then the task waits for approval", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("refine", refining, { approved: false });
+    const specs = new SpecRepository(h.db);
+    const taskId = task.id;
     const specsWhenHookRan: number[] = [];
     h.phaseHooks.onRun = () => {
-      specsWhenHookRan.push(new SpecRepository(h.db).list(task.id).length);
+      specsWhenHookRan.push(specs.list(taskId)?.length ?? -1);
     };
 
     const result = await call("submit_spec", { handoff: handoffFor("refinement", run) });
