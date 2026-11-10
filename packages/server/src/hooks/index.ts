@@ -1,4 +1,5 @@
 export { type AfterMergeHooksOptions, subscribeAfterMergeHooks } from "./after-merge.ts";
+export { type OnFailureHooksOptions, subscribeOnFailureHooks } from "./on-failure.ts";
 export {
   HookError,
   type HookErrorCode,
