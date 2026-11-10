@@ -430,6 +430,9 @@ describe("task detail", () => {
 
       const img = await block.findByRole("img", { name: "Diagrama" });
       expect(img.getAttribute("src")).toBe("https://example.com/d.png");
+      // The custom img component (not the bare default element) is applied.
+      expect(img.className).toContain("max-w-full");
+      expect(img.className).toContain("h-auto");
     });
 
     it("AC-3: the table scrolls horizontally with bordered, padded cells and the image fits the section", async () => {
@@ -448,35 +451,43 @@ describe("task detail", () => {
       expect(img.className).toContain("h-auto");
     });
 
-    it("AC-4: raw HTML is not interpreted", async () => {
+    it("AC-4: raw HTML is not interpreted, not even inside a GFM table", async () => {
       const block = await render(
-        "Antes\n\n<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n<b>negrita</b>",
+        "Antes\n\n<script>alert(1)</script>\n\n<img src=x onerror=alert(1)>\n\n<b>negrita</b>\n\n| Celda |\n| --- |\n| <script>alert(2)</script><b>dentro</b> |",
       );
 
-      await block.findByText(/Antes/);
+      // The table only exists with GFM, so this proves the guard holds on the new rendering path.
+      const table = await block.findByRole("table");
       const region = screen.getByRole("region", { name: "Resultado" });
       expect(region.querySelector("script")).toBeNull();
       expect(region.querySelector("img")).toBeNull();
       expect(region.querySelector("b")).toBeNull();
+      expect(within(table).getByRole("cell").querySelector("*")).toBeNull();
     });
 
     it("AC-5: an image with a javascript: URL does not keep it as src", async () => {
       const block = await render(
-        "![malo](javascript:alert(1)) y ![bueno](https://example.com/b.png)",
+        "| Imagen |\n| --- |\n| ![malo](javascript:alert(1)) |\n| ![bueno](https://example.com/b.png) |",
       );
 
-      await block.findByRole("img", { name: "bueno" });
-      const region = screen.getByRole("region", { name: "Resultado" });
-      for (const img of Array.from(region.querySelectorAll("img"))) {
-        expect(img.getAttribute("src") ?? "").not.toMatch(/javascript:/i);
-      }
+      const malo = await block.findByRole("img", { name: "malo" });
+      expect(malo.getAttribute("src") ?? "").not.toMatch(/javascript:/i);
+      expect(malo.className).toContain("max-w-full");
+      const bueno = block.getByRole("img", { name: "bueno" });
+      expect(bueno.getAttribute("src")).toBe("https://example.com/b.png");
+      // Inside a GFM table: only rendered as images with the new GFM + img handling.
+      expect(within(block.getByRole("table")).getAllByRole("img")).toHaveLength(2);
     });
 
-    it("AC-6: headings and bold text keep rendering next to a table", async () => {
-      const block = await render(`# Hallazgos\n\nSQLite basta para **un** proceso.\n\n${TABLE}`);
+    it("AC-6: headings and bold text keep rendering, also inside a GFM table", async () => {
+      const block = await render(
+        "# Hallazgos\n\nSQLite basta para **un** proceso.\n\n| Opción | Nota |\n| --- | --- |\n| SQLite | **recomendada** |",
+      );
 
       expect(await block.findByRole("heading", { name: "Hallazgos" })).toBeTruthy();
       expect(block.getByText("un").tagName).toBe("STRONG");
+      const cell = within(block.getByRole("table")).getByRole("cell", { name: "recomendada" });
+      expect(cell.querySelector("strong")?.textContent).toBe("recomendada");
     });
   });
 
