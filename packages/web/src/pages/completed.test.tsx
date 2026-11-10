@@ -338,6 +338,25 @@ describe("Completed tab", () => {
       expect(restSummary().textContent).toBe("Resto (4)");
     });
 
+    it("AC-1: a research task with an open PR appears only in the research section", async () => {
+      const fake = seedMixed();
+      const project = fake.addProject({ name: "dos" });
+      fake.addTask(project.id, {
+        ...completed,
+        goal: "Investigación con PR abierto",
+        resultKind: "research",
+        result: "# Hallazgos",
+        prUrl: "https://github.com/o/r/pull/9",
+        prState: "open",
+      });
+      renderApp("/completed", fake);
+
+      await screen.findByText("Con open");
+      expect(researchList().getByText("Investigación con PR abierto")).toBeTruthy();
+      expect(openList().queryByText("Investigación con PR abierto")).toBeNull();
+      expect(within(rest()).queryByText("Investigación con PR abierto")).toBeNull();
+    });
+
     it("AC-2: the rest section starts collapsed and the first list is visible", async () => {
       renderApp("/completed", seedMixed());
 
