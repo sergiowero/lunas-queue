@@ -26,6 +26,7 @@ import {
   claimRun,
   type FailRunResult,
   type LunasqDatabase,
+  listEvents,
   ProjectRepository,
   type ProviderSettingsReader,
   RunRepository,
@@ -46,6 +47,9 @@ import {
 } from "@lunasq/domain";
 import {
   type AgentKind,
+  HOOK_POINT_COMPLETED,
+  type HookPoint,
+  HookPointCompletedPayload,
   type Project,
   type SchedulablePhase,
   SchedulablePhase as SchedulablePhaseSchema,
@@ -53,7 +57,7 @@ import {
   type SchedulerConfigInput,
   taskLabel,
 } from "@lunasq/schemas";
-import { DEFAULT_GATE_TIMEOUT_MS } from "../mcp/ports.ts";
+import { DEFAULT_GATE_TIMEOUT_MS, type PhaseHooks } from "../mcp/ports.ts";
 import type { Dispatcher } from "../scheduler/scheduler.ts";
 import { KeyedLock } from "../worktrees/keyed-lock.ts";
 import { isWorktreeError, type WorktreeService } from "../worktrees/service.ts";
@@ -132,6 +136,11 @@ export interface PhaseDispatcherOptions {
   observer?: RunObserver;
   /** Without it no evidence is written. A failure writing it is reported in `onError`. */
   evidence?: RunEvidenceSink;
+  /**
+   * Runs the `before_refinement` and `before_implementation` points before the agent of the Run is
+   * started. Without it those points are not run (the verify and deliver ones belong to the MCP and delivery).
+   */
+  hooks?: PhaseHooks;
   newSessionId?: () => string;
   startTimeoutMs?: number;
   trustTimeoutMs?: number;
@@ -152,6 +161,7 @@ export class PhaseDispatcher implements Dispatcher {
   private readonly paneEnv: Record<string, string>;
   private readonly observer: RunObserver | undefined;
   private readonly evidence: RunEvidenceSink | undefined;
+  private readonly hooks: PhaseHooks | undefined;
   private readonly newSessionId: () => string;
   private readonly startTimeoutMs: number;
   private readonly trustTimeoutMs: number;
@@ -181,6 +191,7 @@ export class PhaseDispatcher implements Dispatcher {
     };
     this.observer = opts.observer;
     this.evidence = opts.evidence;
+    this.hooks = opts.hooks;
     this.newSessionId = opts.newSessionId ?? randomUUID;
     this.startTimeoutMs = opts.startTimeoutMs ?? DEFAULT_START_TIMEOUT_MS;
     this.trustTimeoutMs = opts.trustTimeoutMs ?? DEFAULT_TRUST_TIMEOUT_MS;
@@ -352,6 +363,8 @@ export class PhaseDispatcher implements Dispatcher {
     const { task, project } = this.taskAndProject(initial.taskId);
     const worktree = await this.worktrees.ensure(initial.taskId);
     let run = this.checkOpen(initial.id);
+    await this.runBeforeHooks(phase, run);
+    run = this.checkOpen(run.id);
 
     let agent = await this.herdr.getAgent(name);
     if (agent && !this.owns(run, agent)) {
@@ -406,6 +419,39 @@ export class PhaseDispatcher implements Dispatcher {
     this.checkOpen(run.id);
     this.observer?.watch(launched, agent);
     return launched;
+  }
+
+  /**
+   * Runs the phase's `before_*` point before the agent is started. A point that already completed without
+   * blocking for this Run is not run again (resumed launch). If it blocks, HookService already escalated the
+   * task: the Run is closed as cancelled, so it is not a failure and uses up no retry, and the launch stops.
+   */
+  private async runBeforeHooks(phase: SchedulablePhase, run: RunRow): Promise<void> {
+    const point = BEFORE_POINTS[phase];
+    if (!this.hooks || !point || this.pointCompleted(run, point)) return;
+    const result = await this.hooks.run({ taskId: run.taskId, point, runId: run.id });
+    if (result.outcome !== "blocked") return;
+    const where = result.failedScript ? ` in ${result.failedScript}` : "";
+    const detail = result.error ? `: ${result.error}` : "";
+    await this.closeRun(run.id, {
+      result: "cancelled",
+      failureReason: `hook_blocked: ${point}${where}${detail}`.slice(0, 2_000),
+    });
+    throw new RunClosed();
+  }
+
+  /** The point already completed for this Run as passed or warned (hook.point_completed). */
+  private pointCompleted(run: RunRow, point: HookPoint): boolean {
+    return listEvents(this.db, run.taskId).some((event) => {
+      if (event.type !== HOOK_POINT_COMPLETED) return false;
+      const payload = HookPointCompletedPayload.safeParse(event.payload);
+      return (
+        payload.success &&
+        payload.data.point === point &&
+        payload.data.runId === run.id &&
+        payload.data.outcome !== "blocked"
+      );
+    });
   }
 
   private taskAndProject(taskId: string): { task: TaskWorktreeRecord; project: Project } {
@@ -713,6 +759,12 @@ export class PhaseDispatcher implements Dispatcher {
     if (ours) await this.herdr.closePane(pane.paneId);
   }
 }
+
+/** Hook point that runs before the agent of each phase is started; verify and deliver have none here. */
+const BEFORE_POINTS: Partial<Record<SchedulablePhase, HookPoint>> = {
+  refine: "before_refinement",
+  implement: "before_implementation",
+};
 
 /** The Run was closed while launching: the launch stops without failing it. */
 class RunClosed extends Error {}
