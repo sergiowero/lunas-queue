@@ -33,6 +33,15 @@ function options(overrides: Partial<RuntimeOptions> = {}): RuntimeOptions & { di
   };
 }
 
+/** The project's base branch on the (fake) remote, where the hooks of each point are read from. */
+function seedBase(opts: RuntimeOptions, project: { localPath: string; baseBranch: string }) {
+  const git = opts.adapters?.git as FakeGit;
+  git.addCheckout(project.localPath, {
+    branch: project.baseBranch,
+    tree: {},
+  });
+}
+
 async function start(opts: RuntimeOptions) {
   const runtime = await startRuntime(opts);
   cleanups.push(() => runtime.stop());
@@ -143,7 +152,9 @@ describe("startRuntime", () => {
   it("passes telemetry to each pane's environment unless it is turned off", async () => {
     const opts = options();
     const seed = prepareDatabase(opts.dbPath);
-    const task = insertTask(seed, insertProject(seed).id);
+    const project = insertProject(seed);
+    seedBase(opts, project);
+    const task = insertTask(seed, project.id);
     seed.$client.close();
     const herdr = opts.adapters?.herdr as FakeHerdr;
 
@@ -182,6 +193,7 @@ describe("startRuntime", () => {
     const opts = options();
     const seed = prepareDatabase(opts.dbPath);
     const project = insertProject(seed);
+    seedBase(opts, project);
     const task = insertTask(seed, project.id);
     const waiting = insertTask(seed, project.id, {
       state: "in_progress",
@@ -226,7 +238,9 @@ describe("startRuntime", () => {
   it("focuses in herdr the agent of a Run dispatched from the Runs table", async () => {
     const opts = options();
     const seed = prepareDatabase(opts.dbPath);
-    const task = insertTask(seed, insertProject(seed).id);
+    const project = insertProject(seed);
+    seedBase(opts, project);
+    const task = insertTask(seed, project.id);
     seed.$client.close();
     const herdr = opts.adapters?.herdr as FakeHerdr;
     const runtime = await start(opts);

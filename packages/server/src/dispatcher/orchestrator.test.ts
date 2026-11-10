@@ -15,6 +15,7 @@ import {
 import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { type Notification, SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { PhaseHookInput, PhaseHooks } from "../mcp/ports.ts";
 import { Escalator } from "../notifications/escalator.ts";
 import { OutboxPublisher } from "../outbox/publisher.ts";
 import type { RunEvidenceSink } from "./dispatcher.ts";
@@ -32,6 +33,7 @@ function setup(
     herdr?: FakeHerdr;
     escalationDelayMs?: number;
     evidence?: RunEvidenceSink;
+    phaseHooks?: PhaseHooks;
   } = {},
 ) {
   const db = opts.db ?? migratedDatabase();
@@ -61,6 +63,7 @@ function setup(
     publisher,
     notifications: { notify, escalator },
     ...(opts.evidence && { evidence: opts.evidence }),
+    ...(opts.phaseHooks && { phaseHooks: opts.phaseHooks }),
     config: { tickIntervalMs: 60_000, ...opts.config },
   });
   cleanups.push(() => orchestrator.stop());
@@ -83,6 +86,24 @@ describe("Orchestrator", () => {
     const [run] = new RunRepository(db).forTask(task.id);
     expect(run?.launchedAt).toBeInstanceOf(Date);
     expect((await herdr.snapshot()).agents.map((a) => a.name)).toEqual([run?.herdrName]);
+  });
+
+  it("the dispatcher runs the phase hooks it was composed with before starting the agent", async () => {
+    const calls: PhaseHookInput[] = [];
+    const phaseHooks: PhaseHooks = {
+      run: async (input) => {
+        calls.push(input);
+        return { outcome: "passed", escalated: false, failedScript: null, error: null };
+      },
+    };
+    const { db, orchestrator, project } = setup({ phaseHooks });
+    const task = insertTask(db, project.id);
+
+    await orchestrator.start();
+    await orchestrator.dispatcher.idle();
+
+    const [run] = new RunRepository(db).forTask(task.id);
+    expect(calls).toEqual([{ taskId: task.id, point: "before_refinement", runId: run?.id }]);
   });
 
   it("on start it resumes a Run claimed before the crash", async () => {
