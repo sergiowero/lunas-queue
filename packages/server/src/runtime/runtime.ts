@@ -69,6 +69,8 @@ export interface RuntimeOptions {
     git?: GitAdapter;
     processes?: ProcessRunner;
   };
+  /** Where the hook scripts run; by default, a pane of the task's workspace. Tests inject a fake. */
+  hookRunnerFor?: (parentPaneId: string) => ProcessRunner;
   log?: (message: string) => void;
 }
 
@@ -193,6 +195,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     projects: new ProjectRepository(db),
     tasks: new TaskWorktreeRepository(db),
     worktrees: orchestrator.worktrees,
+    ...(opts.hookRunnerFor && { runnerFor: opts.hookRunnerFor }),
   });
   const testGate = new PaneTestGate({ db, git, herdr, worktrees: orchestrator.worktrees });
   const app = createApp({
