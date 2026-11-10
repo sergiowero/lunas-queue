@@ -6,7 +6,7 @@ The pilot has two parts. The e2e suite (`pnpm e2e`, [ADR uw-29-e2e](decisions/uw
 
 1. `lunasq install` and `lunasq doctor` green (no failures).
 2. A test repo on GitHub, cloned locally, with a valid `gh auth status` and a test command that passes.
-3. In that repo, on the base branch, `lunasq/hooks/before_verification/10-smoke.sh` (executable, `echo ok`) and `lunasq/hooks/after_implementation/10-lint.sh` (fails with `exit 1`) with `{"after_implementation": {"10-lint.sh": {"policy": "warn"}}}` in `lunasq/hooks/config`. Only the points that `docs/decisions/uw-29-e2e.md` lists as connected run.
+3. In that repo, on the base branch, `lunasq/hooks/before_verification/10-smoke.sh` (executable, `echo ok`) and `lunasq/hooks/after_implementation/10-lint.sh` (fails with `exit 1`) with `{"after_implementation": {"10-lint.sh": {"policy": "warn"}}}` in `lunasq/hooks/config`. All ten hook points run; see [ADR uw-10-hooks](decisions/uw-10-hooks.md).
 4. `lunasq start` and open the URL it prints.
 
 ## Script
@@ -25,5 +25,4 @@ Each deviation from the script is a finding. Turn it into a LunasQ task (goal wi
 
 ## e2e suite findings (ready to queue)
 
-- **Connect the missing hooks:** `before_refinement`, `after_refinement`, `before_implementation` and `on_failure` are in the schema and in `docs/design.md` §Per-phase hooks, but no module runs them. Connect them to their phase (dispatcher and MCP, like `before_verification`) and test each point.
 - **Wake the scheduler when a task is created:** today a new task waits for the next tick (30 s). `POST /api/tasks` should wake it, as answering a question already does.
