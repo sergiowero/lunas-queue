@@ -280,9 +280,9 @@ describe("phase instructions", () => {
     expect(
       InstructionAddedPayload.safeParse({ instructionId: id, phase: "refine", text: "x" }).success,
     ).toBe(true);
-    expect(InstructionRemovedPayload.safeParse({ instructionId: id, phase: "refine" }).success).toBe(
-      true,
-    );
+    expect(
+      InstructionRemovedPayload.safeParse({ instructionId: id, phase: "refine" }).success,
+    ).toBe(true);
     expect(
       InstructionUpdatedPayload.safeParse({
         instructionId: id,

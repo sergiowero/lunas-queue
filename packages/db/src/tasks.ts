@@ -9,11 +9,21 @@ import {
 } from "@lunasq/domain";
 import {
   type DependencyLink,
+  type InstructionAddedPayload,
+  type InstructionRemovedPayload,
+  InstructionUpdate,
+  type InstructionUpdatedPayload,
+  MAX_TASK_INSTRUCTIONS,
+  type PhaseInstruction,
+  PhaseInstructionInput,
   type ResultKind,
   type StatePosition,
   TASK_CREATED,
   TASK_DEPENDENCY_ADDED,
   TASK_DEPENDENCY_REMOVED,
+  TASK_INSTRUCTION_ADDED,
+  TASK_INSTRUCTION_REMOVED,
+  TASK_INSTRUCTION_UPDATED,
   TASK_TITLED,
   TASK_UPDATED,
   Task,
@@ -30,7 +40,7 @@ import {
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
 import { appendEvent } from "./event-log.ts";
-import { projects, taskDependencies, tasks } from "./schema.ts";
+import { projects, taskDependencies, taskInstructions, tasks } from "./schema.ts";
 import { applyTransition, type TransitionTaskResult, transitionTask } from "./task-transitions.ts";
 
 export type TaskRepositoryErrorCode =
@@ -41,6 +51,7 @@ export type TaskRepositoryErrorCode =
   | "cycle"
   | "task_not_draft"
   | "task_terminal"
+  | "instruction_limit"
   | "invalid_row";
 
 export class TaskRepositoryError extends Error {
@@ -92,7 +103,7 @@ export class TaskRepository implements DependencyGraphReader {
 
   /** Validates `input` (throws ZodError if it does not comply) and creates the task in draft with its edges. */
   create(input: TaskCreate): Task {
-    const { dependsOn, causedBy, ...values } = TaskCreate.parse(input);
+    const { dependsOn, causedBy, instructions, ...values } = TaskCreate.parse(input);
     return this.#write((tx) => {
       const project = tx
         .select({ id: projects.id })
@@ -153,6 +164,7 @@ export class TaskRepository implements DependencyGraphReader {
         dependsOn: links,
       };
       appendEvent(tx, { taskId: row.id, type: TASK_CREATED, actor: "human", payload });
+      for (const instruction of instructions) insertInstruction(tx, row.id, instruction);
       return toTask(row);
     });
   }
@@ -160,6 +172,73 @@ export class TaskRepository implements DependencyGraphReader {
   get(taskId: string): Task | null {
     const row = findRow(this.db, taskId);
     return row ? toTask(row) : null;
+  }
+
+  /** The task's phase instructions, oldest first. null if the task does not exist. */
+  instructions(taskId: string): PhaseInstruction[] | null {
+    return this.db.transaction((tx) => (findRow(tx, taskId) ? listInstructions(tx, taskId) : null));
+  }
+
+  /**
+   * Adds an instruction in any task state; it never moves the state. Throws `instruction_limit`
+   * past MAX_TASK_INSTRUCTIONS. null if the task does not exist.
+   */
+  addInstruction(taskId: string, input: PhaseInstructionInput): PhaseInstruction | null {
+    const values = PhaseInstructionInput.parse(input);
+    return this.#write((tx) => {
+      if (!findRow(tx, taskId)) return null;
+      if (listInstructions(tx, taskId).length >= MAX_TASK_INSTRUCTIONS) {
+        throw new TaskRepositoryError(
+          "instruction_limit",
+          `task ${taskId} already has ${MAX_TASK_INSTRUCTIONS} instructions`,
+        );
+      }
+      return insertInstruction(tx, taskId, values);
+    });
+  }
+
+  /**
+   * Replaces the present fields of an instruction of this task and records
+   * task.instruction_updated with those that changed (no event if none did). null if the task
+   * or the instruction (of this task) does not exist.
+   */
+  updateInstruction(
+    taskId: string,
+    instructionId: string,
+    patch: InstructionUpdate,
+  ): PhaseInstruction | null {
+    const values = InstructionUpdate.parse(patch);
+    return this.#write((tx) => {
+      const current = findInstruction(tx, taskId, instructionId);
+      if (!current) return null;
+      const from: InstructionUpdatedPayload["from"] = {};
+      const to: InstructionUpdatedPayload["to"] = {};
+      if (values.text !== undefined && values.text !== current.text) {
+        from.text = current.text;
+        to.text = values.text;
+      }
+      if (values.phase !== undefined && values.phase !== current.phase) {
+        from.phase = current.phase;
+        to.phase = values.phase;
+      }
+      if (Object.keys(to).length === 0) return current;
+      tx.update(taskInstructions).set(to).where(eq(taskInstructions.id, instructionId)).run();
+      const payload: InstructionUpdatedPayload = { instructionId, from, to };
+      appendEvent(tx, { taskId, type: TASK_INSTRUCTION_UPDATED, actor: "human", payload });
+      return { id: current.id, phase: to.phase ?? current.phase, text: to.text ?? current.text };
+    });
+  }
+
+  /** Removes an instruction of this task. false if the task or the instruction does not exist. */
+  removeInstruction(taskId: string, instructionId: string): boolean {
+    return this.#write((tx) => {
+      const current = findInstruction(tx, taskId, instructionId);
+      if (!current) return false;
+      tx.delete(taskInstructions).where(eq(taskInstructions.id, instructionId)).run();
+      const payload: InstructionRemovedPayload = { instructionId, phase: current.phase };
+      appendEvent(tx, { taskId, type: TASK_INSTRUCTION_REMOVED, actor: "human", payload });
+      return true;
+    });
   }
 
   /** Highest priority first; ties by age. */
@@ -432,6 +511,46 @@ function nextTaskNumber(db: Reader): number {
     .from(tasks)
     .get();
   return (row?.last ?? 0) + 1;
+}
+
+function listInstructions(db: Reader, taskId: string): PhaseInstruction[] {
+  return db
+    .select({ id: taskInstructions.id, phase: taskInstructions.phase, text: taskInstructions.text })
+    .from(taskInstructions)
+    .where(eq(taskInstructions.taskId, taskId))
+    .orderBy(asc(taskInstructions.createdAt), asc(sql`rowid`))
+    .all();
+}
+
+function findInstruction(
+  db: Reader,
+  taskId: string,
+  instructionId: string,
+): PhaseInstruction | undefined {
+  return db
+    .select({ id: taskInstructions.id, phase: taskInstructions.phase, text: taskInstructions.text })
+    .from(taskInstructions)
+    .where(and(eq(taskInstructions.id, instructionId), eq(taskInstructions.taskId, taskId)))
+    .get();
+}
+
+function insertInstruction(tx: Tx, taskId: string, input: PhaseInstructionInput): PhaseInstruction {
+  const row = tx
+    .insert(taskInstructions)
+    .values({ taskId, phase: input.phase, text: input.text })
+    .returning({
+      id: taskInstructions.id,
+      phase: taskInstructions.phase,
+      text: taskInstructions.text,
+    })
+    .get();
+  const payload: InstructionAddedPayload = {
+    instructionId: row.id,
+    phase: row.phase,
+    text: row.text,
+  };
+  appendEvent(tx, { taskId, type: TASK_INSTRUCTION_ADDED, actor: "human", payload });
+  return row;
 }
 
 function assertNotTerminal(task: Row): void {

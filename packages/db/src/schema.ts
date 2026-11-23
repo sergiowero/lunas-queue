@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import {
   Actor,
   AgentKind,
+  InstructionPhase,
   Phase,
   PrState,
   type QuestionOptions,
@@ -16,7 +17,6 @@ import {
   SpecApproval,
   type SpecContent,
   SpecDeliverable,
-  InstructionPhase,
   SubState,
   TaskState,
   UsageSource,

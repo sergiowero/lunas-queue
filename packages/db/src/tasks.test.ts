@@ -3,6 +3,9 @@ import {
   TASK_CREATED,
   TASK_DEPENDENCY_ADDED,
   TASK_DEPENDENCY_REMOVED,
+  TASK_INSTRUCTION_ADDED,
+  TASK_INSTRUCTION_REMOVED,
+  TASK_INSTRUCTION_UPDATED,
   TASK_TITLED,
   TASK_TRANSITIONED,
   TASK_UPDATED,
@@ -15,7 +18,7 @@ import { describe, expect, it } from "vitest";
 import { migrateDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
 import * as schema from "./schema.ts";
-import { taskDependencies, tasks } from "./schema.ts";
+import { taskDependencies, taskInstructions, tasks } from "./schema.ts";
 import {
   applyTaskTitle,
   completeTaskWithResult,
@@ -529,5 +532,194 @@ describe("task number", () => {
     const { db, create } = repository();
     const task = create();
     expect(listEvents(db, task.id)[0]?.payload).toMatchObject({ number: task.number });
+  });
+});
+
+describe("phase instructions", () => {
+  const eventTypes = (db: ReturnType<typeof migratedDatabase>, taskId: string) =>
+    listEvents(db, taskId).map((e) => e.type);
+
+  it("a task created with instructions stores them, oldest first, and records task.instruction_added", () => {
+    const { db, repo, create } = repository();
+    const task = create({
+      instructions: [
+        { phase: "implement", text: "do not add dependencies" },
+        { phase: "verify", text: "  run the e2e suite " },
+      ],
+    });
+    expect(repo.instructions(task.id)).toMatchObject([
+      { phase: "implement", text: "do not add dependencies" },
+      { phase: "verify", text: "run the e2e suite" },
+    ]);
+    const added = listEvents(db, task.id).filter((e) => e.type === TASK_INSTRUCTION_ADDED);
+    expect(added).toHaveLength(2);
+    expect(added[0]).toMatchObject({
+      actor: "human",
+      payload: { phase: "implement", text: "do not add dependencies" },
+    });
+    expect((added[0]?.payload as { instructionId: string }).instructionId).toBe(
+      repo.instructions(task.id)?.[0]?.id,
+    );
+  });
+
+  it("a task without instructions has an empty list; an unknown task has null", () => {
+    const { repo, create } = repository();
+    expect(repo.instructions(create().id)).toEqual([]);
+    expect(repo.instructions(missing)).toBeNull();
+  });
+
+  it("an invalid instruction at creation stores nothing", () => {
+    const { db, repo, create } = repository();
+    expect(() => create({ instructions: [{ phase: "deliver" as "refine", text: "x" }] })).toThrow();
+    expect(repo.list()).toEqual([]);
+    expect(db.select().from(taskInstructions).all()).toEqual([]);
+  });
+
+  it("adds an instruction to a task in any state, even completed, without touching its state", () => {
+    const { db, repo, project } = repository();
+    for (const state of ["draft", "in_progress", "completed", "cancelled"] as const) {
+      const task = insertTask(db, project.id, { state, subState: null, verificationIteration: 2 });
+      const before = repo.get(task.id);
+      const added = repo.addInstruction(task.id, { phase: "verify", text: "check the docs" });
+      expect(added).toMatchObject({ phase: "verify", text: "check the docs" });
+      expect(eventTypes(db, task.id)).toEqual([TASK_INSTRUCTION_ADDED]);
+      const after = repo.get(task.id);
+      expect(after).toMatchObject({
+        state: before?.state,
+        subState: before?.subState,
+        verificationIteration: 2,
+      });
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+    }
+  });
+
+  it("adding to an unknown task returns null", () => {
+    const { repo } = repository();
+    expect(repo.addInstruction(missing, { phase: "refine", text: "x" })).toBeNull();
+  });
+
+  it.each([
+    ["deliver phase", { phase: "deliver", text: "x" }],
+    ["empty text", { phase: "refine", text: "  " }],
+    ["text over 10,000 characters", { phase: "refine", text: "x".repeat(10_001) }],
+  ])("rejects adding an instruction with %s and stores nothing", (_, input) => {
+    const { db, repo, create } = repository();
+    const task = create();
+    expect(() => repo.addInstruction(task.id, input as never)).toThrow();
+    expect(repo.instructions(task.id)).toEqual([]);
+    expect(eventTypes(db, task.id)).toEqual([TASK_CREATED]);
+  });
+
+  it("rejects the 51st instruction and keeps 50", () => {
+    const { db, repo, create } = repository();
+    const task = create({
+      instructions: Array.from({ length: 50 }, (_, i) => ({ phase: "refine", text: `n${i}` })),
+    });
+    const error = errorOf(() =>
+      repo.addInstruction(task.id, { phase: "refine", text: "one more" }),
+    );
+    expect(error.code).toBe("instruction_limit");
+    expect(repo.instructions(task.id)).toHaveLength(50);
+    expect(listEvents(db, task.id).filter((e) => e.type === TASK_INSTRUCTION_ADDED)).toHaveLength(
+      50,
+    );
+  });
+
+  it("changing text and phase stores the new values and records from and to", () => {
+    const { db, repo, create } = repository();
+    const task = create({ instructions: [{ phase: "refine", text: "old" }] });
+    const [instruction] = repo.instructions(task.id) ?? [];
+    const updated = repo.updateInstruction(task.id, instruction?.id ?? "", {
+      text: "new",
+      phase: "verify",
+    });
+    expect(updated).toEqual({ id: instruction?.id, phase: "verify", text: "new" });
+    expect(repo.instructions(task.id)).toEqual([updated]);
+    expect(listEvents(db, task.id).at(-1)).toMatchObject({
+      type: TASK_INSTRUCTION_UPDATED,
+      actor: "human",
+      payload: {
+        instructionId: instruction?.id,
+        from: { text: "old", phase: "refine" },
+        to: { text: "new", phase: "verify" },
+      },
+    });
+  });
+
+  it("an edit with only one changed field records only that field; with none, no event", () => {
+    const { db, repo, create } = repository();
+    const task = create({ instructions: [{ phase: "refine", text: "same" }] });
+    const id = repo.instructions(task.id)?.[0]?.id ?? "";
+    repo.updateInstruction(task.id, id, { text: "same", phase: "implement" });
+    expect(listEvents(db, task.id).at(-1)?.payload).toEqual({
+      instructionId: id,
+      from: { phase: "refine" },
+      to: { phase: "implement" },
+    });
+    const events = listEvents(db, task.id).length;
+    expect(repo.updateInstruction(task.id, id, { text: " same ", phase: "implement" })).toEqual({
+      id,
+      phase: "implement",
+      text: "same",
+    });
+    expect(listEvents(db, task.id)).toHaveLength(events);
+  });
+
+  it("editing keeps the position of the instruction in the list", () => {
+    const { repo, create } = repository();
+    const task = create({
+      instructions: [
+        { phase: "refine", text: "a" },
+        { phase: "refine", text: "b" },
+      ],
+    });
+    const first = repo.instructions(task.id)?.[0]?.id ?? "";
+    repo.updateInstruction(task.id, first, { text: "a2" });
+    expect(repo.instructions(task.id)?.map((i) => i.text)).toEqual(["a2", "b"]);
+  });
+
+  it("removes an instruction, records task.instruction_removed and removing again is not found", () => {
+    const { db, repo, create } = repository();
+    const task = create({
+      instructions: [
+        { phase: "implement", text: "a" },
+        { phase: "refine", text: "b" },
+      ],
+    });
+    const id = repo.instructions(task.id)?.[0]?.id ?? "";
+    expect(repo.removeInstruction(task.id, id)).toBe(true);
+    expect(repo.instructions(task.id)?.map((i) => i.text)).toEqual(["b"]);
+    expect(listEvents(db, task.id).at(-1)).toMatchObject({
+      type: TASK_INSTRUCTION_REMOVED,
+      actor: "human",
+      payload: { instructionId: id, phase: "implement" },
+    });
+    const events = listEvents(db, task.id).length;
+    expect(repo.removeInstruction(task.id, id)).toBe(false);
+    expect(listEvents(db, task.id)).toHaveLength(events);
+  });
+
+  it("an instruction of another task, or of an unknown task, is not found and nothing changes", () => {
+    const { db, repo, create } = repository();
+    const a = create({ instructions: [{ phase: "refine", text: "of a" }] });
+    const b = create();
+    const id = repo.instructions(a.id)?.[0]?.id ?? "";
+    const events = listEvents(db, a.id).length;
+    expect(repo.updateInstruction(b.id, id, { text: "hijacked" })).toBeNull();
+    expect(repo.removeInstruction(b.id, id)).toBe(false);
+    expect(repo.updateInstruction(missing, id, { text: "x" })).toBeNull();
+    expect(repo.removeInstruction(missing, id)).toBe(false);
+    expect(repo.instructions(a.id)?.[0]?.text).toBe("of a");
+    expect(listEvents(db, a.id)).toHaveLength(events);
+    expect(listEvents(db, b.id)).toHaveLength(1);
+  });
+
+  it("edits and removes work on a completed task", () => {
+    const { db, repo, project } = repository();
+    const task = insertTask(db, project.id, { state: "completed", subState: null });
+    const added = repo.addInstruction(task.id, { phase: "verify", text: "x" });
+    expect(repo.updateInstruction(task.id, added?.id ?? "", { text: "y" })?.text).toBe("y");
+    expect(repo.removeInstruction(task.id, added?.id ?? "")).toBe(true);
+    expect(repo.get(task.id)).toMatchObject({ state: "completed" });
   });
 });
