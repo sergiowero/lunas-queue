@@ -562,7 +562,7 @@ describe("runs", () => {
       const journalFile = join(previous, "meta", "_journal.json");
       const journal = JSON.parse(readFileSync(journalFile, "utf8"));
       const index = journal.entries.findIndex(
-        (e: { tag: string }) => e.tag === "0018_agent_profiles",
+        (e: { tag: string }) => e.tag === "0019_agent_profiles",
       );
       journal.entries = journal.entries.slice(0, index);
       writeFileSync(journalFile, JSON.stringify(journal));
