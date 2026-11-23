@@ -1,12 +1,16 @@
 // Reads that feed the task detail and the front end queue (ADR uw-21-front-end):
 // Runs without their token, Event log and aggregated usage. Read-only; nothing here changes state.
 import {
+  AGENT_PROFILE_CREATED,
+  AGENT_PROFILE_DELETED,
+  AGENT_PROFILE_UPDATED,
   AgentKind,
   EMPTY_USAGE,
   EventView,
   HOOK_EXECUTED,
   HookExecutedPayload,
   type HookExecutionView,
+  PROJECT_UPDATED,
   REVIEWER_NAMES,
   RunView,
   SETTINGS_UPDATED,
@@ -51,6 +55,15 @@ function toTotals(row: UsageTotals): UsageTotals {
     costUsd: row.costUsd,
   };
 }
+
+/** Global events that change the configuration the UI shows. */
+const GLOBAL_CONFIG_EVENTS: ReadonlySet<string> = new Set([
+  SETTINGS_UPDATED,
+  AGENT_PROFILE_CREATED,
+  AGENT_PROFILE_UPDATED,
+  AGENT_PROFILE_DELETED,
+  PROJECT_UPDATED,
+]);
 
 export class TaskViewRepository {
   private readonly db: LunasqDatabase;
@@ -170,7 +183,8 @@ export class TaskViewRepository {
   /**
    * Tasks with events after `afterId`, in order of their first new event, and the id of the
    * last one. Every task change leaves an event (ADR 0007), so it is enough to invalidate the UI.
-   * `settingsChanged` reports a settings.updated, which is global and does not appear in `taskIds`.
+   * `settingsChanged` reports a global configuration event (settings.updated, agent_profile.* or
+   * project.updated), which does not belong to a task and does not appear in `taskIds`.
    */
   changesSince(afterId: number): {
     lastId: number;
@@ -187,7 +201,7 @@ export class TaskViewRepository {
       lastId: rows.at(-1)?.id ?? afterId,
       // Global events (settings.updated) do not belong to any task.
       taskIds: [...new Set(rows.flatMap((r) => (r.taskId === null ? [] : [r.taskId])))],
-      settingsChanged: rows.some((r) => r.type === SETTINGS_UPDATED),
+      settingsChanged: rows.some((r) => GLOBAL_CONFIG_EVENTS.has(r.type)),
     };
   }
 

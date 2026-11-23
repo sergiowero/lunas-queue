@@ -24,15 +24,19 @@ import {
   RunRepository,
   recordVerdict,
 } from "./runs.ts";
+import { SchedulerStateRepository } from "./scheduler-state.ts";
 import { events, outbox, tasks } from "./schema.ts";
 import { SettingsRepository } from "./settings.ts";
 import { transitionTask } from "./task-transitions.ts";
 import {
+  allPhasesWith,
   freshDatabase,
+  insertAgentProfile,
   insertProject,
   insertRun,
   insertTask,
   migratedDatabase,
+  type TestProfileModel,
 } from "./test-helpers.ts";
 
 // --- LunasQ MCP ---
@@ -238,9 +242,14 @@ describe("Questions and checklist", () => {
 
 function setup(opts: { concurrency?: number; config?: SchedulerConfigInput } = {}) {
   const db = migratedDatabase();
+  const base = insertAgentProfile(db, { name: "base" });
+  const opus = insertAgentProfile(db, {
+    name: "opus",
+    models: [{ kind: "claude", model: "opus" }],
+  });
   const project = insertProject(db, {
     limits: opts.concurrency === undefined ? {} : { concurrency: opts.concurrency },
-    agentProfiles: { implement: { kind: "claude", model: "opus", args: [] } },
+    agentProfiles: { ...allPhasesWith(base.id), implement: opus.id },
   });
   const projects = new ProjectRepository(db);
   const config = SchedulerConfig.parse(opts.config ?? {});
@@ -256,7 +265,7 @@ const decisionFor = (
   expected: ClaimDecision["expected"] = { state: "draft", subState: "queued" },
 ): ClaimDecision => ({ taskId: task.id, projectId: task.projectId, phase, expected });
 
-describe("claimRun and switchAgentKind: global limit saved in Settings", () => {
+describe("claimRun and switchModel: global limit saved in Settings", () => {
   it("the claim revalidates with the limit saved after planning and rejects without creating a Run", () => {
     const { db, project, claim } = setup({ config: { globalConcurrency: 2 } });
     const otro = insertProject(db);
@@ -280,7 +289,7 @@ describe("claimRun and switchAgentKind: global limit saved in Settings", () => {
     expect(claim(decisionFor(insertTask(db, otro.id))).ok).toBe(true);
   });
 
-  it("switchAgentKind rejects for lack of a slot with the saved limit, not with the default", () => {
+  it("switchModel rejects for lack of a slot with the saved limit, not with the default", () => {
     const { db, project, claim, projects, config, runs } = setup();
     const otro = insertProject(db);
     const mine = claim(decisionFor(insertTask(db, project.id)));
@@ -289,18 +298,81 @@ describe("claimRun and switchAgentKind: global limit saved in Settings", () => {
     // With the default (5) it would fit; the saved limit is already full because of the other live agent.
     new SettingsRepository(db).saveConcurrency({ globalConcurrency: 1 });
 
-    expect(runs.switchAgentKind(mine.run.id, "copilot", null, { projects, config })).toBe(
-      "no_slot",
-    );
+    const copilot = { profileId: "p", index: 1, model: { kind: "copilot" as const, args: [] } };
+    expect(runs.switchModel(mine.run.id, copilot, { projects, config })).toBe("no_slot");
     expect(runs.get(mine.run.id)?.agentKind).toBe("claude");
   });
 });
 
-describe("claimRun: enabled providers", () => {
-  it("with all providers disabled it rejects and the task stays in queued without a Run", () => {
-    const { db, project, claim } = setup();
+describe("claimRun: agent profiles and enabled providers", () => {
+  function profileSetup(models: TestProfileModel[]) {
+    const db = migratedDatabase();
+    const profile = insertAgentProfile(db, { name: "fast", models });
+    const project = insertProject(db, { agentProfiles: allPhasesWith(profile.id) });
+    const projects = new ProjectRepository(db);
+    const config = SchedulerConfig.parse({});
+    const claim = (decision: ClaimDecision) =>
+      claimRun(db, { decision, config, projects, sessionId: "sess-1" });
+    return { db, profile, project, claim };
+  }
+
+  it("starts the Run with the primary model and records the profile and its index", () => {
+    const { db, profile, project, claim } = profileSetup([
+      { kind: "claude", model: "opus" },
+      { kind: "codex", model: "gpt-5" },
+    ]);
+    const res = claim(decisionFor(insertTask(db, project.id)));
+    if (!res.ok) throw new Error(res.error.message);
+    expect(res.run).toMatchObject({
+      agentKind: "claude",
+      model: "opus",
+      profileId: profile.id,
+      modelIndex: 0,
+      modelFailed: false,
+    });
+  });
+
+  it("rejects with profile_missing, naming the phase, when the phase is unassigned", () => {
+    const db = migratedDatabase();
+    const project = insertProject(db, { agentProfiles: allPhasesWith(null) });
     const task = insertTask(db, project.id);
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: false, codex: false });
+    const res = claimRun(db, {
+      decision: decisionFor(task),
+      config: SchedulerConfig.parse({}),
+      projects: new ProjectRepository(db),
+      sessionId: "s",
+    });
+    expect(res).toMatchObject({ ok: false, error: { code: "profile_missing" } });
+    if (!res.ok) expect(res.error.message).toContain("refine");
+    expect(new RunRepository(db).forTask(task.id)).toEqual([]);
+    expect(
+      db.$client.prepare("select state, sub_state as s from tasks where id = ?").get(task.id),
+    ).toEqual({ state: "draft", s: "queued" });
+  });
+
+  it("with the primary disabled it creates the Run with the next model and its index", () => {
+    const { db, profile, project, claim } = profileSetup([
+      { kind: "copilot", model: "gpt-5" },
+      { kind: "claude", model: "sonnet" },
+    ]);
+    new SettingsRepository(db).saveProviders({ claude: true, copilot: false, codex: true });
+    const res = claim(decisionFor(insertTask(db, project.id)));
+    if (!res.ok) throw new Error(res.error.message);
+    expect(res.run).toMatchObject({
+      agentKind: "claude",
+      model: "sonnet",
+      profileId: profile.id,
+      modelIndex: 1,
+    });
+  });
+
+  it("with every model of the profile disabled it rejects and the task stays queued without a Run", () => {
+    const { db, project, claim } = profileSetup([
+      { kind: "copilot" },
+      { kind: "codex", model: "gpt-5" },
+    ]);
+    const task = insertTask(db, project.id);
+    new SettingsRepository(db).saveProviders({ claude: true, copilot: false, codex: false });
 
     const res = claim(decisionFor(task));
 
@@ -311,15 +383,28 @@ describe("claimRun: enabled providers", () => {
     expect(new RunRepository(db).forTask(task.id)).toEqual([]);
   });
 
-  it("with the primary disabled it creates the Run with the effective provider, without the primary's model", () => {
-    const { db, project, claim } = setup();
-    const task = insertTask(db, project.id, { state: "in_progress" });
-    new SettingsRepository(db).saveProviders({ claude: false, copilot: true, codex: false });
+  it("the claim skips the models already exhausted in the phase dispatch", () => {
+    const { db, profile, project, claim } = profileSetup([
+      { kind: "claude", model: "opus" },
+      { kind: "codex", model: "gpt-5" },
+    ]);
+    const task = insertTask(db, project.id);
+    const first = claim(decisionFor(task));
+    if (!first.ok) throw new Error(first.error.message);
+    const runs = new RunRepository(db);
+    expect(runs.failModel(first.run.id, "usage_limit: out of usage")).toMatchObject({
+      closed: true,
+      transitioned: true,
+    });
 
-    const res = claim(decisionFor(task, "implement", { state: "in_progress", subState: "queued" }));
-
-    if (!res.ok) throw new Error(res.error.message);
-    expect(res.run).toMatchObject({ agentKind: "copilot", model: null });
+    const second = claim(decisionFor(task));
+    if (!second.ok) throw new Error(second.error.message);
+    expect(second.run).toMatchObject({
+      agentKind: "codex",
+      model: "gpt-5",
+      profileId: profile.id,
+      modelIndex: 1,
+    });
   });
 
   it("a live agent is not touched when its provider is disabled", () => {
@@ -759,5 +844,121 @@ describe("run.failed", () => {
     ctx.runs.fail(run.id, "tercero");
 
     expect(failedEvents(ctx)).toHaveLength(1);
+  });
+});
+
+describe("model fallback bookkeeping", () => {
+  function twoModels() {
+    const db = migratedDatabase();
+    const profile = insertAgentProfile(db, {
+      models: [
+        { kind: "claude", model: "opus" },
+        { kind: "codex", model: "gpt-5" },
+        { kind: "copilot", model: "gpt-5" },
+      ],
+    });
+    const project = insertProject(db, { agentProfiles: allPhasesWith(profile.id) });
+    const task = insertTask(db, project.id);
+    const projects = new ProjectRepository(db);
+    const config = SchedulerConfig.parse({});
+    const claim = () => {
+      const res = claimRun(db, {
+        decision: decisionFor(task),
+        config,
+        projects,
+        sessionId: "s",
+      });
+      if (!res.ok) throw new Error(res.error.message);
+      return res.run;
+    };
+    return { db, task, claim, runs: new RunRepository(db) };
+  }
+
+  it("failModel closes the Run as a model failure, requeues the task and consumes no retry", () => {
+    const { db, task, claim, runs } = twoModels();
+    const run = claim();
+
+    const res = runs.failModel(run.id, "agent_exited: the pane was closed");
+
+    expect(res).toMatchObject({ closed: true, transitioned: true });
+    expect(runs.get(run.id)).toMatchObject({
+      result: "failure",
+      modelFailed: true,
+      failureReason: "agent_exited: the pane was closed",
+    });
+    expect(
+      db.$client.prepare("select state, sub_state as s from tasks where id = ?").get(task.id),
+    ).toEqual({ state: "draft", s: "queued" });
+    expect(runs.consecutiveFailures(task.id, "refine")).toBe(0);
+    expect(runs.exhaustedModels(task.id, "refine")).toEqual([0]);
+    const types = listEvents(db, task.id).map((e) => e.type);
+    expect(types).toContain("run.model_fallback");
+    // A fallback is not a failure of the phase: no run.failed (so no on_failure hook).
+    expect(types).not.toContain(RUN_FAILED);
+    const fallback = listEvents(db, task.id).find((e) => e.type === "run.model_fallback");
+    expect(fallback?.payload).toMatchObject({ runId: run.id, phase: "refine", modelIndex: 0 });
+  });
+
+  it("failModel is idempotent: a second call on the closed Run changes nothing", () => {
+    const { task, claim, runs } = twoModels();
+    const run = claim();
+    runs.failModel(run.id, "first");
+    expect(runs.failModel(run.id, "second")).toMatchObject({ closed: false });
+    expect(runs.get(run.id)?.failureReason).toBe("first");
+    expect(runs.exhaustedModels(task.id, "refine")).toEqual([0]);
+  });
+
+  it("accumulates exhausted models and resets them with a resume", () => {
+    const { db, task, claim, runs } = twoModels();
+    runs.failModel(claim().id, "usage limit");
+    runs.failModel(claim().id, "exited");
+    expect(runs.exhaustedModels(task.id, "refine")).toEqual([0, 1]);
+    expect(runs.modelFailures(task.id, "refine")).toHaveLength(2);
+
+    // The last model fails too: the task escalates; a human resume starts a new phase dispatch.
+    runs.fail(claim().id, "all models failed", { providersUnavailable: true });
+    expect(runs.exhaustedModels(task.id, "refine")).toEqual([0, 1]);
+    transitionTask(db, { taskId: task.id, actor: "human", command: { type: "resume" } });
+    expect(runs.exhaustedModels(task.id, "refine")).toEqual([]);
+  });
+
+  it("start failures recorded on a Run count as exhausted models of the dispatch", () => {
+    const { task, claim, runs } = twoModels();
+    const run = claim();
+    runs.recordProviderAttempt(
+      run.id,
+      { provider: "claude", modelIndex: 0, model: "opus" },
+      "started",
+    );
+    runs.recordProviderAttempt(
+      run.id,
+      { provider: "claude", modelIndex: 0, model: "opus" },
+      "failed",
+      "spawn failed",
+    );
+    runs.fail(run.id, "no model responded", { providersUnavailable: true });
+    expect(runs.exhaustedModels(task.id, "refine")).toEqual([0]);
+    expect(runs.providerAttempts(run.id)).toMatchObject([
+      { provider: "claude", modelIndex: 0, status: "started" },
+      { provider: "claude", modelIndex: 0, status: "failed", reason: "spawn failed" },
+    ]);
+  });
+
+  it("the Run that succeeds ends the phase dispatch: the next one starts from the top", () => {
+    const { db, task, claim, runs } = twoModels();
+    runs.failModel(claim().id, "usage limit");
+    const second = claim();
+    expect(second.modelIndex).toBe(1);
+    closeRun(db, second.id, { result: "success" });
+    expect(runs.exhaustedModels(task.id, "refine")).toEqual([]);
+  });
+
+  it("a model fallback creates no retry backoff for the scheduler", () => {
+    const { db, task, claim, runs } = twoModels();
+    runs.failModel(claim().id, "usage limit");
+    const snapshot = new SchedulerStateRepository(db).snapshot();
+    const scheduled = snapshot.tasks.find((t) => t.id === task.id);
+    expect(scheduled?.retry).toBeUndefined();
+    expect(scheduled?.exhaustedModels).toEqual([0]);
   });
 });

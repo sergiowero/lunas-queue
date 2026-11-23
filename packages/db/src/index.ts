@@ -1,5 +1,6 @@
 export const packageName = "@lunasq/db";
 
+export * from "./agent-profiles.ts";
 export * from "./client.ts";
 export * from "./event-log.ts";
 export * from "./outbox.ts";

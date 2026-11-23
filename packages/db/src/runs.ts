@@ -5,11 +5,11 @@
 import { randomBytes } from "node:crypto";
 import {
   agentName,
-  effectiveAgentKind,
   Occupancy,
+  type PhaseModel,
   type ProjectConfigReader,
   pendingPhase,
-  phaseProfile,
+  resolveProjectPhase,
   type SessionIdentity,
 } from "@lunasq/domain";
 import {
@@ -22,7 +22,10 @@ import {
   QuestionCreatedPayload,
   type QuestionOptions,
   RUN_FAILED,
+  RUN_MODEL_FALLBACK,
+  RUN_PROVIDER_ATTEMPT,
   RunFailedPayload,
+  RunModelFallbackPayload,
   type RunResult,
   SchedulablePhase,
   type SchedulerConfig,
@@ -32,6 +35,7 @@ import {
   VerdictRecordedPayload,
 } from "@lunasq/schemas";
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { readAgentProfile } from "./agent-profiles.ts";
 import type { LunasqDatabase } from "./client.ts";
 import { appendEvent } from "./event-log.ts";
 import { SchedulerStateRepository } from "./scheduler-state.ts";
@@ -68,6 +72,7 @@ export type ClaimErrorCode =
   | "stale_state"
   | "no_slot"
   | "providers_disabled"
+  | "profile_missing"
   | "run_active"
   | "invalid_transition"
   | "actor_not_allowed"
@@ -144,25 +149,44 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
         if (active) {
           throw new ClaimRejected("run_active", `task ${task.id} has Run ${active.id} open`);
         }
-        // Enabled providers are read here, not when planning: the human may have changed them.
+        // Enabled providers and the profile are read here, not when planning: the human may have
+        // changed them. The effective model is the first enabled one not yet exhausted in this phase dispatch.
         const providers = readProviderSettings(tx);
-        const profile = phaseProfile(project, decision.phase);
-        const agentKind = effectiveAgentKind(profile.kind, providers);
-        if (agentKind === null) {
+        const profiles = { get: (profileId: string) => readAgentProfile(tx, profileId) };
+        const exhaustedModels = exhaustedModelIndexes(tx, task.id, decision.phase);
+        const resolved = resolveProjectPhase(
+          project,
+          decision.phase,
+          profiles,
+          providers,
+          exhaustedModels,
+        );
+        if (resolved.status === "unassigned") {
+          throw new ClaimRejected(
+            "profile_missing",
+            `the ${decision.phase} phase of project ${project.name} has no agent profile`,
+          );
+        }
+        if (resolved.status !== "ready") {
           throw new ClaimRejected(
             "providers_disabled",
-            `no agent provider is enabled for ${task.id}`,
+            resolved.status === "exhausted"
+              ? `every enabled model of the ${decision.phase} profile already failed for ${task.id}`
+              : `no agent provider is enabled for ${task.id}`,
           );
         }
         // The same connection: the snapshot sees what this transaction sees (nested savepoint).
         const occupancy = Occupancy.of(
           new SchedulerStateRepository(tx).snapshot(),
           input.projects,
+          profiles,
           providers,
         );
         // The global limit is also read here: Settings may have changed it after planning.
         const config = effectiveConfig(tx, input.config);
-        if (!occupancy.fits(occupancy.slotFor(task, decision.phase), config)) {
+        if (
+          !occupancy.fits(occupancy.slotFor({ ...task, exhaustedModels }, decision.phase), config)
+        ) {
           throw new ClaimRejected("no_slot", `no slot for ${task.id} in ${decision.phase}`);
         }
 
@@ -184,9 +208,10 @@ export function claimRun(db: LunasqDatabase, input: ClaimInput): ClaimResult {
           .values({
             taskId: task.id,
             phase: decision.phase,
-            agentKind,
-            // The profile's model belongs to the primary provider; a fallback uses its own default.
-            model: agentKind === profile.kind ? (profile.model ?? null) : null,
+            agentKind: resolved.model.kind,
+            model: resolved.model.model ?? null,
+            profileId: resolved.profileId,
+            modelIndex: resolved.index,
             iteration: task.verificationIteration,
             herdrName: agentName(task.id, decision.phase, previous + 1),
             agentSession: input.sessionId,
@@ -362,75 +387,64 @@ export class RunRepository {
   }
 
   /**
-   * Changes the Run's provider. The claim reserved the slot of the provider effective back then; moving
-   * to another one (a fallback after the start failed, or because the human changed Settings) revalidates it in
-   * the same transaction against the live agents of the other Runs, with the same limits as the
-   * claim. Returns `no_slot` without writing anything if the new provider does not fit; null if there is no Run.
+   * Moves the Run to another model of its profile. The claim reserved the slot of the provider of the
+   * model effective back then; moving to a model of another provider (a fallback after the start failed,
+   * or because Settings changed) revalidates it in the same transaction against the live agents of the
+   * other Runs, with the same limits as the claim. Returns `no_slot` without writing anything if the new
+   * provider does not fit; null if there is no Run.
    */
-  switchAgentKind(
+  switchModel(
     runId: string,
-    kind: AgentKind,
-    model: string | null,
+    target: PhaseModel,
     limits: { projects: ProjectConfigReader; config: SchedulerConfig },
   ): RunRow | "no_slot" | null {
     return this.db.transaction(
       (tx) => {
         const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
         if (!run) return null;
-        if (run.agentKind !== kind) {
+        if (run.agentKind !== target.model.kind) {
           const task = tx.select().from(tasks).where(eq(tasks.id, run.taskId)).get();
           const snapshot = new SchedulerStateRepository(tx).snapshot();
           // Without the Run itself: it is placed again, not added to its current slot.
           const others = { ...snapshot, tasks: snapshot.tasks.filter((t) => t.id !== run.taskId) };
-          const occupancy = Occupancy.of(others, limits.projects, readProviderSettings(tx));
+          const occupancy = Occupancy.of(
+            others,
+            limits.projects,
+            { get: (profileId) => readAgentProfile(tx, profileId) },
+            readProviderSettings(tx),
+          );
           const slot = {
             projectId: task?.projectId ?? "",
             phase: SchedulablePhase.parse(run.phase),
-            agentKind: kind,
+            agentKind: target.model.kind,
           };
           if (!occupancy.fits(slot, effectiveConfig(tx, limits.config))) return "no_slot" as const;
         }
-        tx.update(runs).set({ agentKind: kind, model }).where(eq(runs.id, runId)).run();
+        tx.update(runs)
+          .set({
+            agentKind: target.model.kind,
+            model: target.model.model ?? null,
+            profileId: target.profileId,
+            modelIndex: target.index,
+          })
+          .where(eq(runs.id, runId))
+          .run();
         return tx.select().from(runs).where(eq(runs.id, runId)).get() ?? null;
       },
       { behavior: "immediate" },
     );
   }
 
-  providerAttempts(runId: string): {
-    provider: AgentKind;
-    status: "started" | "failed";
-    reason?: string;
-  }[] {
+  /** Start attempts of the Run's models, in order (run.provider_attempt events). */
+  providerAttempts(runId: string): ProviderAttempt[] {
     const run = this.get(runId);
     if (!run) return [];
-    return this.db
-      .select({ payload: events.payload })
-      .from(events)
-      .where(and(eq(events.taskId, run.taskId), eq(events.type, "run.provider_attempt")))
-      .orderBy(asc(events.id))
-      .all()
-      .flatMap(({ payload }) => {
-        if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return [];
-        const event = payload as Record<string, unknown>;
-        if (event.runId !== runId || typeof event.provider !== "string") return [];
-        const provider = AgentKind.safeParse(event.provider);
-        const status =
-          event.status === "started" || event.status === "failed" ? event.status : null;
-        if (!provider.success || status === null) return [];
-        return [
-          {
-            provider: provider.data,
-            status,
-            ...(typeof event.reason === "string" && { reason: event.reason }),
-          },
-        ];
-      });
+    return providerAttemptsOf(this.db, run.taskId, (id) => id === runId);
   }
 
   recordProviderAttempt(
     runId: string,
-    provider: AgentKind,
+    attempt: { provider: AgentKind; modelIndex: number; model?: string | null },
     status: "started" | "failed",
     reason?: string,
   ): void {
@@ -441,13 +455,61 @@ export class RunRepository {
         tx,
         {
           taskId: run.taskId,
-          type: "run.provider_attempt",
+          type: RUN_PROVIDER_ATTEMPT,
           actor: "system",
-          payload: { runId, provider, status, ...(reason && { reason }) },
+          payload: {
+            runId,
+            provider: attempt.provider,
+            modelIndex: attempt.modelIndex,
+            ...(attempt.model && { model: attempt.model }),
+            status,
+            ...(reason && { reason }),
+          },
         },
         { publish: true },
       );
     });
+  }
+
+  /**
+   * Model indexes of the profile already tried in the phase dispatch in progress, not counting the
+   * open Run's own start attempts: the models of the closed Runs that ended because of their model
+   * and those that failed to start (ADR agent-profiles). Reset by a success, a cancellation or a resume.
+   */
+  exhaustedModels(taskId: string, phase: Phase): number[] {
+    return exhaustedModelIndexes(this.db, taskId, phase);
+  }
+
+  /**
+   * Failure diagnostics of the phase dispatch in progress: one line per failed model, oldest
+   * first, with the closed Runs of the dispatch and the open Run `openRunId`.
+   */
+  modelFailures(taskId: string, phase: Phase, openRunId?: string): string[] {
+    const chain = dispatchRuns(this.db, taskId, phase);
+    const ids = new Set(chain.map((r) => r.id));
+    if (openRunId) ids.add(openRunId);
+    const lines: string[] = [];
+    const startFailures = providerAttemptsOf(this.db, taskId, (id) => ids.has(id)).filter(
+      (a) => a.status === "failed",
+    );
+    for (const run of [...chain].reverse()) {
+      for (const a of startFailures.filter((f) => f.runId === run.id)) {
+        lines.push(
+          `${describeModel(a.provider, a.model, a.modelIndex)}: ${a.reason ?? "failed to start"}`,
+        );
+      }
+      if (run.modelFailed) {
+        lines.push(
+          `${describeModel(run.agentKind, run.model, run.modelIndex)}: ${run.failureReason ?? "failed"}`,
+        );
+      }
+    }
+    for (const a of startFailures.filter((f) => f.runId === openRunId)) {
+      lines.push(
+        `${describeModel(a.provider, a.model, a.modelIndex)}: ${a.reason ?? "failed to start"}`,
+      );
+    }
+    return lines;
   }
 
   /** Marks that the phase prompt was sent; keeps the first mark. */
@@ -474,7 +536,7 @@ export class RunRepository {
   fail(
     runId: string,
     reason: string,
-    opts: { maxRetries?: number; providersUnavailable?: boolean } = {},
+    opts: { maxRetries?: number; providersUnavailable?: boolean; note?: string } = {},
   ): FailRunResult {
     return this.db.transaction(
       (tx) => {
@@ -495,7 +557,11 @@ export class RunRepository {
             ? {
                 taskId: task.id,
                 actor: "system",
-                command: { type: "escalate", reason: "providers_unavailable" },
+                command: {
+                  type: "escalate",
+                  reason: "providers_unavailable",
+                  ...(opts.note && { note: opts.note.slice(0, 2000) }),
+                },
                 expected: { state: task.state, subState: "running" },
               }
             : {
@@ -546,6 +612,38 @@ export class RunRepository {
     );
   }
 
+  /**
+   * The Run's model failed after launch (usage limit, the agent exited or stopped without the
+   * end-of-phase signal): closes the Run as a model failure and, if the task is still running in the
+   * Run's phase, sends it back to queued so the next pass dispatches the next model of the profile. It
+   * consumes no retry and does not publish `run.failed` (no on_failure hook): it publishes
+   * `run.model_fallback`.
+   */
+  failModel(runId: string, reason: string): FailRunResult {
+    return this.db.transaction(
+      (tx) => {
+        const run = tx.select().from(runs).where(eq(runs.id, runId)).get();
+        if (!run) throw new Error(`Run ${runId} does not exist`);
+        if (!closeRun(tx, runId, { result: "failure", failureReason: reason, modelFailed: true })) {
+          return { closed: false, transitioned: false };
+        }
+        const task = tx.select().from(tasks).where(eq(tasks.id, run.taskId)).get();
+        if (task?.subState !== "running" || pendingPhase(task.state) !== run.phase) {
+          return { closed: true, transitioned: false };
+        }
+        const moved = applyTransition(tx, {
+          taskId: task.id,
+          actor: "system",
+          command: { type: "run_failed", attempt: 1 },
+          expected: { state: task.state, subState: "running" },
+        });
+        if (!moved.ok) throw new Error(`model fallback of ${task.id}: ${moved.error.message}`);
+        return { closed: true, transitioned: true, task: moved.task };
+      },
+      { behavior: "immediate" },
+    );
+  }
+
   /** Consecutive failed Runs of the phase, since the last successful one or the last resume (ADR 0007). */
   consecutiveFailures(taskId: string, phase: Phase): number {
     return consecutiveFailures(this.db, taskId, phase);
@@ -558,6 +656,11 @@ export type CloseRunInput = {
   handoff?: unknown;
   /** Session identity resolved on closing; without it the one from dispatch is kept. */
   session?: SessionIdentity;
+  /**
+   * The Run ended because of its model: it is recorded as such, consumes no retry and publishes
+   * `run.model_fallback` instead of `run.failed`. Only with result `failure`.
+   */
+  modelFailed?: boolean;
 };
 
 export type FailRunResult = { closed: boolean; transitioned: boolean; task?: TaskRow };
@@ -580,6 +683,7 @@ export function closeRun(
         endedAt: at,
         result: input.result,
         failureReason: input.failureReason ?? null,
+        ...(input.modelFailed && input.result === "failure" && { modelFailed: true }),
         ...(input.handoff === undefined ? {} : { handoff: input.handoff }),
         ...(input.session && {
           agentSession: input.session.value,
@@ -587,10 +691,27 @@ export function closeRun(
         }),
       })
       .where(and(eq(runs.id, runId), isNull(runs.endedAt)))
-      .returning({ id: runs.id, taskId: runs.taskId, phase: runs.phase })
+      .returning({
+        id: runs.id,
+        taskId: runs.taskId,
+        phase: runs.phase,
+        modelIndex: runs.modelIndex,
+      })
       .all();
     if (!closed) return false;
-    if (input.result === "failure") {
+    if (input.result === "failure" && input.modelFailed) {
+      const payload = RunModelFallbackPayload.parse({
+        runId: closed.id,
+        phase: closed.phase,
+        modelIndex: closed.modelIndex ?? 0,
+        reason: (input.failureReason || "unspecified").slice(0, 2000),
+      });
+      appendEvent(
+        tx,
+        { taskId: closed.taskId, type: RUN_MODEL_FALLBACK, actor: "system", payload },
+        { publish: true },
+      );
+    } else if (input.result === "failure") {
       const payload = RunFailedPayload.parse({
         runId: closed.id,
         phase: closed.phase,
@@ -622,10 +743,10 @@ export function recordVerdict(db: Writer, taskId: string, payload: VerdictRecord
 }
 
 /**
- * Consecutive failed Runs of the phase, from the newest backwards, up to one that did not fail or up to
- * the task's last resume: it is the `attempt` of run_failed without counting the Run that is failing now.
+ * Closed Runs of the phase dispatch in progress, newest first: the failed ones from the newest
+ * backwards, up to one that did not fail or up to the task's last resume (ADR 0007, ADR agent-profiles).
  */
-export function consecutiveFailures(db: Reader, taskId: string, phase: Phase): number {
+function dispatchRuns(db: Reader, taskId: string, phase: Phase): RunRow[] {
   const lastResume = db
     .select({ at: events.createdAt })
     .from(events)
@@ -640,7 +761,7 @@ export function consecutiveFailures(db: Reader, taskId: string, phase: Phase): n
     .limit(1)
     .get();
   const closed = db
-    .select({ result: runs.result })
+    .select()
     .from(runs)
     .where(
       and(
@@ -654,7 +775,84 @@ export function consecutiveFailures(db: Reader, taskId: string, phase: Phase): n
     .orderBy(desc(runs.startedAt), sql`rowid desc`)
     .all();
   const firstOther = closed.findIndex((r) => r.result !== "failure");
-  return firstOther === -1 ? closed.length : firstOther;
+  return firstOther === -1 ? closed : closed.slice(0, firstOther);
+}
+
+/**
+ * Consecutive failed Runs of the phase, from the newest backwards, up to one that did not fail or up to
+ * the task's last resume: it is the `attempt` of run_failed without counting the Run that is failing now.
+ * A Run that ended because of its model (fallback) is not a failure of the phase and does not count.
+ */
+export function consecutiveFailures(db: Reader, taskId: string, phase: Phase): number {
+  return dispatchRuns(db, taskId, phase).filter((r) => !r.modelFailed).length;
+}
+
+export type ProviderAttempt = {
+  runId: string;
+  provider: AgentKind;
+  modelIndex: number;
+  model?: string;
+  status: "started" | "failed";
+  reason?: string;
+};
+
+/** The start attempts (run.provider_attempt) of the task's Runs accepted by `include`, in order. */
+function providerAttemptsOf(
+  db: Reader,
+  taskId: string,
+  include: (runId: string) => boolean,
+): ProviderAttempt[] {
+  return db
+    .select({ payload: events.payload })
+    .from(events)
+    .where(and(eq(events.taskId, taskId), eq(events.type, RUN_PROVIDER_ATTEMPT)))
+    .orderBy(asc(events.id))
+    .all()
+    .flatMap(({ payload }) => {
+      if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return [];
+      const event = payload as Record<string, unknown>;
+      if (typeof event.runId !== "string" || !include(event.runId)) return [];
+      const provider = AgentKind.safeParse(event.provider);
+      const status = event.status === "started" || event.status === "failed" ? event.status : null;
+      if (!provider.success || status === null) return [];
+      return [
+        {
+          runId: event.runId,
+          provider: provider.data,
+          // Events from before profiles carry no index: they belong to the primary model.
+          modelIndex: typeof event.modelIndex === "number" ? event.modelIndex : 0,
+          ...(typeof event.model === "string" && { model: event.model }),
+          status,
+          ...(typeof event.reason === "string" && { reason: event.reason }),
+        },
+      ];
+    });
+}
+
+function describeModel(
+  kind: AgentKind,
+  model: string | null | undefined,
+  index: number | null | undefined,
+) {
+  return `#${(index ?? 0) + 1} ${kind}${model ? ` ${model}` : ""}`;
+}
+
+/**
+ * Profile model indexes already tried in the phase dispatch in progress: the models of the closed Runs
+ * that ended because of their model and those that failed to start in those Runs. A phase dispatch ends
+ * with a Run that did not fail or with a resume, so the next one starts again from the top of the list.
+ */
+export function exhaustedModelIndexes(db: Reader, taskId: string, phase: Phase): number[] {
+  const chain = dispatchRuns(db, taskId, phase);
+  if (chain.length === 0) return [];
+  const ids = new Set(chain.map((r) => r.id));
+  const exhausted = new Set<number>();
+  for (const run of chain)
+    if (run.modelFailed && run.modelIndex !== null) exhausted.add(run.modelIndex);
+  for (const a of providerAttemptsOf(db, taskId, (id) => ids.has(id))) {
+    if (a.status === "failed") exhausted.add(a.modelIndex);
+  }
+  return [...exhausted].sort((x, y) => x - y);
 }
 
 export type CreateQuestionInput = {

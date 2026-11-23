@@ -2,11 +2,11 @@ import { projectConfigReaderContract } from "@lunasq/domain/testing";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { ProjectRepository, ProjectRepositoryError } from "./projects.ts";
-import { projects } from "./schema.ts";
-import { insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
+import { events, projects } from "./schema.ts";
+import { insertAgentProfile, insertProject, insertTask, migratedDatabase } from "./test-helpers.ts";
 
-// A kind the schema rejects; the cast skips type checking on purpose.
-const unsupportedKind = { kind: "gemini" } as unknown as { kind: "claude" };
+// A phase profile the schema rejects: it is not an id.
+const unsupportedKind = { kind: "gemini" } as unknown as string;
 
 const input = {
   name: "lunas-queue",
@@ -35,14 +35,19 @@ describe("ProjectRepository.create", () => {
     const { repo } = repository();
     const project = repo.create(input);
     expect(project).toMatchObject({ ...input, limits: {}, testCommand: null, bootstrap: null });
-    expect(project.agentProfiles.verify).toEqual({ kind: "claude", args: [] });
+    expect(project.agentProfiles).toEqual({
+      refine: null,
+      implement: null,
+      verify: null,
+      deliver: null,
+    });
     expect(repo.get(project.id)).toEqual(project);
   });
 
   it("validates the input", () => {
     const { repo } = repository();
     expect(() => repo.create({ ...input, agentProfiles: { verify: unsupportedKind } })).toThrow(
-      /"invalid_value"[\s\S]*"verify"/,
+      /"verify"/,
     );
     expect(repo.list()).toEqual([]);
   });
@@ -64,10 +69,10 @@ describe("ProjectRepository.get and list", () => {
     expect(repo.get("no-es-uuid")).toBeNull();
   });
 
-  it("reads old rows with empty JSON applying the defaults", () => {
+  it("reads old rows with empty JSON as unassigned phases", () => {
     const { db, repo } = repository();
-    const row = insertProject(db);
-    expect(repo.get(row.id)?.agentProfiles.refine).toEqual({ kind: "claude", args: [] });
+    const row = insertProject(db, { agentProfiles: {} });
+    expect(repo.get(row.id)?.agentProfiles.refine).toBeNull();
   });
 
   it("fails with invalid_row if the stored JSON does not meet the schema", () => {
@@ -79,11 +84,12 @@ describe("ProjectRepository.get and list", () => {
 
 describe("ProjectRepository.update", () => {
   it("replaces only the present fields", () => {
-    const { repo } = repository();
+    const { db, repo } = repository();
+    const profile = insertAgentProfile(db);
     const created = repo.create({
       ...input,
       testCommand: "pnpm test",
-      agentProfiles: { implement: { kind: "claude", model: "opus" } },
+      agentProfiles: { implement: profile.id },
     });
     const updated = repo.update(created.id, {
       baseBranch: "develop",
@@ -96,7 +102,7 @@ describe("ProjectRepository.update", () => {
       testCommand: null,
       name: input.name,
     });
-    expect(updated?.agentProfiles.implement.model).toBe("opus");
+    expect(updated?.agentProfiles.implement).toBe(profile.id);
   });
 
   it("an empty patch returns the project unchanged", () => {
@@ -110,11 +116,11 @@ describe("ProjectRepository.update", () => {
     expect(repo.update(crypto.randomUUID(), { baseBranch: "develop" })).toBeNull();
   });
 
-  it("rejects a verify profile with another kind without touching the row", () => {
+  it("rejects a phase profile that is not an id without touching the row", () => {
     const { repo } = repository();
     const created = repo.create(input);
     expect(() => repo.update(created.id, { agentProfiles: { verify: unsupportedKind } })).toThrow(
-      /"invalid_value"[\s\S]*"verify"/,
+      /verify/,
     );
     expect(repo.get(created.id)).toEqual(created);
   });
@@ -162,17 +168,15 @@ describe("ProjectRepository: review findings", () => {
     expect(updated?.createdAt).toEqual(old);
   });
 
-  it("the PATCH of agentProfiles merges per phase", () => {
-    const { repo } = repository();
-    const created = repo.create({
-      ...input,
-      agentProfiles: { implement: { kind: "claude", model: "opus" } },
-    });
-    const updated = repo.update(created.id, {
-      agentProfiles: { verify: { kind: "claude", model: "sonnet" } },
-    });
-    expect(updated?.agentProfiles.implement.model).toBe("opus");
-    expect(updated?.agentProfiles.verify.model).toBe("sonnet");
+  it("the PATCH of agentProfiles merges per phase and null unassigns", () => {
+    const { db, repo } = repository();
+    const opus = insertAgentProfile(db);
+    const sonnet = insertAgentProfile(db);
+    const created = repo.create({ ...input, agentProfiles: { implement: opus.id } });
+    const updated = repo.update(created.id, { agentProfiles: { verify: sonnet.id } });
+    expect(updated?.agentProfiles).toMatchObject({ implement: opus.id, verify: sonnet.id });
+    const cleared = repo.update(created.id, { agentProfiles: { implement: null } });
+    expect(cleared?.agentProfiles).toMatchObject({ implement: null, verify: sonnet.id });
   });
 
   it("rolls back the update if the resulting row is not valid", () => {
@@ -188,8 +192,9 @@ describe("ProjectRepository: review findings", () => {
   it("a PATCH can fix the invalid phase of a row", () => {
     const { db, repo } = repository();
     const row = insertProject(db, { agentProfiles: { verify: { kind: "gemini" } } });
-    const fixed = repo.update(row.id, { agentProfiles: { verify: { kind: "claude" } } });
-    expect(fixed?.agentProfiles.verify).toEqual({ kind: "claude", args: [] });
+    const profile = insertAgentProfile(db);
+    const fixed = repo.update(row.id, { agentProfiles: { verify: profile.id } });
+    expect(fixed?.agentProfiles.verify).toBe(profile.id);
   });
 
   it("list fails with invalid_row if any row is not valid", () => {
@@ -206,5 +211,47 @@ describe("ProjectRepository: review findings", () => {
       repo.create({ ...input, name: "otro", localPath: `${input.localPath}/` }),
     );
     expect(error).toMatchObject({ code: "conflict", field: "localPath" });
+  });
+});
+
+describe("ProjectRepository: agent profiles", () => {
+  const eventTypes = (db: ReturnType<typeof migratedDatabase>) =>
+    db
+      .select({ type: events.type, taskId: events.taskId })
+      .from(events)
+      .all()
+      .map((e) => e.type);
+
+  it("rejects a phase that references a profile that does not exist, writing nothing", () => {
+    const { db, repo } = repository();
+    const missing = crypto.randomUUID();
+    const error = errorOf(() => repo.create({ ...input, agentProfiles: { implement: missing } }));
+    expect(error).toMatchObject({ code: "profile_not_found", phases: ["implement"] });
+    expect(repo.list()).toEqual([]);
+
+    const created = repo.create(input);
+    const patch = errorOf(() =>
+      repo.update(created.id, { baseBranch: "develop", agentProfiles: { refine: missing } }),
+    );
+    expect(patch).toMatchObject({ code: "profile_not_found", phases: ["refine"] });
+    expect(repo.get(created.id)).toEqual(created);
+    expect(eventTypes(db).filter((t) => t === "project.updated")).toHaveLength(1);
+  });
+
+  it("saving a project records project.updated, a global event with its phase profiles", () => {
+    const { db, repo } = repository();
+    const profile = insertAgentProfile(db);
+    const created = repo.create(input);
+    repo.update(created.id, { agentProfiles: { refine: profile.id } });
+    const saved = db
+      .select()
+      .from(events)
+      .all()
+      .filter((e) => e.type === "project.updated");
+    expect(saved).toHaveLength(2);
+    expect(saved[1]).toMatchObject({
+      taskId: null,
+      payload: { projectId: created.id, agentProfiles: { refine: profile.id, implement: null } },
+    });
   });
 });

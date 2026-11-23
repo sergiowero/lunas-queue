@@ -10,7 +10,7 @@ import {
 import { TASK_TRANSITIONED, type TaskState } from "@lunasq/schemas";
 import { and, desc, eq, inArray, isNotNull, isNull, max, notInArray, sql } from "drizzle-orm";
 import type { LunasqDatabase } from "./client.ts";
-import { consecutiveFailures } from "./runs.ts";
+import { consecutiveFailures, exhaustedModelIndexes } from "./runs.ts";
 import { events, runs, taskDependencies, tasks } from "./schema.ts";
 import type { Tx } from "./task-transitions.ts";
 
@@ -105,6 +105,9 @@ export class SchedulerStateRepository implements SchedulerStateReader {
       const toTask = (row: (typeof rows)[number]): SchedulerTask => {
         const retry = row.subState === "queued" ? retryState(tx, row.id, row.state) : undefined;
         const agentKind = openRunKind.get(row.id);
+        const phase = pendingPhase(row.state);
+        const exhaustedModels =
+          phase && row.subState === "queued" ? exhaustedModelIndexes(tx, row.id, phase) : [];
         const since = Math.max(
           row.createdAt.getTime(),
           lastTransition.get(row.id)?.getTime() ?? 0,
@@ -122,6 +125,7 @@ export class SchedulerStateRepository implements SchedulerStateReader {
           readySince: new Date(since),
           ...(retry && { retry }),
           ...(agentKind && { agentKind }),
+          ...(exhaustedModels.length > 0 && { exhaustedModels }),
         };
       };
       return { tasks: rows.map(toTask), edges };
@@ -138,7 +142,15 @@ function retryState(tx: Tx, taskId: string, state: TaskState): RetryState | unde
   const last = tx
     .select({ endedAt: runs.endedAt })
     .from(runs)
-    .where(and(eq(runs.taskId, taskId), eq(runs.phase, phase), isNotNull(runs.endedAt)))
+    .where(
+      and(
+        eq(runs.taskId, taskId),
+        eq(runs.phase, phase),
+        isNotNull(runs.endedAt),
+        // A model fallback is not a failure of the phase: it creates no backoff.
+        eq(runs.modelFailed, false),
+      ),
+    )
     .orderBy(desc(runs.startedAt), sql`rowid desc`)
     .limit(1)
     .get();

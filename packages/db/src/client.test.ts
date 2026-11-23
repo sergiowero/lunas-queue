@@ -10,6 +10,7 @@ import { QuestionRepository } from "./questions.ts";
 import { freshDatabase } from "./test-helpers.ts";
 
 const TABLES = [
+  "agent_profiles",
   "app_settings",
   "events",
   "outbox",
