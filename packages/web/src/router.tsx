@@ -57,9 +57,13 @@ const inboxRoute = createRoute({
   component: InboxPage,
 });
 
+export type ProjectsSearch = { edit?: string };
+
 const projectsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/projects",
+  validateSearch: (search: Record<string, unknown>): ProjectsSearch =>
+    typeof search.edit === "string" ? { edit: search.edit } : {},
   component: ProjectsPage,
 });
 

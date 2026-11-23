@@ -1,6 +1,6 @@
 // Delete confirmation for an agent profile. The server rejects with 409 `profile_in_use` a profile
 // that projects select, and lists those projects and phases.
-import type { AgentProfile } from "@lunasq/schemas";
+import type { AgentProfile, Phase } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, type Json } from "../lib/api.ts";
 import { useErrorText } from "../lib/error-text.ts";
@@ -11,7 +11,7 @@ import { Dialog } from "./ui/dialog.tsx";
 
 const PHASES = ["refine", "implement", "verify", "deliver"] as const;
 
-type UsedBy = { id: string; name: string; phases: string[] };
+type UsedBy = { id: string; name: string; phases: Phase[] };
 
 function usedBy(error: Error | null): UsedBy[] | null {
   if (!(error instanceof ApiError) || error.code !== "profile_in_use") return null;
@@ -62,7 +62,10 @@ export function ProfileDeleteDialog({
                 <ul className="mt-1 list-disc pl-5">
                   {projects.map((project) => (
                     <li key={project.id}>
-                      {t.profileDelete.usedBy(project.name, project.phases.join(", "))}
+                      {t.profileDelete.usedBy(
+                        project.name,
+                        project.phases.map((phase) => t.phase[phase] ?? phase).join(", "),
+                      )}
                     </li>
                   ))}
                 </ul>

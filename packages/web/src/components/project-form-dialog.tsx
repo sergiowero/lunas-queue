@@ -266,10 +266,14 @@ export function ProjectFormDialog({
           <legend className="text-sm font-medium">{t.projectForm.agentByPhase}</legend>
           {PHASES.map((phase) => (
             <div key={phase} className="flex flex-col gap-2 rounded-md border border-border p-3">
-              <h3 className="text-xs font-medium uppercase text-muted-foreground">{phase}</h3>
+              <h3 className="text-xs font-medium uppercase text-muted-foreground">
+                {t.phase[phase]}
+              </h3>
               <div className="flex gap-4">
                 <div className="flex flex-1 flex-col gap-1">
-                  <Label htmlFor={`project-profile-${phase}`}>{t.projectForm.profile(phase)}</Label>
+                  <Label htmlFor={`project-profile-${phase}`}>
+                    {t.projectForm.profile(t.phase[phase])}
+                  </Label>
                   <Select
                     id={`project-profile-${phase}`}
                     value={phases[phase].profile}
@@ -284,7 +288,9 @@ export function ProjectFormDialog({
                   </Select>
                 </div>
                 <div className="flex w-40 flex-col gap-1">
-                  <Label htmlFor={`project-timeout-${phase}`}>{t.projectForm.timeout(phase)}</Label>
+                  <Label htmlFor={`project-timeout-${phase}`}>
+                    {t.projectForm.timeout(t.phase[phase])}
+                  </Label>
                   <Input
                     id={`project-timeout-${phase}`}
                     type="number"
@@ -308,7 +314,7 @@ export function ProjectFormDialog({
               )}
               {phases[phase].profile === "" && (
                 <p role="note" className="text-xs text-warning-text">
-                  {t.projectForm.unassignedWarning(phase)}
+                  {t.projectForm.unassignedWarning(t.phase[phase])}
                 </p>
               )}
             </div>

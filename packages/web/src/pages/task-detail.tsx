@@ -85,18 +85,23 @@ function HoldNotice({ task }: { task: Json<Task> }) {
   const held = task.subState === "queued" && !isTerminal(task.state);
   const hold = useQuery({ ...queries.taskHold(task.id), enabled: held });
   if (!held || !hold.data?.hold) return null;
-  const { reason, phase, projectName } = hold.data.hold;
+  const { reason, phase, projectId, projectName } = hold.data.hold;
   return (
     <div role="status" className="rounded-lg border border-border bg-warning/10 p-3 text-sm">
-      <p>{t.taskDetail.hold[reason](projectName, phase)}</p>
-      <Link
-        to={reason === "profile_missing" ? "/projects" : "/settings"}
-        className="mt-1 inline-block font-medium underline"
-      >
-        {reason === "profile_missing"
-          ? t.taskDetail.hold.editProject
-          : t.taskDetail.hold.enableInSettings}
-      </Link>
+      <p>{t.taskDetail.hold[reason](projectName, t.phase[phase])}</p>
+      {reason === "profile_missing" ? (
+        <Link
+          to="/projects"
+          search={{ edit: projectId }}
+          className="mt-1 inline-block font-medium underline"
+        >
+          {t.taskDetail.hold.editProject}
+        </Link>
+      ) : (
+        <Link to="/settings" className="mt-1 inline-block font-medium underline">
+          {t.taskDetail.hold.enableInSettings}
+        </Link>
+      )}
     </div>
   );
 }

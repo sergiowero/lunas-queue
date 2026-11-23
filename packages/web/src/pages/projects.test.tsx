@@ -44,8 +44,8 @@ describe("project creation", () => {
     await user.type(form.getByLabelText("Bootstrap del worktree"), "pnpm install");
     await user.type(form.getByLabelText("Concurrencia"), "2");
     await user.type(form.getByLabelText("Iteraciones de verificación"), "5");
-    await user.selectOptions(form.getByLabelText("Perfil de verify"), "Verificador");
-    await user.type(form.getByLabelText("Timeout de implement (min)"), "60");
+    await user.selectOptions(form.getByLabelText("Perfil de Verificación"), "Verificador");
+    await user.type(form.getByLabelText("Timeout de Implementación (min)"), "60");
     await user.click(form.getByRole("button", { name: "Crear proyecto" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -90,7 +90,7 @@ describe("project creation", () => {
     const { user, dialog } = await openDialog(fake);
     const form = within(dialog);
 
-    const select = (await form.findByLabelText("Perfil de implement")) as HTMLSelectElement;
+    const select = (await form.findByLabelText("Perfil de Implementación")) as HTMLSelectElement;
     await waitFor(() =>
       expect([...select.options].map((o) => o.text)).toEqual([
         "Sin perfil (la fase espera)",
@@ -100,11 +100,11 @@ describe("project creation", () => {
     );
     expect(select.value).toBe("");
     expect(form.getAllByRole("note")).toHaveLength(4);
-    expect(form.getByText(/La fase implement no tiene perfil/)).toBeTruthy();
+    expect(form.getByText(/La fase Implementación no tiene perfil/)).toBeTruthy();
 
     await user.selectOptions(select, "Profundo");
 
-    expect(form.queryByText(/La fase implement no tiene perfil/)).toBeNull();
+    expect(form.queryByText(/La fase Implementación no tiene perfil/)).toBeNull();
     expect(form.getAllByRole("note")).toHaveLength(3);
   });
 
@@ -117,7 +117,7 @@ describe("project creation", () => {
     await user.type(form.getByLabelText("Nombre"), "perfiles");
     await user.type(form.getByLabelText("Repositorio"), "owner/perfiles");
     await user.type(form.getByLabelText("Ruta local"), "/repos/perfiles");
-    await user.selectOptions(await form.findByLabelText("Perfil de implement"), "Rápido");
+    await user.selectOptions(await form.findByLabelText("Perfil de Implementación"), "Rápido");
     await user.click(form.getByRole("button", { name: "Crear proyecto" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
@@ -148,7 +148,7 @@ describe("project creation", () => {
     const { user, dialog } = await openDialog(fake);
     const form = within(dialog);
 
-    await user.selectOptions(await form.findByLabelText("Perfil de refine"), "Con copilot");
+    await user.selectOptions(await form.findByLabelText("Perfil de Refinamiento"), "Con copilot");
 
     expect(
       await form.findByText(/Este perfil tiene modelos con proveedor deshabilitado \(copilot\)/),
@@ -249,13 +249,15 @@ describe("project editing", () => {
     expect((form.getByLabelText("Bootstrap del worktree") as HTMLInputElement).value).toBe("");
     expect((form.getByLabelText("Concurrencia") as HTMLInputElement).value).toBe("2");
     await waitFor(() =>
-      expect((form.getByLabelText("Perfil de implement") as HTMLSelectElement).value).toBe(
+      expect((form.getByLabelText("Perfil de Implementación") as HTMLSelectElement).value).toBe(
         profundo.id,
       ),
     );
-    expect((form.getByLabelText("Perfil de refine") as HTMLSelectElement).value).toBe(rapido.id);
-    expect((form.getByLabelText("Perfil de verify") as HTMLSelectElement).value).toBe("");
-    expect((form.getByLabelText("Timeout de implement (min)") as HTMLInputElement).value).toBe(
+    expect((form.getByLabelText("Perfil de Refinamiento") as HTMLSelectElement).value).toBe(
+      rapido.id,
+    );
+    expect((form.getByLabelText("Perfil de Verificación") as HTMLSelectElement).value).toBe("");
+    expect((form.getByLabelText("Timeout de Implementación (min)") as HTMLInputElement).value).toBe(
       "60",
     );
   });
@@ -291,21 +293,31 @@ describe("project editing", () => {
 
   it("choosing 'no profile' unassigns the phase and the project shows the missing-profile badge", async () => {
     const { fake, project, app } = setup();
-    expect((await screen.findAllByText("Sin perfil: verify")).length).toBe(1);
+    expect((await screen.findAllByText("Sin perfil: Verificación")).length).toBe(1);
     await app.user.click(await screen.findByRole("button", { name: "Editar viejo" }));
     const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
 
-    await app.user.selectOptions(await form.findByLabelText("Perfil de refine"), "");
+    await app.user.selectOptions(await form.findByLabelText("Perfil de Refinamiento"), "");
     await app.user.click(form.getByRole("button", { name: "Guardar cambios" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(fake.projects.find((p) => p.id === project.id)?.agentProfiles.refine).toBeNull();
-    expect(await screen.findByText("Sin perfil: refine, verify")).toBeTruthy();
+    expect(await screen.findByText("Sin perfil: Refinamiento, Verificación")).toBeTruthy();
+  });
+
+  it("the link of a held task opens the edit form of that project", async () => {
+    const fake = new FakeApi();
+    fake.addProject({ name: "otro" });
+    const project = fake.addProject({ name: "retenido" });
+    renderApp(`/projects?edit=${project.id}`, fake);
+
+    const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
+    expect((form.getByLabelText("Nombre") as HTMLInputElement).value).toBe("retenido");
   });
 
   it("the missing-profile badge wraps inside the card instead of overflowing on narrow screens", async () => {
     setup();
-    const badge = await screen.findByText("Sin perfil: verify");
+    const badge = await screen.findByText("Sin perfil: Verificación");
     expect(badge.className).toContain("whitespace-normal");
     expect(badge.className).not.toContain("whitespace-nowrap");
     expect(badge.className).toContain("max-w-full");
@@ -316,7 +328,9 @@ describe("project editing", () => {
     await app.user.click(await screen.findByRole("button", { name: "Editar viejo" }));
     const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
     await waitFor(() =>
-      expect((form.getByLabelText("Perfil de implement") as HTMLSelectElement).value).not.toBe(""),
+      expect((form.getByLabelText("Perfil de Implementación") as HTMLSelectElement).value).not.toBe(
+        "",
+      ),
     );
     fake.profiles.splice(0, fake.profiles.length);
 

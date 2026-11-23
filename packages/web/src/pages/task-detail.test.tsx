@@ -1097,13 +1097,13 @@ describe("task held without a profile", () => {
     renderApp(`/tasks/${task.id}`, fake);
 
     const notice = await screen.findByText(
-      "Esta tarea espera en cola: la fase refine del proyecto lunas-queue no tiene un perfil de agente.",
+      "Esta tarea espera en cola: la fase Refinamiento del proyecto lunas-queue no tiene un perfil de agente.",
     );
     expect(
       within(notice.closest("[role=status]") as HTMLElement)
         .getByRole("link", { name: "Editar el proyecto" })
         .getAttribute("href"),
-    ).toBe("/projects");
+    ).toBe(`/projects?edit=${project.id}`);
   });
 
   it("explains that every model of the profile uses a disabled provider", async () => {

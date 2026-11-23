@@ -199,7 +199,7 @@ describe("Profiles tab", () => {
 
     const alert = await within(dialog).findByRole("alert");
     expect(alert.textContent).toContain("No se puede eliminar: lo usan estos proyectos");
-    expect(alert.textContent).toContain("proyecto-a: refine, implement");
+    expect(alert.textContent).toContain("proyecto-a: Refinamiento, Implementación");
     expect(within(dialog).getByRole("button", { name: "Eliminar" }).hasAttribute("disabled")).toBe(
       true,
     );
@@ -220,7 +220,7 @@ describe("Profiles tab", () => {
     await user.click(within(dialog).getByRole("button", { name: "Eliminar" }));
 
     const alert = await within(dialog).findByRole("alert");
-    expect(alert.textContent).toContain("otro: verify");
+    expect(alert.textContent).toContain("otro: Verificación");
     expect(fake.profiles).toHaveLength(1);
   });
 });
