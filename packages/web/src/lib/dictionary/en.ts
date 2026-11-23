@@ -352,6 +352,7 @@ export const en: Dictionary = {
     answering_unavailable: "This server cannot deliver answers to agents.",
     not_blocked: "The Run has no blocked agent.",
     has_tasks: "The project has tasks and cannot be deleted.",
+    instruction_limit: "This task already has the maximum of 50 instructions.",
   },
   columns: {
     task: "Task",

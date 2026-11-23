@@ -9,6 +9,7 @@ import { DependenciesPanel } from "../components/task/dependencies.tsx";
 import { EventLogPanel } from "../components/task/event-log.tsx";
 import { EvidencePanel } from "../components/task/evidence.tsx";
 import { GoalText } from "../components/task/goal-text.tsx";
+import { InstructionsPanel } from "../components/task/instructions.tsx";
 import { ResultPanel } from "../components/task/result.tsx";
 import { RunsPanel } from "../components/task/runs.tsx";
 import { SpecPanel } from "../components/task/spec.tsx";
@@ -173,6 +174,7 @@ export function TaskDetailPage() {
     <div className="flex flex-col gap-4">
       <Header task={task.data} />
       <ResultPanel task={task.data} />
+      <InstructionsPanel taskId={taskId} instructions={task.data.instructions} />
       <div className="grid gap-4 lg:grid-cols-2">
         <DependenciesPanel task={task.data} />
         <UsagePanel key={taskId} taskId={taskId} />

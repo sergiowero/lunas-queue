@@ -353,6 +353,7 @@ export const es = {
     answering_unavailable: "Este servidor no puede entregar respuestas a los agentes.",
     not_blocked: "El Run no tiene un agente bloqueado.",
     has_tasks: "El proyecto tiene tareas y no se puede eliminar.",
+    instruction_limit: "Esta tarea ya tiene el máximo de 50 instrucciones.",
   } as Record<string, string>,
   columns: {
     task: "Tarea",
