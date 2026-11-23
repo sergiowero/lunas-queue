@@ -8,7 +8,14 @@ import {
   type RunRow,
   TaskWorktreeRepository,
 } from "@lunasq/db";
-import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
+import {
+  allPhasesWith,
+  insertAgentProfile,
+  insertProject,
+  insertTask,
+  migratedDatabase,
+  type TestProfileModel,
+} from "@lunasq/db/test-helpers";
 import type { DispatchDecision } from "@lunasq/domain";
 import type { Notification, ProjectCreate } from "@lunasq/schemas";
 import { PhaseDispatcher } from "../dispatcher/dispatcher.ts";
@@ -24,10 +31,16 @@ export function harness(
     project?: Partial<ProjectCreate>;
     watcher?: Partial<RunWatcherOptions>;
     herdr?: FakeHerdr;
+    /** Models of the agent profile every phase selects; a single Claude model by default. */
+    profileModels?: TestProfileModel[];
   } = {},
 ) {
   const db = migratedDatabase();
-  const project = insertProject(db, opts.project);
+  const profile = opts.profileModels && insertAgentProfile(db, { models: opts.profileModels });
+  const project = insertProject(db, {
+    ...opts.project,
+    ...(profile && { agentProfiles: allPhasesWith(profile.id) }),
+  });
   // Prompts do not end on their own (20 days, under setTimeout's cap): each test decides.
   const herdr = opts.herdr ?? new FakeHerdr({ promptDurationMs: 20 * 24 * 60 * MIN });
   const projects = new ProjectRepository(db);
@@ -56,6 +69,10 @@ export function harness(
       if (!dispatcher) throw new Error("no dispatcher");
       return dispatcher.failRun(runId, reason);
     },
+    failModel: (runId, reason) => {
+      if (!dispatcher) throw new Error("no dispatcher");
+      return dispatcher.failModelRun(runId, reason);
+    },
     onLost: () => {
       lost += 1;
     },
@@ -69,6 +86,8 @@ export function harness(
     worktrees,
     projects,
     mcpConfigPath: "/cfg/lunasq-mcp.json",
+    // Codex needs the URL to configure its MCP server.
+    mcpUrl: "http://127.0.0.1:8123/mcp",
     hookSettingsPath: "/cfg/lunasq-settings.json",
     observer: watcher,
     newSessionId: () => `sess-${++sessions}`,
@@ -95,6 +114,8 @@ export function harness(
       projectId: project.id,
       phase: "refine",
       agentKind: "claude",
+      profileId: project.agentProfiles.refine as string,
+      modelIndex: 0,
       score: 0,
       expected: { state: "draft", subState: "queued" },
     };

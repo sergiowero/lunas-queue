@@ -1,4 +1,9 @@
-import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
+import {
+  insertAgentProfile,
+  insertProject,
+  insertTask,
+  migratedDatabase,
+} from "@lunasq/db/test-helpers";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.ts";
 
@@ -34,17 +39,35 @@ describe("POST /api/projects", () => {
     const { send } = setup();
     const project = await created(send);
     expect(project).toMatchObject({ ...input, limits: {}, testCommand: null, bootstrap: null });
-    expect(project.agentProfiles).toMatchObject({ verify: { kind: "claude", args: [] } });
+    // Phases are unassigned until the human selects an agent profile.
+    expect(project.agentProfiles).toEqual({
+      refine: null,
+      implement: null,
+      verify: null,
+      deliver: null,
+    });
   });
 
-  it("accepts Codex as a verification provider", async () => {
+  it("stores the selected profile ids per phase", async () => {
+    const { db, send } = setup();
+    const profile = insertAgentProfile(db);
+    const res = await send("POST", "/api/projects", {
+      ...input,
+      agentProfiles: { verify: profile.id },
+    });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ agentProfiles: { verify: profile.id } });
+  });
+
+  it("rejects a phase that references a profile that does not exist with 400 profile_not_found", async () => {
     const { send } = setup();
     const res = await send("POST", "/api/projects", {
       ...input,
-      agentProfiles: { verify: { kind: "codex" } },
+      agentProfiles: { implement: crypto.randomUUID() },
     });
-    expect(res.status).toBe(201);
-    expect(await res.json()).toMatchObject({ agentProfiles: { verify: { kind: "codex" } } });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "profile_not_found", phases: ["implement"] });
+    expect((await (await send("GET", "/api/projects")).json()) as unknown[]).toEqual([]);
   });
 
   it("answers 400 if the body is not JSON", async () => {
@@ -100,14 +123,34 @@ describe("PATCH /api/projects/:id", () => {
     });
   });
 
-  it("accepts Codex as an updated verification provider", async () => {
+  it("selects a profile for a phase and unassigns it with null", async () => {
+    const { db, send } = setup();
+    const profile = insertAgentProfile(db);
+    const project = await created(send);
+    const res = await send("PATCH", `/api/projects/${project.id}`, {
+      agentProfiles: { verify: profile.id },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ agentProfiles: { verify: profile.id } });
+    const cleared = await send("PATCH", `/api/projects/${project.id}`, {
+      agentProfiles: { verify: null },
+    });
+    expect(await cleared.json()).toMatchObject({ agentProfiles: { verify: null } });
+  });
+
+  it("a PATCH with an unknown profile id answers 400 profile_not_found and the project does not change", async () => {
     const { send } = setup();
     const project = await created(send);
     const res = await send("PATCH", `/api/projects/${project.id}`, {
-      agentProfiles: { verify: { kind: "codex" } },
+      baseBranch: "develop",
+      agentProfiles: { refine: crypto.randomUUID() },
     });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ agentProfiles: { verify: { kind: "codex" } } });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "profile_not_found", phases: ["refine"] });
+    const stored = (await (await send("GET", `/api/projects/${project.id}`)).json()) as {
+      baseBranch: string;
+    };
+    expect(stored.baseBranch).toBe("main");
   });
 
   it("answers 404 if it does not exist", async () => {
@@ -154,16 +197,15 @@ describe("errors and per-phase PATCH", () => {
   });
 
   it("PATCH of one phase keeps the others", async () => {
-    const { send } = setup();
-    const project = await created(send, {
-      ...input,
-      agentProfiles: { implement: { kind: "claude", model: "opus" } },
-    });
+    const { db, send } = setup();
+    const opus = insertAgentProfile(db);
+    const sonnet = insertAgentProfile(db);
+    const project = await created(send, { ...input, agentProfiles: { implement: opus.id } });
     const res = await send("PATCH", `/api/projects/${project.id}`, {
-      agentProfiles: { verify: { kind: "claude", model: "sonnet" } },
+      agentProfiles: { verify: sonnet.id },
     });
     expect(await res.json()).toMatchObject({
-      agentProfiles: { implement: { model: "opus" }, verify: { model: "sonnet" } },
+      agentProfiles: { implement: opus.id, verify: sonnet.id },
     });
   });
 

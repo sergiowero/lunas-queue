@@ -3,14 +3,17 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type GitAdapter, isGitError } from "@lunasq/adapters";
-import type {
-  LunasqDatabase,
-  ProjectRepository,
-  SchedulerStateRepository,
-  TaskRepository,
-  TaskViewRepository,
+import {
+  AgentProfileRepository,
+  exhaustedModelIndexes,
+  type LunasqDatabase,
+  type ProjectRepository,
+  readProviderSettings,
+  type SchedulerStateRepository,
+  type TaskRepository,
+  type TaskViewRepository,
 } from "@lunasq/db";
-import { rankReady } from "@lunasq/domain";
+import { pendingPhase, rankReady, resolveProjectPhase } from "@lunasq/domain";
 import {
   EMPTY_USAGE,
   type QueueEntry,
@@ -18,6 +21,7 @@ import {
   type SchedulerConfig,
   type Task,
   type TaskEvidence,
+  type TaskHold,
 } from "@lunasq/schemas";
 import { Hono } from "hono";
 import { invalidInput, notFound } from "./http.ts";
@@ -124,6 +128,33 @@ function queue(deps: ViewDeps, projectId: string | undefined): QueueEntry[] {
     .map(({ position: _, ...entry }) => entry);
 }
 
+/**
+ * Why a queued task is not dispatched because of its project's configuration (null if it is not
+ * held): the phase has no agent profile, or no model of it can start (ADR agent-profiles).
+ */
+function holdOf(deps: ViewDeps, task: Task): TaskHold {
+  const phase = pendingPhase(task.state);
+  if (!phase || task.subState !== "queued") return { hold: null };
+  const project = deps.projects.get(task.projectId);
+  if (!project) return { hold: null };
+  const resolved = resolveProjectPhase(
+    project,
+    phase,
+    new AgentProfileRepository(deps.db),
+    readProviderSettings(deps.db),
+    exhaustedModelIndexes(deps.db, task.id, phase),
+  );
+  if (resolved.status === "ready") return { hold: null };
+  return {
+    hold: {
+      reason: resolved.status === "unassigned" ? "profile_missing" : "providers_disabled",
+      phase,
+      projectId: project.id,
+      projectName: project.name,
+    },
+  };
+}
+
 export function queueRoutes(deps: ViewDeps): Hono {
   return new Hono().get("/", (c) => {
     const query = QueueQuery.safeParse(c.req.query());
@@ -146,6 +177,10 @@ export function taskViewRoutes(deps: ViewDeps): Hono {
     .get("/:id/usage", (c) => {
       const usage = deps.views.usage(c.req.param("id"));
       return usage ? c.json(usage) : notFound(c);
+    })
+    .get("/:id/hold", (c) => {
+      const task = deps.tasks.get(c.req.param("id"));
+      return task ? c.json(holdOf(deps, task)) : notFound(c);
     })
     .get("/:id/evidence", async (c) => {
       const task = deps.tasks.get(c.req.param("id"));

@@ -4,6 +4,7 @@
 // message and on a periodic tick; since it recomputes everything from the database, repeating a pass does not
 // duplicate effects.
 import {
+  AgentProfileRepository,
   type ConcurrencySettingsReader,
   type LunasqDatabase,
   ProjectRepository,
@@ -13,6 +14,7 @@ import {
   transitionTask,
 } from "@lunasq/db";
 import {
+  type AgentProfileReader,
   type DependencyEscalation,
   type DispatchDecision,
   type ProjectConfigReader,
@@ -45,6 +47,8 @@ export interface SchedulerOptions {
   publisher?: OutboxPublisher;
   state?: SchedulerStateReader;
   projects?: ProjectConfigReader;
+  /** Agent profiles of the phases; by default those in the database. */
+  profiles?: AgentProfileReader;
   /**
    * Enabled providers and global concurrency limit; read on each pass. By default,
    * those of the database.
@@ -63,6 +67,7 @@ export class Scheduler {
   private readonly publisher: OutboxPublisher | undefined;
   private readonly state: SchedulerStateReader;
   private readonly projects: ProjectConfigReader;
+  private readonly profiles: AgentProfileReader;
   private readonly settings: ProviderSettingsReader & ConcurrencySettingsReader;
   private readonly now: () => Date;
   private readonly onError: SchedulerErrorHandler;
@@ -80,6 +85,7 @@ export class Scheduler {
     this.publisher = opts.publisher;
     this.state = opts.state ?? new SchedulerStateRepository(opts.db);
     this.projects = opts.projects ?? new ProjectRepository(opts.db);
+    this.profiles = opts.profiles ?? new AgentProfileRepository(opts.db);
     this.settings = opts.settings ?? new SettingsRepository(opts.db);
     this.now = opts.now ?? (() => new Date());
     this.onError = opts.onError ?? defaultError;
@@ -140,6 +146,7 @@ export class Scheduler {
     const plan = schedule(
       this.state.snapshot(),
       this.projects,
+      this.profiles,
       {
         ...this.config,
         globalConcurrency: this.settings.concurrency(this.config.globalConcurrency)

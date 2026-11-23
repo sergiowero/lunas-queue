@@ -1,12 +1,20 @@
 import {
+  AgentProfileRepository,
   type LunasqDatabase,
   listEvents,
+  ProjectRepository,
   SchedulerStateRepository,
   SettingsRepository,
   taskDependencies,
   transitionTask,
 } from "@lunasq/db";
-import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
+import {
+  allPhasesWith,
+  insertAgentProfile,
+  insertProject,
+  insertTask,
+  migratedDatabase,
+} from "@lunasq/db/test-helpers";
 import type { DispatchDecision } from "@lunasq/domain";
 import { TASK_TRANSITIONED, TaskTransitionedPayload } from "@lunasq/schemas";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -269,8 +277,15 @@ describe("Scheduler", () => {
     ).toBe("queued");
   });
 
-  it("reads the configuration on each pass and dispatches to the enabled provider", async () => {
-    const { db, project, dispatcher, scheduler } = setup();
+  it("reads the configuration on each pass and dispatches to the enabled provider of the profile", async () => {
+    const db = migratedDatabase();
+    const profile = insertAgentProfile(db, {
+      models: [{ kind: "claude" }, { kind: "copilot" }],
+    });
+    const project = insertProject(db, { agentProfiles: allPhasesWith(profile.id) });
+    const dispatcher = new FakeDispatcher(db);
+    const scheduler = new Scheduler({ db, dispatcher, onError: () => {} });
+    stoppables.push(scheduler);
     const settings = new SettingsRepository(db);
     const task = insertTask(db, project.id);
     settings.saveProviders({ claude: false, copilot: false, codex: false });
@@ -279,7 +294,55 @@ describe("Scheduler", () => {
 
     settings.saveProviders({ claude: false, copilot: true, codex: false });
     await scheduler.run();
-    expect(dispatcher.calls.map((d) => [d.taskId, d.agentKind])).toEqual([[task.id, "copilot"]]);
+    expect(dispatcher.calls.map((d) => [d.taskId, d.agentKind, d.modelIndex])).toEqual([
+      [task.id, "copilot", 1],
+    ]);
+  });
+
+  it("holds the tasks of an unassigned phase without a Run, a retry or an escalation, and dispatches them once a profile is assigned", async () => {
+    const db = migratedDatabase();
+    const project = insertProject(db, { agentProfiles: allPhasesWith(null) });
+    const dispatcher = new FakeDispatcher(db);
+    const publisher = new OutboxPublisher({ db, onError: () => {}, pollIntervalMs: 60_000 });
+    const scheduler = new Scheduler({
+      db,
+      dispatcher,
+      publisher,
+      config: { tickIntervalMs: 60_000 },
+      onError: () => {},
+    });
+    stoppables.push(scheduler, publisher);
+    const task = insertTask(db, project.id);
+    await scheduler.start();
+    await publisher.start();
+    expect(dispatcher.calls).toEqual([]);
+    expect(
+      db.$client.prepare("select state, sub_state as s from tasks where id = ?").get(task.id),
+    ).toEqual({ state: "draft", s: "queued" });
+    expect(db.$client.prepare("select count(*) from runs").pluck().get()).toBe(0);
+
+    // Assigning a profile records project.updated, which wakes the scheduler through the outbox.
+    const profile = insertAgentProfile(db, { models: [{ kind: "claude", model: "opus" }] });
+    new ProjectRepository(db).update(project.id, { agentProfiles: { refine: profile.id } });
+    publisher.wake();
+    await vi.waitFor(() =>
+      expect(dispatcher.calls.map((d) => [d.taskId, d.profileId, d.modelIndex])).toEqual([
+        [task.id, profile.id, 0],
+      ]),
+    );
+  });
+
+  it("an edited profile applies to the next pass: the effective model changes", async () => {
+    const db = migratedDatabase();
+    const profile = insertAgentProfile(db, { models: [{ kind: "claude" }] });
+    const project = insertProject(db, { agentProfiles: allPhasesWith(profile.id) });
+    const dispatcher = new FakeDispatcher(db);
+    const scheduler = new Scheduler({ db, dispatcher, onError: () => {} });
+    stoppables.push(scheduler);
+    new AgentProfileRepository(db).update(profile.id, { models: [{ kind: "codex" }] });
+    insertTask(db, project.id);
+    await scheduler.run();
+    expect(dispatcher.calls.map((d) => d.agentKind)).toEqual(["codex"]);
   });
 
   it("settings.updated wakes the scheduler through the outbox", async () => {

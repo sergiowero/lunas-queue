@@ -476,3 +476,134 @@ function transitionMessage(taskId: string) {
     createdAt: new Date().toISOString(),
   };
 }
+
+describe("RunWatcher: model fallback", () => {
+  const CLAUDE_LIMIT_SCREEN =
+    "trabajo en curso…\nUsage limit reached · limit resets 3:45pm\nContinuing automatically at 3:45pm · Esc to cancel";
+  const twoModels = [
+    { kind: "claude", model: "opus" },
+    { kind: "codex", model: "gpt-5" },
+  ] as const;
+
+  it("usage limit with another model in the profile: the Run closes as a model failure, no escalation, no retry consumed", async () => {
+    const h = setup({ profileModels: [...twoModels] });
+    const { taskId, run, name } = await h.launched();
+    h.herdr.setAgentScreen(name, CLAUDE_LIMIT_SCREEN);
+    h.herdr.setAgentStatus(name, "idle");
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_NUDGE_GRACE_MS);
+    await settle(vi);
+
+    expect(h.runs.get(run.id)).toMatchObject({ result: "failure", modelFailed: true });
+    expect(h.runs.get(run.id)?.failureReason).toContain("usage_limit:");
+    // Back to queued so the next pass starts the next model; not needs_human, and no notification.
+    expect(h.taskRow(taskId)).toMatchObject({ state: "draft", subState: "queued" });
+    expect(h.notifications.filter((n) => n.kind === "usage_limit")).toEqual([]);
+    expect(h.runs.consecutiveFailures(taskId, "refine")).toBe(0);
+    expect(h.runs.exhaustedModels(taskId, "refine")).toEqual([0]);
+    expect(await h.herdr.getAgent(name)).toBeUndefined();
+    expect(h.watcher.watching()).toEqual([]);
+    expect(h.errors).toEqual([]);
+  });
+
+  it("the agent exits and the profile has a next model: fallback instead of run_failed with retries", async () => {
+    const h = setup({ profileModels: [...twoModels] });
+    const { taskId, run, name } = await h.launched();
+
+    h.herdr.exitAgent(name);
+    await settle(vi);
+
+    expect(h.runs.get(run.id)).toMatchObject({ result: "failure", modelFailed: true });
+    expect(h.runs.get(run.id)?.failureReason).toMatch(/^agent_exited:/);
+    expect(h.taskRow(taskId)).toMatchObject({ state: "draft", subState: "queued" });
+    expect(h.runs.consecutiveFailures(taskId, "refine")).toBe(0);
+  });
+
+  it("the agent stops without the end-of-phase signal after the nudges: fallback", async () => {
+    const h = setup({ profileModels: [...twoModels] });
+    const { taskId, run, name } = await h.launched();
+
+    for (let n = 0; n <= DEFAULT_MAX_NUDGES; n++) {
+      h.herdr.setAgentStatus(name, n % 2 === 0 ? "done" : "idle");
+      await settle(vi);
+      await vi.advanceTimersByTimeAsync(DEFAULT_NUDGE_GRACE_MS);
+      await settle(vi);
+    }
+
+    expect(h.runs.get(run.id)).toMatchObject({ result: "failure", modelFailed: true });
+    expect(h.runs.get(run.id)?.failureReason).toMatch(/^agent_stopped:/);
+    expect(h.taskRow(taskId)).toMatchObject({ state: "draft", subState: "queued" });
+    expect(h.runs.consecutiveFailures(taskId, "refine")).toBe(0);
+  });
+
+  it("the last model of a dispatch that already failed escalates with providers_unavailable and every failure", async () => {
+    const h = setup({ profileModels: [...twoModels] });
+    const first = await h.launched();
+    h.herdr.exitAgent(first.name);
+    await settle(vi);
+    expect(h.runs.exhaustedModels(first.taskId, "refine")).toEqual([0]);
+    // The scheduler would start the next Run with the next model; the same Run machinery does it here.
+    await h.dispatcher?.dispatch({
+      taskId: first.taskId,
+      projectId: h.project.id,
+      phase: "refine",
+      agentKind: "codex",
+      profileId: h.project.agentProfiles.refine as string,
+      modelIndex: 1,
+      score: 0,
+      expected: { state: "draft", subState: "queued" },
+    });
+    await h.dispatcher?.idle();
+    const second = h.runs.latestForTask(first.taskId);
+    expect(second).toMatchObject({ modelIndex: 1, agentKind: "codex" });
+
+    h.herdr.exitAgent(second?.herdrName ?? "");
+    await settle(vi);
+
+    expect(h.taskRow(first.taskId)).toMatchObject({ state: "needs_human" });
+    const event = h.db.$client
+      .prepare("select payload from events where task_id = ? order by id desc limit 1")
+      .get(first.taskId) as { payload: string };
+    const payload = JSON.parse(event.payload) as { reason: string; note: string };
+    expect(payload.reason).toBe("providers_unavailable");
+    expect(payload.note).toContain("#1 claude opus: agent_exited");
+    expect(payload.note).toContain("#2 codex gpt-5: agent_exited");
+  });
+
+  it("with a single model there is nothing to fall back to: the usual route applies", async () => {
+    const h = setup();
+    const { taskId, run, name } = await h.launched();
+
+    h.herdr.exitAgent(name);
+    await settle(vi);
+
+    expect(h.runs.get(run.id)).toMatchObject({ result: "failure", modelFailed: false });
+    expect(h.runs.consecutiveFailures(taskId, "refine")).toBe(1);
+  });
+
+  it("with a single model a usage limit keeps the usage_limit escalation with the agent alive", async () => {
+    const h = setup();
+    const { taskId, run, name } = await h.launched();
+    h.herdr.setAgentScreen(name, CLAUDE_LIMIT_SCREEN);
+    h.herdr.setAgentStatus(name, "idle");
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_NUDGE_GRACE_MS);
+    await settle(vi);
+
+    expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human" });
+    expect(h.runs.get(run.id)?.endedAt).toBeNull();
+    expect(await h.herdr.getAgent(name)).toBeDefined();
+  });
+
+  it("a phase timeout is not a model failure: it escalates and never falls back", async () => {
+    const h = setup({ profileModels: [...twoModels] });
+    const { taskId, run, name } = await h.launched();
+
+    await vi.advanceTimersByTimeAsync(31 * MIN);
+    await settle(vi);
+
+    expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human" });
+    expect(h.runs.get(run.id)).toMatchObject({ endedAt: null, modelFailed: false });
+    expect(await h.herdr.getAgent(name)).toBeDefined();
+  });
+});

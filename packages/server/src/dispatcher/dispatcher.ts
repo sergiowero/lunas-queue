@@ -21,6 +21,7 @@ import {
   TRUST_ACCEPT_KEYS,
 } from "@lunasq/adapters";
 import {
+  AgentProfileRepository,
   type ClaimErrorCode,
   type CloseRunInput,
   claimRun,
@@ -35,11 +36,13 @@ import {
   TaskWorktreeRepository,
 } from "@lunasq/db";
 import {
+  type AgentProfileReader,
   type DispatchDecision,
   DispatchRuleError,
+  type PhaseModel,
   type ProjectConfigReader,
-  phaseProfile,
   phasePrompt,
+  resolveProjectPhase,
   resolveSession,
   runEnv,
   type TaskWorktreeRecord,
@@ -50,6 +53,7 @@ import {
   HOOK_POINT_COMPLETED,
   type HookPoint,
   HookPointCompletedPayload,
+  type ProfileModel,
   type Project,
   type SchedulablePhase,
   SchedulablePhase as SchedulablePhaseSchema,
@@ -127,6 +131,8 @@ export interface PhaseDispatcherOptions {
   /** Stable settings with the subagent hooks (ADR uw-19-revisores); see `ensureHookSettings`. */
   hookSettingsPath: string;
   projects?: ProjectConfigReader;
+  /** Agent profiles of the phases; by default those in the database. */
+  profiles?: AgentProfileReader;
   /** Enabled providers; by default those in the database. Read on claim and on launch. */
   settings?: ProviderSettingsReader;
   /** The same limits as the scheduler: the claim revalidates them (ADR 0014). */
@@ -156,6 +162,7 @@ export class PhaseDispatcher implements Dispatcher {
   private readonly copilotMcpDirs = new Map<string, string>();
   private readonly hookSettingsPath: string;
   private readonly projects: ProjectConfigReader;
+  private readonly profiles: AgentProfileReader;
   private readonly settings: ProviderSettingsReader;
   private readonly config: SchedulerConfig;
   private readonly paneEnv: Record<string, string>;
@@ -184,6 +191,7 @@ export class PhaseDispatcher implements Dispatcher {
     this.mcpUrl = opts.mcpUrl;
     this.hookSettingsPath = opts.hookSettingsPath;
     this.projects = opts.projects ?? new ProjectRepository(opts.db);
+    this.profiles = opts.profiles ?? new AgentProfileRepository(opts.db);
     this.settings = opts.settings ?? new SettingsRepository(opts.db);
     this.config = SchedulerConfig.parse(opts.config ?? {});
     this.paneEnv = {
@@ -295,7 +303,7 @@ export class PhaseDispatcher implements Dispatcher {
   failRun(
     runId: string,
     reason: string,
-    opts: { maxRetries?: number; providersUnavailable?: boolean } = {},
+    opts: { maxRetries?: number; providersUnavailable?: boolean; note?: string } = {},
   ): Promise<FailRunResult> {
     return this.closeLocks.run(runId, async () => {
       if (!this.runs.get(runId))
@@ -315,6 +323,54 @@ export class PhaseDispatcher implements Dispatcher {
       const res = this.runs.pause(runId, reason);
       await this.releaseAndRecord(runId);
       return res;
+    });
+  }
+
+  /**
+   * The Run's model failed after launch (usage limit, the agent exited or stopped without the
+   * end-of-phase signal). With another enabled model left in the profile, the Run is closed as a model
+   * failure and the task returns to queued: the next pass starts a new Run of the same phase, in the same
+   * worktree, with the next model, and no retry is consumed. When that was the last enabled model of a
+   * dispatch that already had failures, the Run fails and the task escalates to needs_human with every
+   * model's failure. Otherwise (a profile with nothing to fall back to) it does nothing and the caller
+   * applies the usual route. Idempotent.
+   */
+  failModelRun(runId: string, reason: string): Promise<ModelFailureOutcome> {
+    return this.closeLocks.run(runId, async () => {
+      const run = this.runs.get(runId);
+      if (!run) throw new DispatchError("run_not_found", `Run ${runId} does not exist`);
+      if (run.endedAt !== null) return "settled";
+      const phase = SchedulablePhaseSchema.safeParse(run.phase);
+      const task = this.tasks.get(run.taskId);
+      const project = task ? this.projects.get(task.projectId) : null;
+      if (!phase.success || !project) return "unavailable";
+      const prior = new Set(this.runs.exhaustedModels(run.taskId, phase.data));
+      for (const a of this.runs.providerAttempts(run.id)) {
+        if (a.status === "failed") prior.add(a.modelIndex);
+      }
+      const next = resolveProjectPhase(
+        project,
+        phase.data,
+        this.profiles,
+        this.settings.providers(),
+        [...prior, ...(run.modelIndex === null ? [] : [run.modelIndex])],
+      );
+      if (next.status === "ready") {
+        this.runs.failModel(runId, reason);
+        await this.releaseAndRecord(runId);
+        return "fallback";
+      }
+      if (prior.size === 0) return "unavailable";
+      const failures = [
+        ...this.runs.modelFailures(run.taskId, phase.data, run.id),
+        `${describeModel(run)}: ${reason}`,
+      ];
+      this.runs.fail(runId, `no model of the profile is left: ${failures.join("; ")}`, {
+        providersUnavailable: true,
+        note: `Every model of the ${phase.data} profile failed: ${failures.join("; ")}`,
+      });
+      await this.releaseAndRecord(runId);
+      return "exhausted";
     });
   }
 
@@ -470,6 +526,11 @@ export class PhaseDispatcher implements Dispatcher {
     return run.herdrPane !== null && agent.paneId === run.herdrPane;
   }
 
+  /**
+   * Starts the agent with the effective model of the phase profile; if it does not start, with the next
+   * enabled one, each model at most once per phase dispatch. The enabled providers and the profile
+   * are read again right before each attempt: the human may have changed them after the claim.
+   */
   private async startAgentWithFallback(
     project: Project,
     phase: SchedulablePhase,
@@ -477,27 +538,24 @@ export class PhaseDispatcher implements Dispatcher {
     name: string,
     worktree: { workspaceId: string; rootPaneId: string; path: string },
   ): Promise<HerdrAgent | null> {
-    const primary = phaseProfile(project, phase);
-    // Only the providers enabled now; the human may have changed them after the claim, so
-    // it is read again right before starting each one.
-    const order = agentProviders.fallbackOrder(primary.kind);
-    const isEnabled = (kind: AgentKind) => this.settings.providers()[kind];
     const attempts = this.runs.providerAttempts(initial.id);
-    const latest = new Map<AgentKind, (typeof attempts)[number]["status"]>();
-    for (const attempt of attempts) latest.set(attempt.provider, attempt.status);
-    const diagnostics = attempts.flatMap((attempt) =>
-      attempt.status === "failed" && attempt.reason
-        ? [`${attempt.provider}: ${attempt.reason}`]
+    const latest = new Map<number, (typeof attempts)[number]>();
+    for (const attempt of attempts) latest.set(attempt.modelIndex, attempt);
+    const diagnostics = [...latest.values()].flatMap((a) =>
+      a.status === "failed" && a.reason
+        ? [`${describeAttempt(a.provider, a.model, a.modelIndex)}: ${a.reason}`]
         : [],
     );
 
-    if ([...latest.values()].includes("started")) {
-      for (const [kind, status] of latest) {
-        if (status !== "started") continue;
+    if ([...latest.values()].some((a) => a.status === "started")) {
+      for (const attempt of [...latest.values()]) {
+        if (attempt.status !== "started") continue;
         const reason = "the process was interrupted before confirming the start";
-        this.runs.recordProviderAttempt(initial.id, kind, "failed", reason);
-        diagnostics.push(`${kind}: ${reason}`);
-        latest.set(kind, "failed");
+        this.runs.recordProviderAttempt(initial.id, attempt, "failed", reason);
+        diagnostics.push(
+          `${describeAttempt(attempt.provider, attempt.model, attempt.modelIndex)}: ${reason}`,
+        );
+        latest.set(attempt.modelIndex, { ...attempt, status: "failed", reason });
       }
       if (initial.herdrPane) {
         await this.herdr.closePane(initial.herdrPane);
@@ -505,40 +563,59 @@ export class PhaseDispatcher implements Dispatcher {
       }
     }
 
-    const attempted = new Set(latest.keys());
+    // Models already tried in the closed Runs of this phase dispatch and in this Run's launch.
+    const tried = new Set<number>([
+      ...this.runs.exhaustedModels(initial.taskId, phase),
+      ...latest.keys(),
+    ]);
+    // Models left without a concurrency slot: skipped for now, not failed.
+    const unslotted = new Set<number>();
     let saturated = false;
-    for (const provider of order) {
-      if (attempted.has(provider.kind) || !isEnabled(provider.kind)) continue;
-      const switched = this.runs.switchAgentKind(
-        initial.id,
-        provider.kind,
-        provider.kind === primary.kind ? (primary.model ?? null) : null,
-        { projects: this.projects, config: this.config },
-      );
+    let last: ReturnType<typeof resolveProjectPhase> = { status: "exhausted" };
+    for (;;) {
+      last = resolveProjectPhase(project, phase, this.profiles, this.settings.providers(), [
+        ...tried,
+        ...unslotted,
+      ]);
+      if (last.status !== "ready") break;
+      const target: PhaseModel = last;
+      const kind = target.model.kind;
+      const switched = this.runs.switchModel(initial.id, target, {
+        projects: this.projects,
+        config: this.config,
+      });
       if (!switched) throw new DispatchError("run_not_found", `Run ${initial.id} does not exist`);
       if (switched === "no_slot") {
         // The claim reserved another provider: moving to this one would exceed its concurrency limit.
-        diagnostics.push(`${provider.kind}: no concurrency slot`);
+        diagnostics.push(
+          `${describeAttempt(kind, target.model.model, target.index)}: no concurrency slot`,
+        );
+        unslotted.add(target.index);
         saturated = true;
         continue;
       }
       let run: RunRow = switched;
       run = this.checkOpen(run.id);
-      const args = await this.args(project, phase, run);
+      const args = await this.args(run, target.model);
       const paneId = await this.ensurePane(run, worktree, phase);
       run = this.checkOpen(run.id);
       // Preparation waits for herdr and the file system: the human may have turned the provider off.
-      if (!isEnabled(provider.kind)) {
+      if (!this.settings.providers()[kind]) {
         await this.herdr.closePane(paneId);
         this.runs.clearPane(run.id);
         await this.removeCopilotMcpConfig(run.id);
         continue;
       }
-      this.runs.recordProviderAttempt(run.id, provider.kind, "started");
+      const attempt = {
+        provider: kind,
+        modelIndex: target.index,
+        model: target.model.model ?? null,
+      };
+      this.runs.recordProviderAttempt(run.id, attempt, "started");
       try {
         const started = await this.herdr.startAgent({
           name,
-          kind: provider.kind,
+          kind,
           paneId,
           args,
           timeoutMs: this.startTimeoutMs,
@@ -555,44 +632,54 @@ export class PhaseDispatcher implements Dispatcher {
       } catch (error) {
         if (isHerdrError(error, "agent_name_taken")) throw error;
         const reason = asError(error).message.replaceAll(run.runToken, "[redacted]");
-        diagnostics.push(`${provider.kind}: ${reason}`);
-        this.runs.recordProviderAttempt(run.id, provider.kind, "failed", reason);
+        diagnostics.push(`${describeAttempt(kind, target.model.model, target.index)}: ${reason}`);
+        this.runs.recordProviderAttempt(run.id, attempt, "failed", reason);
+        tried.add(target.index);
         await this.herdr.closePane(paneId);
         this.runs.clearPane(run.id);
       } finally {
-        if (provider.kind === "copilot") await this.removeCopilotMcpConfig(run.id);
+        if (kind === "copilot") await this.removeCopilotMcpConfig(run.id);
       }
     }
 
-    if (order.every((p) => !isEnabled(p.kind))) {
-      // The human turned them all off during the launch: it is not a CLI failure, the dispatch
-      // pauses and the task waits in queued until one is enabled.
-      await this.pauseRun(initial.id, "all providers are disabled in Settings");
+    if (last.status === "unassigned" || last.status === "providers_disabled") {
+      // The human unassigned the profile or turned every provider off during the launch: it is not a
+      // CLI failure, the dispatch pauses and the task waits in queued until it can run.
+      await this.pauseRun(
+        initial.id,
+        last.status === "unassigned"
+          ? `the ${phase} phase has no agent profile`
+          : "all providers of the profile are disabled in Settings",
+      );
       return null;
     }
     const hadRealFailure = this.runs
       .providerAttempts(initial.id)
       .some((a) => a.status === "failed");
     if (saturated && !hadRealFailure) {
-      // No provider failed to start and an enabled one was left without a slot: it is transient
+      // No model failed to start and an enabled one was left without a slot: it is transient
       // saturation, not a CLI failure. The task waits in queued and the scheduler
-      // replans it when a slot frees up. If some provider did fail, the failure is counted
-      // below: pausing would hide it and the scheduler would retry the broken provider without backoff.
+      // replans it when a slot frees up. If some model did fail, the failure is counted
+      // below: pausing would hide it and the scheduler would retry the broken model without backoff.
       await this.pauseRun(initial.id, `no concurrency slot: ${diagnostics.join("; ")}`);
       return null;
     }
-    const reason = `no provider responded on start: ${diagnostics.join("; ") || "no diagnosis"}`;
-    await this.failRun(initial.id, reason, { providersUnavailable: true });
+    const earlier = this.runs.modelFailures(initial.taskId, phase, initial.id);
+    const reason = `no model of the profile responded on start: ${diagnostics.join("; ") || "no diagnosis"}`;
+    await this.failRun(initial.id, reason, {
+      providersUnavailable: true,
+      note:
+        [...earlier.filter((line) => !diagnostics.includes(line)), ...diagnostics].join("; ") ||
+        reason,
+    });
     return null;
   }
 
-  private async args(project: Project, phase: SchedulablePhase, run: RunRow): Promise<string[]> {
-    const profile = phaseProfile(project, phase);
-    const selected = profile.kind === run.agentKind ? profile : { kind: run.agentKind, args: [] };
+  private async args(run: RunRow, model: ProfileModel): Promise<string[]> {
     try {
       const mcpConfigPath =
-        selected.kind === "copilot" ? await this.writeCopilotMcpConfig(run) : this.mcpConfigPath;
-      return agentProviders.get(selected.kind).args(selected, {
+        model.kind === "copilot" ? await this.writeCopilotMcpConfig(run) : this.mcpConfigPath;
+      return agentProviders.get(model.kind).args(model, {
         mcpConfigPath,
         ...(this.mcpUrl && { mcpUrl: this.mcpUrl }),
         settingsPath: this.hookSettingsPath,
@@ -765,6 +852,21 @@ const BEFORE_POINTS: Partial<Record<SchedulablePhase, HookPoint>> = {
   refine: "before_refinement",
   implement: "before_implementation",
 };
+
+/**
+ * What `failModelRun` did: moved the phase to the next model (`fallback`), escalated because every
+ * enabled model failed (`exhausted`), found nothing to fall back to (`unavailable`: the caller applies
+ * its usual route) or found the Run already closed (`settled`).
+ */
+export type ModelFailureOutcome = "fallback" | "exhausted" | "unavailable" | "settled";
+
+function describeAttempt(kind: AgentKind, model: string | null | undefined, index: number): string {
+  return `#${index + 1} ${kind}${model ? ` ${model}` : ""}`;
+}
+
+function describeModel(run: RunRow): string {
+  return describeAttempt(run.agentKind, run.model, run.modelIndex ?? 0);
+}
 
 /** The Run was closed while launching: the launch stops without failing it. */
 class RunClosed extends Error {}

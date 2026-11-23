@@ -124,6 +124,7 @@ export class Orchestrator {
       escalator: notifications.escalator,
       notify: this.notify,
       failRun: (runId, reason) => this.dispatcher.failRun(runId, reason),
+      failModel: (runId, reason) => this.dispatcher.failModelRun(runId, reason),
       onLost: () => this.reconciler.wake(),
       ...(reconcile.maxNudges !== undefined && { maxNudges: reconcile.maxNudges }),
       ...(reconcile.nudgeGraceMs !== undefined && { nudgeGraceMs: reconcile.nudgeGraceMs }),
