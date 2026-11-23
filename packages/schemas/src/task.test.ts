@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DependencyLink,
+  InstructionAddedPayload,
+  InstructionRemovedPayload,
+  InstructionUpdate,
+  InstructionUpdatedPayload,
+  MAX_TASK_INSTRUCTIONS,
+  PhaseInstructionInput,
   TASK_CREATED,
   TASK_DEPENDENCY_ADDED,
   TASK_DEPENDENCY_REMOVED,
@@ -21,8 +27,13 @@ const otherId = "00000000-0000-4000-8000-000000000002";
 const validCreate = { projectId, goal: "Agregar login con GitHub", priority: 100 };
 
 describe("TaskCreate", () => {
-  it("accepts the minimum and fills in empty tags and dependencies", () => {
-    expect(TaskCreate.parse(validCreate)).toEqual({ ...validCreate, tags: [], dependsOn: [] });
+  it("accepts the minimum and fills in empty tags, dependencies and instructions", () => {
+    expect(TaskCreate.parse(validCreate)).toEqual({
+      ...validCreate,
+      tags: [],
+      dependsOn: [],
+      instructions: [],
+    });
   });
 
   it("trims the goal and the tags and removes duplicates", () => {
@@ -212,5 +223,75 @@ describe("TaskListQuery", () => {
     });
     expect(TaskListQuery.safeParse({ state: "nuevo" }).success).toBe(false);
     expect(TaskListQuery.safeParse({ orden: "x" }).success).toBe(false);
+  });
+});
+
+describe("phase instructions", () => {
+  const instruction = { phase: "implement", text: "do not add dependencies" };
+
+  it("TaskCreate accepts instructions, trims their text and defaults to none", () => {
+    expect(TaskCreate.parse(validCreate).instructions).toEqual([]);
+    const parsed = TaskCreate.parse({
+      ...validCreate,
+      instructions: [{ phase: "verify", text: "  check the docs  " }],
+    });
+    expect(parsed.instructions).toEqual([{ phase: "verify", text: "check the docs" }]);
+  });
+
+  it.each([
+    ["the deliver phase", { phase: "deliver", text: "x" }],
+    ["an unknown phase", { phase: "plan", text: "x" }],
+    ["an empty text", { phase: "refine", text: "" }],
+    ["a text of only spaces", { phase: "refine", text: "   " }],
+    ["a text over 10,000 characters", { phase: "refine", text: "x".repeat(10_001) }],
+    ["an unknown field", { phase: "refine", text: "x", id: "1" }],
+  ])("rejects an instruction with %s", (_, bad) => {
+    expect(PhaseInstructionInput.safeParse(bad).success).toBe(false);
+    expect(TaskCreate.safeParse({ ...validCreate, instructions: [bad] }).success).toBe(false);
+  });
+
+  it("accepts a text of exactly 10,000 characters", () => {
+    expect(
+      PhaseInstructionInput.safeParse({ phase: "refine", text: "x".repeat(10_000) }).success,
+    ).toBe(true);
+  });
+
+  it("caps the instructions of a task at the limit", () => {
+    const many = (n: number) => Array.from({ length: n }, () => instruction);
+    expect(
+      TaskCreate.safeParse({ ...validCreate, instructions: many(MAX_TASK_INSTRUCTIONS) }).success,
+    ).toBe(true);
+    expect(
+      TaskCreate.safeParse({ ...validCreate, instructions: many(MAX_TASK_INSTRUCTIONS + 1) })
+        .success,
+    ).toBe(false);
+  });
+
+  it("InstructionUpdate takes a text and/or a phase, and at least one", () => {
+    expect(InstructionUpdate.parse({ text: " new " })).toEqual({ text: "new" });
+    expect(InstructionUpdate.parse({ phase: "verify" })).toEqual({ phase: "verify" });
+    expect(InstructionUpdate.safeParse({}).success).toBe(false);
+    expect(InstructionUpdate.safeParse({ phase: "deliver" }).success).toBe(false);
+    expect(InstructionUpdate.safeParse({ text: "  " }).success).toBe(false);
+  });
+
+  it("the instruction events carry the instruction id and the changed fields", () => {
+    const id = "00000000-0000-4000-8000-0000000000aa";
+    expect(
+      InstructionAddedPayload.safeParse({ instructionId: id, phase: "refine", text: "x" }).success,
+    ).toBe(true);
+    expect(InstructionRemovedPayload.safeParse({ instructionId: id, phase: "refine" }).success).toBe(
+      true,
+    );
+    expect(
+      InstructionUpdatedPayload.safeParse({
+        instructionId: id,
+        from: { text: "a" },
+        to: { text: "b" },
+      }).success,
+    ).toBe(true);
+    expect(
+      InstructionUpdatedPayload.safeParse({ instructionId: id, from: {}, to: {} }).success,
+    ).toBe(false);
   });
 });

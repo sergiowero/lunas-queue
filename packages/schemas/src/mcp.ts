@@ -13,7 +13,7 @@ import {
 } from "./handoff/index.ts";
 import { QuestionOptions } from "./question.ts";
 import { SpecContent } from "./spec.ts";
-import { TaskNumber } from "./task.ts";
+import { PhaseInstruction, TaskNumber } from "./task.ts";
 
 const TaskItemId = z.string().regex(/^T-[1-9]\d*$/, {
   error: "invalid task id: T-<n> expected, for example T-1",
@@ -103,6 +103,8 @@ export const TaskContext = z.strictObject({
     verificationIteration: z.int().min(0),
     branch: z.string().nullable(),
     worktreePath: z.string().nullable(),
+    // Human instructions for this Run's phase only, oldest first; follow them.
+    instructions: z.array(PhaseInstruction),
   }),
   run: z.strictObject({ id: z.uuid(), phase: Phase, iteration: z.int().min(0) }),
   project: z.strictObject({

@@ -20,6 +20,33 @@ export function taskLabel(number: number): string {
   return `#${number}`;
 }
 
+/** Agent phases a human can address an instruction to (deliver has no agent). */
+export const InstructionPhase = z.enum(["refine", "implement", "verify"]);
+export type InstructionPhase = z.infer<typeof InstructionPhase>;
+
+export const MAX_TASK_INSTRUCTIONS = 50;
+const InstructionText = z.string().trim().min(1).max(10_000);
+
+/** Instruction as the human writes it: when creating the task or adding one later. */
+export const PhaseInstructionInput = z.strictObject({
+  phase: InstructionPhase,
+  text: InstructionText,
+});
+export type PhaseInstructionInput = z.input<typeof PhaseInstructionInput>;
+
+/** PATCH of one instruction: each present field replaces the stored one; at least one. */
+export const InstructionUpdate = z
+  .strictObject({ phase: InstructionPhase.optional(), text: InstructionText.optional() })
+  .refine((u) => u.phase !== undefined || u.text !== undefined, "no fields to change");
+export type InstructionUpdate = z.input<typeof InstructionUpdate>;
+
+export const PhaseInstruction = z.strictObject({
+  id: z.uuid(),
+  phase: InstructionPhase,
+  text: z.string().min(1),
+});
+export type PhaseInstruction = z.infer<typeof PhaseInstruction>;
+
 const Goal = z.string().trim().min(1).max(10_000);
 const Tags = z.array(z.string().trim().min(1).max(64)).max(32).transform(unique);
 
@@ -30,6 +57,11 @@ export const TaskCreate = z.strictObject({
   priority: Priority,
   // Task that originated this bugfix.
   causedBy: z.uuid().optional(),
+  // Instructions for the agents of each phase, oldest first.
+  instructions: z
+    .array(PhaseInstructionInput)
+    .max(MAX_TASK_INSTRUCTIONS)
+    .default(() => []),
   // Initial edges: the new task depends on these.
   dependsOn: z
     .array(z.uuid())
@@ -81,6 +113,10 @@ export const Task = z.strictObject({
 });
 export type Task = z.infer<typeof Task>;
 
+/** A task with its phase instructions, oldest first: what GET /api/tasks/:id returns. */
+export const TaskDetail = Task.extend({ instructions: z.array(PhaseInstruction) });
+export type TaskDetail = z.infer<typeof TaskDetail>;
+
 /** The other task of an edge, seen from a task: one of its dependencies or dependents. */
 export const DependencyLink = z.strictObject({
   taskId: z.uuid(),
@@ -107,6 +143,9 @@ export const TASK_UPDATED = "task.updated";
 export const TASK_TITLED = "task.titled";
 export const TASK_DEPENDENCY_ADDED = "task.dependency_added";
 export const TASK_DEPENDENCY_REMOVED = "task.dependency_removed";
+export const TASK_INSTRUCTION_ADDED = "task.instruction_added";
+export const TASK_INSTRUCTION_UPDATED = "task.instruction_updated";
+export const TASK_INSTRUCTION_REMOVED = "task.instruction_removed";
 
 export const TaskCreatedPayload = z.strictObject({
   // Optional: the task.created events before the number do not carry it.
@@ -142,6 +181,30 @@ export const TaskDependencyPayload = z.strictObject({
   crossProject: z.boolean(),
 });
 export type TaskDependencyPayload = z.infer<typeof TaskDependencyPayload>;
+
+export const InstructionAddedPayload = z.strictObject({
+  instructionId: z.uuid(),
+  phase: InstructionPhase,
+  text: z.string(),
+});
+export type InstructionAddedPayload = z.infer<typeof InstructionAddedPayload>;
+
+const InstructionFields = z.strictObject({
+  phase: InstructionPhase.optional(),
+  text: z.string().optional(),
+});
+
+/** Only the fields that changed, with their previous value and the new one. */
+export const InstructionUpdatedPayload = z
+  .strictObject({ instructionId: z.uuid(), from: InstructionFields, to: InstructionFields })
+  .refine((p) => Object.keys(p.to).length > 0, "task.instruction_updated without changes");
+export type InstructionUpdatedPayload = z.infer<typeof InstructionUpdatedPayload>;
+
+export const InstructionRemovedPayload = z.strictObject({
+  instructionId: z.uuid(),
+  phase: InstructionPhase,
+});
+export type InstructionRemovedPayload = z.infer<typeof InstructionRemovedPayload>;
 
 /** Filters of GET /api/tasks. */
 export const TaskListQuery = z.strictObject({
