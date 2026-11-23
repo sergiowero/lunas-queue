@@ -41,6 +41,7 @@ import {
   type HookPoint,
   type MustFixFinding,
   type Phase,
+  type PhaseInstruction,
   parseHandoff,
   parseResultHandoff,
   REVIEWER_NAMES,
@@ -258,6 +259,8 @@ export class LunasqMcpService {
         verificationIteration: task.verificationIteration,
         branch: task.branch,
         worktreePath: task.worktreePath,
+        // Only the instructions addressed to this Run's phase.
+        instructions: this.#instructionsFor(task.id, run.phase),
       },
       run: { id: run.id, phase: run.phase, iteration: run.iteration },
       project: {
@@ -859,6 +862,10 @@ export class LunasqMcpService {
   }
 
   /** Must-fix of the last verdict if it was reject; null if there is none or if the last was pass. */
+  #instructionsFor(taskId: string, phase: string): PhaseInstruction[] {
+    return (this.#tasks.instructions(taskId) ?? []).filter((i) => i.phase === phase);
+  }
+
   #rework(taskId: string): TaskContext["rework"] {
     const latest = this.#runs.latestHandoff(taskId, "verify");
     const handoff = latest ? storedHandoff(latest.handoff) : undefined;
