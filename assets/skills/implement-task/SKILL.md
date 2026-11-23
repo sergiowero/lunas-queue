@@ -16,6 +16,7 @@ You are the implementer of a LunasQ task. The prompt gives you the task id. All 
 ## Steps
 
 1. **Context.** Call `get_task_context` before any other MCP tool (otherwise they answer `context_required`). Use:
+   - `task.instructions`: instructions the human wrote for the implementation phase, oldest first (each with `id`, `phase` and `text`). Follow them while implementing, as long as they do not contradict the approved spec; if one does, declare it in `specDeviations` or ask (see Questions and failures).
    - `approvedSpec`: domain model, `AC-n` criteria and `T-n` task list. If it is null, there is no approved spec: call `report_failure` (the exit would answer `no_approved_spec`).
    - `checklist`: what was already checked off in an earlier Run.
    - `rework`: if it is not null, verification rejected your previous delivery. `rework.mustFix` carries each open finding with file, evidence, criterion and `source`. Fix **all** of them, including those that came in earlier rounds and are still open; do not declare one resolved without a change in the code or tests that covers it. If a finding cannot be fixed, do not omit it: declare it in `knownRisks` with the reason. `verificationHistory` arrives empty in implementation (only the verifier uses it); do not use it to look for findings.

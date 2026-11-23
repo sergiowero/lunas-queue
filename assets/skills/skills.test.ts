@@ -133,6 +133,12 @@ describe("@lunasq/assets-skills", () => {
       expect(Object.keys(example.body).sort()).toEqual([...bodyKeys].sort());
     });
 
+    it("tells the agent to follow the human's task.instructions for its phase", () => {
+      const { body } = parsed();
+      expect(body).toContain("task.instructions");
+      expect(body).toMatch(/follow/i);
+    });
+
     it("explains how to fix a rejection in the same Run", () => {
       const { body } = parsed();
       for (const code of ["invalid_handoff", "handoff_mismatch", "tool_not_allowed"]) {
