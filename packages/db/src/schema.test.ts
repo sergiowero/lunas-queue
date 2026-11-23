@@ -13,6 +13,7 @@ import {
   questions,
   specs,
   taskDependencies,
+  taskInstructions,
   tasks,
   usageRecords,
 } from "./schema.ts";
@@ -349,6 +350,43 @@ describe("task_dependencies", () => {
       .run();
     db.delete(tasks).where(eq(tasks.id, a.id)).run();
     expect(db.select().from(taskDependencies).all()).toEqual([]);
+  });
+});
+
+describe("task_instructions", () => {
+  it("accepts the three agent phases and rejects any other", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id);
+    for (const phase of ["refine", "implement", "verify"] as const) {
+      db.insert(taskInstructions).values({ taskId: t.id, phase, text: "x" }).run();
+    }
+    for (const phase of ["deliver", "other"]) {
+      expect(() =>
+        db
+          .insert(taskInstructions)
+          .values({ taskId: t.id, phase: phase as "refine", text: "x" })
+          .run(),
+      ).toThrow(CHECK);
+    }
+  });
+
+  it("belongs to an existing task and is deleted with it", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id);
+    expect(() =>
+      db.insert(taskInstructions).values({ taskId: "nope", phase: "refine", text: "x" }).run(),
+    ).toThrow(FK);
+    db.insert(taskInstructions).values({ taskId: t.id, phase: "refine", text: "x" }).run();
+    db.delete(tasks).where(eq(tasks.id, t.id)).run();
+    expect(db.select().from(taskInstructions).all()).toEqual([]);
+  });
+
+  it("the text is required and non-empty", () => {
+    const db = migratedDatabase();
+    const t = insertTask(db, insertProject(db).id);
+    expect(() =>
+      db.insert(taskInstructions).values({ taskId: t.id, phase: "refine", text: "" }).run(),
+    ).toThrow(CHECK);
   });
 });
 
