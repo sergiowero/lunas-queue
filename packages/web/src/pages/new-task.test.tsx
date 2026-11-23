@@ -268,6 +268,16 @@ describe("task creation: phase instructions", () => {
     expect((add as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("lets a long unbroken instruction shrink instead of overflowing the card", async () => {
+    const { user } = await openForm();
+    await user.type(screen.getByLabelText("Instrucción"), "x".repeat(300));
+    await user.click(screen.getByRole("button", { name: "Agregar" }));
+
+    const list = screen.getByRole("list", { name: "Instrucciones agregadas" });
+    const span = within(list).getByText("x".repeat(300));
+    expect(span.className).toContain("min-w-0");
+  });
+
   it("adds instructions with their phase, removes one and creates the task with the rest", async () => {
     const { user, fake, project, router } = await openForm();
     const phase = screen.getByLabelText("Fase");

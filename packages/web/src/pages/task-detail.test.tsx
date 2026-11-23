@@ -965,6 +965,17 @@ describe("task detail: phase instructions", () => {
     expect((region.getByLabelText("Instrucción") as HTMLTextAreaElement).value).toBe("");
   });
 
+  it("lets a long unbroken instruction shrink instead of overflowing the card", async () => {
+    const { fake, task } = withInstructions();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instrucciones");
+    await user.type(region.getByLabelText("Instrucción"), "y".repeat(300));
+    await user.click(region.getByRole("button", { name: "Agregar" }));
+
+    const span = await region.findByText("y".repeat(300));
+    expect(span.className).toContain("min-w-0");
+  });
+
   it("edits the text and the phase inline and shows the saved values", async () => {
     const { fake, task } = withInstructions();
     const { user } = renderApp(`/tasks/${task.id}`, fake);

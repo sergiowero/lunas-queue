@@ -124,7 +124,7 @@ export function InstructionsPanel({
                 ) : (
                   <>
                     <Badge variant="secondary">{t.phase[instruction.phase]}</Badge>
-                    <span className="flex-1 whitespace-pre-wrap break-words">
+                    <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
                       {instruction.text}
                     </span>
                     <Button

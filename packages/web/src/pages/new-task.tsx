@@ -215,7 +215,9 @@ export function NewTaskPage() {
                 className="flex items-start gap-2 rounded-md border border-border px-3 py-1.5"
               >
                 <Badge variant="secondary">{t.phase[instruction.phase]}</Badge>
-                <span className="flex-1 whitespace-pre-wrap break-words">{instruction.text}</span>
+                <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+                  {instruction.text}
+                </span>
                 <Button
                   variant="ghost"
                   size="sm"
