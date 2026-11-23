@@ -1,6 +1,6 @@
 # Agent effort per phase
 
-**Status:** accepted
+**Status:** accepted. `effort` now belongs to each model of a global [agent profile](agent-profiles.md) (`ProfileModel`), edited in the Profiles tab; the project form no longer has an effort selector. The rules below (`--effort` emitted after `--model`, conflict with `--effort` in `args`) still apply per model.
 
 ## Context
 
