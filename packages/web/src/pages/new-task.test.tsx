@@ -276,6 +276,8 @@ describe("task creation: phase instructions", () => {
     const list = screen.getByRole("list", { name: "Instrucciones agregadas" });
     const span = within(list).getByText("x".repeat(300));
     expect(span.className).toContain("min-w-0");
+    // The buttons wrap under the text at phone width instead of overflowing the card.
+    expect(span.closest("li")?.className).toContain("flex-wrap");
   });
 
   it("adds instructions with their phase, removes one and creates the task with the rest", async () => {

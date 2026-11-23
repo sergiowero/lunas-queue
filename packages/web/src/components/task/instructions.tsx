@@ -113,7 +113,7 @@ export function InstructionsPanel({
             {instructions.map((instruction) => (
               <li
                 key={instruction.id}
-                className="flex items-start gap-2 rounded-md border border-border px-3 py-1.5"
+                className="flex flex-wrap items-start gap-2 rounded-md border border-border px-3 py-1.5"
               >
                 {editing === instruction.id ? (
                   <EditInstruction

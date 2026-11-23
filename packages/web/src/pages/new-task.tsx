@@ -212,7 +212,7 @@ export function NewTaskPage() {
             {instructions.map((instruction) => (
               <li
                 key={instruction.key}
-                className="flex items-start gap-2 rounded-md border border-border px-3 py-1.5"
+                className="flex flex-wrap items-start gap-2 rounded-md border border-border px-3 py-1.5"
               >
                 <Badge variant="secondary">{t.phase[instruction.phase]}</Badge>
                 <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">

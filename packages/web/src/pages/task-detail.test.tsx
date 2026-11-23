@@ -974,6 +974,8 @@ describe("task detail: phase instructions", () => {
 
     const span = await region.findByText("y".repeat(300));
     expect(span.className).toContain("min-w-0");
+    // The buttons wrap under the text at phone width instead of overflowing the card.
+    expect(span.closest("li")?.className).toContain("flex-wrap");
   });
 
   it("edits the text and the phase inline and shows the saved values", async () => {
@@ -1043,8 +1045,13 @@ describe("task detail: phase instructions", () => {
     // The text is kept so nothing is lost.
     expect((region.getByLabelText("Instrucción") as HTMLTextAreaElement).value).toBe("una más");
 
+    // A different error for the removal, so its own alert cannot be confused with the add error.
+    fake.instructionsError = { status: 404, error: "not_found", message: "instruction not found" };
     await user.click(region.getByRole("button", { name: "Quitar la instrucción de Verificación" }));
-    await waitFor(() => expect(region.getAllByRole("alert").length).toBeGreaterThan(0));
+    await waitFor(() => expect(region.getAllByRole("alert")).toHaveLength(2));
+    expect(region.getAllByRole("alert").map((a) => a.textContent)).toContain(
+      "No se encontró lo que se pidió.",
+    );
     expect(texts(region)).toHaveLength(2);
   });
 
