@@ -6,7 +6,16 @@ import {
   TaskRepositoryError,
   type TransitionTaskResult,
 } from "@lunasq/db";
-import { TaskCancel, TaskCreate, TaskListQuery, TaskUpdate } from "@lunasq/schemas";
+import {
+  InstructionUpdate,
+  PhaseInstructionInput,
+  type Task,
+  TaskCancel,
+  TaskCreate,
+  type TaskDetail,
+  TaskListQuery,
+  TaskUpdate,
+} from "@lunasq/schemas";
 import { type Context, Hono } from "hono";
 import { invalidInput, notFound, readJson, readOptionalJson } from "./http.ts";
 
@@ -25,6 +34,11 @@ function transitionError(c: Context, result: Extract<TransitionTaskResult, { ok:
 }
 
 export function taskRoutes(tasks: TaskRepository, runs: RunRepository): Hono {
+  // Single-task responses carry the phase instructions so the UI never loses them on a refresh.
+  const detail = (task: Task): TaskDetail => ({
+    ...task,
+    instructions: tasks.instructions(task.id) ?? [],
+  });
   return new Hono()
     .get("/", (c) => {
       const query = TaskListQuery.safeParse(c.req.query());
@@ -37,14 +51,14 @@ export function taskRoutes(tasks: TaskRepository, runs: RunRepository): Hono {
       const input = TaskCreate.safeParse(json.body);
       if (!input.success) return invalidInput(c, input.error);
       try {
-        return c.json(tasks.create(input.data), 201);
+        return c.json(detail(tasks.create(input.data)), 201);
       } catch (error) {
         return repositoryError(c, error);
       }
     })
     .get("/:id", (c) => {
       const task = tasks.get(c.req.param("id"));
-      return task ? c.json(task) : notFound(c);
+      return task ? c.json(detail(task)) : notFound(c);
     })
     .patch("/:id", async (c) => {
       const json = await readJson(c);
@@ -53,7 +67,7 @@ export function taskRoutes(tasks: TaskRepository, runs: RunRepository): Hono {
       if (!patch.success) return invalidInput(c, patch.error);
       try {
         const task = tasks.update(c.req.param("id"), patch.data);
-        return task ? c.json(task) : notFound(c);
+        return task ? c.json(detail(task)) : notFound(c);
       } catch (error) {
         return repositoryError(c, error);
       }
@@ -66,7 +80,7 @@ export function taskRoutes(tasks: TaskRepository, runs: RunRepository): Hono {
       const result = tasks.cancel(c.req.param("id"), input.data.note);
       if (!result.ok) return transitionError(c, result);
       const task = tasks.get(result.task.id);
-      return task ? c.json(task) : notFound(c);
+      return task ? c.json(detail(task)) : notFound(c);
     })
     .post("/:id/pause", (c) => {
       // The REST API does not authenticate the caller: it is the human's local channel (like cancel and resume).
@@ -76,14 +90,43 @@ export function taskRoutes(tasks: TaskRepository, runs: RunRepository): Hono {
       const result = tasks.pause(id, runs.deliveryInProgress(id));
       if (!result.ok) return transitionError(c, result);
       const task = tasks.get(result.task.id);
-      return task ? c.json(task) : notFound(c);
+      return task ? c.json(detail(task)) : notFound(c);
     })
     .post("/:id/resume", (c) => {
       const result = tasks.resume(c.req.param("id"));
       if (!result.ok) return transitionError(c, result);
       const task = tasks.get(result.task.id);
-      return task ? c.json(task) : notFound(c);
+      return task ? c.json(detail(task)) : notFound(c);
     })
+    .post("/:id/instructions", async (c) => {
+      const json = await readJson(c);
+      if (!json.ok) return c.json({ error: "invalid_json" }, 400);
+      const input = PhaseInstructionInput.safeParse(json.body);
+      if (!input.success) return invalidInput(c, input.error);
+      try {
+        const instruction = tasks.addInstruction(c.req.param("id"), input.data);
+        return instruction ? c.json(instruction, 201) : notFound(c);
+      } catch (error) {
+        return repositoryError(c, error);
+      }
+    })
+    .patch("/:id/instructions/:instructionId", async (c) => {
+      const json = await readJson(c);
+      if (!json.ok) return c.json({ error: "invalid_json" }, 400);
+      const patch = InstructionUpdate.safeParse(json.body);
+      if (!patch.success) return invalidInput(c, patch.error);
+      const instruction = tasks.updateInstruction(
+        c.req.param("id"),
+        c.req.param("instructionId"),
+        patch.data,
+      );
+      return instruction ? c.json(instruction) : notFound(c);
+    })
+    .delete("/:id/instructions/:instructionId", (c) =>
+      tasks.removeInstruction(c.req.param("id"), c.req.param("instructionId"))
+        ? c.body(null, 204)
+        : notFound(c),
+    )
     .get("/:id/dependencies", (c) => {
       const dependencies = tasks.dependencies(c.req.param("id"));
       return dependencies ? c.json(dependencies) : notFound(c);
