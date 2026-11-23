@@ -79,6 +79,28 @@ function CancelTask({ task }: { task: Json<Task> }) {
   );
 }
 
+/** Why a queued task has no Run: its phase has no usable agent profile (docs/decisions/agent-profiles.md). */
+function HoldNotice({ task }: { task: Json<Task> }) {
+  const t = useT();
+  const held = task.subState === "queued" && !isTerminal(task.state);
+  const hold = useQuery({ ...queries.taskHold(task.id), enabled: held });
+  if (!held || !hold.data?.hold) return null;
+  const { reason, phase, projectName } = hold.data.hold;
+  return (
+    <div role="status" className="rounded-lg border border-border bg-warning/10 p-3 text-sm">
+      <p>{t.taskDetail.hold[reason](projectName, phase)}</p>
+      <Link
+        to={reason === "profile_missing" ? "/projects" : "/settings"}
+        className="mt-1 inline-block font-medium underline"
+      >
+        {reason === "profile_missing"
+          ? t.taskDetail.hold.editProject
+          : t.taskDetail.hold.enableInSettings}
+      </Link>
+    </div>
+  );
+}
+
 function Header({ task }: { task: Json<Task> }) {
   const t = useT();
   const projects = useQuery(queries.projects());
@@ -173,6 +195,7 @@ export function TaskDetailPage() {
   return (
     <div className="flex flex-col gap-4">
       <Header task={task.data} />
+      <HoldNotice task={task.data} />
       <ResultPanel task={task.data} />
       <InstructionsPanel taskId={taskId} instructions={task.data.instructions} />
       <div className="grid gap-4 lg:grid-cols-2">

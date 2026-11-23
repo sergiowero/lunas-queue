@@ -31,6 +31,7 @@ describe("project creation", () => {
 
   it("sends commands, limits and per-phase profiles, without the empty fields", async () => {
     const fake = new FakeApi();
+    const verifyProfile = fake.addProfile({ name: "Verificador" });
     const { user, dialog } = await openDialog(fake);
     const form = within(dialog);
 
@@ -43,11 +44,7 @@ describe("project creation", () => {
     await user.type(form.getByLabelText("Bootstrap del worktree"), "pnpm install");
     await user.type(form.getByLabelText("Concurrencia"), "2");
     await user.type(form.getByLabelText("Iteraciones de verificación"), "5");
-    await user.type(form.getByLabelText("Modelo de verify"), "sonnet");
-    await user.type(
-      form.getByLabelText("Argumentos de CLI para Claude en verify (uno por línea)"),
-      "--permission-mode\nauto",
-    );
+    await user.selectOptions(form.getByLabelText("Perfil de verify"), "Verificador");
     await user.type(form.getByLabelText("Timeout de implement (min)"), "60");
     await user.click(form.getByRole("button", { name: "Crear proyecto" }));
 
@@ -59,9 +56,7 @@ describe("project creation", () => {
       localPath: "/repos/completo",
       testCommand: "pnpm test",
       bootstrap: "pnpm install",
-      agentProfiles: {
-        verify: { kind: "claude", model: "sonnet", args: ["--permission-mode", "auto"] },
-      },
+      agentProfiles: { verify: verifyProfile.id },
       limits: {
         concurrency: 2,
         maxVerificationIterations: 5,
@@ -88,59 +83,67 @@ describe("project creation", () => {
     expect(fake.requests.find((r) => r.method === "POST")?.body).not.toHaveProperty("limits");
   });
 
-  it("sends the per-phase effort only when chosen, and shows it when editing", async () => {
+  it("lists the profiles per phase, with a no-profile option, and warns while a phase has none", async () => {
     const fake = new FakeApi();
+    fake.addProfile({ name: "Rápido" });
+    fake.addProfile({ name: "Profundo" });
     const { user, dialog } = await openDialog(fake);
     const form = within(dialog);
 
-    await user.type(form.getByLabelText("Nombre"), "esfuerzo");
-    await user.type(form.getByLabelText("Repositorio"), "owner/esfuerzo");
-    await user.type(form.getByLabelText("Ruta local"), "/repos/esfuerzo");
-    await user.selectOptions(form.getByLabelText("Esfuerzo de implement"), "high");
+    const select = (await form.findByLabelText("Perfil de implement")) as HTMLSelectElement;
+    await waitFor(() =>
+      expect([...select.options].map((o) => o.text)).toEqual([
+        "Sin perfil (la fase espera)",
+        "Rápido",
+        "Profundo",
+      ]),
+    );
+    expect(select.value).toBe("");
+    expect(form.getAllByRole("note")).toHaveLength(4);
+    expect(form.getByText(/La fase implement no tiene perfil/)).toBeTruthy();
+
+    await user.selectOptions(select, "Profundo");
+
+    expect(form.queryByText(/La fase implement no tiene perfil/)).toBeNull();
+    expect(form.getAllByRole("note")).toHaveLength(3);
+  });
+
+  it("sends only the phases with a selected profile and leaves the rest unassigned", async () => {
+    const fake = new FakeApi();
+    const profile = fake.addProfile({ name: "Rápido" });
+    const { user, dialog } = await openDialog(fake);
+    const form = within(dialog);
+
+    await user.type(form.getByLabelText("Nombre"), "perfiles");
+    await user.type(form.getByLabelText("Repositorio"), "owner/perfiles");
+    await user.type(form.getByLabelText("Ruta local"), "/repos/perfiles");
+    await user.selectOptions(await form.findByLabelText("Perfil de implement"), "Rápido");
     await user.click(form.getByRole("button", { name: "Crear proyecto" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
-      agentProfiles: { implement: { kind: "claude", effort: "high", args: [] } },
+      agentProfiles: { implement: profile.id },
     });
-
     expect(fake.requests.find((r) => r.method === "POST")?.body).not.toHaveProperty(
       "agentProfiles.verify",
     );
-  });
-
-  it("allows choosing Copilot as a phase's provider", async () => {
-    const fake = new FakeApi();
-    const { user, dialog } = await openDialog(fake);
-    const form = within(dialog);
-
-    await user.type(form.getByLabelText("Nombre"), "copilot-project");
-    await user.type(form.getByLabelText("Repositorio"), "owner/copilot-project");
-    await user.type(form.getByLabelText("Ruta local"), "/repos/copilot-project");
-    await user.selectOptions(form.getByLabelText("Proveedor de implement"), "copilot");
-    await user.click(form.getByRole("button", { name: "Crear proyecto" }));
-
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
-      agentProfiles: { implement: { kind: "copilot", args: [] } },
+    expect(fake.projects.at(-1)?.agentProfiles).toEqual({
+      refine: null,
+      implement: profile.id,
+      verify: null,
+      deliver: null,
     });
   });
 
-  it("allows choosing Codex as a phase's provider", async () => {
+  it("with no profiles yet it says so and links to the Profiles tab", async () => {
     const fake = new FakeApi();
-    const { user, dialog } = await openDialog(fake);
+    const { dialog } = await openDialog(fake);
     const form = within(dialog);
 
-    await user.type(form.getByLabelText("Nombre"), "codex-project");
-    await user.type(form.getByLabelText("Repositorio"), "owner/codex-project");
-    await user.type(form.getByLabelText("Ruta local"), "/repos/codex-project");
-    await user.selectOptions(form.getByLabelText("Proveedor de implement"), "codex");
-    await user.click(form.getByRole("button", { name: "Crear proyecto" }));
-
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
-      agentProfiles: { implement: { kind: "codex", args: [] } },
-    });
+    expect(await form.findByText(/Todavía no hay perfiles de agente/)).toBeTruthy();
+    expect(form.getByRole("link", { name: "Crear un perfil" }).getAttribute("href")).toBe(
+      "/profiles",
+    );
   });
 
   it("shows the server's error and leaves the popup open", async () => {
@@ -190,6 +193,8 @@ describe("project creation", () => {
 describe("project editing", () => {
   function setup() {
     const fake = new FakeApi();
+    const rapido = fake.addProfile({ name: "Rápido" });
+    const profundo = fake.addProfile({ name: "Profundo" });
     const project = fake.addProject({
       name: "viejo",
       repo: "owner/viejo",
@@ -198,18 +203,18 @@ describe("project editing", () => {
       testCommand: "pnpm test",
       bootstrap: null,
       agentProfiles: {
-        refine: { kind: "claude", args: [] },
-        implement: { kind: "claude", model: "opus", args: ["--permission-mode", "auto"] },
-        verify: { kind: "claude", args: [] },
-        deliver: { kind: "claude", args: [] },
+        refine: rapido.id,
+        implement: profundo.id,
+        verify: null,
+        deliver: rapido.id,
       },
       limits: { concurrency: 2, phaseTimeoutMinutes: { implement: 60 } },
     });
-    return { fake, project, app: renderApp("/projects", fake) };
+    return { fake, project, rapido, profundo, app: renderApp("/projects", fake) };
   }
 
   it("opens the same form prefilled with the project's data", async () => {
-    const { app } = setup();
+    const { app, rapido, profundo } = setup();
     await app.user.click(await screen.findByRole("button", { name: "Editar viejo" }));
     const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
 
@@ -220,21 +225,20 @@ describe("project editing", () => {
     expect((form.getByLabelText("Comando de tests") as HTMLInputElement).value).toBe("pnpm test");
     expect((form.getByLabelText("Bootstrap del worktree") as HTMLInputElement).value).toBe("");
     expect((form.getByLabelText("Concurrencia") as HTMLInputElement).value).toBe("2");
-    expect((form.getByLabelText("Modelo de implement") as HTMLInputElement).value).toBe("opus");
-    expect(
-      (
-        form.getByLabelText(
-          "Argumentos de CLI para Claude en implement (uno por línea)",
-        ) as HTMLTextAreaElement
-      ).value,
-    ).toBe("--permission-mode\nauto");
+    await waitFor(() =>
+      expect((form.getByLabelText("Perfil de implement") as HTMLSelectElement).value).toBe(
+        profundo.id,
+      ),
+    );
+    expect((form.getByLabelText("Perfil de refine") as HTMLSelectElement).value).toBe(rapido.id);
+    expect((form.getByLabelText("Perfil de verify") as HTMLSelectElement).value).toBe("");
     expect((form.getByLabelText("Timeout de implement (min)") as HTMLInputElement).value).toBe(
       "60",
     );
   });
 
   it("saves the changes with PATCH, deletes the emptied command and updates the list", async () => {
-    const { fake, project, app } = setup();
+    const { fake, project, profundo, app } = setup();
     await app.user.click(await screen.findByRole("button", { name: "Editar viejo" }));
     const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
 
@@ -256,11 +260,40 @@ describe("project editing", () => {
       bootstrap: null,
       limits: { concurrency: 2, phaseTimeoutMinutes: { implement: 60 } },
     });
+    // Every phase is sent on edit: the unselected one as null.
     expect(request?.body).toMatchObject({
-      agentProfiles: {
-        implement: { kind: "claude", model: "opus", args: ["--permission-mode", "auto"] },
-      },
+      agentProfiles: { implement: profundo.id, verify: null },
     });
+  });
+
+  it("choosing 'no profile' unassigns the phase and the project shows the missing-profile badge", async () => {
+    const { fake, project, app } = setup();
+    expect((await screen.findAllByText("Sin perfil: verify")).length).toBe(1);
+    await app.user.click(await screen.findByRole("button", { name: "Editar viejo" }));
+    const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
+
+    await app.user.selectOptions(await form.findByLabelText("Perfil de refine"), "");
+    await app.user.click(form.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(fake.projects.find((p) => p.id === project.id)?.agentProfiles.refine).toBeNull();
+    expect(await screen.findByText("Sin perfil: refine, verify")).toBeTruthy();
+  });
+
+  it("a profile that disappeared answers profile_not_found and the form shows it", async () => {
+    const { fake, app } = setup();
+    await app.user.click(await screen.findByRole("button", { name: "Editar viejo" }));
+    const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
+    await waitFor(() =>
+      expect((form.getByLabelText("Perfil de implement") as HTMLSelectElement).value).not.toBe(""),
+    );
+    fake.profiles.splice(0, fake.profiles.length);
+
+    await app.user.click(form.getByRole("button", { name: "Guardar cambios" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "El perfil elegido ya no existe.",
+    );
   });
 
   it("shows the error and leaves the form open", async () => {

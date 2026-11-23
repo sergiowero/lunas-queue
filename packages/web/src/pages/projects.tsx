@@ -1,10 +1,11 @@
-import type { Project } from "@lunasq/schemas";
+import { type Project, unassignedPhases } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ProjectDeleteDialog } from "../components/project-delete-dialog.tsx";
 import { ProjectFormDialog } from "../components/project-form-dialog.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
+import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
 import type { Json } from "../lib/api.ts";
@@ -47,6 +48,13 @@ export function ProjectsPage() {
               <p>
                 {t.projectsPage.baseBranch} {project.baseBranch}
               </p>
+              {unassignedPhases(project.agentProfiles).length > 0 && (
+                <Badge variant="destructive" className="mt-2">
+                  {t.projectsPage.missingProfile(
+                    unassignedPhases(project.agentProfiles).join(", "),
+                  )}
+                </Badge>
+              )}
               <div className="mt-3 flex gap-2">
                 <Button
                   variant="outline"

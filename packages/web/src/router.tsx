@@ -15,6 +15,7 @@ import { HooksPage } from "./pages/hooks.tsx";
 import { InProgressPage } from "./pages/in-progress.tsx";
 import { InboxPage } from "./pages/inbox.tsx";
 import { NewTaskPage } from "./pages/new-task.tsx";
+import { ProfilesPage } from "./pages/profiles.tsx";
 import { ProjectsPage } from "./pages/projects.tsx";
 import { QueuePage } from "./pages/queue.tsx";
 import { SettingsPage } from "./pages/settings.tsx";
@@ -62,6 +63,12 @@ const projectsRoute = createRoute({
   component: ProjectsPage,
 });
 
+const profilesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/profiles",
+  component: ProfilesPage,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -103,6 +110,7 @@ const routeTree = rootRoute.addChildren([
   completedRoute,
   inboxRoute,
   projectsRoute,
+  profilesRoute,
   settingsRoute,
   boardRoute,
   hooksRoute,

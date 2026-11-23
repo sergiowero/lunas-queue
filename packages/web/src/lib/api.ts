@@ -1,6 +1,9 @@
 // LunasQ API client. The types come from @lunasq/schemas; over JSON the dates arrive
 // as ISO strings, so each response is typed with Json<T>.
 import type {
+  AgentProfile,
+  AgentProfileCreate,
+  AgentProfileUpdate,
   AgentProviderPatch,
   AgentProviderSettings,
   BlockedAgent,
@@ -26,6 +29,7 @@ import type {
   TaskDependencies,
   TaskDetail,
   TaskEvidence,
+  TaskHold,
   TaskUsage,
   VerificationSettings,
 } from "@lunasq/schemas";
@@ -44,12 +48,21 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly issues: ApiIssue[];
+  /** The whole error body, for the codes that carry data (profile_in_use lists the projects). */
+  readonly body: Record<string, unknown>;
 
-  constructor(status: number, code: string, message: string, issues: ApiIssue[] = []) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    issues: ApiIssue[] = [],
+    body: Record<string, unknown> = {},
+  ) {
     super(message);
     this.status = status;
     this.code = code;
     this.issues = issues;
+    this.body = body;
   }
 }
 
@@ -63,7 +76,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<Json<T>> {
   if (!res.ok) {
     const code = typeof body.error === "string" ? body.error : "http_error";
     const message = typeof body.message === "string" ? body.message : `${res.status} ${code}`;
-    throw new ApiError(res.status, code, message, (body.issues as ApiIssue[] | undefined) ?? []);
+    throw new ApiError(
+      res.status,
+      code,
+      message,
+      (body.issues as ApiIssue[] | undefined) ?? [],
+      body,
+    );
   }
   return body as Json<T>;
 }
@@ -106,6 +125,18 @@ export const api = {
   },
   specs: (id: string) => request<Spec[]>(`${task(id)}/specs`),
   specDiff: (id: string, version: number) => request<SpecDiff>(`${task(id)}/specs/${version}/diff`),
+  agentProfiles: () => request<AgentProfile[]>("/api/agent-profiles"),
+  createAgentProfile: (input: AgentProfileCreate) =>
+    post<AgentProfile>("/api/agent-profiles", input),
+  updateAgentProfile: (id: string, input: AgentProfileUpdate) =>
+    request<AgentProfile>(`/api/agent-profiles/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  deleteAgentProfile: (id: string) =>
+    request<void>(`/api/agent-profiles/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  /** Why a queued task is held without a Run (a phase without a usable profile); null if it is not. */
+  taskHold: (id: string) => request<TaskHold>(`${task(id)}/hold`),
   createProject: (input: ProjectCreate) => post<Project>("/api/projects", input),
   updateProject: (id: string, input: ProjectUpdate) =>
     request<Project>(`/api/projects/${encodeURIComponent(id)}`, {

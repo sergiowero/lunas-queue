@@ -6,6 +6,7 @@
 
 import type {
   Actor,
+  AgentProfile,
   AgentProviderSettings as AgentProviderSettingsValue,
   BlockedAgent,
   EventView,
@@ -21,11 +22,14 @@ import type {
   SpecContent,
   SubState,
   Task,
+  TaskHold,
   TaskState,
   TaskUsage,
   UsageTotals,
 } from "@lunasq/schemas";
 import {
+  AgentProfileCreate,
+  AgentProfileUpdate,
   AgentProviderPatch,
   AgentProviderSettings,
   ConcurrencySettings,
@@ -98,6 +102,9 @@ const uuid = () => {
 
 export class FakeApi {
   readonly projects: Json<Project>[] = [];
+  readonly profiles: Json<AgentProfile>[] = [];
+  /** What GET /api/tasks/:id/hold answers per task; without an entry, the task is not held. */
+  readonly holds = new Map<string, Json<TaskHold>>();
   readonly tasks: Json<Task>[] = [];
   readonly edges: { taskId: string; dependsOnId: string }[] = [];
   /** Phase instructions per task, oldest first. */
@@ -166,8 +173,28 @@ export class FakeApi {
     return new Date(this.clock).toISOString();
   }
 
+  /** The profile that projects created with `addProject` select for every phase by default. */
+  defaultProfile(): Json<AgentProfile> {
+    return this.profiles[0] ?? this.addProfile({ name: "Default" });
+  }
+
+  addProfile(overrides: Partial<Json<AgentProfile>> = {}): Json<AgentProfile> {
+    const at = this.now();
+    const profile: Json<AgentProfile> = {
+      id: uuid(),
+      name: `perfil-${seq}`,
+      models: [{ kind: "claude", model: "sonnet", args: [] }],
+      createdAt: at,
+      updatedAt: at,
+      ...overrides,
+    };
+    this.profiles.push(profile);
+    return profile;
+  }
+
   addProject(overrides: Partial<Json<Project>> = {}): Json<Project> {
     const at = this.now();
+    const profileId = overrides.agentProfiles ? null : this.defaultProfile().id;
     const project: Json<Project> = {
       id: uuid(),
       name: `proyecto-${seq}`,
@@ -175,9 +202,10 @@ export class FakeApi {
       baseBranch: "main",
       localPath: `/repos/demo-${seq}`,
       agentProfiles: {
-        refine: { kind: "claude", args: [] },
-        implement: { kind: "claude", args: [] },
-        verify: { kind: "claude", args: [] },
+        refine: profileId,
+        implement: profileId,
+        verify: profileId,
+        deliver: profileId,
       },
       limits: {},
       testCommand: null,
@@ -252,6 +280,9 @@ export class FakeApi {
       phase,
       agentKind: "claude",
       model: "opus",
+      profileId: null,
+      modelIndex: null,
+      modelFailed: false,
       iteration: this.task(taskId).verificationIteration,
       herdrWorkspace: "w1",
       herdrPane: `p-${seq}`,
@@ -434,6 +465,11 @@ export class FakeApi {
     const [resource, id, sub, version, action] = parts;
     const notFound: [number, unknown] = [404, { error: "not_found" }];
 
+    if (resource === "agent-profiles") return this.agentProfiles(method, id, body);
+    if (resource === "tasks" && sub === "hold" && method === "GET") {
+      if (!this.tasks.some((t) => t.id === id)) return notFound;
+      return [200, this.holds.get(id ?? "") ?? { hold: null }];
+    }
     if (resource === "projects" && method === "POST" && !id) return this.createProject(body);
     if (resource === "projects" && id && method === "PATCH") return this.updateProject(id, body);
     if (resource === "projects" && id && method === "DELETE") return this.deleteProject(id);
@@ -621,8 +657,19 @@ export class FakeApi {
         return conflict("conflict", `ya existe un proyecto con ese ${field}`, { field });
       }
     }
-    const { testCommand = null, bootstrap = null, ...rest } = input;
-    return [201, this.addProject({ ...rest, testCommand, bootstrap } as Partial<Json<Project>>)];
+    const missing = this.missingProfiles(input.agentProfiles);
+    if (missing.length > 0) return this.profileNotFound(missing);
+    const { testCommand = null, bootstrap = null, agentProfiles, ...rest } = input;
+    return [
+      201,
+      this.addProject({
+        ...rest,
+        testCommand,
+        bootstrap,
+        // The schema defaults every unselected phase to null: unassigned.
+        agentProfiles,
+      } as Partial<Json<Project>>),
+    ];
   }
 
   private updateProject(id: string, body: unknown): [number, unknown] {
@@ -637,6 +684,8 @@ export class FakeApi {
       return [400, { error: "invalid_input", issues }];
     }
     const { agentProfiles, ...rest } = parsed.data;
+    const missing = this.missingProfiles(agentProfiles);
+    if (missing.length > 0) return this.profileNotFound(missing);
     for (const field of ["name", "localPath"] as const) {
       const value = rest[field];
       if (value !== undefined && this.projects.some((p) => p.id !== id && p[field] === value)) {
@@ -648,6 +697,75 @@ export class FakeApi {
       updatedAt: this.now(),
     });
     return [200, project];
+  }
+
+  private missingProfiles(
+    selected: Partial<Record<Phase, string | null | undefined>> | undefined,
+  ): Phase[] {
+    return (Object.entries(selected ?? {}) as [Phase, string | null][])
+      .filter(([, id]) => id !== null && !this.profiles.some((p) => p.id === id))
+      .map(([phase]) => phase);
+  }
+
+  private profileNotFound(phases: Phase[]): [number, unknown] {
+    return [
+      400,
+      {
+        error: "profile_not_found",
+        phases,
+        message: `profile not found for: ${phases.join(", ")}`,
+      },
+    ];
+  }
+
+  /** The projects (and phases) that select a profile. */
+  private profileUsage(profileId: string) {
+    return this.projects
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        phases: (Object.entries(p.agentProfiles) as [Phase, string | null][])
+          .filter(([, id]) => id === profileId)
+          .map(([phase]) => phase),
+      }))
+      .filter((p) => p.phases.length > 0);
+  }
+
+  private agentProfiles(method: string, id: string | undefined, body: unknown): [number, unknown] {
+    if (!id) {
+      if (method === "GET") return [200, this.profiles];
+      if (method !== "POST") return [404, { error: "not_found" }];
+      const input = validate(AgentProfileCreate, body);
+      if (!input.ok) return input.response;
+      if (this.profiles.some((p) => p.name === input.data.name)) {
+        return [
+          400,
+          {
+            error: "invalid_input",
+            issues: [{ path: ["name"], message: "a profile with that name already exists" }],
+          },
+        ];
+      }
+      return [201, this.addProfile(input.data as Partial<Json<AgentProfile>>)];
+    }
+    const profile = this.profiles.find((p) => p.id === id);
+    if (!profile) return [404, { error: "not_found" }];
+    if (method === "GET") return [200, profile];
+    if (method === "PATCH") {
+      const input = validate(AgentProfileUpdate, body);
+      if (!input.ok) return input.response;
+      Object.assign(profile, input.data, { updatedAt: this.now() });
+      return [200, profile];
+    }
+    if (method === "DELETE") {
+      const projects = this.profileUsage(id);
+      if (projects.length > 0) {
+        return conflict("profile_in_use", "the profile is selected by projects", { projects });
+      }
+      this.profiles.splice(this.profiles.indexOf(profile), 1);
+      return [204, null];
+    }
+    return [404, { error: "not_found" }];
   }
 
   private deleteProject(id: string): [number, unknown] {

@@ -8,6 +8,7 @@ import { cn } from "../lib/utils.ts";
 import { DispatchPausedBanner } from "./dispatch-paused-banner.tsx";
 import { PlusIcon, SettingsIcon } from "./icons.tsx";
 import { LanguageToggle } from "./language-toggle.tsx";
+import { ProfilesBanner } from "./profiles-banner.tsx";
 import { ThemeToggle } from "./theme-toggle.tsx";
 import { Badge } from "./ui/badge.tsx";
 import { buttonVariants } from "./ui/button.tsx";
@@ -110,6 +111,9 @@ export function Layout() {
             >
               {t.nav.projects}
             </Link>
+            <Link to="/profiles" className={nav} activeProps={active}>
+              {t.nav.profiles}
+            </Link>
           </nav>
           <Link to="/tasks/new" className={cn(buttonVariants({ size: "sm" }), "ml-auto shrink-0")}>
             <PlusIcon />
@@ -129,6 +133,7 @@ export function Layout() {
         </div>
       </header>
       <DispatchPausedBanner />
+      <ProfilesBanner />
       <main className="mx-auto max-w-7xl px-6 py-6">
         <Outlet />
       </main>

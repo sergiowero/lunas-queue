@@ -11,6 +11,9 @@ export const BLOCKED_REFRESH_MS = 5000;
 
 export const queries = {
   projects: () => queryOptions({ queryKey: ["projects"], queryFn: api.projects }),
+  agentProfiles: () => queryOptions({ queryKey: ["agent-profiles"], queryFn: api.agentProfiles }),
+  taskHold: (id: string) =>
+    queryOptions({ queryKey: ["task", id, "hold"], queryFn: () => api.taskHold(id) }),
   queue: (projectId?: string) =>
     queryOptions({ queryKey: ["queue", projectId ?? null], queryFn: () => api.queue(projectId) }),
   tasks: (projectId?: string) =>
