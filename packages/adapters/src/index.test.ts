@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { AgentProviderRegistry, agentProviders, packageName } from "./index.ts";
+import {
+  AgentProviderError,
+  AgentProviderRegistry,
+  agentProviders,
+  packageName,
+  validateProfileModel,
+} from "./index.ts";
 
 describe("@lunasq/adapters", () => {
   it("exports its package name", () => {
     expect(packageName).toBe("@lunasq/adapters");
   });
 
-  it("builds CLI-specific arguments and orders the fallback with the primary first", () => {
+  it("builds CLI-specific arguments for each provider", () => {
     const context = {
       mcpConfigPath: "/cfg/mcp.json",
       mcpUrl: "http://localhost:4321/mcp",
@@ -78,16 +84,19 @@ describe("@lunasq/adapters", () => {
       "--config",
       'mcp_servers.lunasq.default_tools_approval_mode="approve"',
     ]);
-    expect(agentProviders.fallbackOrder("copilot").map((provider) => provider.kind)).toEqual([
-      "copilot",
-      "claude",
-      "codex",
-    ]);
-    expect(agentProviders.fallbackOrder("codex").map((provider) => provider.kind)).toEqual([
-      "codex",
-      "claude",
-      "copilot",
-    ]);
+  });
+
+  it("validates a profile model against its provider's reserved flags, naming the flag", () => {
+    expect(() => validateProfileModel({ kind: "claude", model: "opus", args: [] })).not.toThrow();
+    expect(() => validateProfileModel({ kind: "copilot", args: ["--autopilot"] })).toThrow(
+      /--autopilot/,
+    );
+    expect(() => validateProfileModel({ kind: "codex", args: ["--sandbox=read-only"] })).toThrow(
+      AgentProviderError,
+    );
+    expect(() =>
+      validateProfileModel({ kind: "claude", effort: "high", args: ["--effort", "low"] }),
+    ).toThrow(/effort/);
   });
 
   it("rejects flags that compete with fixed per-provider options", () => {

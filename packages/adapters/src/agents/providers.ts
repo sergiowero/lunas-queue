@@ -1,4 +1,4 @@
-import type { AgentKind, AgentProfile } from "@lunasq/schemas";
+import type { AgentKind, ProfileModel } from "@lunasq/schemas";
 
 export type AgentProviderContext = {
   mcpConfigPath: string;
@@ -13,7 +13,7 @@ export type AgentProvider = {
     usage: "reported" | "unavailable";
     reviewerExecution: "native-hooks" | "lunasq-runner";
   };
-  args(profile: AgentProfile, context: AgentProviderContext): string[];
+  args(profile: ProfileModel, context: AgentProviderContext): string[];
 };
 
 export class AgentProviderError extends Error {
@@ -38,12 +38,6 @@ export class AgentProviderRegistry {
     const provider = this.#providers.get(kind);
     if (!provider) throw new AgentProviderError(`no adapter registered for ${kind}`);
     return provider;
-  }
-
-  /** Primary provider first, followed by the others in registration order. */
-  fallbackOrder(primary: AgentKind): AgentProvider[] {
-    const first = this.get(primary);
-    return [first, ...[...this.#providers.values()].filter((provider) => provider !== first)];
   }
 
   all(): AgentProvider[] {
@@ -103,7 +97,7 @@ function assertNoOptionTerminator(args: string[]): void {
   }
 }
 
-function assertEffortNotDuplicated(profile: AgentProfile): void {
+function assertEffortNotDuplicated(profile: ProfileModel): void {
   if (
     profile.effort &&
     profile.args.some((arg) => arg === "--effort" || arg.startsWith("--effort="))
@@ -195,3 +189,16 @@ export const agentProviders = new AgentProviderRegistry([
   copilotProvider,
   codexProvider,
 ]);
+
+/**
+ * Checks a profile model against its provider's reserved flags (the ones LunasQ sets itself) without
+ * building a command line. Throws `AgentProviderError` naming the conflicting flag.
+ */
+export function validateProfileModel(model: ProfileModel): void {
+  agentProviders.get(model.kind).args(model, {
+    mcpConfigPath: "/validate/mcp.json",
+    mcpUrl: "http://127.0.0.1/validate",
+    settingsPath: "/validate/settings.json",
+    sessionId: "validate",
+  });
+}
