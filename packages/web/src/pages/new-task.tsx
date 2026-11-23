@@ -2,10 +2,13 @@
 // validation is the server's; here only its issues are shown. Dependencies are added one by
 // one with a selector and end up in a list of chosen ones, in the order they were added. They can be
 // from any project; those from another are flagged as a risk, like in the detail.
+
+import type { PhaseInstructionInput } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { Loading, QueryError } from "../components/status.tsx";
+import { InstructionForm } from "../components/task/instruction-form.tsx";
 import { TaskNumber, taskLabel as taskNumberLabel } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
@@ -45,6 +48,7 @@ export function NewTaskPage() {
   const [tags, setTags] = useState("");
   const [priority, setPriority] = useState(String(DEFAULT_PRIORITY));
   const [dependsOn, setDependsOn] = useState<string[]>([]);
+  const [instructions, setInstructions] = useState<(PhaseInstructionInput & { key: string })[]>([]);
   const projects = useQuery(queries.projects());
   const candidates = useQuery({ ...queries.tasks(), enabled: projectId !== "" });
 
@@ -65,6 +69,7 @@ export function NewTaskPage() {
       tags: parseTags(tags),
       priority: Number(priority),
       dependsOn,
+      instructions: instructions.map(({ phase, text }) => ({ phase, text })),
     });
   };
 
@@ -199,6 +204,39 @@ export function NewTaskPage() {
           )}
         </div>
       )}
+      <div className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium">{t.instructions.title}</h2>
+        <p className="text-xs text-muted-foreground">{t.instructions.hint}</p>
+        {instructions.length > 0 && (
+          <ul aria-label={t.instructions.listAria} className="flex flex-col gap-1 text-sm">
+            {instructions.map((instruction) => (
+              <li
+                key={instruction.key}
+                className="flex items-start gap-2 rounded-md border border-border px-3 py-1.5"
+              >
+                <Badge variant="secondary">{t.phase[instruction.phase]}</Badge>
+                <span className="flex-1 whitespace-pre-wrap break-words">{instruction.text}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={t.instructions.removeAria(t.phase[instruction.phase])}
+                  onClick={() =>
+                    setInstructions((current) => current.filter((i) => i.key !== instruction.key))
+                  }
+                >
+                  {t.instructions.remove}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <InstructionForm
+          idPrefix="new-task-instruction"
+          onAdd={(input) =>
+            setInstructions((current) => [...current, { ...input, key: crypto.randomUUID() }])
+          }
+        />
+      </div>
       {create.error && (
         <p role="alert" className="text-sm text-destructive">
           {t.newTask.createFailed(describe(create.error, t))}

@@ -7,6 +7,9 @@ import type {
   ConcurrencySettings,
   EventView,
   HookExecutionView,
+  InstructionUpdate,
+  PhaseInstruction,
+  PhaseInstructionInput,
   Project,
   ProjectCreate,
   ProjectHooksView,
@@ -21,6 +24,7 @@ import type {
   Task,
   TaskCreate,
   TaskDependencies,
+  TaskDetail,
   TaskEvidence,
   TaskUsage,
   VerificationSettings,
@@ -86,7 +90,7 @@ export const api = {
     request<ProjectHooksView>(`/api/projects/${encodeURIComponent(projectId)}/hooks`),
   hookExecutions: (projectId: string) =>
     request<HookExecutionView[]>(`/api/projects/${encodeURIComponent(projectId)}/hooks/executions`),
-  task: (id: string) => request<Task>(task(id)),
+  task: (id: string) => request<TaskDetail>(task(id)),
   dependencies: (id: string) => request<TaskDependencies>(`${task(id)}/dependencies`),
   runs: (id: string) => request<RunView[]>(`${task(id)}/runs`),
   events: (id: string) => request<EventView[]>(`${task(id)}/events`),
@@ -110,7 +114,18 @@ export const api = {
     }),
   deleteProject: (id: string) =>
     request<void>(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  createTask: (input: TaskCreate) => post<Task>("/api/tasks", input),
+  createTask: (input: TaskCreate) => post<TaskDetail>("/api/tasks", input),
+  addInstruction: (id: string, input: PhaseInstructionInput) =>
+    post<PhaseInstruction>(`${task(id)}/instructions`, input),
+  updateInstruction: (id: string, instructionId: string, input: InstructionUpdate) =>
+    request<PhaseInstruction>(`${task(id)}/instructions/${encodeURIComponent(instructionId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  removeInstruction: (id: string, instructionId: string) =>
+    request<void>(`${task(id)}/instructions/${encodeURIComponent(instructionId)}`, {
+      method: "DELETE",
+    }),
   cancelTask: (id: string) => post<Task>(`${task(id)}/cancel`),
   pauseTask: (id: string) => post<Task>(`${task(id)}/pause`),
   resumeTask: (id: string) => post<Task>(`${task(id)}/resume`),

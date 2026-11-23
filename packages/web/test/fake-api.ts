@@ -11,6 +11,7 @@ import type {
   EventView,
   EvidenceSource,
   Phase,
+  PhaseInstruction,
   Project,
   ProjectHooksView,
   Question,
@@ -29,6 +30,9 @@ import {
   AgentProviderSettings,
   ConcurrencySettings,
   type HookExecutionView,
+  InstructionUpdate,
+  MAX_TASK_INSTRUCTIONS,
+  PhaseInstructionInput,
   ProjectCreate,
   ProjectUpdate,
   QuestionAnswer,
@@ -96,6 +100,10 @@ export class FakeApi {
   readonly projects: Json<Project>[] = [];
   readonly tasks: Json<Task>[] = [];
   readonly edges: { taskId: string; dependsOnId: string }[] = [];
+  /** Phase instructions per task, oldest first. */
+  readonly instructions = new Map<string, Json<PhaseInstruction>[]>();
+  /** If set, the instruction routes (POST, PATCH, DELETE) answer this error. */
+  instructionsError: { status: number; error: string; message: string } | null = null;
   readonly runs: Json<RunView>[] = [];
   readonly events: Json<EventView>[] = [];
   readonly specs: Json<Spec>[] = [];
@@ -467,19 +475,21 @@ export class FakeApi {
     if (!task) return notFound;
     switch (sub) {
       case undefined:
-        return [200, task];
+        return [200, this.detail(task)];
+      case "instructions":
+        return this.instructionRoute(task, method, version, body);
       case "cancel":
         if (task.state === "completed" || task.state === "cancelled") {
           return conflict("invalid_transition", `the task is already ${task.state}`);
         }
         this.transition(id, "cancelled", null);
-        return [200, task];
+        return [200, this.detail(task)];
       case "pause":
         if (!["draft", "refined", "in_progress", "verification"].includes(task.state)) {
           return conflict("invalid_transition", `pause does not apply from ${task.state}`);
         }
         this.transition(id, "paused", null, {}, "pause");
-        return [200, task];
+        return [200, this.detail(task)];
       case "resume": {
         if (task.state !== "needs_human" && task.state !== "paused") {
           return conflict("invalid_transition", `the task is ${task.state}`);
@@ -491,7 +501,7 @@ export class FakeApi {
           .findLast((p) => p.to.state === entered)?.from.state;
         if (!origin) return conflict("no_escalation_found", `task ${id} has no escalation`);
         this.transition(id, origin, origin === "refined" ? null : "queued", {}, "resume");
-        return [200, task];
+        return [200, this.detail(task)];
       }
       case "dependencies":
         if (method === "PUT") return this.addDependency(task, version);
@@ -672,7 +682,80 @@ export class FakeApi {
       priority: input.priority,
     });
     for (const dependsOnId of input.dependsOn) this.edges.push({ taskId: task.id, dependsOnId });
-    return [201, task];
+    for (const instruction of input.instructions) this.pushInstruction(task.id, instruction);
+    return [201, this.detail(task)];
+  }
+
+  private detail(task: Json<Task>) {
+    return { ...task, instructions: this.instructions.get(task.id) ?? [] };
+  }
+
+  private pushInstruction(
+    taskId: string,
+    input: { phase: PhaseInstruction["phase"]; text: string },
+  ): Json<PhaseInstruction> {
+    const instruction = { id: uuid(), ...input };
+    this.instructions.set(taskId, [...(this.instructions.get(taskId) ?? []), instruction]);
+    this.event(taskId, "task.instruction_added", "human", {
+      instructionId: instruction.id,
+      ...input,
+    });
+    return instruction;
+  }
+
+  /** Like the server: add (201), edit (200) and remove (204) in any state; 404 for foreign ids. */
+  private instructionRoute(
+    task: Json<Task>,
+    method: string,
+    instructionId: string | undefined,
+    body: unknown,
+  ): [number, unknown] {
+    if (this.instructionsError) {
+      const { status, ...error } = this.instructionsError;
+      return [status, error];
+    }
+    const list = this.instructions.get(task.id) ?? [];
+    if (method === "POST" && !instructionId) {
+      const input = validate(PhaseInstructionInput, body);
+      if (!input.ok) return input.response;
+      if (list.length >= MAX_TASK_INSTRUCTIONS) {
+        return conflict("instruction_limit", "the task already has 50 instructions");
+      }
+      return [201, this.pushInstruction(task.id, input.data)];
+    }
+    const current = list.find((i) => i.id === instructionId);
+    if (!current) return [404, { error: "not_found" }];
+    if (method === "PATCH") {
+      const patch = validate(InstructionUpdate, body);
+      if (!patch.ok) return patch.response;
+      const next = {
+        ...current,
+        ...(patch.data.phase && { phase: patch.data.phase }),
+        ...(patch.data.text && { text: patch.data.text }),
+      };
+      this.instructions.set(
+        task.id,
+        list.map((i) => (i.id === current.id ? next : i)),
+      );
+      this.event(task.id, "task.instruction_updated", "human", {
+        instructionId: current.id,
+        from: current,
+        to: patch.data,
+      });
+      return [200, next];
+    }
+    if (method === "DELETE") {
+      this.instructions.set(
+        task.id,
+        list.filter((i) => i.id !== current.id),
+      );
+      this.event(task.id, "task.instruction_removed", "human", {
+        instructionId: current.id,
+        phase: current.phase,
+      });
+      return [204, null];
+    }
+    return [404, { error: "not_found" }];
   }
 
   private spec(

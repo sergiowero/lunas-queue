@@ -56,6 +56,7 @@ describe("task creation", () => {
       tags: ["auth", "ui"],
       priority: 250,
       dependsOn: [dep.id],
+      instructions: [],
     });
     expect(await screen.findByRole("heading", { name: "Login con email" })).toBeTruthy();
   });
@@ -244,5 +245,81 @@ describe("task creation", () => {
       expect.stringContaining("goal: Too small"),
     );
     expect(router.state.location.pathname).toBe("/tasks/new");
+  });
+});
+
+describe("task creation: phase instructions", () => {
+  async function openForm(language?: "en") {
+    if (language) localStorage.setItem(LANGUAGE_KEY, language);
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "lunas-queue" });
+    const view = renderApp("/tasks/new", fake);
+    await view.user.selectOptions(await screen.findByLabelText(/Proyecto|Project/), "lunas-queue");
+    return { ...view, fake, project };
+  }
+
+  it("Add is disabled while the text is empty or only spaces", async () => {
+    const { user } = await openForm();
+    const add = screen.getByRole("button", { name: "Agregar" });
+    expect((add as HTMLButtonElement).disabled).toBe(true);
+    await user.type(screen.getByLabelText("Instrucción"), "   ");
+    expect((add as HTMLButtonElement).disabled).toBe(true);
+    await user.type(screen.getByLabelText("Instrucción"), "no agregues dependencias");
+    expect((add as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("adds instructions with their phase, removes one and creates the task with the rest", async () => {
+    const { user, fake, project, router } = await openForm();
+    const phase = screen.getByLabelText("Fase");
+    const text = screen.getByLabelText("Instrucción") as HTMLTextAreaElement;
+
+    await user.selectOptions(phase, "implement");
+    await user.type(text, "no agregues dependencias");
+    await user.click(screen.getByRole("button", { name: "Agregar" }));
+    // The field is cleared after adding, ready for the next one.
+    expect(text.value).toBe("");
+
+    await user.selectOptions(phase, "verify");
+    await user.type(text, "corre la suite e2e");
+    await user.click(screen.getByRole("button", { name: "Agregar" }));
+
+    await user.selectOptions(phase, "refine");
+    await user.type(text, "borrar esta");
+    await user.click(screen.getByRole("button", { name: "Agregar" }));
+
+    const list = screen.getByRole("list", { name: "Instrucciones agregadas" });
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((li) => li.textContent),
+    ).toEqual([
+      expect.stringContaining("Implementación"),
+      expect.stringContaining("Verificación"),
+      expect.stringContaining("Refinamiento"),
+    ]);
+    await user.click(screen.getByRole("button", { name: "Quitar la instrucción de Refinamiento" }));
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+
+    await user.type(screen.getByLabelText("Objetivo"), "Login con email");
+    await user.click(screen.getByRole("button", { name: "Crear tarea" }));
+    await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/tasks\/[0-9a-f-]+$/));
+    expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
+      projectId: project.id,
+      instructions: [
+        { phase: "implement", text: "no agregues dependencias" },
+        { phase: "verify", text: "corre la suite e2e" },
+      ],
+    });
+  });
+
+  it("shows its texts in English when the UI language is English", async () => {
+    const { user } = await openForm("en");
+    expect(screen.getByLabelText("Phase")).toBeTruthy();
+    await user.type(screen.getByLabelText("Instruction"), "do not add dependencies");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    const list = screen.getByRole("list", { name: "Added instructions" });
+    expect(within(list).getByText("do not add dependencies")).toBeTruthy();
+    expect(within(list).getByText("Refinement")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove the Refinement instruction" })).toBeTruthy();
   });
 });
