@@ -303,6 +303,14 @@ describe("project editing", () => {
     expect(await screen.findByText("Sin perfil: refine, verify")).toBeTruthy();
   });
 
+  it("the missing-profile badge wraps inside the card instead of overflowing on narrow screens", async () => {
+    setup();
+    const badge = await screen.findByText("Sin perfil: verify");
+    expect(badge.className).toContain("whitespace-normal");
+    expect(badge.className).not.toContain("whitespace-nowrap");
+    expect(badge.className).toContain("max-w-full");
+  });
+
   it("a profile that disappeared answers profile_not_found and the form shows it", async () => {
     const { fake, app } = setup();
     await app.user.click(await screen.findByRole("button", { name: "Editar viejo" }));

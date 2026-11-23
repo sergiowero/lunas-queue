@@ -49,7 +49,7 @@ export function ProjectsPage() {
                 {t.projectsPage.baseBranch} {project.baseBranch}
               </p>
               {unassignedPhases(project.agentProfiles).length > 0 && (
-                <Badge variant="destructive" className="mt-2">
+                <Badge variant="destructive" className="mt-2 max-w-full whitespace-normal">
                   {t.projectsPage.missingProfile(
                     unassignedPhases(project.agentProfiles).join(", "),
                   )}
