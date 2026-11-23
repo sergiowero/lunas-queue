@@ -557,9 +557,7 @@ describe("phase instructions", () => {
       actor: "human",
       payload: { phase: "implement", text: "do not add dependencies" },
     });
-    expect((added[0]?.payload as { instructionId: string }).instructionId).toBe(
-      repo.instructions(task.id)?.[0]?.id,
-    );
+    expect(added[0]?.payload).toMatchObject({ instructionId: repo.instructions(task.id)?.[0]?.id });
   });
 
   it("a task without instructions has an empty list; an unknown task has null", () => {
