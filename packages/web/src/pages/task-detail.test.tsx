@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { FakeApi, SPEC_CONTENT } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 import * as format from "../lib/format.ts";
+import { LANGUAGE_KEY } from "../lib/i18n.ts";
 
 vi.mock("../lib/format.ts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/format.ts")>();
@@ -919,5 +920,165 @@ describe("#N mentions in cards and rows that are already a link", () => {
     renderApp("/queue", fake);
     const row = await screen.findByRole("link", { name: goal });
     expect(row.querySelector("a")).toBeNull();
+  });
+});
+
+describe("task detail: phase instructions", () => {
+  function withInstructions() {
+    const { fake, task } = seeded();
+    fake.instructions.set(task.id, [
+      { id: "i-1", phase: "implement", text: "no agregues dependencias" },
+      { id: "i-2", phase: "verify", text: "corre la suite e2e" },
+    ]);
+    return { fake, task };
+  }
+  const texts = (region: Awaited<ReturnType<typeof section>>) =>
+    region.getAllByRole("listitem").map((li) => li.textContent ?? "");
+
+  it("lists each instruction with its phase label, and shows an empty state", async () => {
+    const { fake, task } = withInstructions();
+    const other = fake.addTask(task.projectId, { goal: "Sin instrucciones" });
+    const view = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instrucciones");
+    expect(texts(region)).toEqual([
+      expect.stringContaining("Implementaciónno agregues dependencias"),
+      expect.stringContaining("Verificacióncorre la suite e2e"),
+    ]);
+    await view.router.navigate({ to: "/tasks/$taskId", params: { taskId: other.id } });
+    expect(await (await section("Instrucciones")).findByText("Sin instrucciones.")).toBeTruthy();
+  });
+
+  it("adds an instruction with the selector, the text and Agregar, and the list reflects it", async () => {
+    const { fake, task } = withInstructions();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instrucciones");
+    await region.findByText("no agregues dependencias");
+    await user.selectOptions(region.getByLabelText("Fase"), "refine");
+    await user.type(region.getByLabelText("Instrucción"), "mira el diseño");
+    await user.click(region.getByRole("button", { name: "Agregar" }));
+
+    await waitFor(() => expect(texts(region)).toHaveLength(3));
+    expect(texts(region)[2]).toContain("Refinamientomira el diseño");
+    expect(
+      fake.requests.find((r) => r.method === "POST" && r.path.endsWith("/instructions"))?.body,
+    ).toEqual({ phase: "refine", text: "mira el diseño" });
+    expect((region.getByLabelText("Instrucción") as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("lets a long unbroken instruction shrink instead of overflowing the card", async () => {
+    const { fake, task } = withInstructions();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instrucciones");
+    await user.type(region.getByLabelText("Instrucción"), "y".repeat(300));
+    await user.click(region.getByRole("button", { name: "Agregar" }));
+
+    const span = await region.findByText("y".repeat(300));
+    expect(span.className).toContain("min-w-0");
+    // The buttons wrap under the text at phone width instead of overflowing the card.
+    expect(span.closest("li")?.className).toContain("flex-wrap");
+  });
+
+  it("edits the text and the phase inline and shows the saved values", async () => {
+    const { fake, task } = withInstructions();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instrucciones");
+    await user.click(
+      await region.findByRole("button", { name: "Editar la instrucción de Implementación" }),
+    );
+
+    const text = region.getByLabelText("Instrucción", { selector: "textarea[data-editing]" });
+    await user.clear(text);
+    await user.type(text, "usa el componente X");
+    await user.selectOptions(
+      region.getByLabelText("Fase", { selector: "select[data-editing]" }),
+      "verify",
+    );
+    await user.click(region.getByRole("button", { name: "Guardar" }));
+
+    await waitFor(() => expect(texts(region)[0]).toContain("Verificaciónusa el componente X"));
+    expect(
+      fake.requests.find((r) => r.method === "PATCH" && r.path.endsWith("/instructions/i-1"))?.body,
+    ).toEqual({ phase: "verify", text: "usa el componente X" });
+  });
+
+  it("Cancelar leaves the instruction as it was", async () => {
+    const { fake, task } = withInstructions();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instrucciones");
+    await user.click(
+      await region.findByRole("button", { name: "Editar la instrucción de Implementación" }),
+    );
+    await user.type(
+      region.getByLabelText("Instrucción", { selector: "textarea[data-editing]" }),
+      " extra",
+    );
+    await user.click(region.getByRole("button", { name: "Cancelar" }));
+    expect(texts(region)[0]).toContain("Implementaciónno agregues dependencias");
+    expect(fake.requests.some((r) => r.method === "PATCH")).toBe(false);
+  });
+
+  it("removes an instruction and the list reflects it", async () => {
+    const { fake, task } = withInstructions();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instrucciones");
+    await user.click(
+      await region.findByRole("button", { name: "Quitar la instrucción de Verificación" }),
+    );
+    await waitFor(() => expect(texts(region)).toHaveLength(1));
+    expect(region.queryByText("corre la suite e2e")).toBeNull();
+    expect(fake.instructions.get(task.id)).toHaveLength(1);
+  });
+
+  it("shows the API error when an operation fails", async () => {
+    const { fake, task } = withInstructions();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instrucciones");
+    await region.findByText("no agregues dependencias");
+    fake.instructionsError = {
+      status: 409,
+      error: "instruction_limit",
+      message: "the task already has 50 instructions",
+    };
+    await user.type(region.getByLabelText("Instrucción"), "una más");
+    await user.click(region.getByRole("button", { name: "Agregar" }));
+    expect((await region.findByRole("alert")).textContent).toContain("máximo de 50 instrucciones");
+    // The text is kept so nothing is lost.
+    expect((region.getByLabelText("Instrucción") as HTMLTextAreaElement).value).toBe("una más");
+
+    // A different error for the removal, so its own alert cannot be confused with the add error.
+    fake.instructionsError = { status: 404, error: "not_found", message: "instruction not found" };
+    await user.click(region.getByRole("button", { name: "Quitar la instrucción de Verificación" }));
+    await waitFor(() => expect(region.getAllByRole("alert")).toHaveLength(2));
+    expect(region.getAllByRole("alert").map((a) => a.textContent)).toContain(
+      "No se encontró lo que se pidió.",
+    );
+    expect(texts(region)).toHaveLength(2);
+  });
+
+  it("works on a completed task", async () => {
+    const { fake, task } = withInstructions();
+    fake.transition(task.id, "completed", null);
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instrucciones");
+    await user.type(await region.findByLabelText("Instrucción"), "para la próxima");
+    await user.click(region.getByRole("button", { name: "Agregar" }));
+    await waitFor(() => expect(texts(region)).toHaveLength(3));
+  });
+
+  it("takes all its texts from the English dictionary", async () => {
+    localStorage.setItem(LANGUAGE_KEY, "en");
+    const { fake, task } = withInstructions();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instructions");
+    expect(texts(region)[0]).toContain("Implementationno agregues dependencias");
+    expect(region.getByLabelText("Phase")).toBeTruthy();
+    expect(region.getByLabelText("Instruction")).toBeTruthy();
+    expect(region.getByRole("button", { name: "Add" })).toBeTruthy();
+    await user.click(region.getByRole("button", { name: "Edit the Implementation instruction" }));
+    expect(region.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(region.getByRole("button", { name: "Cancel" })).toBeTruthy();
+    expect(
+      region.getByRole("button", { name: "Remove the Verification instruction" }),
+    ).toBeTruthy();
   });
 });

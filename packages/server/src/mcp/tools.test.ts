@@ -9,6 +9,7 @@ import {
   RunSubagentRepository,
   SettingsRepository,
   SpecRepository,
+  TaskRepository,
   transitionTask,
 } from "@lunasq/db";
 import { insertRun, setTaskPosition } from "@lunasq/db/test-helpers";
@@ -48,6 +49,48 @@ describe("get_task_context", () => {
     });
     expect(body).toHaveProperty("task.goal");
     expect(body).not.toHaveProperty("task.intent");
+  });
+
+  it("implementation receives only the implement instructions, oldest first, with id, phase and text", async () => {
+    const h = mcpHarness();
+    const { task, call } = await h.session("implement", implementing);
+    const tasks = new TaskRepository(h.db);
+    tasks.addInstruction(task.id, { phase: "refine", text: "for the refiner" });
+    const first = tasks.addInstruction(task.id, {
+      phase: "implement",
+      text: "no new dependencies",
+    });
+    tasks.addInstruction(task.id, { phase: "verify", text: "for the verifier" });
+    const second = tasks.addInstruction(task.id, { phase: "implement", text: "use component X" });
+    const { body } = await call("get_task_context");
+    expect(body).toMatchObject({
+      task: {
+        instructions: [
+          { id: first?.id, phase: "implement", text: "no new dependencies" },
+          { id: second?.id, phase: "implement", text: "use component X" },
+        ],
+      },
+    });
+  });
+
+  it("each phase receives only its own instructions", async () => {
+    const h = mcpHarness();
+    const verify = await h.session("verify", verifying);
+    const tasks = new TaskRepository(h.db);
+    tasks.addInstruction(verify.task.id, { phase: "implement", text: "x" });
+    tasks.addInstruction(verify.task.id, { phase: "verify", text: "run the e2e suite" });
+    const { body } = await verify.call("get_task_context");
+    expect((body.task as { instructions: { phase: string }[] }).instructions).toMatchObject([
+      { phase: "verify", text: "run the e2e suite" },
+    ]);
+  });
+
+  it("a task without instructions for the Run's phase receives an empty array", async () => {
+    const h = mcpHarness();
+    const { task, call } = await h.session("implement", implementing);
+    new TaskRepository(h.db).addInstruction(task.id, { phase: "verify", text: "other phase" });
+    const { body } = await call("get_task_context");
+    expect(body).toMatchObject({ task: { instructions: [] } });
   });
 
   it("refinement after requested changes receives the version and its comments", async () => {

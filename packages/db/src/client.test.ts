@@ -19,6 +19,7 @@ const TABLES = [
   "runs",
   "specs",
   "task_dependencies",
+  "task_instructions",
   "tasks",
   "usage_records",
 ];

@@ -407,3 +407,140 @@ describe("dependencies", () => {
     expect((await send("DELETE", `/api/tasks/${b.id}/dependencies/${a.id}`)).status).toBe(404);
   });
 });
+
+describe("task instructions API", () => {
+  type Instruction = { id: string; phase: string; text: string };
+  const list = async (
+    send: ReturnType<typeof setup>["send"],
+    taskId: string,
+  ): Promise<Instruction[]> => {
+    const res = await send("GET", `/api/tasks/${taskId}`);
+    return ((await res.json()) as { instructions: Instruction[] }).instructions;
+  };
+
+  it("creating with instructions stores them and the response and GET carry them", async () => {
+    const { create, send, db } = setup();
+    const task = await create({
+      instructions: [{ phase: "implement", text: "do not add dependencies" }],
+    });
+    expect(task.instructions).toMatchObject([
+      { phase: "implement", text: "do not add dependencies" },
+    ]);
+    expect(await list(send, task.id)).toEqual(task.instructions);
+    expect(listEvents(db, task.id).map((e) => e.type)).toContain("task.instruction_added");
+  });
+
+  it("a task without instructions answers an empty list", async () => {
+    const { create, send } = setup();
+    expect(await list(send, (await create()).id)).toEqual([]);
+  });
+
+  it.each([
+    ["deliver phase", { phase: "deliver", text: "x" }],
+    ["unknown phase", { phase: "plan", text: "x" }],
+    ["empty text", { phase: "refine", text: "" }],
+    ["text of spaces", { phase: "refine", text: "   " }],
+    ["text over 10,000 characters", { phase: "refine", text: "x".repeat(10_001) }],
+  ])(
+    "rejects an instruction with %s at creation and on add with 400, storing nothing",
+    async (_, bad) => {
+      const { send, project, create, db } = setup();
+      const res = await send("POST", "/api/tasks", {
+        projectId: project.id,
+        goal: "x",
+        priority: 1,
+        instructions: [bad],
+      });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe("invalid_input");
+      expect(db.$client.prepare("select count(*) from tasks").pluck().get()).toBe(0);
+
+      const task = await create();
+      expect((await send("POST", `/api/tasks/${task.id}/instructions`, bad)).status).toBe(400);
+      expect(await list(send, task.id)).toEqual([]);
+    },
+  );
+
+  it("adds an instruction with 201", async () => {
+    const { create, send } = setup();
+    const task = await create();
+    const res = await send("POST", `/api/tasks/${task.id}/instructions`, {
+      phase: "verify",
+      text: "check the docs",
+    });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ phase: "verify", text: "check the docs" });
+    expect(await list(send, task.id)).toHaveLength(1);
+  });
+
+  it("answers 409 when adding the 51st instruction", async () => {
+    const { create, send } = setup();
+    const task = await create({
+      instructions: Array.from({ length: 50 }, (_, i) => ({ phase: "refine", text: `n${i}` })),
+    });
+    const res = await send("POST", `/api/tasks/${task.id}/instructions`, {
+      phase: "refine",
+      text: "one more",
+    });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toBe("instruction_limit");
+    expect(await list(send, task.id)).toHaveLength(50);
+  });
+
+  it("adds to a completed task without moving its state", async () => {
+    const { db, project, send } = setup();
+    const task = insertTask(db, project.id, { state: "completed", subState: null });
+    const res = await send("POST", `/api/tasks/${task.id}/instructions`, {
+      phase: "verify",
+      text: "x",
+    });
+    expect(res.status).toBe(201);
+    expect(((await (await send("GET", `/api/tasks/${task.id}`)).json()) as TaskBody).state).toBe(
+      "completed",
+    );
+  });
+
+  it("edits text and phase, and the edit is visible on GET", async () => {
+    const { create, send } = setup();
+    const task = await create({ instructions: [{ phase: "refine", text: "old" }] });
+    const id = (await list(send, task.id))[0]?.id;
+    const res = await send("PATCH", `/api/tasks/${task.id}/instructions/${id}`, {
+      phase: "verify",
+      text: "new",
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id, phase: "verify", text: "new" });
+    expect(await list(send, task.id)).toEqual([{ id, phase: "verify", text: "new" }]);
+    expect((await send("PATCH", `/api/tasks/${task.id}/instructions/${id}`, {})).status).toBe(400);
+    expect((await send("PATCH", `/api/tasks/${task.id}/instructions/${id}`, "{")).status).toBe(400);
+  });
+
+  it("removes with 204 and removing again answers 404", async () => {
+    const { create, send } = setup();
+    const task = await create({ instructions: [{ phase: "refine", text: "x" }] });
+    const id = (await list(send, task.id))[0]?.id;
+    expect((await send("DELETE", `/api/tasks/${task.id}/instructions/${id}`)).status).toBe(204);
+    expect(await list(send, task.id)).toEqual([]);
+    expect((await send("DELETE", `/api/tasks/${task.id}/instructions/${id}`)).status).toBe(404);
+  });
+
+  it("answers 404 for an instruction of another task or a task that does not exist", async () => {
+    const { create, send } = setup();
+    const a = await create({ instructions: [{ phase: "refine", text: "of a" }] });
+    const b = await create();
+    const id = (await list(send, a.id))[0]?.id;
+    expect(
+      (await send("PATCH", `/api/tasks/${b.id}/instructions/${id}`, { text: "hijack" })).status,
+    ).toBe(404);
+    expect((await send("DELETE", `/api/tasks/${b.id}/instructions/${id}`)).status).toBe(404);
+    expect(
+      (await send("PATCH", `/api/tasks/${missing}/instructions/${id}`, { text: "x" })).status,
+    ).toBe(404);
+    expect((await send("DELETE", `/api/tasks/${missing}/instructions/${id}`)).status).toBe(404);
+    expect(
+      (await send("POST", `/api/tasks/${missing}/instructions`, { phase: "refine", text: "x" }))
+        .status,
+    ).toBe(404);
+    expect((await list(send, a.id))[0]?.text).toBe("of a");
+  });
+});

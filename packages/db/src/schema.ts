@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import {
   Actor,
   AgentKind,
+  InstructionPhase,
   Phase,
   PrState,
   type QuestionOptions,
@@ -168,6 +169,25 @@ export const taskDependencies = sqliteTable(
     primaryKey({ columns: [t.taskId, t.dependsOnId] }),
     check("task_dependencies_no_self_loop", sql`${t.taskId} <> ${t.dependsOnId}`),
     index("task_dependencies_depends_on_idx").on(t.dependsOnId),
+  ],
+);
+
+// Free-text instructions the human addresses to the agent of one phase of a task. Oldest first by rowid.
+export const taskInstructions = sqliteTable(
+  "task_instructions",
+  {
+    id: id(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    phase: text("phase", { enum: values(InstructionPhase) }).notNull(),
+    text: text("text").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    inEnum("task_instructions_phase_enum", t.phase, values(InstructionPhase)),
+    check("task_instructions_text_not_empty", sql`length(${t.text}) > 0`),
+    index("task_instructions_task_idx").on(t.taskId),
   ],
 );
 
