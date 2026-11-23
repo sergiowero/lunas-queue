@@ -14,6 +14,9 @@ describe("RunView", () => {
       phase: "implement",
       agentKind: "claude",
       model: null,
+      profileId: null,
+      modelIndex: null,
+      modelFailed: false,
       iteration: 0,
       herdrWorkspace: null,
       herdrPane: null,
@@ -27,6 +30,7 @@ describe("RunView", () => {
       handoff: null,
     });
     expect(run).not.toHaveProperty("runToken");
+    expect(run).toMatchObject({ profileId: null, modelIndex: null, modelFailed: false });
     expect(() => RunView.parse({ ...run, runToken: "secreto" })).toThrow();
   });
 });

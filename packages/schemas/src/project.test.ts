@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  AgentProfiles,
+  AgentProfileCreate,
+  AgentProfileUpdate,
   MAX_PHASE_TIMEOUT_MINUTES,
+  PhaseProfiles,
+  ProfileModel,
   Project,
   ProjectCreate,
   ProjectLimits,
   ProjectUpdate,
-  VerifyAgentProfile,
+  unassignedPhases,
 } from "./index.ts";
 
 const validCreate = {
@@ -16,92 +19,110 @@ const validCreate = {
   localPath: "/Users/sergio/workspace/lunas-queue",
 };
 
-describe("AgentProfiles", () => {
+const uuid = () => crypto.randomUUID();
+
+describe("ProfileModel", () => {
   it("accepts effort only with the levels of claude --effort", () => {
     for (const effort of ["low", "medium", "high", "xhigh", "max"]) {
-      expect(AgentProfiles.parse({ implement: { kind: "claude", effort } }).implement.effort).toBe(
-        effort,
-      );
+      expect(ProfileModel.parse({ kind: "claude", effort }).effort).toBe(effort);
     }
-    expect(() => AgentProfiles.parse({ implement: { kind: "claude", effort: "turbo" } })).toThrow();
-    expect(() => VerifyAgentProfile.parse({ kind: "claude", effort: "" })).toThrow();
+    expect(ProfileModel.safeParse({ kind: "claude", effort: "turbo" }).success).toBe(false);
   });
 
-  it("fills in the missing phases with claude without args", () => {
-    const profiles = AgentProfiles.parse({ implement: { kind: "claude", model: "opus" } });
-    expect(profiles).toEqual({
-      refine: { kind: "claude", args: [] },
-      implement: { kind: "claude", model: "opus", args: [] },
-      verify: { kind: "claude", args: [] },
-      deliver: { kind: "claude", args: [] },
+  it("keeps the provider, model and args, with empty args by default", () => {
+    expect(ProfileModel.parse({ kind: "claude" })).toEqual({ kind: "claude", args: [] });
+    expect(ProfileModel.parse({ kind: "codex", model: "gpt-5", args: ["--x"] })).toEqual({
+      kind: "codex",
+      model: "gpt-5",
+      args: ["--x"],
     });
   });
 
-  it("keeps the model and args of the profile", () => {
-    const profiles = AgentProfiles.parse({
-      verify: { kind: "claude", model: "sonnet", args: ["--permission-mode", "auto"] },
-    });
-    expect(profiles.verify).toEqual({
-      kind: "claude",
-      model: "sonnet",
-      args: ["--permission-mode", "auto"],
-    });
+  it("accepts Claude, Copilot and Codex and rejects other providers or an empty model", () => {
+    for (const kind of ["claude", "copilot", "codex"]) {
+      expect(ProfileModel.safeParse({ kind }).success).toBe(true);
+    }
+    expect(ProfileModel.safeParse({ kind: "gemini" }).success).toBe(false);
+    expect(ProfileModel.safeParse({ kind: "claude", model: "" }).success).toBe(false);
   });
 
-  it("accepts Copilot CLI as a provider in any phase", () => {
-    const profiles = AgentProfiles.parse({
-      refine: { kind: "copilot", effort: "medium" },
-      implement: { kind: "copilot", model: "gpt-5" },
-      verify: { kind: "copilot" },
-      deliver: { kind: "copilot" },
-    });
-    expect(Object.values(profiles).map((profile) => profile.kind)).toEqual([
-      "copilot",
-      "copilot",
-      "copilot",
-      "copilot",
-    ]);
-  });
-
-  it("accepts Codex CLI as a provider in any phase", () => {
-    const profiles = AgentProfiles.parse({
-      refine: { kind: "codex", effort: "xhigh" },
-      implement: { kind: "codex", model: "gpt-5.4" },
-      verify: { kind: "codex" },
-      deliver: { kind: "codex" },
-    });
-    expect(Object.values(profiles).map((profile) => profile.kind)).toEqual([
-      "codex",
-      "codex",
-      "codex",
-      "codex",
-    ]);
-  });
-
-  it.each(["refine", "implement", "verify", "deliver"])(
-    "rejects an unknown kind in %s",
-    (phase) => {
-      const result = AgentProfiles.safeParse({ [phase]: { kind: "gemini" } });
+  it("rejects effort together with --effort in args, naming the flag", () => {
+    for (const args of [["--effort", "low"], ["--effort=low"]]) {
+      const result = ProfileModel.safeParse({ kind: "claude", effort: "high", args });
       expect(result.success).toBe(false);
-      expect(result.error?.issues[0]?.path).toEqual([phase, "kind"]);
-    },
-  );
-
-  it("verify uses the same per-provider profile schema as the other phases", () => {
-    expect(AgentProfiles.shape.verify.safeParse({ kind: "claude" }).success).toBe(true);
-    expect(AgentProfiles.shape.verify.safeParse({ kind: "copilot" }).success).toBe(true);
-  });
-
-  it("verify shares the agent profile schema", () => {
-    expect(AgentProfiles.shape.verify.unwrap()).toBe(VerifyAgentProfile);
-    expect(ProjectUpdate.shape.agentProfiles.unwrap().shape.verify.unwrap()).toBe(
-      VerifyAgentProfile,
+      expect(result.error?.issues[0]?.message).toContain("--effort");
+    }
+    // Without effort the flag in args is still allowed (existing behavior).
+    expect(ProfileModel.safeParse({ kind: "claude", args: ["--effort", "low"] }).success).toBe(
+      true,
     );
   });
+});
 
-  it("rejects unknown phases and an empty model", () => {
-    expect(AgentProfiles.safeParse({ review: { kind: "claude" } }).success).toBe(false);
-    expect(AgentProfiles.safeParse({ refine: { kind: "claude", model: "" } }).success).toBe(false);
+describe("AgentProfileCreate", () => {
+  const model = { kind: "claude" as const, model: "opus" };
+
+  it("accepts a name and from 1 to 10 models, keeping their order", () => {
+    const models = [model, { kind: "codex" as const, model: "gpt-5" }];
+    const parsed = AgentProfileCreate.parse({ name: "Fast", models });
+    expect(parsed.models.map((m) => m.kind)).toEqual(["claude", "codex"]);
+    expect(
+      AgentProfileCreate.safeParse({ name: "Max", models: Array.from({ length: 10 }, () => model) })
+        .success,
+    ).toBe(true);
+  });
+
+  it.each([
+    ["no models", { name: "Fast", models: [] }],
+    [
+      "more than 10 models",
+      { name: "Fast", models: Array.from({ length: 11 }, () => ({ kind: "claude" })) },
+    ],
+    ["an empty name", { name: "  ", models: [{ kind: "claude" }] }],
+    ["unknown fields", { name: "Fast", models: [{ kind: "claude" }], id: uuid() }],
+    [
+      "a model with a conflicting effort flag",
+      {
+        name: "Fast",
+        models: [{ kind: "claude", effort: "high", args: ["--effort", "low"] }],
+      },
+    ],
+  ])("rejects %s", (_label, input) => {
+    expect(AgentProfileCreate.safeParse(input).success).toBe(false);
+  });
+
+  it("the PATCH is partial", () => {
+    expect(AgentProfileUpdate.parse({ name: "Slow" })).toEqual({ name: "Slow" });
+    expect(AgentProfileUpdate.safeParse({ models: [] }).success).toBe(false);
+  });
+});
+
+describe("PhaseProfiles", () => {
+  it("leaves every phase unassigned by default", () => {
+    expect(PhaseProfiles.parse({})).toEqual({
+      refine: null,
+      implement: null,
+      verify: null,
+      deliver: null,
+    });
+  });
+
+  it("accepts profile ids or null and rejects anything else", () => {
+    const id = uuid();
+    expect(PhaseProfiles.parse({ implement: id }).implement).toBe(id);
+    expect(PhaseProfiles.safeParse({ implement: "claude" }).success).toBe(false);
+    expect(PhaseProfiles.safeParse({ review: id }).success).toBe(false);
+  });
+
+  it("lists the unassigned phases", () => {
+    const id = uuid();
+    expect(unassignedPhases(PhaseProfiles.parse({ implement: id, verify: id }))).toEqual([
+      "refine",
+      "deliver",
+    ]);
+    expect(
+      unassignedPhases(PhaseProfiles.parse({ refine: id, implement: id, verify: id, deliver: id })),
+    ).toEqual([]);
   });
 });
 
@@ -135,7 +156,12 @@ describe("ProjectLimits", () => {
 describe("ProjectCreate", () => {
   it("applies defaults for profiles and limits", () => {
     const project = ProjectCreate.parse(validCreate);
-    expect(project.agentProfiles.verify).toEqual({ kind: "claude", args: [] });
+    expect(project.agentProfiles).toEqual({
+      refine: null,
+      implement: null,
+      verify: null,
+      deliver: null,
+    });
     expect(project.limits).toEqual({});
     expect(project.testCommand).toBeUndefined();
   });
@@ -156,7 +182,7 @@ describe("ProjectCreate", () => {
     ["empty branch", { baseBranch: "" }],
     ["empty name", { name: " " }],
     ["empty test command", { testCommand: "" }],
-    ["verify with another kind", { agentProfiles: { verify: { kind: "gemini" } } }],
+    ["a phase profile that is not an id", { agentProfiles: { verify: { kind: "claude" } } }],
   ])("rejects %s", (_label, overrides) => {
     expect(ProjectCreate.safeParse({ ...validCreate, ...overrides }).success).toBe(false);
   });
@@ -178,8 +204,8 @@ describe("ProjectUpdate", () => {
     });
   });
 
-  it("validates the verify profile", () => {
-    const result = ProjectUpdate.safeParse({ agentProfiles: { verify: { kind: "gemini" } } });
+  it("validates the phase profiles", () => {
+    const result = ProjectUpdate.safeParse({ agentProfiles: { verify: { kind: "claude" } } });
     expect(result.success).toBe(false);
   });
 });
@@ -225,10 +251,9 @@ describe("normalization and format", () => {
     expect(at(MAX_PHASE_TIMEOUT_MINUTES + 1)).toBe(false);
   });
 
-  it("the PATCH of agentProfiles is partial per phase and without defaults", () => {
-    const patch = ProjectUpdate.parse({
-      agentProfiles: { verify: { kind: "claude", model: "sonnet" } },
-    });
-    expect(patch.agentProfiles).toEqual({ verify: { kind: "claude", model: "sonnet", args: [] } });
+  it("the PATCH of agentProfiles is partial per phase, without defaults, and null unassigns", () => {
+    const id = uuid();
+    const patch = ProjectUpdate.parse({ agentProfiles: { verify: id, deliver: null } });
+    expect(patch.agentProfiles).toEqual({ verify: id, deliver: null });
   });
 });

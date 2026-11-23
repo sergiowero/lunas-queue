@@ -2,6 +2,7 @@
 // usage, evidence and the global queue. They are derived from the tables; none is written through the API.
 import { z } from "zod";
 import { Actor, AgentKind, Phase, RunResult, SessionSource } from "./enums.ts";
+import { SchedulablePhase } from "./scheduler.ts";
 import { Task } from "./task.ts";
 
 /** A Run as the UI sees it: without the run token, which only lives in the pane's environment. */
@@ -11,6 +12,11 @@ export const RunView = z.strictObject({
   phase: Phase,
   agentKind: AgentKind,
   model: z.string().nullable(),
+  // Agent profile and index of the model the Run used; null on Runs from before profiles.
+  profileId: z.uuid().nullable(),
+  modelIndex: z.int().min(0).nullable(),
+  // The Run ended because of its model and the phase moved to the next one (no retry consumed).
+  modelFailed: z.boolean(),
   iteration: z.int().min(0),
   herdrWorkspace: z.string().nullable(),
   herdrPane: z.string().nullable(),
@@ -112,3 +118,20 @@ export type QueueEntry = z.infer<typeof QueueEntry>;
 
 export const QueueQuery = z.strictObject({ projectId: z.uuid().optional() });
 export type QueueQuery = z.infer<typeof QueueQuery>;
+
+/**
+ * Why a queued task is not being dispatched because of its project's configuration: the phase has no
+ * agent profile (`profile_missing`) or no model of it can start (`providers_disabled`: every one
+ * belongs to a disabled provider or already failed). `hold` is null if the task is not held.
+ */
+export const TaskHold = z.strictObject({
+  hold: z
+    .strictObject({
+      reason: z.enum(["profile_missing", "providers_disabled"]),
+      phase: SchedulablePhase,
+      projectId: z.uuid(),
+      projectName: z.string().min(1),
+    })
+    .nullable(),
+});
+export type TaskHold = z.infer<typeof TaskHold>;
