@@ -330,6 +330,9 @@ export const en: Dictionary = {
     unassignedWarning: (phase) =>
       `The ${phase} phase has no profile: its tasks will wait in the queue until you choose one.`,
     noProfilesYet: "There are no agent profiles yet.",
+    disabledModels: (names) =>
+      `This profile has models with a disabled provider (${names}): they are skipped.`,
+    enableInSettings: "Enable in Settings",
     createProfile: "Create a profile",
     timeout: (phase) => `${phase} timeout (min)`,
     saveFailed: (detail) => `The project could not be saved: ${detail}`,

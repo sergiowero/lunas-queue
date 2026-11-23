@@ -2,7 +2,14 @@
 // server's; here only its issues are shown. On create, empty fields are not sent so that
 // the server defaults apply; on edit everything is sent, because PATCH replaces each present
 // field and `null` clears the optional commands.
-import type { Phase, Project, ProjectCreate, ProjectUpdate } from "@lunasq/schemas";
+import type {
+  AgentProfile,
+  AgentProviderSettings,
+  Phase,
+  Project,
+  ProjectCreate,
+  ProjectUpdate,
+} from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
@@ -22,6 +29,17 @@ type PhaseFields = {
   profile: string;
   timeout: string;
 };
+
+/** Providers of the selected profile's models that are disabled in Settings (they are skipped). */
+function disabledKinds(
+  profiles: Json<AgentProfile>[] | undefined,
+  providers: Json<AgentProviderSettings> | undefined,
+  profileId: string,
+): string[] {
+  const profile = profiles?.find((p) => p.id === profileId);
+  if (!profile || !providers) return [];
+  return [...new Set(profile.models.map((m) => m.kind).filter((kind) => !providers[kind]))];
+}
 
 function describe(error: Error, t: Dictionary): string {
   if (error instanceof ApiError && error.issues.length > 0) {
@@ -101,6 +119,7 @@ export function ProjectFormDialog({
   const t = useT();
   const queryClient = useQueryClient();
   const profiles = useQuery(queries.agentProfiles());
+  const providers = useQuery(queries.providerSettings());
   const [name, setName] = useState(project?.name ?? "");
   const [repo, setRepo] = useState(project?.repo ?? "");
   const [baseBranch, setBaseBranch] = useState(project?.baseBranch ?? "main");
@@ -277,6 +296,16 @@ export function ProjectFormDialog({
                   />
                 </div>
               </div>
+              {disabledKinds(profiles.data, providers.data, phases[phase].profile).length > 0 && (
+                <p className="text-xs text-warning-text">
+                  {t.projectForm.disabledModels(
+                    disabledKinds(profiles.data, providers.data, phases[phase].profile).join(", "),
+                  )}{" "}
+                  <Link to="/settings" className="underline">
+                    {t.projectForm.enableInSettings}
+                  </Link>
+                </p>
+              )}
               {phases[phase].profile === "" && (
                 <p role="note" className="text-xs text-warning-text">
                   {t.projectForm.unassignedWarning(phase)}

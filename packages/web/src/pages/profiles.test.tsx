@@ -185,7 +185,7 @@ describe("Profiles tab", () => {
     );
   });
 
-  it("a profile in use cannot be deleted: the dialog lists the projects and phases", async () => {
+  it("a profile in use cannot be deleted: the dialog disables Eliminar and lists the projects and phases", async () => {
     const fake = new FakeApi();
     const profile = fake.addProfile({ name: "En uso" });
     fake.addProject({
@@ -196,11 +196,31 @@ describe("Profiles tab", () => {
 
     await user.click(await screen.findByRole("button", { name: "Eliminar perfil En uso" }));
     const dialog = await screen.findByRole("dialog", { name: "Eliminar perfil" });
-    await user.click(within(dialog).getByRole("button", { name: "Eliminar" }));
 
-    const alert = await screen.findByRole("alert");
+    const alert = await within(dialog).findByRole("alert");
     expect(alert.textContent).toContain("No se puede eliminar: lo usan estos proyectos");
     expect(alert.textContent).toContain("proyecto-a: refine, implement");
+    expect(within(dialog).getByRole("button", { name: "Eliminar" }).hasAttribute("disabled")).toBe(
+      true,
+    );
+    expect(fake.requests.some((r) => r.method === "DELETE")).toBe(false);
+  });
+
+  it("if the projects were not known yet, the server's 409 profile_in_use is explained the same way", async () => {
+    const fake = new FakeApi();
+    const profile = fake.addProfile({ name: "En uso" });
+    const { user } = renderApp("/profiles", fake);
+    await user.click(await screen.findByRole("button", { name: "Eliminar perfil En uso" }));
+    const dialog = await screen.findByRole("dialog", { name: "Eliminar perfil" });
+    // Another tab assigns the profile after the projects were read.
+    fake.addProject({
+      name: "otro",
+      agentProfiles: { refine: null, implement: null, verify: profile.id, deliver: null },
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Eliminar" }));
+
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.textContent).toContain("otro: verify");
     expect(fake.profiles).toHaveLength(1);
   });
 });

@@ -330,6 +330,9 @@ export const es = {
     unassignedWarning: (phase: string) =>
       `La fase ${phase} no tiene perfil: sus tareas esperarán en cola hasta que elijas uno.`,
     noProfilesYet: "Todavía no hay perfiles de agente.",
+    disabledModels: (names: string) =>
+      `Este perfil tiene modelos con proveedor deshabilitado (${names}): se omiten.`,
+    enableInSettings: "Habilitar en Settings",
     createProfile: "Crear un perfil",
     timeout: (phase: string) => `Timeout de ${phase} (min)`,
     saveFailed: (detail: string) => `No se pudo guardar el proyecto: ${detail}`,

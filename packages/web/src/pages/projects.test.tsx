@@ -135,6 +135,29 @@ describe("project creation", () => {
     });
   });
 
+  it("warns, with a link to Settings, when the selected profile has models of a disabled provider", async () => {
+    const fake = new FakeApi();
+    fake.providers = { claude: true, copilot: false, codex: true };
+    fake.addProfile({
+      name: "Con copilot",
+      models: [
+        { kind: "claude", args: [] },
+        { kind: "copilot", args: [] },
+      ],
+    });
+    const { user, dialog } = await openDialog(fake);
+    const form = within(dialog);
+
+    await user.selectOptions(await form.findByLabelText("Perfil de refine"), "Con copilot");
+
+    expect(
+      await form.findByText(/Este perfil tiene modelos con proveedor deshabilitado \(copilot\)/),
+    ).toBeTruthy();
+    expect(form.getByRole("link", { name: "Habilitar en Settings" }).getAttribute("href")).toBe(
+      "/settings",
+    );
+  });
+
   it("with no profiles yet it says so and links to the Profiles tab", async () => {
     const fake = new FakeApi();
     const { dialog } = await openDialog(fake);

@@ -1,12 +1,15 @@
 // Delete confirmation for an agent profile. The server rejects with 409 `profile_in_use` a profile
 // that projects select, and lists those projects and phases.
 import type { AgentProfile } from "@lunasq/schemas";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api, type Json } from "../lib/api.ts";
 import { useErrorText } from "../lib/error-text.ts";
 import { useT } from "../lib/i18n.ts";
+import { queries } from "../lib/queries.ts";
 import { Button } from "./ui/button.tsx";
 import { Dialog } from "./ui/dialog.tsx";
+
+const PHASES = ["refine", "implement", "verify", "deliver"] as const;
 
 type UsedBy = { id: string; name: string; phases: string[] };
 
@@ -32,7 +35,16 @@ export function ProfileDeleteDialog({
       onClose();
     },
   });
-  const projects = usedBy(remove.error);
+  const allProjects = useQuery(queries.projects());
+  // Known before trying: the projects that select the profile. The server's 409 stays as the guard.
+  const known: UsedBy[] = (allProjects.data ?? [])
+    .map((project) => ({
+      id: project.id,
+      name: project.name,
+      phases: PHASES.filter((phase) => project.agentProfiles[phase] === profile.id),
+    }))
+    .filter((project) => project.phases.length > 0);
+  const projects = usedBy(remove.error) ?? (known.length > 0 ? known : null);
 
   return (
     <Dialog title={t.profileDelete.title} onClose={onClose}>
@@ -42,7 +54,7 @@ export function ProfileDeleteDialog({
           <strong>{profile.name}</strong>
           {t.profileDelete.confirmSuffix}
         </p>
-        {remove.error && (
+        {(remove.error || projects) && (
           <div role="alert" className="text-sm text-destructive">
             {projects ? (
               <>
@@ -56,7 +68,7 @@ export function ProfileDeleteDialog({
                 </ul>
               </>
             ) : (
-              <p>{t.profileDelete.failed(errorText(remove.error))}</p>
+              <p>{t.profileDelete.failed(errorText(remove.error as Error))}</p>
             )}
           </div>
         )}
@@ -64,7 +76,11 @@ export function ProfileDeleteDialog({
           <Button variant="outline" onClick={onClose}>
             {t.common.cancel}
           </Button>
-          <Button variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate()}>
+          <Button
+            variant="destructive"
+            disabled={remove.isPending || projects !== null}
+            onClick={() => remove.mutate()}
+          >
             {t.common.delete}
           </Button>
         </div>
