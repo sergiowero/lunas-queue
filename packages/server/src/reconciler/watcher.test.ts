@@ -596,14 +596,18 @@ describe("RunWatcher: model fallback", () => {
   });
 
   it("a phase timeout is not a model failure: it escalates and never falls back", async () => {
-    const h = setup({ profileModels: [...twoModels] });
+    // A spy at the watcher's seam: whatever the timeout path does, it must never ask to fail the model.
+    const failModel = vi.fn(async () => "fallback" as const);
+    const h = setup({ profileModels: [...twoModels], watcher: { failModel } });
     const { taskId, run, name } = await h.launched();
 
     await vi.advanceTimersByTimeAsync(31 * MIN);
     await settle(vi);
 
+    expect(failModel).not.toHaveBeenCalled();
     expect(h.taskRow(taskId)).toMatchObject({ state: "needs_human" });
     expect(h.runs.get(run.id)).toMatchObject({ endedAt: null, modelFailed: false });
+    expect(h.runs.exhaustedModels(taskId, "refine")).toEqual([]);
     expect(await h.herdr.getAgent(name)).toBeDefined();
   });
 });
