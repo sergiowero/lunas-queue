@@ -1082,3 +1082,55 @@ describe("task detail: phase instructions", () => {
     ).toBeTruthy();
   });
 });
+
+describe("task held without a profile", () => {
+  it("explains that the phase has no profile and links to the project", async () => {
+    const { fake, project, task } = seeded();
+    fake.holds.set(task.id, {
+      hold: {
+        reason: "profile_missing",
+        phase: "refine",
+        projectId: project.id,
+        projectName: "lunas-queue",
+      },
+    });
+    renderApp(`/tasks/${task.id}`, fake);
+
+    const notice = await screen.findByText(
+      "Esta tarea espera en cola: la fase Refinamiento del proyecto lunas-queue no tiene un perfil de agente.",
+    );
+    expect(
+      within(notice.closest("[role=status]") as HTMLElement)
+        .getByRole("link", { name: "Editar el proyecto" })
+        .getAttribute("href"),
+    ).toBe(`/projects?edit=${project.id}`);
+  });
+
+  it("explains that every model of the profile uses a disabled provider", async () => {
+    const { fake, project, task } = seeded();
+    fake.holds.set(task.id, {
+      hold: {
+        reason: "providers_disabled",
+        phase: "implement",
+        projectId: project.id,
+        projectName: "lunas-queue",
+      },
+    });
+    renderApp(`/tasks/${task.id}`, fake);
+
+    expect(await screen.findByText(/usan proveedores deshabilitados/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Ir a Settings" }).getAttribute("href")).toBe(
+      "/settings",
+    );
+  });
+
+  it("shows nothing for a task that is not held, and does not ask for a running one", async () => {
+    const { fake, task } = seeded();
+    fake.transition(task.id, "in_progress", "running");
+    renderApp(`/tasks/${task.id}`, fake);
+
+    await screen.findByRole("heading", { name: "Login con email" });
+    expect(screen.queryByText(/Esta tarea espera en cola/)).toBeNull();
+    expect(fake.requests.some((r) => r.path.endsWith("/hold"))).toBe(false);
+  });
+});

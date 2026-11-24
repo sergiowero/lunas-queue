@@ -1,22 +1,35 @@
-import type { Project } from "@lunasq/schemas";
+import { type Project, unassignedPhases } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { ProjectDeleteDialog } from "../components/project-delete-dialog.tsx";
 import { ProjectFormDialog } from "../components/project-form-dialog.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
+import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
 import type { Json } from "../lib/api.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
+const route = getRouteApi("/projects");
+
 export function ProjectsPage() {
   const t = useT();
   const projects = useQuery(queries.projects());
+  const search = route.useSearch();
+  const navigate = useNavigate({ from: "/projects" });
   const [dialog, setDialog] = useState<
     { kind: "create" } | { kind: "edit" | "delete"; project: Json<Project> } | null
   >(null);
+  // `?edit=<projectId>` (the held-task notice links here) opens that project's form once.
+  const editId = search.edit;
+  const editTarget = editId ? projects.data?.find((p) => p.id === editId) : undefined;
+  useEffect(() => {
+    if (!editTarget) return;
+    setDialog({ kind: "edit", project: editTarget });
+    void navigate({ search: {}, replace: true });
+  }, [editTarget, navigate]);
   if (projects.error) return <QueryError error={projects.error} />;
   if (!projects.data) return <Loading />;
   return (
@@ -47,6 +60,15 @@ export function ProjectsPage() {
               <p>
                 {t.projectsPage.baseBranch} {project.baseBranch}
               </p>
+              {unassignedPhases(project.agentProfiles).length > 0 && (
+                <Badge variant="destructive" className="mt-2 max-w-full whitespace-normal">
+                  {t.projectsPage.missingProfile(
+                    unassignedPhases(project.agentProfiles)
+                      .map((phase) => t.phase[phase])
+                      .join(", "),
+                  )}
+                </Badge>
+              )}
               <div className="mt-3 flex gap-2">
                 <Button
                   variant="outline"

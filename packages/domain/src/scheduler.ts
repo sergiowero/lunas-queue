@@ -13,9 +13,10 @@ import type {
   SubState,
   TaskState,
 } from "@lunasq/schemas";
+import { type AgentProfileReader, type PhaseModel, resolveProjectPhase } from "./agent-profiles.ts";
 import { type DependencyEdge, DependencyGraph } from "./dependency-graph.ts";
-import { type ProjectConfigReader, phaseProfile } from "./project-config.ts";
-import { ALL_PROVIDERS_ENABLED, effectiveAgentKind } from "./providers.ts";
+import type { ProjectConfigReader } from "./project-config.ts";
+import { ALL_PROVIDERS_ENABLED } from "./providers.ts";
 import { isTerminal } from "./state-machine.ts";
 
 /** What the scheduler needs from a task. */
@@ -36,6 +37,8 @@ export type SchedulerTask = {
   retry?: RetryState;
   /** Provider its live agent runs with (that of the open Run, which may be a fallback). */
   agentKind?: AgentKind;
+  /** Profile model indexes already tried in the pending phase's current dispatch (ADR agent-profiles). */
+  exhaustedModels?: number[];
 };
 
 export type RetryState = { failures: number; lastFailedAt: Date };
@@ -56,6 +59,9 @@ export type DispatchDecision = {
   projectId: string;
   phase: SchedulablePhase;
   agentKind: AgentKind;
+  /** Agent profile and index of the model the phase starts with. */
+  profileId: string;
+  modelIndex: number;
   score: number;
   /** Position read; the claim uses it to reject if the task has already moved. */
   expected: StatePosition;
@@ -171,8 +177,16 @@ class Slots<K> {
   }
 }
 
-/** A live or to-be-dispatched agent; `agentKind` is missing without project configuration or without an enabled provider. */
-export type Slot = { projectId: string; phase: SchedulablePhase; agentKind: AgentKind | undefined };
+/**
+ * A live or to-be-dispatched agent. `agentKind` and `model` are missing without project configuration,
+ * with the phase unassigned, with every model disabled or with every enabled one exhausted.
+ */
+export type Slot = {
+  projectId: string;
+  phase: SchedulablePhase;
+  agentKind: AgentKind | undefined;
+  model?: PhaseModel;
+};
 
 /**
  * Live agents per limit level. `schedule` uses it to plan and the dispatcher claim
@@ -184,28 +198,32 @@ export class Occupancy {
   readonly #byPhase = new Slots<SchedulablePhase>();
   readonly #byKind = new Slots<AgentKind>();
   readonly #projects: (id: string) => Project | null;
+  readonly #profiles: Pick<AgentProfileReader, "get">;
   readonly #providers: AgentProviderSettings;
 
   private constructor(
     projects: Pick<ProjectConfigReader, "get">,
+    profiles: Pick<AgentProfileReader, "get">,
     providers: AgentProviderSettings,
   ) {
     this.#projects = memo((id: string) => projects.get(id));
+    this.#profiles = profiles;
     this.#providers = providers;
   }
 
   /**
    * Occupancy of the snapshot's live agents. `providers` are the currently enabled providers
    * (all by default) and only affect new slots: a live agent counts against the provider
-   * it runs with (`agentKind` of its Run; without it, the primary of its profile), because changing the
-   * configuration never interrupts it.
+   * it runs with (`agentKind` of its Run; without it, its profile's effective model), because changing
+   * the configuration never interrupts it.
    */
   static of(
     snapshot: SchedulerSnapshot,
     projects: Pick<ProjectConfigReader, "get">,
+    profiles: Pick<AgentProfileReader, "get">,
     providers: AgentProviderSettings = ALL_PROVIDERS_ENABLED,
   ): Occupancy {
-    const occupancy = new Occupancy(projects, providers);
+    const occupancy = new Occupancy(projects, profiles, providers);
     for (const task of snapshot.tasks) {
       const phase = pendingPhase(task.state);
       if (!phase || !holdsSlot(task)) continue;
@@ -216,25 +234,37 @@ export class Occupancy {
   }
 
   /**
-   * The slot `task` would take in `phase`: the effective provider of the project profile (the
-   * primary if enabled, otherwise the first enabled one of the fallback). `agentKind` is missing if the
-   * project has no configuration or if no provider is enabled.
+   * The slot `task` would take in `phase`: the effective model of the project's phase profile (the
+   * first enabled one not yet exhausted). `agentKind` is missing if the project has no configuration,
+   * the phase is unassigned or no model can be started.
    */
-  slotFor(task: Pick<SchedulerTask, "projectId">, phase: SchedulablePhase): Slot {
+  slotFor(
+    task: Pick<SchedulerTask, "projectId" | "exhaustedModels">,
+    phase: SchedulablePhase,
+  ): Slot {
     return this.#slot(task, phase, this.#providers);
   }
 
   #slot(
-    task: Pick<SchedulerTask, "projectId">,
+    task: Pick<SchedulerTask, "projectId" | "exhaustedModels">,
     phase: SchedulablePhase,
     providers: AgentProviderSettings,
   ): Slot {
     const settings = this.#projects(task.projectId);
-    const primary = settings ? phaseProfile(settings, phase).kind : undefined;
-    return {
-      projectId: task.projectId,
+    const slot: Slot = { projectId: task.projectId, phase, agentKind: undefined };
+    if (!settings) return slot;
+    const resolved = resolveProjectPhase(
+      settings,
       phase,
-      agentKind: primary ? (effectiveAgentKind(primary, providers) ?? undefined) : undefined,
+      this.#profiles,
+      providers,
+      task.exhaustedModels ?? [],
+    );
+    if (resolved.status !== "ready") return slot;
+    return {
+      ...slot,
+      agentKind: resolved.model.kind,
+      model: { profileId: resolved.profileId, index: resolved.index, model: resolved.model },
     };
   }
 
@@ -264,29 +294,32 @@ export class Occupancy {
 
 /**
  * What to dispatch and what to escalate in this pass. The decisions respect, added to the live
- * agents of the snapshot, the global, per-project, per-phase and per-agent-kind limits. Only
- * enabled providers are dispatched to (all by default): if the primary is disabled the first
- * enabled one of the fallback is used and, with none, nothing is dispatched.
+ * agents of the snapshot, the global, per-project, per-phase and per-agent-kind limits. A task is
+ * dispatched with the effective model of its phase profile (the first enabled one not yet
+ * exhausted); with the phase unassigned or no model available it is held in queued, without a Run.
  */
 export function schedule(
   snapshot: SchedulerSnapshot,
   projects: Pick<ProjectConfigReader, "get">,
+  profiles: Pick<AgentProfileReader, "get">,
   config: SchedulerConfig,
   now: Date,
   providers: AgentProviderSettings = ALL_PROVIDERS_ENABLED,
 ): SchedulePlan {
-  const occupancy = Occupancy.of(snapshot, projects, providers);
+  const occupancy = Occupancy.of(snapshot, projects, profiles, providers);
   const dispatch: DispatchDecision[] = [];
   for (const { task, score } of rankReady(snapshot, config, now)) {
     if (occupancy.globalFull(config)) break;
     const slot = occupancy.slotFor(task, pendingPhase(task.state) as SchedulablePhase);
-    if (!slot.agentKind || !occupancy.fits(slot, config)) continue;
+    if (!slot.agentKind || !slot.model || !occupancy.fits(slot, config)) continue;
     occupancy.add(slot);
     dispatch.push({
       taskId: task.id,
       projectId: task.projectId,
       phase: slot.phase,
       agentKind: slot.agentKind,
+      profileId: slot.model.profileId,
+      modelIndex: slot.model.index,
       score,
       expected: { state: task.state, subState: task.subState },
     });

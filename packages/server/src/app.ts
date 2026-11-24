@@ -3,6 +3,8 @@
 // (runtime/runtime.ts).
 import { type GitAdapter, RealGit, ShellProcessRunner } from "@lunasq/adapters";
 import {
+  AgentProfileRepository,
+  AgentProfileRepositoryError,
   type LunasqDatabase,
   ProjectRepository,
   ProjectRepositoryError,
@@ -18,6 +20,7 @@ import {
 } from "@lunasq/db";
 import { SchedulerConfig, type SchedulerConfigInput } from "@lunasq/schemas";
 import { Hono } from "hono";
+import { agentProfileRoutes } from "./api/agent-profiles.ts";
 import { type HookLister, hookRoutes } from "./api/hooks.ts";
 import { projectRoutes } from "./api/projects.ts";
 import {
@@ -146,6 +149,7 @@ export function createApp({
     .route(SUBAGENT_HOOK_PATH, subagentHookRoutes(db))
     .route("/api/projects/:id/hooks", hookRoutes({ projects, views: taskViews, hooks }))
     .route("/api/projects", projectRoutes(projects))
+    .route("/api/agent-profiles", agentProfileRoutes(new AgentProfileRepository(db)))
     .route(
       "/api/settings",
       settingsRoutes(new SettingsRepository(db), views.config.globalConcurrency),
@@ -161,6 +165,7 @@ export function createApp({
     .onError((error, c) => {
       if (
         error instanceof ProjectRepositoryError ||
+        error instanceof AgentProfileRepositoryError ||
         error instanceof TaskRepositoryError ||
         error instanceof SpecRepositoryError
       ) {

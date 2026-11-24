@@ -2,58 +2,50 @@
 // server's; here only its issues are shown. On create, empty fields are not sent so that
 // the server defaults apply; on edit everything is sent, because PATCH replaces each present
 // field and `null` clears the optional commands.
-import {
-  type AgentKind,
-  EFFORT_LEVELS,
-  type EffortLevel,
-  type Phase,
-  type Project,
-  type ProjectCreate,
-  type ProjectUpdate,
+import type {
+  AgentProfile,
+  AgentProviderSettings,
+  Phase,
+  Project,
+  ProjectCreate,
+  ProjectUpdate,
 } from "@lunasq/schemas";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { ApiError, api, type Json } from "../lib/api.ts";
 import type { Dictionary } from "../lib/dictionary/index.ts";
 import { errorText } from "../lib/error-text.ts";
 import { useT } from "../lib/i18n.ts";
+import { queries } from "../lib/queries.ts";
 import { Button } from "./ui/button.tsx";
 import { Dialog } from "./ui/dialog.tsx";
-import { Input, Label, Select, Textarea } from "./ui/input.tsx";
+import { Input, Label, Select } from "./ui/input.tsx";
 
 const PHASES: Phase[] = ["refine", "implement", "verify", "deliver"];
-const PROVIDER_LABEL: Record<AgentKind, string> = {
-  claude: "Claude",
-  copilot: "Copilot",
-  codex: "Codex",
-};
-const PROVIDER_COMMAND: Record<AgentKind, string> = {
-  claude: "claude",
-  copilot: "copilot",
-  codex: "codex",
-};
 
 type PhaseFields = {
-  kind: AgentKind;
-  model: string;
-  effort: string;
-  args: string;
+  /** Selected agent profile id; "" leaves the phase unassigned. */
+  profile: string;
   timeout: string;
 };
+
+/** Providers of the selected profile's models that are disabled in Settings (they are skipped). */
+function disabledKinds(
+  profiles: Json<AgentProfile>[] | undefined,
+  providers: Json<AgentProviderSettings> | undefined,
+  profileId: string,
+): string[] {
+  const profile = profiles?.find((p) => p.id === profileId);
+  if (!profile || !providers) return [];
+  return [...new Set(profile.models.map((m) => m.kind).filter((kind) => !providers[kind]))];
+}
 
 function describe(error: Error, t: Dictionary): string {
   if (error instanceof ApiError && error.issues.length > 0) {
     return error.issues.map((i) => `${i.path.join(".") || t.common.body}: ${i.message}`).join("; ");
   }
   return errorText(error, t);
-}
-
-/** One argument per line, so as not to depend on quotes or spaces inside an argument. */
-function parseArgs(text: string): string[] {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "");
 }
 
 const optionalInt = (text: string) => (text.trim() === "" ? undefined : Number(text));
@@ -73,12 +65,8 @@ type FormValues = {
 function initialPhases(project?: Json<Project>): Record<Phase, PhaseFields> {
   const phases = {} as Record<Phase, PhaseFields>;
   for (const phase of PHASES) {
-    const profile = project?.agentProfiles[phase];
     phases[phase] = {
-      kind: profile?.kind ?? "claude",
-      model: profile?.model ?? "",
-      effort: profile?.effort ?? "",
-      args: profile?.args.join("\n") ?? "",
+      profile: project?.agentProfiles[phase] ?? "",
       timeout: String(project?.limits.phaseTimeoutMinutes?.[phase] ?? ""),
     };
   }
@@ -91,24 +79,13 @@ function optionalCommand(key: "testCommand" | "bootstrap", text: string, editing
 }
 
 function buildInput(form: FormValues, editing: boolean): ProjectCreate | ProjectUpdate {
-  const agentProfiles: NonNullable<ProjectCreate["agentProfiles"]> = {};
+  const agentProfiles: Partial<Record<Phase, string | null>> = {};
   const phaseTimeoutMinutes: Partial<Record<Phase, number>> = {};
   for (const phase of PHASES) {
-    const { kind, model, effort, args, timeout } = form.phases[phase];
-    if (
-      editing ||
-      kind !== "claude" ||
-      model.trim() !== "" ||
-      effort !== "" ||
-      parseArgs(args).length > 0
-    ) {
-      agentProfiles[phase] = {
-        kind,
-        ...(model.trim() !== "" && { model: model.trim() }),
-        ...(effort !== "" && { effort: effort as EffortLevel }),
-        args: parseArgs(args),
-      };
-    }
+    const { profile, timeout } = form.phases[phase];
+    // On create, an unselected phase is not sent (it stays unassigned); on edit, null unassigns it.
+    if (profile !== "") agentProfiles[phase] = profile;
+    else if (editing) agentProfiles[phase] = null;
     const minutes = optionalInt(timeout);
     if (minutes !== undefined) phaseTimeoutMinutes[phase] = minutes;
   }
@@ -141,6 +118,8 @@ export function ProjectFormDialog({
 }) {
   const t = useT();
   const queryClient = useQueryClient();
+  const profiles = useQuery(queries.agentProfiles());
+  const providers = useQuery(queries.providerSettings());
   const [name, setName] = useState(project?.name ?? "");
   const [repo, setRepo] = useState(project?.repo ?? "");
   const [baseBranch, setBaseBranch] = useState(project?.baseBranch ?? "main");
@@ -287,45 +266,31 @@ export function ProjectFormDialog({
           <legend className="text-sm font-medium">{t.projectForm.agentByPhase}</legend>
           {PHASES.map((phase) => (
             <div key={phase} className="flex flex-col gap-2 rounded-md border border-border p-3">
-              <h3 className="text-xs font-medium uppercase text-muted-foreground">{phase}</h3>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor={`project-agent-${phase}`}>{t.projectForm.provider(phase)}</Label>
-                <Select
-                  id={`project-agent-${phase}`}
-                  value={phases[phase].kind}
-                  onChange={(e) => setPhase(phase, { kind: e.target.value as AgentKind })}
-                >
-                  <option value="claude">Claude Code</option>
-                  <option value="copilot">GitHub Copilot CLI</option>
-                  <option value="codex">OpenAI Codex CLI</option>
-                </Select>
-              </div>
+              <h3 className="text-xs font-medium uppercase text-muted-foreground">
+                {t.phase[phase]}
+              </h3>
               <div className="flex gap-4">
                 <div className="flex flex-1 flex-col gap-1">
-                  <Label htmlFor={`project-model-${phase}`}>{t.projectForm.model(phase)}</Label>
-                  <Input
-                    id={`project-model-${phase}`}
-                    value={phases[phase].model}
-                    onChange={(e) => setPhase(phase, { model: e.target.value })}
-                  />
-                </div>
-                <div className="flex w-40 flex-col gap-1">
-                  <Label htmlFor={`project-effort-${phase}`}>{t.projectForm.effort(phase)}</Label>
+                  <Label htmlFor={`project-profile-${phase}`}>
+                    {t.projectForm.profile(t.phase[phase])}
+                  </Label>
                   <Select
-                    id={`project-effort-${phase}`}
-                    value={phases[phase].effort}
-                    onChange={(e) => setPhase(phase, { effort: e.target.value })}
+                    id={`project-profile-${phase}`}
+                    value={phases[phase].profile}
+                    onChange={(e) => setPhase(phase, { profile: e.target.value })}
                   >
-                    <option value="">{t.projectForm.effortDefault}</option>
-                    {EFFORT_LEVELS.map((level) => (
-                      <option key={level} value={level}>
-                        {level}
+                    <option value="">{t.projectForm.noProfile}</option>
+                    {(profiles.data ?? []).map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name}
                       </option>
                     ))}
                   </Select>
                 </div>
                 <div className="flex w-40 flex-col gap-1">
-                  <Label htmlFor={`project-timeout-${phase}`}>{t.projectForm.timeout(phase)}</Label>
+                  <Label htmlFor={`project-timeout-${phase}`}>
+                    {t.projectForm.timeout(t.phase[phase])}
+                  </Label>
                   <Input
                     id={`project-timeout-${phase}`}
                     type="number"
@@ -337,25 +302,31 @@ export function ProjectFormDialog({
                   />
                 </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor={`project-args-${phase}`}>
-                  {t.projectForm.argsLabel(PROVIDER_LABEL[phases[phase].kind], phase)}
-                </Label>
-                <p id={`project-args-help-${phase}`} className="text-xs text-muted-foreground">
-                  {t.projectForm.argsHelp.before}
-                  <code>{PROVIDER_COMMAND[phases[phase].kind]}</code>
-                  {t.projectForm.argsHelp.after}
+              {disabledKinds(profiles.data, providers.data, phases[phase].profile).length > 0 && (
+                <p className="text-xs text-warning-text">
+                  {t.projectForm.disabledModels(
+                    disabledKinds(profiles.data, providers.data, phases[phase].profile).join(", "),
+                  )}{" "}
+                  <Link to="/settings" className="underline">
+                    {t.projectForm.enableInSettings}
+                  </Link>
                 </p>
-                <Textarea
-                  id={`project-args-${phase}`}
-                  aria-describedby={`project-args-help-${phase}`}
-                  rows={2}
-                  value={phases[phase].args}
-                  onChange={(e) => setPhase(phase, { args: e.target.value })}
-                />
-              </div>
+              )}
+              {phases[phase].profile === "" && (
+                <p role="note" className="text-xs text-warning-text">
+                  {t.projectForm.unassignedWarning(t.phase[phase])}
+                </p>
+              )}
             </div>
           ))}
+          {profiles.data?.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              {t.projectForm.noProfilesYet}{" "}
+              <Link to="/profiles" className="underline">
+                {t.projectForm.createProfile}
+              </Link>
+            </p>
+          )}
         </fieldset>
 
         {save.error && (

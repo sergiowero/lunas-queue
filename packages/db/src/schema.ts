@@ -69,13 +69,23 @@ const nonNegative = (name: string, column: AnySQLiteColumn) => check(name, sql`$
 const unsignedInt = (name: string, column: AnySQLiteColumn) =>
   check(name, sql`${isInteger(column)} and ${column} >= 0`);
 
+// Global, named list of models: the primary first and then its fallbacks (ADR agent-profiles).
+export const agentProfiles = sqliteTable("agent_profiles", {
+  id: id(),
+  name: text("name").notNull().unique(),
+  // Ordered ProfileModel[], validated with Zod on write and on read.
+  models: text("models", { mode: "json" }).$type<unknown[]>().notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
 export const projects = sqliteTable("projects", {
   id: id(),
   name: text("name").notNull().unique(),
   repo: text("repo").notNull(),
   baseBranch: text("base_branch").notNull(),
   localPath: text("local_path").notNull().unique(),
-  // Agent profile per phase and limits; its shape is validated with Zod.
+  // Agent profile id per phase (null: unassigned) and limits; their shape is validated with Zod.
   agentProfiles: text("agent_profiles", { mode: "json" })
     .$type<Record<string, unknown>>()
     .notNull()
@@ -243,6 +253,12 @@ export const runs = sqliteTable(
     phase: text("phase", { enum: values(Phase) }).notNull(),
     agentKind: text("agent_kind", { enum: values(AgentKind) }).notNull(),
     model: text("model"),
+    // Agent profile and index of its model this Run started with (null on Runs from before profiles).
+    profileId: text("profile_id").references(() => agentProfiles.id, { onDelete: "set null" }),
+    modelIndex: integer("model_index"),
+    // The Run ended because of its model (usage limit, exit, stop without signal): the phase moved to
+    // the next model of the profile. It is a failure that consumes no retry.
+    modelFailed: integer("model_failed", { mode: "boolean" }).notNull().default(false),
     // The task's verification iteration at dispatch: separates rework from retries.
     iteration: integer("iteration").notNull().default(0),
     herdrWorkspace: text("herdr_workspace"),

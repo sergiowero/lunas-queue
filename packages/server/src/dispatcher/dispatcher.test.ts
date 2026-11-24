@@ -8,9 +8,11 @@ import {
   TRUST_ACCEPT_KEYS,
 } from "@lunasq/adapters";
 import {
+  AgentProfileRepository,
   appendEvent,
   claimRun,
   closeRun,
+  listEvents,
   ProjectRepository,
   ProjectWorkspaceRepository,
   RunRepository,
@@ -18,12 +20,19 @@ import {
   TaskWorktreeRepository,
   transitionTask,
 } from "@lunasq/db";
-import { insertProject, insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
+import {
+  allPhasesWith,
+  insertAgentProfile,
+  insertProject,
+  insertTask,
+  migratedDatabase,
+  type TestProfileModel,
+} from "@lunasq/db/test-helpers";
 import { agentName, type DispatchDecision, phasePrompt } from "@lunasq/domain";
 import {
   HOOK_POINT_COMPLETED,
   type HookPoint,
-  type Project,
+  type Phase,
   RUN_FAILED,
   SchedulerConfig,
   type SchedulerConfigInput,
@@ -52,18 +61,33 @@ function setup(
     herdr?: FakeHerdr;
     config?: SchedulerConfigInput;
     concurrency?: number;
-    agentProfiles?: Partial<Project["agentProfiles"]>;
+    /** Models of the profile each phase selects; a phase left out uses a bare Claude profile. */
+    agentProfiles?: Partial<Record<Phase, TestProfileModel | TestProfileModel[]>>;
     dispatcher?: Partial<PhaseDispatcherOptions>;
   } = {},
 ) {
   const db = migratedDatabase();
+  const base = insertAgentProfile(db, { name: "base" });
+  const phaseProfiles: Record<string, string | null> = allPhasesWith(base.id);
+  // By default refine tries Claude first and, if it does not start, Copilot and then Codex.
+  const models = {
+    refine: [
+      { kind: "claude", model: "sonnet", args: ["--permission-mode", "auto"] },
+      { kind: "copilot" },
+      { kind: "codex" },
+    ],
+    ...opts.agentProfiles,
+  } as Partial<Record<Phase, TestProfileModel | TestProfileModel[]>>;
+  for (const [phase, entry] of Object.entries(models)) {
+    phaseProfiles[phase] = insertAgentProfile(db, {
+      name: `perfil-${phase}`,
+      models: Array.isArray(entry) ? entry : [entry],
+    }).id;
+  }
   const project = insertProject(db, {
     bootstrap: "pnpm install",
     limits: opts.concurrency === undefined ? {} : { concurrency: opts.concurrency },
-    agentProfiles: {
-      refine: { kind: "claude", model: "sonnet", args: ["--permission-mode", "auto"] },
-      ...opts.agentProfiles,
-    },
+    agentProfiles: phaseProfiles,
   });
   const herdr = opts.herdr ?? new FakeHerdr();
   const processes = new FakeProcessRunner();
@@ -122,6 +146,9 @@ const refine = (task: { id: string; projectId: string }): DispatchDecision => ({
   projectId: task.projectId,
   phase: "refine",
   agentKind: "claude",
+  // The claim resolves the effective model again inside its transaction: these are only the plan's.
+  profileId: "planned",
+  modelIndex: 0,
   score: 0,
   expected: { state: "draft", subState: "queued" },
 });
@@ -530,8 +557,8 @@ describe("PhaseDispatcher: enabled providers", () => {
     const [run] = runs.forTask(task.id);
     expect(kinds).toEqual(["copilot"]);
     expect(run?.agentKind).toBe("copilot");
-    expect(runs.providerAttempts(run?.id ?? "")).toEqual([
-      { provider: "copilot", status: "started" },
+    expect(runs.providerAttempts(run?.id ?? "")).toMatchObject([
+      { provider: "copilot", modelIndex: 1, status: "started" },
     ]);
   });
 
@@ -587,8 +614,8 @@ describe("PhaseDispatcher: enabled providers", () => {
     const [run] = runs.forTask(task.id);
     expect(kinds).toEqual(["copilot"]);
     expect(run?.agentKind).toBe("copilot");
-    expect(runs.providerAttempts(run?.id ?? "")).toEqual([
-      { provider: "copilot", status: "started" },
+    expect(runs.providerAttempts(run?.id ?? "")).toMatchObject([
+      { provider: "copilot", modelIndex: 1, status: "started" },
     ]);
     // The pane prepared for claude is not left orphaned: it is closed and only copilot's stays open.
     expect(closed).toHaveLength(1);
@@ -699,15 +726,17 @@ describe("PhaseDispatcher: launch failures", () => {
     const [run] = runs.forTask(task.id);
     expect(kinds).toEqual(["claude", "copilot"]);
     expect(run?.agentKind).toBe("copilot");
-    expect(runs.providerAttempts(run?.id ?? "")).toEqual([
-      { provider: "claude", status: "started" },
+    expect(runs.providerAttempts(run?.id ?? "")).toMatchObject([
+      { provider: "claude", modelIndex: 0, model: "sonnet", status: "started" },
       {
         provider: "claude",
+        modelIndex: 0,
         status: "failed",
         reason: "claude executable not found",
       },
-      { provider: "copilot", status: "started" },
+      { provider: "copilot", modelIndex: 1, status: "started" },
     ]);
+    expect(run).toMatchObject({ modelIndex: 1, agentKind: "copilot" });
   });
 
   it("does not move to a fallback whose concurrency limit is already full and counts the primary's failure", async () => {
@@ -739,15 +768,15 @@ describe("PhaseDispatcher: launch failures", () => {
     // Claude's real failure is counted: pausing would hide it and the scheduler would dispatch again
     // to the broken provider without backoff. The diagnosis keeps both reasons.
     expect(run).toMatchObject({ result: "failure" });
-    expect(run?.failureReason).toContain("claude: claude executable not found");
-    expect(run?.failureReason).toContain("copilot: no concurrency slot");
+    expect(run?.failureReason).toContain("#1 claude sonnet: claude executable not found");
+    expect(run?.failureReason).toContain("#2 copilot: no concurrency slot");
     expect(taskRow(task.id)).not.toMatchObject({ subState: "queued" });
     expect(runs.forTask(live.id)[0]?.agentKind).toBe("copilot");
   });
 
   it("applies a symmetric fallback when Copilot is the primary provider", async () => {
     const { db, project, herdr, runs, make } = setup({
-      agentProfiles: { refine: { kind: "copilot", args: [] } },
+      agentProfiles: { refine: [{ kind: "copilot" }, { kind: "claude" }] },
     });
     const dispatcher = make();
     const task = insertTask(db, project.id);
@@ -785,7 +814,7 @@ describe("PhaseDispatcher: launch failures", () => {
     expect(run).toMatchObject({
       result: "failure",
       failureReason: expect.stringContaining(
-        "no provider responded on start: claude: claude service unavailable; copilot: copilot service unavailable; codex: codex service unavailable",
+        "no model of the profile responded on start: #1 claude sonnet: claude service unavailable; #2 copilot: copilot service unavailable; #3 codex: codex service unavailable",
       ),
     });
     expect(taskRow(task.id)).toMatchObject({ state: "needs_human", subState: null });
@@ -1353,5 +1382,189 @@ describe("PhaseDispatcher: before_refinement and before_implementation hooks", (
 
     expect(ctx.runs.forTask(task.id)[0]?.launchedAt).toBeInstanceOf(Date);
     expect(ctx.errors).toEqual([]);
+  });
+});
+
+describe("PhaseDispatcher: agent profiles and model fallback", () => {
+  const twoModels = [
+    { kind: "claude", model: "opus" },
+    { kind: "codex", model: "gpt-5" },
+  ] satisfies TestProfileModel[];
+
+  /** Dispatches the task, then plays the watcher: the live Run's model fails after launch. */
+  async function failLiveRun(ctx: ReturnType<typeof setup>, taskId: string, reason: string) {
+    const run = ctx.runs.latestForTask(taskId);
+    if (!run) throw new Error("no Run");
+    return { run, outcome: await ctx.dispatcher.failModelRun(run.id, reason) };
+  }
+
+  it("starts the phase with the primary model and records the profile and index 0", async () => {
+    const ctx = setup({ agentProfiles: { refine: twoModels } });
+    const task = insertTask(ctx.db, ctx.project.id);
+
+    await ctx.dispatcher.dispatch(refine(task));
+    await ctx.dispatcher.idle();
+
+    const [run] = ctx.runs.forTask(task.id);
+    expect(run).toMatchObject({
+      agentKind: "claude",
+      model: "opus",
+      modelIndex: 0,
+      profileId: ctx.project.agentProfiles.refine,
+    });
+    expect(ctx.herdr.agentArgs(run?.herdrName ?? "").slice(0, 2)).toEqual(["--model", "opus"]);
+  });
+
+  it("verification runs on sonnet when its effective model is claude without a model", async () => {
+    const ctx = setup({ agentProfiles: { verify: [{ kind: "claude" }] } });
+    const task = insertTask(ctx.db, ctx.project.id, { state: "verification" });
+
+    await ctx.dispatcher.dispatch({
+      ...refine(task),
+      phase: "verify",
+      expected: { state: "verification", subState: "queued" },
+    });
+    await ctx.dispatcher.idle();
+
+    const [run] = ctx.runs.forTask(task.id);
+    expect(run).toMatchObject({ phase: "verify", model: "sonnet" });
+    expect(ctx.herdr.agentArgs(run?.herdrName ?? "").slice(0, 2)).toEqual(["--model", "sonnet"]);
+  });
+
+  it("a launched Run that fails because of its model moves the phase to the next model, in the same worktree and without consuming a retry", async () => {
+    const ctx = setup({ agentProfiles: { refine: twoModels } });
+    const task = insertTask(ctx.db, ctx.project.id);
+    await ctx.dispatcher.dispatch(refine(task));
+    await ctx.dispatcher.idle();
+    const worktreeBefore = ctx.taskRow(task.id).worktreePath;
+
+    const { run, outcome } = await failLiveRun(ctx, task.id, "usage_limit: limit reached");
+
+    expect(outcome).toBe("fallback");
+    expect(ctx.runs.get(run.id)).toMatchObject({ result: "failure", modelFailed: true });
+    expect(ctx.taskRow(task.id)).toMatchObject({ state: "draft", subState: "queued" });
+    expect(ctx.runs.consecutiveFailures(task.id, "refine")).toBe(0);
+    // The pane of the failed model is released.
+    expect((await ctx.herdr.snapshot()).agents).toEqual([]);
+
+    // The next pass starts a new Run of the same phase with the next model.
+    const scheduler = new Scheduler({ db: ctx.db, dispatcher: ctx.dispatcher });
+    stoppables.push(scheduler);
+    await scheduler.run();
+    await ctx.dispatcher.idle();
+    const runs = ctx.runs.forTask(task.id);
+    expect(runs).toHaveLength(2);
+    expect(runs[1]).toMatchObject({
+      phase: "refine",
+      agentKind: "codex",
+      model: "gpt-5",
+      modelIndex: 1,
+      endedAt: null,
+    });
+    expect(ctx.taskRow(task.id)).toMatchObject({
+      subState: "running",
+      worktreePath: worktreeBefore,
+    });
+    expect(ctx.herdr.agentArgs(runs[1]?.herdrName ?? "")).toContain("gpt-5");
+  });
+
+  it("when the last enabled model fails the task escalates with the failure of every model", async () => {
+    const ctx = setup({ agentProfiles: { refine: twoModels } });
+    const task = insertTask(ctx.db, ctx.project.id);
+    await ctx.dispatcher.dispatch(refine(task));
+    await ctx.dispatcher.idle();
+    expect((await failLiveRun(ctx, task.id, "usage_limit: claude out")).outcome).toBe("fallback");
+    await ctx.dispatcher.dispatch({ ...refine(task), agentKind: "codex" });
+    await ctx.dispatcher.idle();
+
+    const { run, outcome } = await failLiveRun(ctx, task.id, "agent_exited: codex crashed");
+
+    expect(outcome).toBe("exhausted");
+    expect(ctx.taskRow(task.id)).toMatchObject({ state: "needs_human" });
+    const escalation = listEvents(ctx.db, task.id).findLast((e) => e.type === "task.transitioned");
+    expect(escalation?.payload).toMatchObject({
+      reason: "providers_unavailable",
+      note: expect.stringContaining("#1 claude opus: usage_limit: claude out"),
+    });
+    expect(JSON.stringify(escalation?.payload)).toContain(
+      "#2 codex gpt-5: agent_exited: codex crashed",
+    );
+    expect(ctx.runs.get(run.id)).toMatchObject({ result: "failure" });
+  });
+
+  it("with nothing to fall back to, the caller keeps its usual route", async () => {
+    const ctx = setup({ agentProfiles: { refine: [{ kind: "claude" }] } });
+    const task = insertTask(ctx.db, ctx.project.id);
+    await ctx.dispatcher.dispatch(refine(task));
+    await ctx.dispatcher.idle();
+
+    const { run, outcome } = await failLiveRun(ctx, task.id, "agent_exited: gone");
+
+    expect(outcome).toBe("unavailable");
+    // Nothing changed: the Run is still open for the watcher to fail through run_failed with retries.
+    expect(ctx.runs.get(run.id)).toMatchObject({ endedAt: null, modelFailed: false });
+    expect(ctx.taskRow(task.id)).toMatchObject({ subState: "running" });
+  });
+
+  it("a model whose provider was disabled in Settings is not the next one", async () => {
+    const ctx = setup({ agentProfiles: { refine: twoModels } });
+    const task = insertTask(ctx.db, ctx.project.id);
+    await ctx.dispatcher.dispatch(refine(task));
+    await ctx.dispatcher.idle();
+    new SettingsRepository(ctx.db).saveProviders({ claude: true, copilot: true, codex: false });
+
+    const { outcome } = await failLiveRun(ctx, task.id, "agent_exited: gone");
+
+    // Codex is disabled and claude is the one that failed: nothing left, and no earlier failure.
+    expect(outcome).toBe("unavailable");
+  });
+
+  it("editing the profile or unassigning it does not interrupt the live Run; only the next dispatch uses it", async () => {
+    const ctx = setup({ agentProfiles: { refine: twoModels } });
+    const task = insertTask(ctx.db, ctx.project.id);
+    await ctx.dispatcher.dispatch(refine(task));
+    await ctx.dispatcher.idle();
+    const [live] = ctx.runs.forTask(task.id);
+    const profiles = new AgentProfileRepository(ctx.db);
+    const profileId = ctx.project.agentProfiles.refine as string;
+
+    profiles.update(profileId, { models: [{ kind: "copilot", model: "gpt-5" }] });
+    new ProjectRepository(ctx.db).update(ctx.project.id, { agentProfiles: { refine: null } });
+
+    expect(ctx.runs.get(live?.id ?? "")).toMatchObject({ endedAt: null, agentKind: "claude" });
+    expect(ctx.taskRow(task.id)).toMatchObject({ subState: "running" });
+    expect((await ctx.herdr.snapshot()).agents).toHaveLength(1);
+
+    // A later dispatch of the unassigned phase is rejected without creating a Run.
+    const other = insertTask(ctx.db, ctx.project.id);
+    await expect(ctx.dispatcher.dispatch(refine(other))).rejects.toMatchObject({
+      code: "profile_missing",
+    });
+    expect(ctx.runs.forTask(other.id)).toEqual([]);
+  });
+
+  it("a phase failure that is not the model's (a blocked hook) never falls back", async () => {
+    const ctx = setup({ agentProfiles: { refine: twoModels } });
+    const task = insertTask(ctx.db, ctx.project.id);
+    const hooks: PhaseHooks = {
+      run: async (input) => {
+        transitionTask(ctx.db, {
+          taskId: input.taskId,
+          actor: "system",
+          command: { type: "escalate", reason: "hook_failed" },
+        });
+        return { outcome: "blocked", escalated: true, failedScript: "x.sh", error: "nope" };
+      },
+    };
+    const dispatcher = ctx.make({ hooks });
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = ctx.runs.forTask(task.id);
+    expect(run).toMatchObject({ result: "cancelled", modelFailed: false });
+    expect(run?.failureReason).toContain("hook_blocked");
+    expect(ctx.runs.exhaustedModels(task.id, "refine")).toEqual([]);
+    expect((await ctx.herdr.snapshot()).agents).toEqual([]);
   });
 });

@@ -1,6 +1,8 @@
 // Contract suites of the domain ports: they run against the in-memory implementation and
 // against the @lunasq/db one, so that both behave the same.
 import {
+  type AgentProfile,
+  type ProfileModel,
   Project,
   ProjectCreate,
   type PrState,
@@ -9,6 +11,7 @@ import {
   type TaskState,
 } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
+import { InMemoryAgentProfileReader } from "./agent-profiles.ts";
 import type { DependencyEdge, DependencyGraphReader } from "./dependency-graph.ts";
 import type { ProjectConfigReader } from "./project-config.ts";
 import type { SchedulerStateReader } from "./scheduler.ts";
@@ -21,9 +24,39 @@ export function fakeUuid(): string {
   return `00000000-0000-4000-8000-${String(seq).padStart(12, "0")}`;
 }
 
-/** Complete and validated project, as a ProjectConfigReader returns it. */
+/** Agent profile as an AgentProfileReader returns it; `models` default to one Claude model. */
+export function sampleProfile(
+  name: string,
+  models: (Partial<ProfileModel> & Pick<ProfileModel, "kind">)[] = [{ kind: "claude" }],
+): AgentProfile {
+  const now = new Date();
+  return {
+    id: fakeUuid(),
+    name,
+    models: models.map((m) => ({ args: [], ...m })),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/** The profile every `sampleProject` selects in all its phases unless the test says otherwise. */
+export const DEFAULT_SAMPLE_PROFILE: AgentProfile = {
+  ...sampleProfile("default"),
+  id: "00000000-0000-4000-8000-0000000000aa",
+};
+
+/** Reader with the default sample profile (and the given ones). */
+export function sampleProfiles(...profiles: AgentProfile[]): InMemoryAgentProfileReader {
+  return new InMemoryAgentProfileReader([DEFAULT_SAMPLE_PROFILE, ...profiles]);
+}
+
+/**
+ * Complete and validated project, as a ProjectConfigReader returns it. Every phase selects
+ * DEFAULT_SAMPLE_PROFILE unless `agentProfiles` says otherwise.
+ */
 export function sampleProject(name: string, overrides: Partial<ProjectCreate> = {}): Project {
   const now = new Date();
+  const { id } = DEFAULT_SAMPLE_PROFILE;
   return Project.parse({
     testCommand: null,
     bootstrap: null,
@@ -33,6 +66,12 @@ export function sampleProject(name: string, overrides: Partial<ProjectCreate> = 
       baseBranch: "main",
       localPath: `/repos/${name}`,
       ...overrides,
+      agentProfiles: overrides.agentProfiles ?? {
+        refine: id,
+        implement: id,
+        verify: id,
+        deliver: id,
+      },
     }),
     id: fakeUuid(),
     createdAt: now,
@@ -47,7 +86,7 @@ export function projectConfigReaderContract(
   describe(`ProjectConfigReader contract: ${name}`, () => {
     it("returns the complete configuration of a project", () => {
       const config = sampleProject("beta", {
-        agentProfiles: { verify: { kind: "claude", model: "sonnet", args: ["--x"] } },
+        agentProfiles: { verify: DEFAULT_SAMPLE_PROFILE.id },
         limits: { concurrency: 2, phaseTimeoutMinutes: { implement: 60 } },
         testCommand: "pnpm test",
         bootstrap: "pnpm install",
@@ -71,9 +110,9 @@ export function projectConfigReaderContract(
       const reader = setup([config]);
       const read = reader.get(config.id);
       if (!read) throw new Error("no project");
-      read.agentProfiles.refine.args.push("--mutado");
+      read.agentProfiles.refine = null;
       read.createdAt.setFullYear(1990);
-      expect(reader.get(config.id)?.agentProfiles.refine.args).toEqual([]);
+      expect(reader.get(config.id)?.agentProfiles.refine).toBe(DEFAULT_SAMPLE_PROFILE.id);
       expect(reader.get(config.id)?.createdAt).toEqual(config.createdAt);
     });
   });

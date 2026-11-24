@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { afterEach } from "vitest";
 import { type LunasqDatabase, migrateDatabase, openDatabase } from "./client.ts";
-import { projects, runs, tasks } from "./schema.ts";
+import { agentProfiles, projects, runs, tasks } from "./schema.ts";
 
 const opened: { db: LunasqDatabase; dir: string }[] = [];
 
@@ -33,11 +33,61 @@ export function migratedDatabase(): LunasqDatabase {
 
 let seq = 0;
 
+/** Models of an agent profile: provider, optional model, optional effort and args. */
+export type TestProfileModel = {
+  kind: "claude" | "copilot" | "codex";
+  model?: string;
+  effort?: string;
+  args?: string[];
+};
+
+/** Inserts an agent profile (one Claude model by default) and returns its row. */
+export function insertAgentProfile(
+  db: LunasqDatabase,
+  overrides: { name?: string; models?: TestProfileModel[] } = {},
+) {
+  seq += 1;
+  const [row] = db
+    .insert(agentProfiles)
+    .values({
+      name: overrides.name ?? `perfil-${seq}`,
+      models: (overrides.models ?? [{ kind: "claude" }]).map((m) => ({ args: [], ...m })),
+    })
+    .returning()
+    .all();
+  if (!row) throw new Error("agent profile insert without a row");
+  return row;
+}
+
+const PHASES = ["refine", "implement", "verify", "deliver"] as const;
+
+/** Phase profiles that all point at `profileId` (what a configured project looks like). */
+export function allPhasesWith(profileId: string | null) {
+  return Object.fromEntries(PHASES.map((phase) => [phase, profileId]));
+}
+
+/** Every phase on the shared "default" profile; `{}` on databases migrated before profiles existed. */
+function defaultPhaseProfiles(db: LunasqDatabase): Record<string, unknown> {
+  const hasTable = db.$client
+    .prepare("select 1 from sqlite_master where type = 'table' and name = 'agent_profiles'")
+    .get();
+  if (!hasTable) return {};
+  const profile =
+    db.select().from(agentProfiles).where(eq(agentProfiles.name, "default")).get() ??
+    insertAgentProfile(db, { name: "default" });
+  return allPhasesWith(profile.id);
+}
+
+/**
+ * Inserts a project. Unless the test passes its own `agentProfiles`, every phase is assigned to a
+ * default Claude profile (created once per database) so the project can be dispatched.
+ */
 export function insertProject(
   db: LunasqDatabase,
   overrides: Partial<typeof projects.$inferInsert> = {},
 ) {
   seq += 1;
+  const assigned = overrides.agentProfiles ?? defaultPhaseProfiles(db);
   const [row] = db
     .insert(projects)
     .values({
@@ -46,6 +96,7 @@ export function insertProject(
       baseBranch: "main",
       localPath: `/tmp/proyecto-${seq}`,
       ...overrides,
+      agentProfiles: assigned,
     })
     .returning()
     .all();

@@ -38,7 +38,7 @@ import {
   TaskTransitionedPayload,
   taskLabel,
 } from "@lunasq/schemas";
-import type { RunObserver } from "../dispatcher/dispatcher.ts";
+import type { ModelFailureOutcome, RunObserver } from "../dispatcher/dispatcher.ts";
 import type { Escalator } from "../notifications/escalator.ts";
 import { KeyedLock } from "../worktrees/keyed-lock.ts";
 import { PhaseClock } from "./phase-clock.ts";
@@ -58,6 +58,11 @@ export interface RunWatcherOptions {
   herdr: HerdrAdapter;
   /** `PhaseDispatcher.failRun`: closes the Run, applies `run_failed` and closes the pane. */
   failRun: (runId: string, reason: string) => Promise<unknown>;
+  /**
+   * `PhaseDispatcher.failModelRun`: the Run's model failed after launch; moves the phase to the next
+   * model of the profile when there is one (ADR agent-profiles). Without it there is no model fallback.
+   */
+  failModel?: (runId: string, reason: string) => Promise<ModelFailureOutcome>;
   escalator: Pick<Escalator, "watch" | "resolve">;
   notify: (notification: Notification) => unknown;
   projects?: ProjectConfigReader;
@@ -93,6 +98,7 @@ export class RunWatcher implements RunObserver {
   private readonly db: LunasqDatabase;
   private readonly herdr: HerdrAdapter;
   private readonly failRunFn: (runId: string, reason: string) => Promise<unknown>;
+  private readonly failModelFn: (runId: string, reason: string) => Promise<ModelFailureOutcome>;
   private readonly escalator: Pick<Escalator, "watch" | "resolve">;
   private readonly notifyFn: (notification: Notification) => unknown;
   private readonly projects: ProjectConfigReader;
@@ -111,6 +117,7 @@ export class RunWatcher implements RunObserver {
     this.db = opts.db;
     this.herdr = opts.herdr;
     this.failRunFn = opts.failRun;
+    this.failModelFn = opts.failModel ?? (async () => "unavailable");
     this.escalator = opts.escalator;
     this.notifyFn = opts.notify;
     this.projects = opts.projects ?? new ProjectRepository(opts.db);
@@ -336,10 +343,20 @@ export class RunWatcher implements RunObserver {
       return;
     }
     this.unwatch(w.runId);
-    await this.failRunFn(
-      w.runId,
+    await this.failOrFallBack(
+      w,
       `agent_stopped: agent ${w.name} stopped without the end-of-phase signal after ${w.nudges} nudges`,
     );
+  }
+
+  /**
+   * The Run's model failed: the phase continues with the next model of its profile or, when it was the
+   * last one of a dispatch that already had failures, the task escalates. With nothing to fall back to,
+   * the Run fails as usual (retry with backoff or needs_human).
+   */
+  private async failOrFallBack(w: Watch, reason: string): Promise<void> {
+    const outcome = await this.failModelFn(w.runId, reason);
+    if (outcome === "unavailable") await this.failRunFn(w.runId, reason);
   }
 
   /** On entering `blocked`: if the screen is the usage limit (not a permission), it escalates now. */
@@ -361,7 +378,22 @@ export class RunWatcher implements RunObserver {
       return false; // the agent no longer responds: the next signal (crash) decides the route.
     }
     if (!this.current(w) || !showsUsageLimit(screen)) return false;
-    await this.escalateUsageLimit(w, usageLimitMessage(screen));
+    const message = usageLimitMessage(screen);
+    if (await this.fallBackOnUsageLimit(w, message)) return true;
+    await this.escalateUsageLimit(w, message);
+    return true;
+  }
+
+  /**
+   * The model ran out of usage: with another enabled model in the profile the phase moves to it (the
+   * Run closes as a model failure and consumes no retry). Returns false if there is nothing to fall
+   * back to and the usual `usage_limit` escalation applies, with the agent left alive.
+   */
+  private async fallBackOnUsageLimit(w: Watch, message: string): Promise<boolean> {
+    if (this.settled(w) || !this.inPhase(w, "running")) return false;
+    const outcome = await this.failModelFn(w.runId, `usage_limit: ${message}`);
+    if (outcome === "unavailable") return false;
+    this.unwatch(w.runId);
     return true;
   }
 
@@ -405,7 +437,7 @@ export class RunWatcher implements RunObserver {
     this.unwatch(w.runId);
     if (this.settled(w) || this.inPhase(w, "waiting_human")) return;
     const what = exited ? "the agent process ended" : "the pane was closed";
-    await this.failRunFn(w.runId, `agent_exited: ${what} (${w.name}, pane ${w.paneId})`);
+    await this.failOrFallBack(w, `agent_exited: ${what} (${w.name}, pane ${w.paneId})`);
   }
 
   /** Phase timeout expired: needs_human with notification; the agent stays alive. */

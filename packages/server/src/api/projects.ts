@@ -6,6 +6,9 @@ import { type Context, Hono } from "hono";
 import { invalidInput, notFound, readJson } from "./http.ts";
 
 function repositoryError(c: Context, error: unknown) {
+  if (error instanceof ProjectRepositoryError && error.code === "profile_not_found") {
+    return c.json({ error: error.code, phases: error.phases, message: error.message }, 400);
+  }
   if (error instanceof ProjectRepositoryError && error.code !== "invalid_row") {
     return c.json({ error: error.code, field: error.field, message: error.message }, 409);
   }

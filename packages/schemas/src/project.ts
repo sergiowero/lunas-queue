@@ -11,28 +11,64 @@ export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export const EffortLevel = z.enum(EFFORT_LEVELS);
 export type EffortLevel = z.infer<typeof EffortLevel>;
 
-const profileFields = {
-  model: nonEmpty.optional(),
-  effort: EffortLevel.optional(),
-  args: z.array(z.string()).default(() => []),
-};
+const hasEffortFlag = (args: readonly string[]) =>
+  args.some((arg) => arg === "--effort" || arg.startsWith("--effort="));
 
-export const AgentProfile = z.strictObject({ kind: AgentKind, ...profileFields });
+// One entry of an agent profile (docs/decisions/agent-profiles.md): which provider and model run the
+// phase, with which effort and extra args. The first entry of a profile is the primary and the rest
+// are its fallbacks. The flags each provider reserves are checked by the adapters.
+export const ProfileModel = z
+  .strictObject({
+    kind: AgentKind,
+    model: nonEmpty.optional(),
+    effort: EffortLevel.optional(),
+    args: z.array(z.string()).default(() => []),
+  })
+  .refine((m) => m.effort === undefined || !hasEffortFlag(m.args), {
+    message: "the model sets effort and also carries --effort in args: keep one",
+    path: ["args"],
+  });
+export type ProfileModel = z.infer<typeof ProfileModel>;
+
+export const MIN_PROFILE_MODELS = 1;
+export const MAX_PROFILE_MODELS = 10;
+
+const profileName = nonEmpty.max(100);
+const profileModels = z.array(ProfileModel).min(MIN_PROFILE_MODELS).max(MAX_PROFILE_MODELS);
+
+/** Named, global list of models: the primary first and then its fallbacks in order. */
+export const AgentProfile = z.strictObject({
+  id: z.uuid(),
+  name: profileName,
+  models: profileModels,
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 export type AgentProfile = z.infer<typeof AgentProfile>;
 
-// Verification depends on the Claude Code subagents (§Verification with subagents):
-// its profile is tied to "claude" and not to AgentKind, so that it stays that way when v2 adds other kinds.
-export const VerifyAgentProfile = AgentProfile;
+export const AgentProfileCreate = z.strictObject({ name: profileName, models: profileModels });
+export type AgentProfileCreate = z.input<typeof AgentProfileCreate>;
 
-const defaultProfile = (): AgentProfile => ({ kind: "claude", args: [] });
+// PATCH: each present field replaces the stored one.
+export const AgentProfileUpdate = z.strictObject({
+  name: profileName.optional(),
+  models: profileModels.optional(),
+});
+export type AgentProfileUpdate = z.input<typeof AgentProfileUpdate>;
 
-export const AgentProfiles = z.strictObject({
-  refine: AgentProfile.default(defaultProfile),
-  implement: AgentProfile.default(defaultProfile),
-  verify: VerifyAgentProfile.default(defaultProfile),
-  deliver: AgentProfile.default(defaultProfile),
+/** The agent profile a project selects for each phase; null leaves the phase unassigned. */
+export const PhaseProfiles = z.strictObject({
+  refine: z.uuid().nullable().default(null),
+  implement: z.uuid().nullable().default(null),
+  verify: z.uuid().nullable().default(null),
+  deliver: z.uuid().nullable().default(null),
 } satisfies Record<Phase, z.ZodType>);
-export type AgentProfiles = z.infer<typeof AgentProfiles>;
+export type PhaseProfiles = z.infer<typeof PhaseProfiles>;
+
+/** Phases of a project without an agent profile: its tasks wait in queued until one is assigned. */
+export function unassignedPhases(profiles: PhaseProfiles): Phase[] {
+  return Phase.options.filter((phase) => profiles[phase] === null);
+}
 
 const positiveInt = z.int().min(1);
 
@@ -75,7 +111,7 @@ const configFields = {
     .startsWith("/", "localPath must be an absolute path")
     .transform(normalizePosixPath)
     .refine((path) => path !== "/", "localPath cannot be the root"),
-  agentProfiles: AgentProfiles.prefault({}),
+  agentProfiles: PhaseProfiles.prefault({}),
   limits: ProjectLimits.default(() => ({})),
 };
 
@@ -95,10 +131,10 @@ export const ProjectUpdate = z.strictObject({
   localPath: configFields.localPath.optional(),
   agentProfiles: z
     .strictObject({
-      refine: AgentProfile.optional(),
-      implement: AgentProfile.optional(),
-      verify: VerifyAgentProfile.optional(),
-      deliver: AgentProfile.optional(),
+      refine: z.uuid().nullable().optional(),
+      implement: z.uuid().nullable().optional(),
+      verify: z.uuid().nullable().optional(),
+      deliver: z.uuid().nullable().optional(),
     } satisfies Record<Phase, z.ZodType>)
     .optional(),
   limits: ProjectLimits.optional(),
@@ -110,7 +146,7 @@ export type ProjectUpdate = z.input<typeof ProjectUpdate>;
 export const Project = z.strictObject({
   id: z.uuid(),
   ...configFields,
-  agentProfiles: AgentProfiles,
+  agentProfiles: PhaseProfiles,
   limits: ProjectLimits,
   testCommand: nonEmpty.nullable(),
   bootstrap: nonEmpty.nullable(),
@@ -118,3 +154,22 @@ export const Project = z.strictObject({
   updatedAt: z.date(),
 });
 export type Project = z.infer<typeof Project>;
+
+// Global events (taskId null): they wake the scheduler so it replans with the new configuration.
+export const AGENT_PROFILE_CREATED = "agent_profile.created";
+export const AGENT_PROFILE_UPDATED = "agent_profile.updated";
+export const AGENT_PROFILE_DELETED = "agent_profile.deleted";
+export const PROJECT_UPDATED = "project.updated";
+
+export const AgentProfileEventPayload = z.strictObject({
+  profileId: z.uuid(),
+  name: nonEmpty,
+});
+export type AgentProfileEventPayload = z.infer<typeof AgentProfileEventPayload>;
+
+/** A project's configuration was saved; carries the phase profiles so held tasks are reconsidered. */
+export const ProjectUpdatedPayload = z.strictObject({
+  projectId: z.uuid(),
+  agentProfiles: PhaseProfiles,
+});
+export type ProjectUpdatedPayload = z.infer<typeof ProjectUpdatedPayload>;

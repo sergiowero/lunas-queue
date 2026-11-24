@@ -27,3 +27,21 @@ export const RunFailedPayload = z.strictObject({
   reason: z.string().min(1).max(2000),
 });
 export type RunFailedPayload = z.infer<typeof RunFailedPayload>;
+
+/**
+ * A launched Run failed because of its model (usage limit, the agent exited or stopped without the
+ * end-of-phase signal) and the phase moves to the next model of its agent profile. It replaces
+ * `run.failed` for that Run: a fallback is not a failure of the phase and consumes no retry.
+ */
+export const RUN_MODEL_FALLBACK = "run.model_fallback";
+
+export const RunModelFallbackPayload = z.strictObject({
+  runId: z.string().min(1),
+  phase: Phase,
+  modelIndex: z.int().min(0),
+  reason: z.string().min(1).max(2000),
+});
+export type RunModelFallbackPayload = z.infer<typeof RunModelFallbackPayload>;
+
+/** Why a model of an agent profile was left out of a phase dispatch. */
+export const RUN_PROVIDER_ATTEMPT = "run.provider_attempt";

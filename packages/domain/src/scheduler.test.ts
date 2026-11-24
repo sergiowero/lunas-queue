@@ -6,6 +6,7 @@ import type {
 } from "@lunasq/schemas";
 import { SchedulerConfig } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
+import type { InMemoryAgentProfileReader } from "./agent-profiles.ts";
 import type { DependencyEdge } from "./dependency-graph.ts";
 import { InMemoryProjectConfigReader } from "./project-config.ts";
 import {
@@ -18,7 +19,12 @@ import {
   type SchedulerTask,
   schedule,
 } from "./scheduler.ts";
-import { sampleProject, schedulerStateReaderContract } from "./testing.ts";
+import {
+  sampleProfile,
+  sampleProfiles,
+  sampleProject,
+  schedulerStateReaderContract,
+} from "./testing.ts";
 
 const NOW = new Date("2026-10-29T12:00:00Z");
 const HOUR = 3_600_000;
@@ -59,11 +65,13 @@ function plan(
   input: SchedulerConfigInput = {},
   projects: Project[] = [alfa, beta],
   providers?: AgentProviderSettings,
+  profiles: InMemoryAgentProfileReader = sampleProfiles(),
 ) {
   const snapshot: SchedulerSnapshot = { tasks, edges };
   return schedule(
     snapshot,
     new InMemoryProjectConfigReader(projects),
+    profiles,
     config(input),
     NOW,
     providers,
@@ -410,11 +418,13 @@ describe("concurrency limits", () => {
 
 describe("Occupancy", () => {
   const reader = new InMemoryProjectConfigReader([alfa]);
+  const profiles = sampleProfiles();
 
   it("revalidates a decision against a newer snapshot", () => {
     const decision = plan([task("x")], [], { globalConcurrency: 1 }).dispatch[0];
     if (!decision) throw new Error("no decision");
-    const occupancy = (tasks: SchedulerTask[]) => Occupancy.of({ tasks, edges: [] }, reader);
+    const occupancy = (tasks: SchedulerTask[]) =>
+      Occupancy.of({ tasks, edges: [] }, reader, profiles);
     const slot = occupancy([]).slotFor(decision, decision.phase);
     expect(occupancy([]).fits(slot, config({ globalConcurrency: 1 }))).toBe(true);
     // Another process dispatched in between: the claim no longer fits.
@@ -423,131 +433,128 @@ describe("Occupancy", () => {
   });
 
   it("without project configuration it does not fit", () => {
-    const occupancy = Occupancy.of({ tasks: [], edges: [] }, reader);
+    const occupancy = Occupancy.of({ tasks: [], edges: [] }, reader, profiles);
     const slot = occupancy.slotFor({ projectId: beta.id }, "refine");
     expect(slot.agentKind).toBeUndefined();
     expect(occupancy.fits(slot, config())).toBe(false);
   });
 });
 
-describe("enabled providers", () => {
-  const copilotPrimary = sampleProject("copiloto", {
-    agentProfiles: { refine: { kind: "copilot", args: [] } },
-  });
-  const projects = [alfa, copilotPrimary];
+describe("agent profiles", () => {
+  const copilotFirst = sampleProfile("copilot-first", [
+    { kind: "copilot", model: "gpt-5" },
+    { kind: "claude", model: "sonnet" },
+  ]);
+  const fast = sampleProfile("fast", [
+    { kind: "claude", model: "opus" },
+    { kind: "codex", model: "gpt-5" },
+  ]);
+  const profiles = sampleProfiles(copilotFirst, fast);
+  const withProfile = (name: string, profileId: string | null) =>
+    sampleProject(name, {
+      agentProfiles: {
+        refine: profileId,
+        implement: profileId,
+        verify: profileId,
+        deliver: profileId,
+      },
+    });
+  const copilotProject = withProfile("copiloto", copilotFirst.id);
+  const fastProject = withProfile("rapido", fast.id);
+  const unassigned = withProfile("sin-perfil", null);
+  const projects = [alfa, copilotProject, fastProject, unassigned];
+  const all = { claude: true, copilot: true, codex: true };
+  const run = (
+    tasks: SchedulerTask[],
+    providers: AgentProviderSettings = all,
+    input: SchedulerConfigInput = {},
+  ) => plan(tasks, [], input, projects, providers, profiles);
 
-  it("with all providers disabled it dispatches nothing and the tasks stay in queued", () => {
-    const tareas = [task("a"), task("b", { projectId: copilotPrimary.id })];
-    const result = plan(tareas, [], {}, projects, { claude: false, copilot: false, codex: false });
-    // The pause neither escalates nor discards anything: the whole plan is empty and the tasks wait.
+  it("dispatches with the primary model of the phase profile and records its index", () => {
+    const [decision] = run([task("a", { projectId: fastProject.id })]).dispatch;
+    expect(decision).toMatchObject({
+      agentKind: "claude",
+      profileId: fast.id,
+      modelIndex: 0,
+    });
+  });
+
+  it("holds a task whose phase is unassigned: no dispatch and no escalation", () => {
+    const result = run([task("a", { projectId: unassigned.id })]);
     expect(result).toEqual({ dispatch: [], escalate: [] });
-    // Contrast: with one enabled, the same tasks are dispatched.
-    const reanudado = plan(tareas, [], {}, projects, {
-      claude: true,
-      copilot: false,
-      codex: false,
-    });
-    expect(reanudado.dispatch.map((d) => d.taskId).sort()).toEqual(["a", "b"]);
+    // The other tasks of the pass are not affected by the held one.
+    expect(dispatched(run([task("a", { projectId: unassigned.id }), task("b")]))).toEqual(["b"]);
   });
 
-  it("with claude disabled, a task with primary claude goes to copilot and takes its slot", () => {
-    const result = plan([task("a")], [], {}, projects, {
-      claude: false,
-      copilot: true,
-      codex: false,
+  it("with the primary provider disabled it uses the next enabled model and its index", () => {
+    const [decision] = run([task("a", { projectId: copilotProject.id })], {
+      ...all,
+      copilot: false,
+    }).dispatch;
+    expect(decision).toMatchObject({
+      agentKind: "claude",
+      profileId: copilotFirst.id,
+      modelIndex: 1,
     });
-    expect(result.dispatch.map((d) => d.agentKind)).toEqual(["copilot"]);
-    // The copilot slot fills up: the per-agent-kind limit applies to the effective provider.
-    const limited = plan(
-      [task("a"), task("b")],
-      [],
-      { agentKindConcurrency: { copilot: 1 } },
-      projects,
-      { claude: false, copilot: true, codex: false },
+  });
+
+  it("holds the task when every model of the profile belongs to a disabled provider", () => {
+    const result = run([task("a", { projectId: copilotProject.id })], {
+      claude: false,
+      copilot: false,
+      codex: true,
+    });
+    expect(result).toEqual({ dispatch: [], escalate: [] });
+    expect(run([task("a")], { claude: false, copilot: false, codex: false })).toEqual({
+      dispatch: [],
+      escalate: [],
+    });
+  });
+
+  it("skips the models already exhausted in the phase dispatch", () => {
+    const [decision] = run([
+      task("a", { projectId: fastProject.id, exhaustedModels: [0] }),
+    ]).dispatch;
+    expect(decision).toMatchObject({ agentKind: "codex", modelIndex: 1 });
+    // With every enabled model exhausted the task is held, not escalated.
+    expect(run([task("a", { projectId: fastProject.id, exhaustedModels: [0, 1] })])).toEqual({
+      dispatch: [],
+      escalate: [],
+    });
+  });
+
+  it("the per-agent-kind limit applies to the effective model's provider", () => {
+    const limited = run(
+      [task("a", { projectId: copilotProject.id }), task("b", { projectId: copilotProject.id })],
+      { ...all, copilot: false },
+      { agentKindConcurrency: { claude: 1 } },
     );
     expect(dispatched(limited)).toEqual(["a"]);
   });
 
-  it("with copilot disabled, a task with primary copilot goes to claude", () => {
-    const result = plan([task("a", { projectId: copilotPrimary.id })], [], {}, projects, {
-      claude: true,
-      copilot: false,
-      codex: false,
+  it("a live agent counts against the provider it really runs with", () => {
+    const live = task("live", {
+      projectId: copilotProject.id,
+      subState: "running",
+      agentKind: "claude",
     });
-    expect(result.dispatch.map((d) => d.agentKind)).toEqual(["claude"]);
-  });
-
-  it("with Claude and Copilot enabled each task uses the primary of its profile and takes its slot", () => {
-    const both = { claude: true, copilot: true, codex: false };
-    const kinds = (tasks: SchedulerTask[], input: SchedulerConfigInput = {}) =>
-      plan(tasks, [], input, projects, both).dispatch.map((d) => [d.taskId, d.agentKind]);
-    expect(kinds([task("a"), task("b", { projectId: copilotPrimary.id })])).toEqual([
-      ["a", "claude"],
-      ["b", "copilot"],
-    ]);
-    // Each kind counts against its own limit: the copilot one does not spend the claude slot.
-    const limited = kinds([task("a"), task("b"), task("c", { projectId: copilotPrimary.id })], {
-      agentKindConcurrency: { claude: 1, copilot: 1 },
-    });
-    expect(limited).toEqual([
-      ["a", "claude"],
-      ["c", "copilot"],
-    ]);
-    // Without explicit configuration, all enabled.
-    expect(plan([task("g")], [], {}, projects).dispatch[0]?.agentKind).toBe("claude");
-    // The primary rules because it is enabled: the same task changes when it is disabled.
-    const solo = (providers: AgentProviderSettings) =>
-      plan([task("h")], [], {}, projects, providers).dispatch.map((d) => d.agentKind);
-    expect(solo(both)).toEqual(["claude"]);
-    expect(solo({ claude: false, copilot: true, codex: false })).toEqual(["copilot"]);
-    expect(solo({ claude: false, copilot: false, codex: true })).toEqual(["codex"]);
-  });
-
-  it("the same task changes provider only when its primary is disabled", () => {
-    const providerOf = (id: string, projectId: string, providers: AgentProviderSettings) =>
-      plan([task(id, { projectId })], [], {}, projects, providers).dispatch.map((d) => d.agentKind);
-    expect(providerOf("c", alfa.id, { claude: true, copilot: false, codex: false })).toEqual([
-      "claude",
-    ]);
-    expect(providerOf("d", alfa.id, { claude: false, copilot: true, codex: false })).toEqual([
-      "copilot",
-    ]);
-    expect(
-      providerOf("e", copilotPrimary.id, { claude: true, copilot: false, codex: false }),
-    ).toEqual(["claude"]);
-    expect(providerOf("f", alfa.id, { claude: false, copilot: false, codex: false })).toEqual([]);
-  });
-
-  it("a live agent takes the slot of the provider it runs with, not that of its profile", () => {
-    const both = { claude: true, copilot: true, codex: false };
-    // The profile says claude, but the Run fell back to copilot.
-    const viva = task("viva", { subState: "running", agentKind: "copilot" });
-    const claudeLibre = plan(
-      [viva, task("a")],
-      [],
-      { agentKindConcurrency: { claude: 1 } },
-      projects,
-      both,
-    );
-    expect(dispatched(claudeLibre)).toEqual(["a"]);
-    const copilotLleno = plan(
-      [viva, task("b", { projectId: copilotPrimary.id }), task("c")],
-      [],
-      { agentKindConcurrency: { copilot: 1 } },
-      projects,
-      both,
-    );
-    expect(dispatched(copilotLleno)).toEqual(["c"]);
-  });
-
-  it("a live agent without a registered provider counts against the primary of its profile", () => {
-    const viva = task("viva", { subState: "running" });
-    const result = plan([viva, task("a")], [], { agentKindConcurrency: { claude: 1 } }, projects, {
-      claude: true,
-      copilot: true,
-      codex: false,
+    const result = run([live, task("a", { projectId: fastProject.id })], all, {
+      agentKindConcurrency: { claude: 1 },
     });
     expect(result.dispatch).toEqual([]);
+  });
+
+  it("a changed profile applies to the next plan", () => {
+    const next = sampleProfiles({ ...fast, models: [{ kind: "codex", model: "gpt-5", args: [] }] });
+    const [decision] = plan(
+      [task("a", { projectId: fastProject.id })],
+      [],
+      {},
+      projects,
+      all,
+      next,
+    ).dispatch;
+    expect(decision).toMatchObject({ agentKind: "codex", modelIndex: 0 });
   });
 });
 
@@ -682,7 +689,7 @@ describe("limits are never exceeded (random DAGs)", () => {
     const reader = new InMemoryProjectConfigReader(projects);
     for (let pass = 0; pass < 6; pass++) {
       const before = live().length;
-      const result = schedule({ tasks, edges }, reader, parsed, NOW);
+      const result = schedule({ tasks, edges }, reader, sampleProfiles(), parsed, NOW);
       const chosen = new Set(result.dispatch.map((d) => d.taskId));
       tasks = tasks.map((t) => (chosen.has(t.id) ? { ...t, subState: "running" } : t));
       const running = live();
@@ -708,7 +715,7 @@ describe("limits are never exceeded (random DAGs)", () => {
         }
       }
       // And it leaves no free slots unused: every ready task left out no longer fits.
-      const after = Occupancy.of({ tasks, edges }, reader);
+      const after = Occupancy.of({ tasks, edges }, reader, sampleProfiles());
       for (const { task: waiting } of rankReady({ tasks, edges }, parsed, NOW)) {
         const slot = after.slotFor(waiting, pendingPhase(waiting.state) as SchedulablePhase);
         expect(after.fits(slot, parsed)).toBe(false);

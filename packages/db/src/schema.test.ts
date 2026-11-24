@@ -7,10 +7,12 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { describe, expect, it } from "vitest";
 import { migrateDatabase, migrationsFolder } from "./client.ts";
 import {
+  agentProfiles,
   events,
   outbox,
   projects,
   questions,
+  runs,
   specs,
   taskDependencies,
   taskInstructions,
@@ -56,7 +58,8 @@ describe("projects", () => {
     const p = insertProject(db);
     expect(p.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(p.createdAt).toBeInstanceOf(Date);
-    expect(p.agentProfiles).toEqual({});
+    // Every phase is assigned to the shared default profile of the test helper.
+    expect(Object.keys(p.agentProfiles)).toEqual(["refine", "implement", "verify", "deliver"]);
     expect(p.limits).toEqual({});
   });
 
@@ -535,13 +538,87 @@ describe("runs", () => {
       db.$client
         .prepare("insert into tasks (id, project_id, intent, priority) values (?, ?, 'Do it', 100)")
         .run(taskId, project.id);
-      const run = insertRun(db, taskId);
-      db.insert(usageRecords).values({ runId: run.id, model: "gpt-5.4", source: "otel" }).run();
+      const runId = randomUUID();
+      db.$client
+        .prepare(
+          "insert into runs (id, task_id, phase, agent_kind, run_token) values (?, ?, 'implement', 'claude', 'tok')",
+        )
+        .run(runId, taskId);
+      db.insert(usageRecords).values({ runId, model: "gpt-5.4", source: "otel" }).run();
 
       migrateDatabase(db);
 
       expect(db.select().from(usageRecords).all()).toHaveLength(1);
       expect(() => db.$client.prepare("update runs set agent_kind = 'codex'").run()).not.toThrow();
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
+  });
+
+  it("the agent profiles migration clears every phase's provider config and creates no profile", () => {
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-drizzle-before-profiles-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8"));
+      const index = journal.entries.findIndex(
+        (e: { tag: string }) => e.tag === "0019_agent_profiles",
+      );
+      journal.entries = journal.entries.slice(0, index);
+      writeFileSync(journalFile, JSON.stringify(journal));
+      const { db } = freshDatabase();
+      migrate(db, { migrationsFolder: previous });
+      // Raw inserts: the current Drizzle schema names columns the previous database does not have yet.
+      const insertRaw = db.$client.prepare(
+        "insert into projects (id, name, repo, base_branch, local_path, agent_profiles) values (?, ?, 'o/r', 'main', ?, ?)",
+      );
+      insertRaw.run(
+        "p1",
+        "copilot-project",
+        "/repos/a",
+        JSON.stringify({
+          implement: { kind: "copilot", model: "gpt-5", args: [] },
+          verify: { kind: "claude", effort: "high", args: ["--x"] },
+        }),
+      );
+      insertRaw.run("p2", "defaults", "/repos/b", "{}");
+      const taskId = randomUUID();
+      db.$client
+        .prepare(
+          "insert into tasks (id, project_id, goal, priority) values (?, 'p1', 'Do it', 100)",
+        )
+        .run(taskId);
+      db.$client
+        .prepare(
+          "insert into runs (id, task_id, phase, agent_kind, run_token) values ('r1', ?, 'implement', 'copilot', 'tok')",
+        )
+        .run(taskId);
+
+      migrateDatabase(db);
+
+      const unassigned = { refine: null, implement: null, verify: null, deliver: null };
+      const stored = () =>
+        db.select({ id: projects.id, profiles: projects.agentProfiles }).from(projects).all();
+      expect(stored()).toEqual([
+        { id: "p1", profiles: unassigned },
+        { id: "p2", profiles: unassigned },
+      ]);
+      expect(db.select().from(agentProfiles).all()).toEqual([]);
+      // Existing Runs are kept; they simply carry no profile.
+      expect(db.select().from(runs).get()).toMatchObject({
+        id: "r1",
+        profileId: null,
+        modelIndex: null,
+        modelFailed: false,
+      });
+
+      // Running it again changes nothing.
+      migrateDatabase(db);
+      expect(stored()).toEqual([
+        { id: "p1", profiles: unassigned },
+        { id: "p2", profiles: unassigned },
+      ]);
+      expect(db.select().from(agentProfiles).all()).toEqual([]);
     } finally {
       rmSync(previous, { recursive: true, force: true });
     }

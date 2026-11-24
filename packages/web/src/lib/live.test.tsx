@@ -89,6 +89,30 @@ describe("live updates over SSE", () => {
     expect(await screen.findByRole("status")).toBeTruthy();
   });
 
+  it("a profile or project change refreshes the Profiles tab and the missing-profile banner", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const fake = new FakeApi();
+    const project = fake.addProject({
+      agentProfiles: { refine: null, implement: null, verify: null, deliver: null },
+    });
+    renderApp("/profiles", fake);
+    await screen.findByText("Fases sin perfil:");
+    expect(screen.getByText(/Todavía no hay perfiles/)).toBeTruthy();
+
+    // Another tab creates a profile and assigns it to every phase: only the global change arrives.
+    const profile = fake.addProfile({ name: "Nuevo desde otra pestaña" });
+    Object.assign(project.agentProfiles, {
+      refine: profile.id,
+      implement: profile.id,
+      verify: profile.id,
+      deliver: profile.id,
+    });
+    FakeEventSource.instances[0]?.emit("change", JSON.stringify({ taskIds: [], settings: true }));
+
+    expect(await screen.findByText("Nuevo desde otra pestaña")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("Fases sin perfil:")).toBeNull());
+  });
+
   it("ignores unreadable messages and closes the connection on unmount", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     const { unmount } = renderApp("/queue");

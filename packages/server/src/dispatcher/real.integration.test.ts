@@ -18,7 +18,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defaultSocketPath, RealHerdr, ShellProcessRunner } from "@lunasq/adapters";
-import { ProjectRepository, RunRepository } from "@lunasq/db";
+import { AgentProfileRepository, ProjectRepository, RunRepository } from "@lunasq/db";
 import { insertTask, migratedDatabase } from "@lunasq/db/test-helpers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Orchestrator } from "./orchestrator.ts";
@@ -108,14 +108,16 @@ describe.skipIf(!enabled)("dispatcher contra herdr real", { timeout: 60_000 }, (
 
   it("dispatches a phase end to end, accepts the trust and does not duplicate when repeated", async () => {
     const db = migratedDatabase();
+    const profile = new AgentProfileRepository(db).create({
+      name: "haiku",
+      models: [{ kind: "claude", model: "haiku", args: ["--permission-mode", "auto"] }],
+    });
     const project = new ProjectRepository(db).create({
       name: `dispatch-${process.pid}`,
       repo: "lunasq/toy",
       baseBranch: "main",
       localPath: join(dir, "repo"),
-      agentProfiles: {
-        refine: { kind: "claude", model: "haiku", args: ["--permission-mode", "auto"] },
-      },
+      agentProfiles: { refine: profile.id },
     });
     const task = insertTask(db, project.id);
     const out = join(dir, "out");

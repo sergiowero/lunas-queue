@@ -67,6 +67,13 @@ const api = async <T>(path: string, init?: RequestInit): Promise<T> => {
   return (await res.json()) as T;
 };
 
+// Phases start unassigned and held tasks never run (docs/decisions/agent-profiles.md): the pilot
+// selects one scripted profile for every phase.
+const profile = await api<{ id: string }>("/api/agent-profiles", {
+  method: "POST",
+  body: JSON.stringify({ name: "Piloto", models: [{ kind: "claude" }] }),
+});
+
 const project = await api<{ id: string }>("/api/projects", {
   method: "POST",
   body: JSON.stringify({
@@ -75,6 +82,12 @@ const project = await api<{ id: string }>("/api/projects", {
     baseBranch: "main",
     localPath: fixture.repo,
     testCommand: "sh test.sh",
+    agentProfiles: {
+      refine: profile.id,
+      implement: profile.id,
+      verify: profile.id,
+      deliver: profile.id,
+    },
   }),
 });
 

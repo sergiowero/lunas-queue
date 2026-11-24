@@ -1,0 +1,34 @@
+# Agent profiles with model fallbacks
+
+**Status:** accepted. It replaces the per‑project, per‑phase `{ kind, model, effort, args }` profile of [ADR 0008](0008-config-proyecto.md) and [effort per phase](effort-por-fase.md), and the registry‑order fallback of [ADR 0016](0016-proveedores-agente.md) and [settings‑proveedores](settings-proveedores.md).
+
+## Context
+
+A project configured one provider, model, effort and args per phase, and the only fallback was "try the other registered providers in registry order" when a CLI did not start. When a model hit its rate limit or usage limit, or the agent exited, the task retried the same model or escalated. The human had no way to say "try this other model next", and the same configuration had to be copied into every project.
+
+## Decision
+
+- **Global profiles.** An `agent_profiles` table (`id`, unique `name`, `models` JSON, timestamps). `models` is an ordered list of 1 to 10 entries `{ kind, model?, effort?, args }`: the first is the primary, the rest are its fallbacks, in order. An entry with `effort` and also `--effort` in `args` is rejected, and each provider's reserved flags are validated by `validateProfileModel` (adapters) on create and update (400 `invalid_input`, path `["models", i, "args"]`).
+- **Projects select a profile per phase.** `Project.agentProfiles` is `{ refine, implement, verify, deliver }`, each a profile id or `null`. The project no longer carries provider, model, effort or args. Per‑phase timeouts and limits stay in the project.
+- **Unassigned phases hold their tasks.** A phase with `null` has no model: the scheduler does not dispatch its tasks (they stay `queued`, with no Run, retry or escalation) and `claimRun` rejects with `profile_missing`. Creating a project leaves every phase unassigned. Migration `0018_agent_profiles` sets every existing project's phases to `null`, so the human must pick profiles after upgrading.
+- **Referential rules.** Selecting a missing profile answers 400 `profile_not_found` (with the phases). Deleting a profile that projects use answers 409 `profile_in_use` with `projects: [{ id, name, phases }]`. `runs.profile_id` is `ON DELETE set null`, so history survives.
+- **Effective model.** `resolvePhaseModel` (domain) picks the first model, by profile order, that is not exhausted and whose provider is enabled in Settings. Without one the result is `unassigned`, `providers_disabled` or `exhausted`. A `verify` model of kind `claude` without `model` runs on `sonnet` (the approver's default that used to live in the project profile).
+- **Exhausted models.** Per dispatch chain (the failed Runs since the last non‑failure Run or the last `resume`), a model is exhausted when a Run of that `modelIndex` closed as a model failure (`runs.model_failed`) or when a start attempt of that index failed (`run.provider_attempt` events carry `modelIndex`). Each Run records `profile_id`, `model_index` and `model`.
+- **Start fallback.** `startAgentWithFallback` iterates the profile's models by index inside the same Run, re‑reading the enabled providers before each attempt. A model whose provider is disabled is skipped without an attempt record; a model whose per‑type concurrency slot is full is skipped without counting as a failure. `RunRepository.switchModel` revalidates the limits for the new provider.
+- **Post‑launch fallback.** The watcher turns a usage or rate limit, an agent exit and a stop without the end‑of‑phase signal (after the nudges) into a *model failure* when another usable model exists: `RunRepository.failModel` closes the Run (`model_failed`, event `run.model_fallback`) and sends the task back to `queued` without consuming a retry, and the next dispatch creates a new Run of the same phase with the next model, in the same worktree. The `consecutiveFailures` count and the retry backoff ignore model‑failed Runs. With nothing to fall back to, the previous behaviour applies (retries; a usage limit escalates with the agent kept alive).
+- **Exhaustion.** When no model of the profile responds, the task escalates to `needs_human` with reason `providers_unavailable` and a note listing every model's failure (`#1 claude opus: usage_limit: …; #2 codex gpt-5: …`). A `resume` starts a new chain: the models are tried again from the primary.
+- **No fallback for non‑model failures.** A blocked hook, `profile_conflict`, a phase timeout, bootstrap failures and any failure that is not about the model never fall back.
+- **Live Runs are not interrupted.** Editing or unassigning a profile, or disabling a provider, only affects the next dispatch.
+- **Events.** Global events (no task): `agent_profile.created|updated|deleted` and `project.updated`, published to the outbox. They count as configuration changes (`settings` in the changes stream), so they wake the scheduler and refresh the UI of every tab.
+
+## API and UI
+
+- `GET|POST /api/agent-profiles`, `GET|PATCH|DELETE /api/agent-profiles/:id` (local origin only) and `GET /api/tasks/:id/hold`, which explains why a queued task has no Run (`profile_missing` or `providers_disabled`, with the project and phase).
+- A **Perfiles / Profiles** tab lists, creates, edits (reorders and removes models) and deletes profiles; a model of a disabled provider is shown as skipped with a link to Settings, and deleting a profile in use lists the projects and phases.
+- The project form has a profile selector per phase with a "no profile" option and a warning while a phase is unassigned; Projects shows a "no profile" badge; a global banner appears while any project has an unassigned phase; the task detail shows why a held task waits. All texts are in both dictionaries.
+
+## Consequences
+
+- A profile is edited once and applies to every project that selects it, from the next dispatch.
+- Provider flags are no longer duplicated per project and phase.
+- Because the registry order is gone, a project that wants "claude, then copilot" must say so in a profile.

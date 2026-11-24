@@ -12,9 +12,17 @@ export function invalidateChanges(
   taskIds: string[],
   settings = false,
 ): void {
-  // The providers configuration is global (settings.updated): the Settings page and the paused
-  // dispatch notice of other tabs refresh without waiting for the polling.
-  if (settings) void queryClient.invalidateQueries({ queryKey: ["settings"] });
+  // The configuration is global (settings.updated, agent_profile.*, project.updated): the Settings
+  // page, the Profiles tab, the projects and the notices of other tabs refresh without waiting for the polling.
+  if (settings) {
+    void queryClient.invalidateQueries({ queryKey: ["settings"] });
+    void queryClient.invalidateQueries({ queryKey: ["agent-profiles"] });
+    void queryClient.invalidateQueries({ queryKey: ["projects"] });
+    // A held task's notice depends on the projects' profiles and on the enabled providers.
+    void queryClient.invalidateQueries({
+      predicate: (q) => q.queryKey[0] === "task" && q.queryKey[2] === "hold",
+    });
+  }
   void queryClient.invalidateQueries({ queryKey: ["queue"] });
   void queryClient.invalidateQueries({ queryKey: ["tasks"] });
   // Hook executions are task events. The hooks' content
