@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import type { Json } from "../../lib/api.ts";
-import { formatAgent, formatDate } from "../../lib/format.ts";
+import { formatDate } from "../../lib/format.ts";
 import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
 import { RunAgent } from "../agent-badge.tsx";

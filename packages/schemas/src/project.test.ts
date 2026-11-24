@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  AgentProfile,
   AgentProfileCreate,
   AgentProfileUpdate,
-  AgentProfile,
   MAX_PHASE_TIMEOUT_MINUTES,
+  PhaseProfiles,
   PROFILE_COLORS,
   PROFILE_ICONS,
-  PhaseProfiles,
   PROJECT_COLORS,
   PROJECT_ICONS,
   ProfileModel,

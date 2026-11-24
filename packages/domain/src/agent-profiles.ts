@@ -5,9 +5,9 @@
 import {
   type AgentProfile,
   type AgentProviderSettings,
+  type Phase,
   PROFILE_COLORS,
   PROFILE_ICONS,
-  type Phase,
   type ProfileColor,
   type ProfileIcon,
   type ProfileModel,
