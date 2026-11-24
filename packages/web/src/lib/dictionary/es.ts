@@ -466,6 +466,7 @@ export const es = {
     neutralLabel: (kind: string) => `Agente ${kind}, sin perfil`,
     noProfile: "Sin perfil",
     noProfileLabel: "Sin perfil de agente",
+    unavailableLabel: "Agente no disponible",
   },
   profileAppearance: {
     icon: "Icono",

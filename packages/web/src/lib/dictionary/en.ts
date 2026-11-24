@@ -466,6 +466,7 @@ export const en: Dictionary = {
     neutralLabel: (kind) => `Agent ${kind}, no profile`,
     noProfile: "No profile",
     noProfileLabel: "No agent profile",
+    unavailableLabel: "Agent not available",
   },
   profileAppearance: {
     icon: "Icon",

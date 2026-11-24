@@ -34,6 +34,20 @@ describe("Runs table", () => {
     expect(rowOf(rapido)).not.toBe(rowOf(lento));
   });
 
+  it("a profiled Run does not look unprofiled when the profiles query fails", async () => {
+    const { fake, project, fast } = seeded();
+    const task = fake.addTask(project.id, { goal: "Perfiles caídos", state: "in_progress" });
+    const run = fake.startRun(task.id, "implement");
+    Object.assign(run, { profileId: fast.id });
+    fake.profilesFail = true;
+    renderApp(`/tasks/${task.id}`, fake);
+
+    const runs = within(await screen.findByRole("region", { name: "Runs" }));
+    expect(await runs.findByRole("img", { name: "Agente no disponible" })).toBeTruthy();
+    expect(fake.requests.filter((r) => r.path === "/api/agent-profiles").length).toBeLessThan(5);
+    expect(runs.queryByRole("img", { name: /sin perfil/i })).toBeNull();
+  });
+
   it("a Run without profile or with a deleted profile shows a neutral badge with its kind and nothing fails", async () => {
     const { fake, project } = seeded();
     const task = fake.addTask(project.id, { goal: "Sin perfil", state: "in_progress" });
@@ -124,6 +138,20 @@ describe("Inbox", () => {
     expect(blocked.queryByRole("img", { name: "Sin perfil de agente" })).toBeNull();
     release();
     expect(await blocked.findByRole("img", { name: "Agente Rápido" })).toBeTruthy();
+  });
+
+  it("does not claim «no profile» when the Runs query fails", async () => {
+    const { fake, project, fast } = seeded();
+    const task = fake.addTask(project.id, { goal: "Bloqueada", state: "in_progress" });
+    const run = fake.startRun(task.id, "implement");
+    Object.assign(run, { profileId: fast.id });
+    fake.block(run);
+    fake.runsFail.add(task.id);
+    renderApp("/inbox", fake);
+
+    const blocked = within(await screen.findByRole("region", { name: "Agentes bloqueados" }));
+    expect(await blocked.findByRole("img", { name: "Agente no disponible" })).toBeTruthy();
+    expect(blocked.queryByRole("img", { name: "Sin perfil de agente" })).toBeNull();
   });
 
   it("the blocked agent shows the badge of its Run's profile", async () => {

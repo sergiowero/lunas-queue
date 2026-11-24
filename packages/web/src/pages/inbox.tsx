@@ -304,6 +304,7 @@ function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Ta
             profileId={run?.profileId}
             kind={run?.agentKind ?? null}
             pending={runs.isPending}
+            unavailable={runs.isError}
           />
           <span className="font-mono">{agent.agentName}</span>
         </dd>

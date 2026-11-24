@@ -129,6 +129,8 @@ export class FakeApi {
   readonly runsFail = new Set<string>();
   /** If set, GET .../runs does not answer until the promise resolves (pending query). */
   runsGate: Promise<void> | null = null;
+  /** If true, GET /api/agent-profiles answers 500. */
+  profilesFail = false;
   /** If set, GET /api/agent-profiles does not answer until the promise resolves (pending query). */
   profilesGate: Promise<void> | null = null;
   readonly requests: Request[] = [];
@@ -399,6 +401,12 @@ export class FakeApi {
     }
     if (method === "PUT" && url.pathname === "/api/settings/verification") {
       await this.holdVerificationPut;
+    }
+    if (this.profilesFail && url.pathname === "/api/agent-profiles" && method === "GET") {
+      return new Response(JSON.stringify({ error: "internal" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
     }
     const [status, payload] = this.route(method, url, body);
     return new Response(status === 204 ? null : JSON.stringify(payload), {

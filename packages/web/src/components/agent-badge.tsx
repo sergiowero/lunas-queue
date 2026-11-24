@@ -17,14 +17,18 @@ const NEUTRAL = "bg-surface-secondary text-text-secondary ring-border";
 
 /**
  * Resolves profiles by id from the shared `agent-profiles` query. `find` answers null for an id that
- * no longer exists (and once the query failed), so callers fall back to the neutral badge. While the
- * list loads, `loading` is true and callers show a placeholder instead of a wrong neutral badge.
+ * no longer exists, so callers fall back to the neutral badge. While the list loads (`loading`) or
+ * when its query failed (`failed`), a profiled piece of work shows a placeholder or an «unavailable»
+ * mark instead of a neutral badge that would claim there is no profile.
  */
 export function useAgentProfiles() {
-  const profiles = useQuery(queries.agentProfiles());
+  // retryOnMount off: every badge is an observer, and each one mounting on a failed query would
+  // refetch it again (a request storm while the server is failing). The list still refreshes on events.
+  const profiles = useQuery({ ...queries.agentProfiles(), retryOnMount: false });
   const byId = new Map((profiles.data ?? []).map((profile) => [profile.id, profile]));
   return {
     loading: profiles.isPending,
+    failed: profiles.isError,
     find: (profileId: string | null | undefined): Json<AgentProfile> | null =>
       (profileId ? byId.get(profileId) : undefined) ?? null,
   };
@@ -70,18 +74,21 @@ export function AgentBadge({
   kind,
   label,
   pending,
+  unavailable,
   className,
 }: {
   profileId: string | null | undefined;
   kind?: AgentKind | null | undefined;
   /** The work this badge belongs to is still loading (its Run): a placeholder, not a neutral badge. */
   pending?: boolean | undefined;
+  /** The work this badge belongs to could not be loaded (its Run): neither a profile nor «no profile» is known. */
+  unavailable?: boolean | undefined;
   /** Text of the neutral badge instead of the bare kind (a Run shows «claude · opus»). */
   label?: string | undefined;
   className?: string | undefined;
 }) {
   const t = useT();
-  const { find, loading } = useAgentProfiles();
+  const { find, loading, failed } = useAgentProfiles();
   const profile = find(profileId);
   // A profiled piece of work whose profile list has not arrived yet must not look unprofiled.
   if (pending || (loading && profileId)) {
@@ -104,6 +111,19 @@ export function AgentBadge({
         color={profile.color}
         className={className}
       />
+    );
+  }
+  // The profile is not known because something failed to load: do not claim there is none.
+  if (unavailable || (failed && profileId)) {
+    return (
+      <span
+        role="img"
+        aria-label={t.agentBadge.unavailableLabel}
+        data-agent-badge="unavailable"
+        className={cn(CHIP, NEUTRAL, className)}
+      >
+        <span aria-hidden="true">—</span>
+      </span>
     );
   }
   return (
@@ -130,9 +150,17 @@ export function RunAgent({
 }: {
   run: { profileId: string | null; agentKind: AgentKind; model?: string | null };
 }) {
-  const { find, loading } = useAgentProfiles();
+  const { find, loading, failed } = useAgentProfiles();
   const text = formatAgent(run);
   if (loading && run.profileId) return <AgentBadge profileId={run.profileId} />;
+  if (failed && run.profileId) {
+    return (
+      <span className="flex flex-wrap items-center gap-2">
+        <AgentBadge profileId={run.profileId} />
+        <span>{text}</span>
+      </span>
+    );
+  }
   if (!find(run.profileId)) {
     return <AgentBadge profileId={null} kind={run.agentKind} label={text} />;
   }

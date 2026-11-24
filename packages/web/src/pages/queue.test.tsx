@@ -456,6 +456,24 @@ describe("global queue", () => {
       expect(await within(cell).findByRole("img", { name: "Agente Rápido" })).toBeTruthy();
     });
 
+    it("does not claim «no profile» when the profiles query fails", async () => {
+      const fake = new FakeApi();
+      const rapido = fake.addProfile({ name: "Rápido", icon: "rocket", color: "teal" });
+      const project = fake.addProject({
+        name: "asignado",
+        agentProfiles: { refine: rapido.id, implement: null, verify: null, deliver: null },
+      });
+      const task = fake.addTask(project.id, { goal: "A refinar", state: "draft" });
+      fake.queue = [{ task, ready: false, score: null, effectivePriority: null, usage }];
+      fake.profilesFail = true;
+      renderApp("/queue", fake);
+
+      const row = (await screen.findByText("A refinar")).closest("tr") as HTMLElement;
+      const cell = within(row).getAllByRole("cell")[4] as HTMLElement;
+      expect(await within(cell).findByRole("img", { name: "Agente no disponible" })).toBeTruthy();
+      expect(within(cell).queryByRole("img", { name: "Sin perfil de agente" })).toBeNull();
+    });
+
     it("shows the badge of the profile the project assigns to the task's next phase, or a no-profile mark", async () => {
       const fake = new FakeApi();
       const rapido = fake.addProfile({ name: "Rápido", icon: "rocket", color: "teal" });
