@@ -2,12 +2,16 @@
 // primary first and then its fallbacks. A project selects one profile per phase; the effective model
 // of a phase dispatch is the first model that is enabled in Settings and not yet exhausted.
 // Pure rules: whoever calls reads the profile, the enabled providers and the exhausted models.
-import type {
-  AgentProfile,
-  AgentProviderSettings,
-  Phase,
-  ProfileModel,
-  Project,
+import {
+  type AgentProfile,
+  type AgentProviderSettings,
+  PROFILE_COLORS,
+  PROFILE_ICONS,
+  type Phase,
+  type ProfileColor,
+  type ProfileIcon,
+  type ProfileModel,
+  type Project,
 } from "@lunasq/schemas";
 import { DEFAULT_VERIFY_MODEL } from "./project-config.ts";
 
@@ -16,6 +20,21 @@ export interface AgentProfileReader {
   get(profileId: string): AgentProfile | null;
   /** All the profiles, ordered by name. */
   list(): AgentProfile[];
+}
+
+/** A random member of `set` from `random` (a `Math.random`-like source in [0, 1)). */
+function pick<T>(set: readonly T[], random: () => number): T {
+  return set[Math.min(Math.floor(random() * set.length), set.length - 1)] as T;
+}
+
+/** The icon and the color for a profile that did not choose them; `random` is injectable for tests. */
+export function randomAppearance(random: () => number = Math.random): {
+  icon: ProfileIcon;
+  color: ProfileColor;
+} {
+  const icon = pick(PROFILE_ICONS, random);
+  const color = pick(PROFILE_COLORS, random);
+  return { icon, color };
 }
 
 function copyProfile(profile: AgentProfile): AgentProfile {

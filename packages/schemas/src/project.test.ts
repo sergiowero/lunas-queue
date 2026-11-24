@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   AgentProfileCreate,
   AgentProfileUpdate,
+  AgentProfile,
   MAX_PHASE_TIMEOUT_MINUTES,
+  PROFILE_COLORS,
+  PROFILE_ICONS,
   PhaseProfiles,
   PROJECT_COLORS,
   PROJECT_ICONS,
@@ -98,6 +101,57 @@ describe("AgentProfileCreate", () => {
   it("the PATCH is partial", () => {
     expect(AgentProfileUpdate.parse({ name: "Slow" })).toEqual({ name: "Slow" });
     expect(AgentProfileUpdate.safeParse({ models: [] }).success).toBe(false);
+  });
+});
+
+describe("profile appearance", () => {
+  const models = [{ kind: "claude" as const }];
+
+  it("accepts every icon and color of the closed sets on create and update", () => {
+    for (const icon of PROFILE_ICONS) {
+      expect(AgentProfileCreate.safeParse({ name: "A", models, icon }).success).toBe(true);
+    }
+    for (const color of PROFILE_COLORS) {
+      expect(AgentProfileUpdate.safeParse({ color }).success).toBe(true);
+    }
+  });
+
+  it("leaves icon and color optional on create and update", () => {
+    expect(AgentProfileCreate.parse({ name: "A", models })).not.toHaveProperty("icon");
+    expect(AgentProfileUpdate.parse({ name: "B" })).toEqual({ name: "B" });
+  });
+
+  it.each([
+    [
+      "create icon",
+      () => AgentProfileCreate.safeParse({ name: "A", models, icon: "star" }),
+      "icon",
+    ],
+    [
+      "create color",
+      () => AgentProfileCreate.safeParse({ name: "A", models, color: "beige" }),
+      "color",
+    ],
+    ["update icon", () => AgentProfileUpdate.safeParse({ icon: "" }), "icon"],
+    ["update color", () => AgentProfileUpdate.safeParse({ color: "#ff0000" }), "color"],
+  ])("rejects a value outside the set: %s", (_label, parse, path) => {
+    const result = parse();
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual([path]);
+  });
+
+  it("a stored profile requires both icon and color", () => {
+    const base = {
+      id: uuid(),
+      name: "A",
+      models,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    expect(AgentProfile.safeParse(base).success).toBe(false);
+    expect(
+      AgentProfile.safeParse({ ...base, icon: PROFILE_ICONS[0], color: PROFILE_COLORS[0] }).success,
+    ).toBe(true);
   });
 });
 
