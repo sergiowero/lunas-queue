@@ -75,6 +75,11 @@ export const agentProfiles = sqliteTable("agent_profiles", {
   name: text("name").notNull().unique(),
   // Ordered ProfileModel[], validated with Zod on write and on read.
   models: text("models", { mode: "json" }).$type<unknown[]>().notNull(),
+  // Appearance in the UI (closed sets PROFILE_ICONS and PROFILE_COLORS, validated with Zod). The
+  // defaults only back the ALTER of migration 0021, which then gives each existing row a random pair;
+  // the repository always writes both.
+  icon: text("icon").notNull().default("bot"),
+  color: text("color").notNull().default("blue"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

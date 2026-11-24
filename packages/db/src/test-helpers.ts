@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -41,22 +42,22 @@ export type TestProfileModel = {
   args?: string[];
 };
 
-/** Inserts an agent profile (one Claude model by default) and returns its row. */
+/**
+ * Inserts an agent profile (one Claude model by default) and returns its id. It writes only the
+ * columns every migration has, so it also works on databases trimmed to an older migration; the
+ * appearance columns take their defaults.
+ */
 export function insertAgentProfile(
   db: LunasqDatabase,
   overrides: { name?: string; models?: TestProfileModel[] } = {},
 ) {
   seq += 1;
-  const [row] = db
-    .insert(agentProfiles)
-    .values({
-      name: overrides.name ?? `perfil-${seq}`,
-      models: (overrides.models ?? [{ kind: "claude" }]).map((m) => ({ args: [], ...m })),
-    })
-    .returning()
-    .all();
-  if (!row) throw new Error("agent profile insert without a row");
-  return row;
+  const id = randomUUID();
+  const models = (overrides.models ?? [{ kind: "claude" }]).map((m) => ({ args: [], ...m }));
+  db.$client
+    .prepare("insert into agent_profiles (id, name, models) values (?, ?, ?)")
+    .run(id, overrides.name ?? `perfil-${seq}`, JSON.stringify(models));
+  return { id };
 }
 
 const PHASES = ["refine", "implement", "verify", "deliver"] as const;
@@ -72,10 +73,13 @@ function defaultPhaseProfiles(db: LunasqDatabase): Record<string, unknown> {
     .prepare("select 1 from sqlite_master where type = 'table' and name = 'agent_profiles'")
     .get();
   if (!hasTable) return {};
-  const profile =
-    db.select().from(agentProfiles).where(eq(agentProfiles.name, "default")).get() ??
-    insertAgentProfile(db, { name: "default" });
-  return allPhasesWith(profile.id);
+  // Only the id: databases trimmed to an older migration lack the columns of the newer ones.
+  const existing = db
+    .select({ id: agentProfiles.id })
+    .from(agentProfiles)
+    .where(eq(agentProfiles.name, "default"))
+    .get();
+  return allPhasesWith(existing?.id ?? insertAgentProfile(db, { name: "default" }).id);
 }
 
 /**
