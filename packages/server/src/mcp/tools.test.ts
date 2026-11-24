@@ -1613,6 +1613,61 @@ describe("run_reviewer: verifiable CLI executions", () => {
     ]);
   });
 
+  it("launches OpenCode reviewers and records their start and stop under the OpenCode agent id", async () => {
+    const reviewer = {
+      run: vi.fn(async () => ({
+        transcriptPath: "/lunasq/opencode-reviewers/run/opencode-session.jsonl",
+        output: "NO FINDINGS",
+      })),
+    };
+    const h = mcpHarness({ opencodeReviewers: reviewer });
+    const { task, run, call } = await h.ready("verify", verifying, { agentKind: "opencode" });
+    const result = await call("run_reviewer", {
+      reviewer: "lunasq-code-reviewer",
+      instructions: "Review AC-1 and src/auth.ts",
+    });
+
+    expect(result).toEqual({ isError: false, body: { output: "NO FINDINGS" } });
+    expect(reviewer.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreePath: task.worktreePath,
+        reviewer: "lunasq-code-reviewer",
+        instructions: "Review AC-1 and src/auth.ts",
+      }),
+    );
+    expect(new RunSubagentRepository(h.db).forRun(run.id)).toMatchObject([
+      {
+        agentType: "lunasq-code-reviewer",
+        agentId: expect.stringMatching(/^opencode-/),
+        transcriptPath: "/lunasq/opencode-reviewers/run/opencode-session.jsonl",
+        stoppedAt: expect.any(Date),
+      },
+    ]);
+  });
+
+  it("an OpenCode reviewer that fails returns an error naming it and records no report", async () => {
+    const reviewer = {
+      run: vi.fn(async () =>
+        Promise.reject(new Error("OpenCode lunasq-code-reviewer finished by timeout")),
+      ),
+    };
+    const h = mcpHarness({ opencodeReviewers: reviewer });
+    const { run, call } = await h.ready("verify", verifying, { agentKind: "opencode" });
+
+    const result = await call("run_reviewer", {
+      reviewer: "lunasq-code-reviewer",
+      instructions: "Revisa el diff",
+    });
+
+    expect(result.body).toMatchObject({
+      error: "reviewer_execution_failed",
+      message: expect.stringContaining("OpenCode lunasq-code-reviewer finished by timeout"),
+    });
+    expect(new RunSubagentRepository(h.db).forRun(run.id)).toMatchObject([
+      { stoppedAt: null, transcriptPath: null },
+    ]);
+  });
+
   it("a Copilot failure stays as an attempt without SubagentStop and cannot count as ran", async () => {
     const reviewer = { run: vi.fn(async () => Promise.reject(new Error("auth required"))) };
     const h = mcpHarness({ copilotReviewers: reviewer });

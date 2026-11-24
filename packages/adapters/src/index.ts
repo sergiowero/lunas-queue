@@ -1,5 +1,12 @@
 export const packageName = "@lunasq/adapters";
 
+export {
+  OPENCODE_CONFIG_ENV,
+  OPENCODE_DISABLE_PROJECT_CONFIG_ENV,
+  type OpencodePhaseConfigInput,
+  opencodePhaseConfig,
+  opencodeReviewerConfig,
+} from "./agents/opencode-config.ts";
 export type { AgentProvider, AgentProviderContext } from "./agents/providers.ts";
 export {
   AgentProviderError,
@@ -20,6 +27,7 @@ export type * from "./github/types.ts";
 export {
   CODEX_TRUST_ACCEPT_KEYS,
   COPILOT_TRUST_ACCEPT_KEYS,
+  OPENCODE_USAGE_LIMIT_PATTERN,
   showsCodexTrustDialog,
   showsCopilotTrustDialog,
   showsTrustDialog,

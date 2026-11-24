@@ -43,7 +43,7 @@ export const es = {
       "No se pudo leer la configuración de proveedores; si todos están deshabilitados, las tareas esperan en cola.",
     pausedTitle: "Despacho en pausa:",
     pausedBody:
-      "Claude, Copilot y Codex están deshabilitados, así que las tareas esperan en cola. Los agentes vivos siguen corriendo.",
+      "Claude, Copilot, Codex y OpenCode están deshabilitados, así que las tareas esperan en cola. Los agentes vivos siguen corriendo.",
     goToSettings: "Ir a Settings",
   },
   state: {
@@ -107,7 +107,7 @@ export const es = {
   },
   usage: {
     title: "Usage",
-    partial: "Consumo registrado (parcial: Copilot y Codex CLI no informan usage): ",
+    partial: "Consumo registrado (parcial: Copilot, Codex y OpenCode CLI no informan usage): ",
     summary: (tokens: string, cost: string) => `${tokens} tokens · ${cost}`,
     none: "Sin consumo registrado todavía.",
     phase: "Fase",
@@ -532,11 +532,13 @@ export const es = {
       claude: "Claude",
       copilot: "Copilot",
       codex: "Codex",
+      opencode: "OpenCode",
     },
     providerDescriptions: {
       claude: "Claude Code",
       copilot: "GitHub Copilot CLI",
       codex: "OpenAI Codex CLI",
+      opencode: "OpenCode CLI",
     },
     providersTitle: "Proveedores de agente",
     providersHelp:

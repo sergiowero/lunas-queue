@@ -502,6 +502,7 @@ describe("runs", () => {
     expect(() => set("phase", "deploy")).toThrow(CHECK);
     expect(() => set("agent_kind", "gemini")).toThrow(CHECK);
     expect(() => set("agent_kind", "codex")).not.toThrow();
+    expect(() => set("agent_kind", "opencode")).not.toThrow();
     expect(() => set("result", "ok")).toThrow(CHECK);
     expect(() => set("result", "failure")).not.toThrow();
     expect(() => set("agent_session_source", "otra")).toThrow(CHECK);
@@ -550,6 +551,57 @@ describe("runs", () => {
 
       expect(db.select().from(usageRecords).all()).toHaveLength(1);
       expect(() => db.$client.prepare("update runs set agent_kind = 'codex'").run()).not.toThrow();
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
+  });
+
+  it("the OpenCode provider migration keeps every earlier Run and usage record and accepts opencode", () => {
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-drizzle-before-opencode-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8"));
+      const index = journal.entries.findIndex(
+        (e: { tag: string }) => e.tag === "0020_agent_kind_opencode",
+      );
+      expect(index).toBeGreaterThan(0);
+      journal.entries = journal.entries.slice(0, index);
+      writeFileSync(journalFile, JSON.stringify(journal));
+      const { db } = freshDatabase();
+      migrate(db, { migrationsFolder: previous });
+      const project = insertProject(db);
+      const taskId = randomUUID();
+      db.$client
+        .prepare("insert into tasks (id, project_id, goal, priority) values (?, ?, 'Do it', 100)")
+        .run(taskId, project.id);
+      const kinds = ["claude", "copilot", "codex"];
+      const runIds = kinds.map(() => randomUUID());
+      kinds.forEach((kind, i) => {
+        db.$client
+          .prepare(
+            "insert into runs (id, task_id, phase, agent_kind, run_token, ended_at, result) values (?, ?, 'implement', ?, ?, 1, 'success')",
+          )
+          .run(runIds[i], taskId, kind, `tok-${kind}`);
+        db.insert(usageRecords)
+          .values({ runId: runIds[i] as string, model: "m", source: "otel" })
+          .run();
+      });
+
+      migrateDatabase(db);
+
+      const runs = db.$client
+        .prepare("select id, agent_kind from runs where run_token like 'tok-%' order by rowid")
+        .all();
+      expect(runs).toEqual(kinds.map((kind, i) => ({ id: runIds[i], agent_kind: kind })));
+      expect(db.select().from(usageRecords).all()).toHaveLength(3);
+      expect(() =>
+        db.$client
+          .prepare(
+            "insert into runs (id, task_id, phase, agent_kind, run_token) values (?, ?, 'implement', 'opencode', 'tok-oc')",
+          )
+          .run(randomUUID(), taskId),
+      ).not.toThrow();
     } finally {
       rmSync(previous, { recursive: true, force: true });
     }

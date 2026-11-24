@@ -79,6 +79,25 @@ const RESERVED_CODEX_FLAGS = [
   "--strict-config",
 ];
 
+const RESERVED_OPENCODE_FLAGS = [
+  "--model",
+  "-m",
+  "--auto",
+  "--port",
+  "--hostname",
+  "--mdns",
+  "--mdns-domain",
+  "--continue",
+  "-c",
+  "--session",
+  "-s",
+  "--fork",
+  "--prompt",
+  "--agent",
+  "--pure",
+  "--variant",
+];
+
 function assertNoReservedArgs(args: string[], flags: string[]): void {
   const clash = args.find((arg) =>
     flags.some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
@@ -184,10 +203,26 @@ const codexProvider: AgentProvider = {
   },
 };
 
+/**
+ * OpenCode's TUI takes the model with `--model`; it has no flag for the model variant (the effort),
+ * which LunasQ sets in the per-Run inline config (`opencodePhaseConfig`). The permissions and the
+ * LunasQ MCP server also live in that config, so no flag disables approvals or carries a secret.
+ */
+const opencodeProvider: AgentProvider = {
+  kind: "opencode",
+  capabilities: { usage: "unavailable", reviewerExecution: "lunasq-runner" },
+  args(profile) {
+    assertNoReservedArgs(profile.args, RESERVED_OPENCODE_FLAGS);
+    assertNoOptionTerminator(profile.args);
+    return [...(profile.model === undefined ? [] : ["--model", profile.model]), ...profile.args];
+  },
+};
+
 export const agentProviders = new AgentProviderRegistry([
   claudeProvider,
   copilotProvider,
   codexProvider,
+  opencodeProvider,
 ]);
 
 /**

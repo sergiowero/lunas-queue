@@ -183,6 +183,7 @@ export interface McpServiceDeps {
   phaseHooks: PhaseHooks;
   copilotReviewers?: CopilotReviewerExecutor;
   codexReviewers?: ReviewerExecutor;
+  opencodeReviewers?: ReviewerExecutor;
 }
 
 export class LunasqMcpService {
@@ -197,6 +198,7 @@ export class LunasqMcpService {
   readonly #subagents: RunSubagentRepository;
   readonly #copilotReviewers: CopilotReviewerExecutor | undefined;
   readonly #codexReviewers: ReviewerExecutor | undefined;
+  readonly #opencodeReviewers: ReviewerExecutor | undefined;
   readonly #reviewersInFlight = new Set<string>();
   // Runs with a test gate in progress: a retry does not launch a second suite in parallel.
   readonly #gating = new Set<string>();
@@ -213,6 +215,7 @@ export class LunasqMcpService {
     this.#subagents = new RunSubagentRepository(deps.db);
     this.#copilotReviewers = deps.copilotReviewers;
     this.#codexReviewers = deps.codexReviewers;
+    this.#opencodeReviewers = deps.opencodeReviewers;
   }
 
   /** Common guards: active Run, tool of its phase and context read (except get_task_context). */
@@ -380,7 +383,9 @@ export class LunasqMcpService {
         ? this.#copilotReviewers
         : run.agentKind === "codex"
           ? this.#codexReviewers
-          : undefined;
+          : run.agentKind === "opencode"
+            ? this.#opencodeReviewers
+            : undefined;
     if (!reviewers) {
       return fail(
         "reviewer_execution_unavailable",

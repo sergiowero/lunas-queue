@@ -25,6 +25,7 @@ const PROVIDER_COMMAND: Record<AgentKind, string> = {
   claude: "claude",
   copilot: "copilot",
   codex: "codex",
+  opencode: "opencode",
 };
 
 type ModelFields = {
@@ -158,6 +159,7 @@ export function ProfileFormDialog({
                       <option value="claude">Claude Code</option>
                       <option value="copilot">GitHub Copilot CLI</option>
                       <option value="codex">OpenAI Codex CLI</option>
+                      <option value="opencode">OpenCode CLI</option>
                     </Select>
                   </div>
                   <Button

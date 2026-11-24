@@ -25,6 +25,7 @@ export const healthyResponses = (): Responses => ({
   "claude --version": { stdout: "2.1.314 (Claude Code)\n" },
   "copilot --version": { stdout: "GitHub Copilot CLI 1.0.105\n" },
   "codex --version": { stdout: "codex-cli 0.166.0\n" },
+  "opencode --version": { stdout: "1.19.6\n" },
   "gh auth status": { stdout: "✓ Logged in to github.com" },
   "command -v engram": { stdout: "/usr/local/bin/engram\n" },
 });

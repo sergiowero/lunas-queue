@@ -539,6 +539,165 @@ describe("PhaseDispatcher: folder trust", () => {
   });
 });
 
+describe("PhaseDispatcher: OpenCode", () => {
+  const opencodeProfile = {
+    kind: "opencode",
+    model: "anthropic/claude-sonnet-4",
+    effort: "high",
+    args: [],
+  } satisfies TestProfileModel;
+
+  it("launches OpenCode in the worktree with the per-Run inline config in the pane environment", async () => {
+    const herdr = new FakeHerdr();
+    const { db, project, dispatcher, runs, errors } = setup({
+      herdr,
+      agentProfiles: { refine: opencodeProfile },
+    });
+    const task = insertTask(db, project.id);
+    const starts: Parameters<typeof herdr.startAgent>[0][] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      starts.push(input);
+      return start(input);
+    });
+
+    await dispatcher.dispatch({ ...refine(task), agentKind: "opencode" });
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(errors).toEqual([]);
+    expect(run).toMatchObject({ agentKind: "opencode", launchedAt: expect.any(Date) });
+    expect(starts[0]).toMatchObject({ kind: "opencode" });
+    expect(starts[0]?.args).toEqual(["--model", "anthropic/claude-sonnet-4"]);
+    const env = herdr.paneEnv(run?.herdrPane ?? "");
+    expect(env).toMatchObject({ LUNASQ_RUN_TOKEN: run?.runToken });
+    const config = JSON.parse(env.OPENCODE_CONFIG_CONTENT ?? "null");
+    expect(config.mcp.lunasq).toEqual({
+      type: "remote",
+      url: "http://127.0.0.1:8123/mcp",
+      enabled: true,
+      headers: { "X-LunasQ-Run-Token": "{env:LUNASQ_RUN_TOKEN}" },
+    });
+    expect(config.agent.build).toEqual({ model: "anthropic/claude-sonnet-4", variant: "high" });
+  });
+
+  it("the inline config allows edits and commands, denies external directories and holds no token", async () => {
+    const herdr = new FakeHerdr();
+    const { db, project, dispatcher, runs } = setup({
+      herdr,
+      agentProfiles: { refine: opencodeProfile },
+    });
+    const task = insertTask(db, project.id);
+
+    await dispatcher.dispatch({ ...refine(task), agentKind: "opencode" });
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    const raw = herdr.paneEnv(run?.herdrPane ?? "").OPENCODE_CONFIG_CONTENT ?? "";
+    expect(JSON.parse(raw).permission).toMatchObject({
+      edit: "allow",
+      bash: "allow",
+      external_directory: "deny",
+    });
+    expect(raw).not.toContain(run?.runToken ?? "unreachable");
+    expect(herdr.agentArgs(run?.herdrName ?? "")).not.toContain("--auto");
+  });
+
+  it("an unknown prompt on a freshly started OpenCode sends no keys and the next model is tried", async () => {
+    const herdr = new FakeHerdr({ startStatus: "blocked" });
+    const { db, project, dispatcher, runs, errors } = setup({
+      herdr,
+      agentProfiles: { refine: [opencodeProfile, { kind: "claude", model: "sonnet" }] },
+    });
+    const events: string[] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      events.push(`start:${input.kind}`);
+      return start(input);
+    });
+    const sendKeys = herdr.sendKeys.bind(herdr);
+    vi.spyOn(herdr, "sendKeys").mockImplementation(async (input) => {
+      events.push("keys");
+      return sendKeys(input);
+    });
+    const task = insertTask(db, project.id);
+
+    await dispatcher.dispatch({ ...refine(task), agentKind: "opencode" });
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(errors).toEqual([]);
+    // Keys only go to Claude's trust dialog, after OpenCode was given up on.
+    expect(events).toEqual(["start:opencode", "start:claude", "keys"]);
+    expect(runs.providerAttempts(run?.id ?? "")).toMatchObject([
+      { provider: "opencode", status: "started" },
+      { provider: "opencode", status: "failed", reason: expect.stringContaining("agent_blocked") },
+      { provider: "claude", status: "started" },
+    ]);
+    expect(run?.agentKind).toBe("claude");
+  });
+
+  it("when OpenCode is the only model, a blocked start fails the dispatch as agent_blocked without keys", async () => {
+    const herdr = new FakeHerdr({ startStatus: "blocked" });
+    const { db, project, dispatcher, runs, taskRow } = setup({
+      herdr,
+      agentProfiles: { refine: opencodeProfile },
+    });
+    const sendKeys = vi.spyOn(herdr, "sendKeys");
+    const task = insertTask(db, project.id);
+
+    await dispatcher.dispatch({ ...refine(task), agentKind: "opencode" });
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(sendKeys).not.toHaveBeenCalled();
+    expect(run).toMatchObject({ result: "failure" });
+    expect(run?.failureReason).toMatch(/agent_blocked/);
+    expect(taskRow(task.id).state).toBe("needs_human");
+  });
+
+  it("with opencode disabled it runs the next model and records no attempt for opencode", async () => {
+    const { db, project, herdr, dispatcher, runs } = setup({
+      agentProfiles: { refine: [opencodeProfile, { kind: "claude", model: "sonnet" }] },
+    });
+    new SettingsRepository(db).saveProviders({ opencode: false });
+    const kinds: string[] = [];
+    const start = herdr.startAgent.bind(herdr);
+    vi.spyOn(herdr, "startAgent").mockImplementation(async (input) => {
+      kinds.push(input.kind);
+      return start(input);
+    });
+    const task = insertTask(db, project.id);
+
+    await dispatcher.dispatch(refine(task));
+    await dispatcher.idle();
+
+    const [run] = runs.forTask(task.id);
+    expect(kinds).toEqual(["claude"]);
+    expect(run?.agentKind).toBe("claude");
+    expect(runs.providerAttempts(run?.id ?? "").map((a) => a.provider)).toEqual(["claude"]);
+    expect(herdr.paneEnv(run?.herdrPane ?? "")).not.toHaveProperty("OPENCODE_CONFIG_CONTENT");
+  });
+
+  it("a model failure after launch moves the task to the next model with run.model_fallback", async () => {
+    const ctx = setup({
+      agentProfiles: { refine: [opencodeProfile, { kind: "claude", model: "sonnet" }] },
+    });
+    const task = insertTask(ctx.db, ctx.project.id);
+    await ctx.dispatcher.dispatch({ ...refine(task), agentKind: "opencode" });
+    await ctx.dispatcher.idle();
+    const run = ctx.runs.latestForTask(task.id);
+    if (!run) throw new Error("no Run");
+
+    const outcome = await ctx.dispatcher.failModelRun(run.id, "usage_limit: opencode out");
+
+    expect(outcome).toBe("fallback");
+    expect(ctx.runs.get(run.id)).toMatchObject({ result: "failure", modelFailed: true });
+    expect(ctx.taskRow(task.id)).toMatchObject({ subState: "queued" });
+    expect(listEvents(ctx.db, task.id).map((e) => e.type)).toContain("run.model_fallback");
+  });
+});
+
 describe("PhaseDispatcher: enabled providers", () => {
   it("with claude disabled it only tries copilot and does not record an attempt for claude", async () => {
     const { db, project, herdr, dispatcher, runs } = setup();

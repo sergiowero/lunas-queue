@@ -10,10 +10,11 @@ The dispatcher must run Claude Code and GitHub Copilot CLI without mixing one pr
 
 ## Decision
 
-- The explicit providers validated by the schema are Claude Code and Copilot CLI; a registry in `adapters` declares their capabilities and composes provider‑specific arguments.
+- The explicit providers validated by the schema are Claude Code, Copilot CLI, Codex CLI and OpenCode; a registry in `adapters` declares their capabilities and composes provider‑specific arguments.
 - The configuration is a global agent profile per phase ([agent profiles](agent-profiles.md)). The fallback tries the profile's models in order (not the registered providers in registry order), when the process cannot start or become ready before receiving the prompt and, after launch, when the model fails (usage limit, exit, stop without signal). The failures of all models are kept as Run events and escalate the task to `needs_human` with `providers_unavailable`.
 - `lunasq install` maintains a `lunasq` entry in `~/.copilot/mcp-config.json`, preserving the other options and servers. Each Copilot Run uses a temporary MCP file with restrictive permissions containing its token; it is deleted after the CLI starts.
 - Copilot CLI always runs in autopilot mode: the adapter adds `--autopilot` to every phase session and `CopilotCliReviewerExecutor` adds it to the reviewers. `--autopilot`, `--mode` and `--plan` (also as `--flag=value`) are reserved and a profile model that brings them in `args` is rejected when the profile is saved. The `--` terminator is not accepted in Copilot's `args` either, because it would turn the fixed flags, including `--autopilot`, into positionals. Claude's arguments do not change.
+- Later providers: Codex CLI ([ADR codex-provider](codex-provider.md)) and OpenCode ([ADR opencode-provider](opencode-provider.md)) were added the same way: an enum value, a registry entry with its reserved flags and capabilities, a per-Run MCP configuration that keeps the token out of argv and of global config, and a reviewer executor. The registry order is claude, copilot, codex, opencode.
 - Unsupported usage data is not invented: the UI identifies Copilot Runs without metrics and marks the recorded totals as partial.
 - Verification with HTTP reviewers and the evidence hooks remain Claude‑only. Copilot's verification must not be presented as on par until reviewers/evidence are connected to the same guards.
 

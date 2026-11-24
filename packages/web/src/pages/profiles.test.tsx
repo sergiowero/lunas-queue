@@ -65,6 +65,22 @@ describe("Profiles tab", () => {
     });
   });
 
+  it("offers OpenCode as a provider and saves it in the profile", async () => {
+    const fake = new FakeApi();
+    const { user, dialog } = await openCreate(fake);
+
+    await user.type(dialog.getByLabelText("Nombre del perfil"), "Abierto");
+    await user.selectOptions(dialog.getByLabelText("Proveedor del modelo 1"), "opencode");
+    await user.type(dialog.getByLabelText("Nombre del modelo 1"), "anthropic/claude-sonnet-4");
+    await user.click(dialog.getByRole("button", { name: "Crear perfil" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(fake.requests.find((r) => r.method === "POST")?.body).toEqual({
+      name: "Abierto",
+      models: [{ kind: "opencode", model: "anthropic/claude-sonnet-4", args: [] }],
+    });
+  });
+
   it("reorders and removes models when editing", async () => {
     const fake = new FakeApi();
     const profile = fake.addProfile({
@@ -145,7 +161,7 @@ describe("Profiles tab", () => {
 
   it("a model whose provider is disabled in Settings is shown as disabled and links to Settings", async () => {
     const fake = new FakeApi();
-    fake.providers = { claude: true, copilot: false, codex: true };
+    fake.providers = { claude: true, copilot: false, codex: true, opencode: true };
     fake.addProfile({
       name: "Con copilot",
       models: [

@@ -8,7 +8,7 @@ import {
 } from "./agent-profiles.ts";
 import { fakeUuid, sampleProfile, sampleProject } from "./testing.ts";
 
-const all: AgentProviderSettings = { claude: true, copilot: true, codex: true };
+const all: AgentProviderSettings = { claude: true, copilot: true, codex: true, opencode: true };
 const profile = sampleProfile("Fast", [
   { kind: "claude", model: "opus" },
   { kind: "codex", model: "gpt-5" },
@@ -48,7 +48,12 @@ describe("resolvePhaseModel", () => {
 
   it("reports providers_disabled when every model belongs to a disabled provider", () => {
     expect(
-      resolvePhaseModel("implement", profile, { claude: false, copilot: false, codex: false }),
+      resolvePhaseModel("implement", profile, {
+        claude: false,
+        copilot: false,
+        codex: false,
+        opencode: false,
+      }),
     ).toEqual({ status: "providers_disabled" });
   });
 

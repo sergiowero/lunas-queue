@@ -23,7 +23,7 @@ describe("GET /api/settings/providers", () => {
     const { send } = setup();
     const res = await send("GET");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ claude: true, copilot: true, codex: true });
+    expect(await res.json()).toEqual({ claude: true, copilot: true, codex: true, opencode: true });
   });
 });
 
@@ -32,10 +32,18 @@ describe("PUT /api/settings/providers", () => {
     const { db, send } = setup();
     const res = await send("PUT", { claude: false, copilot: true });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ claude: false, copilot: true, codex: true });
-    expect(await (await send("GET")).json()).toEqual({ claude: false, copilot: true, codex: true });
+    expect(await res.json()).toEqual({ claude: false, copilot: true, codex: true, opencode: true });
+    expect(await (await send("GET")).json()).toEqual({
+      claude: false,
+      copilot: true,
+      codex: true,
+      opencode: true,
+    });
     expect(listPendingOutbox(db).map((e) => [e.message.topic, e.message.payload])).toEqual([
-      [SETTINGS_UPDATED, { providers: { claude: false, copilot: true, codex: true } }],
+      [
+        SETTINGS_UPDATED,
+        { providers: { claude: false, copilot: true, codex: true, opencode: true } },
+      ],
     ]);
   });
 
@@ -43,11 +51,17 @@ describe("PUT /api/settings/providers", () => {
     const { send } = setup();
     await send("PUT", { claude: false });
     const res = await send("PUT", { copilot: false });
-    expect(await res.json()).toEqual({ claude: false, copilot: false, codex: true });
+    expect(await res.json()).toEqual({
+      claude: false,
+      copilot: false,
+      codex: true,
+      opencode: true,
+    });
     expect(await (await send("GET")).json()).toEqual({
       claude: false,
       copilot: false,
       codex: true,
+      opencode: true,
     });
   });
 
@@ -59,6 +73,7 @@ describe("PUT /api/settings/providers", () => {
       claude: false,
       copilot: false,
       codex: true,
+      opencode: true,
     });
     expect(db.$client.prepare("select count(*) from app_settings").pluck().get()).toBe(1);
     expect(listPendingOutbox(db)).toHaveLength(1);
@@ -72,7 +87,12 @@ describe("PUT /api/settings/providers", () => {
     "answers 400 invalid_input with %s and does not change what was saved",
     async (_name, body) => {
       const { db, send } = setup();
-      new SettingsRepository(db).saveProviders({ claude: false, copilot: true, codex: true });
+      new SettingsRepository(db).saveProviders({
+        claude: false,
+        copilot: true,
+        codex: true,
+        opencode: true,
+      });
       const before = listPendingOutbox(db).length;
       const res = await send("PUT", body);
       expect(res.status).toBe(400);
@@ -81,6 +101,7 @@ describe("PUT /api/settings/providers", () => {
         claude: false,
         copilot: true,
         codex: true,
+        opencode: true,
       });
       expect(listPendingOutbox(db)).toHaveLength(before);
     },
@@ -305,6 +326,7 @@ describe("request origin for /api/settings", () => {
       claude: true,
       copilot: true,
       codex: true,
+      opencode: true,
     });
     expect(listPendingOutbox(db)).toEqual([]);
   });
@@ -334,6 +356,7 @@ describe("request origin for /api/settings", () => {
       claude: true,
       copilot: true,
       codex: true,
+      opencode: true,
     });
     expect(listPendingOutbox(db)).toEqual([]);
   });

@@ -17,6 +17,21 @@ describe("Settings page", () => {
     expect(on(codex)).toBe(true);
   });
 
+  it("shows an enabled OpenCode switch and turning it off persists only that setting", async () => {
+    const { user, fake } = renderApp("/settings");
+    const opencode = await screen.findByRole("switch", { name: "OpenCode" });
+    expect(on(opencode)).toBe(true);
+    expect(screen.getByText("OpenCode CLI")).toBeTruthy();
+
+    await user.click(opencode);
+
+    await waitFor(() => expect(on(screen.getByRole("switch", { name: "OpenCode" }))).toBe(false));
+    expect(fake.requests.filter((r) => r.method === "PUT")).toEqual([
+      { method: "PUT", path: "/api/settings/providers", body: { opencode: false } },
+    ]);
+    expect(fake.providers).toEqual({ claude: true, copilot: true, codex: true, opencode: false });
+  });
+
   it("turning Claude off sends the PUT and the switch stays off after reloading", async () => {
     const { user, fake, unmount } = renderApp("/settings");
     await user.click(await screen.findByRole("switch", { name: "Claude" }));
@@ -25,7 +40,7 @@ describe("Settings page", () => {
     expect(fake.requests.filter((r) => r.method === "PUT")).toEqual([
       { method: "PUT", path: "/api/settings/providers", body: { claude: false } },
     ]);
-    expect(fake.providers).toEqual({ claude: false, copilot: true, codex: true });
+    expect(fake.providers).toEqual({ claude: false, copilot: true, codex: true, opencode: true });
 
     // Reload: a new app against the same saved state.
     unmount();
@@ -43,7 +58,7 @@ describe("Settings page", () => {
     expect(fake.requests.filter((r) => r.method === "PUT")).toEqual([
       { method: "PUT", path: "/api/settings/providers", body: { codex: false } },
     ]);
-    expect(fake.providers).toEqual({ claude: true, copilot: true, codex: false });
+    expect(fake.providers).toEqual({ claude: true, copilot: true, codex: false, opencode: true });
   });
 
   it("with the keyboard, the saving switch stays focusable and is not pressed twice", async () => {
@@ -70,7 +85,7 @@ describe("Settings page", () => {
     await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
     await waitFor(() => expect(claude.getAttribute("aria-disabled")).toBe("false"));
     expect(document.activeElement).toBe(claude);
-    expect(fake.providers).toEqual({ claude: false, copilot: true, codex: true });
+    expect(fake.providers).toEqual({ claude: false, copilot: true, codex: true, opencode: true });
   });
 
   it("a change from another tab is not overwritten: each switch sends only its provider", async () => {
@@ -78,12 +93,12 @@ describe("Settings page", () => {
     const { user } = renderApp("/settings", fake);
     await screen.findByRole("switch", { name: "Claude" });
     // Another tab turns Claude off while this one keeps the old view (Claude on).
-    fake.providers = { claude: false, copilot: true, codex: true };
+    fake.providers = { claude: false, copilot: true, codex: true, opencode: true };
 
     await user.click(screen.getByRole("switch", { name: "Copilot" }));
 
     await waitFor(() => expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(false));
-    expect(fake.providers).toEqual({ claude: false, copilot: false, codex: true });
+    expect(fake.providers).toEqual({ claude: false, copilot: false, codex: true, opencode: true });
     expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false);
   });
 
@@ -151,7 +166,7 @@ describe("Settings page", () => {
     const alert = await screen.findByText(/El cambio se guardó/, {}, { timeout: 4000 });
     expect(alert.textContent).toMatch(/no se pudo leer el estado/);
     expect(alert.textContent).not.toMatch(/No se pudo actualizar la configuración/);
-    expect(fake.providers).toEqual({ claude: true, copilot: false, codex: true });
+    expect(fake.providers).toEqual({ claude: true, copilot: false, codex: true, opencode: true });
   });
 
   it("shows the error if the server rejects the change and keeps the saved state", async () => {
@@ -163,7 +178,7 @@ describe("Settings page", () => {
       "Los datos enviados no son válidos.",
     );
     expect(on(screen.getByRole("switch", { name: "Copilot" }))).toBe(true);
-    expect(fake.providers).toEqual({ claude: true, copilot: true, codex: true });
+    expect(fake.providers).toEqual({ claude: true, copilot: true, codex: true, opencode: true });
   });
 });
 
@@ -279,7 +294,7 @@ describe("Concurrencia section", () => {
     // The providers keep working.
     await user.click(screen.getByRole("switch", { name: "Claude" }));
     await waitFor(() => expect(on(screen.getByRole("switch", { name: "Claude" }))).toBe(false));
-    expect(fake.providers).toEqual({ claude: false, copilot: true, codex: true });
+    expect(fake.providers).toEqual({ claude: false, copilot: true, codex: true, opencode: true });
   });
 
   it("if the PUT is saved but the re-read fails, the field shows the saved value and the notice says it was saved", async () => {
@@ -454,7 +469,7 @@ describe("Iteraciones de verificación section", () => {
 describe("paused dispatch notice", () => {
   it("does not appear while any provider is enabled", async () => {
     const fake = new FakeApi();
-    fake.providers = { claude: false, copilot: true, codex: true };
+    fake.providers = { claude: false, copilot: true, codex: true, opencode: true };
     renderApp("/queue", fake);
     await screen.findByRole("link", { name: "Settings" });
     await waitFor(() =>
@@ -467,7 +482,7 @@ describe("paused dispatch notice", () => {
     "con todos los proveedores deshabilitados aparece en %s con enlace a Settings",
     async (path) => {
       const fake = new FakeApi();
-      fake.providers = { claude: false, copilot: false, codex: false };
+      fake.providers = { claude: false, copilot: false, codex: false, opencode: false };
       renderApp(path, fake);
       const banner = await screen.findByRole("status");
       expect(banner.textContent).toMatch(/Despacho en pausa/);
@@ -496,7 +511,13 @@ describe("paused dispatch notice", () => {
     await user.click(screen.getByRole("switch", { name: "Copilot" }));
 
     await waitFor(
-      () => expect(fake.providers).toEqual({ claude: false, copilot: false, codex: true }),
+      () =>
+        expect(fake.providers).toEqual({
+          claude: false,
+          copilot: false,
+          codex: true,
+          opencode: true,
+        }),
       {
         timeout: 5000,
       },
@@ -508,7 +529,7 @@ describe("paused dispatch notice", () => {
 
   it("disappears when enabling a provider from Settings", async () => {
     const fake = new FakeApi();
-    fake.providers = { claude: false, copilot: false, codex: false };
+    fake.providers = { claude: false, copilot: false, codex: false, opencode: false };
     const { user } = renderApp("/settings", fake);
     await screen.findByRole("status");
     await user.click(await screen.findByRole("switch", { name: "Copilot" }));

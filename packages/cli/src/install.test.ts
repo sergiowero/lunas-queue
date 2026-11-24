@@ -214,7 +214,11 @@ describe("install", () => {
       ...healthyResponses(),
       [command]: { exitCode: 127 },
       ...(command === "claude --version"
-        ? { "copilot --version": { exitCode: 127 }, "codex --version": { exitCode: 127 } }
+        ? {
+            "copilot --version": { exitCode: 127 },
+            "codex --version": { exitCode: 127 },
+            "opencode --version": { exitCode: 127 },
+          }
         : {}),
     });
     const result = await install(ctx);

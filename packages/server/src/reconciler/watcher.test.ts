@@ -506,6 +506,69 @@ describe("RunWatcher: model fallback", () => {
     expect(h.errors).toEqual([]);
   });
 
+  describe("with OpenCode as the primary model", () => {
+    const opencodeFirst = [
+      { kind: "opencode", model: "anthropic/claude-sonnet-4" },
+      { kind: "claude", model: "opus" },
+    ] as const;
+
+    it("a usage limit on OpenCode's screen closes the Run as model_failed and queues the next model", async () => {
+      const h = setup({ profileModels: [...opencodeFirst] });
+      const { taskId, run, name } = await h.launched();
+      expect(h.runs.get(run.id)?.agentKind).toBe("opencode");
+      h.herdr.setAgentScreen(name, CLAUDE_LIMIT_SCREEN);
+      h.herdr.setAgentStatus(name, "idle");
+
+      await vi.advanceTimersByTimeAsync(DEFAULT_NUDGE_GRACE_MS);
+      await settle(vi);
+
+      expect(h.runs.get(run.id)).toMatchObject({ result: "failure", modelFailed: true });
+      expect(h.runs.get(run.id)?.failureReason).toContain("usage_limit:");
+      expect(h.taskRow(taskId)).toMatchObject({ state: "draft", subState: "queued" });
+      expect(h.runs.exhaustedModels(taskId, "refine")).toEqual([0]);
+      expect(db_events(h, taskId).filter((type) => type === "run.model_fallback")).toHaveLength(1);
+      expect(h.errors).toEqual([]);
+    });
+
+    it.each([
+      "Free usage exceeded, subscribe to Go",
+      "Usage limit reached. It will reset in 2 hours. To continue using this model now, enable usage from your available balance.",
+      "Rate limit exceeded. Please try again later.",
+    ])(
+      "OpenCode's own notice %j closes the Run as model_failed with run.model_fallback",
+      async (notice) => {
+        const h = setup({ profileModels: [...opencodeFirst] });
+        const { taskId, run, name } = await h.launched();
+        h.herdr.setAgentScreen(name, `trabajo en curso…\n┃ ${notice}\n`);
+        h.herdr.setAgentStatus(name, "idle");
+
+        await vi.advanceTimersByTimeAsync(DEFAULT_NUDGE_GRACE_MS);
+        await settle(vi);
+
+        expect(h.runs.get(run.id)).toMatchObject({ result: "failure", modelFailed: true });
+        expect(h.runs.get(run.id)?.failureReason).toContain("usage_limit:");
+        expect(h.taskRow(taskId)).toMatchObject({ state: "draft", subState: "queued" });
+        expect(db_events(h, taskId).filter((type) => type === "run.model_fallback")).toHaveLength(
+          1,
+        );
+        expect(h.errors).toEqual([]);
+      },
+    );
+
+    it("OpenCode exiting after launch falls back to the next model", async () => {
+      const h = setup({ profileModels: [...opencodeFirst] });
+      const { taskId, run, name } = await h.launched();
+
+      h.herdr.exitAgent(name);
+      await settle(vi);
+
+      expect(h.runs.get(run.id)).toMatchObject({ result: "failure", modelFailed: true });
+      expect(h.runs.get(run.id)?.failureReason).toMatch(/^agent_exited:/);
+      expect(h.taskRow(taskId)).toMatchObject({ state: "draft", subState: "queued" });
+      expect(h.runs.consecutiveFailures(taskId, "refine")).toBe(0);
+    });
+  });
+
   it("the agent exits and the profile has a next model: fallback instead of run_failed with retries", async () => {
     const h = setup({ profileModels: [...twoModels] });
     const { taskId, run, name } = await h.launched();
@@ -611,3 +674,14 @@ describe("RunWatcher: model fallback", () => {
     expect(await h.herdr.getAgent(name)).toBeDefined();
   });
 });
+
+function db_events(
+  h: { db: { $client: { prepare: (sql: string) => { all: (...a: string[]) => unknown[] } } } },
+  taskId: string,
+) {
+  return (
+    h.db.$client.prepare("select type from events where task_id = ?").all(taskId) as {
+      type: string;
+    }[]
+  ).map((e) => e.type);
+}

@@ -463,7 +463,7 @@ describe("agent profiles", () => {
   const fastProject = withProfile("rapido", fast.id);
   const unassigned = withProfile("sin-perfil", null);
   const projects = [alfa, copilotProject, fastProject, unassigned];
-  const all = { claude: true, copilot: true, codex: true };
+  const all = { claude: true, copilot: true, codex: true, opencode: true };
   const run = (
     tasks: SchedulerTask[],
     providers: AgentProviderSettings = all,
@@ -503,9 +503,12 @@ describe("agent profiles", () => {
       claude: false,
       copilot: false,
       codex: true,
+      opencode: true,
     });
     expect(result).toEqual({ dispatch: [], escalate: [] });
-    expect(run([task("a")], { claude: false, copilot: false, codex: false })).toEqual({
+    expect(
+      run([task("a")], { claude: false, copilot: false, codex: false, opencode: false }),
+    ).toEqual({
       dispatch: [],
       escalate: [],
     });

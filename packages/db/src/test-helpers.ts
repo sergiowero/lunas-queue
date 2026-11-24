@@ -35,7 +35,7 @@ let seq = 0;
 
 /** Models of an agent profile: provider, optional model, optional effort and args. */
 export type TestProfileModel = {
-  kind: "claude" | "copilot" | "codex";
+  kind: "claude" | "copilot" | "codex" | "opencode";
   model?: string;
   effort?: string;
   args?: string[];

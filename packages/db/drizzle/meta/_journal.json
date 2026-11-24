@@ -141,6 +141,13 @@
       "when": 1795471435590,
       "tag": "0019_agent_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1795480163260,
+      "tag": "0020_agent_kind_opencode",
+      "breakpoints": true
     }
   ]
 }

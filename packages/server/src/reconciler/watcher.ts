@@ -79,6 +79,8 @@ type Watch = {
   /** Task number: the notification titles identify it with #N. */
   taskNumber: number;
   phase: SchedulablePhase;
+  /** The Run's agent kind: each agent words its usage-limit notice differently. */
+  agentKind: string;
   name: string;
   paneId: string;
   sub: HerdrSubscription;
@@ -146,6 +148,7 @@ export class RunWatcher implements RunObserver {
       taskId: run.taskId,
       taskNumber: task.number,
       phase: phase.data,
+      agentKind: run.agentKind,
       name: run.herdrName,
       paneId: agent.paneId,
       sub: this.herdr.subscribe({ paneIds: [agent.paneId] }, (event) =>
@@ -377,8 +380,8 @@ export class RunWatcher implements RunObserver {
     } catch {
       return false; // the agent no longer responds: the next signal (crash) decides the route.
     }
-    if (!this.current(w) || !showsUsageLimit(screen)) return false;
-    const message = usageLimitMessage(screen);
+    if (!this.current(w) || !showsUsageLimit(screen, w.agentKind)) return false;
+    const message = usageLimitMessage(screen, w.agentKind);
     if (await this.fallBackOnUsageLimit(w, message)) return true;
     await this.escalateUsageLimit(w, message);
     return true;

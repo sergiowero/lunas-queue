@@ -166,6 +166,7 @@ export interface McpHarnessOptions {
   deliverable?: "code" | "docs";
   copilotReviewers?: CopilotReviewerExecutor;
   codexReviewers?: ReviewerExecutor;
+  opencodeReviewers?: ReviewerExecutor;
 }
 
 export function mcpHarness(options: McpHarnessOptions = {}) {
@@ -184,6 +185,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
     phaseHooks,
     ...(options.copilotReviewers && { copilotReviewers: options.copilotReviewers }),
     ...(options.codexReviewers && { codexReviewers: options.codexReviewers }),
+    ...(options.opencodeReviewers && { opencodeReviewers: options.opencodeReviewers }),
   });
 
   async function connect(token?: string) {
@@ -239,7 +241,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
   async function session(
     phase: Phase,
     position: Position,
-    opts: { approved?: boolean; agentKind?: "claude" | "copilot" | "codex" } = {},
+    opts: { approved?: boolean; agentKind?: "claude" | "copilot" | "codex" | "opencode" } = {},
   ) {
     const t = task(position, opts);
     const run = insertRun(db, t.id, { phase, agentKind: opts.agentKind ?? "claude" });
@@ -273,7 +275,7 @@ export function mcpHarness(options: McpHarnessOptions = {}) {
   async function ready(
     phase: Phase,
     position: Position,
-    opts: { approved?: boolean; agentKind?: "claude" | "copilot" | "codex" } = {},
+    opts: { approved?: boolean; agentKind?: "claude" | "copilot" | "codex" | "opencode" } = {},
   ) {
     const s = await session(phase, position, opts);
     const context = await s.call("get_task_context");
