@@ -7,9 +7,12 @@ import type {
   AgentProviderSettings,
   Phase,
   Project,
+  ProjectColor,
   ProjectCreate,
+  ProjectIcon,
   ProjectUpdate,
 } from "@lunasq/schemas";
+import { PROJECT_COLORS, PROJECT_ICONS } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
@@ -57,6 +60,10 @@ type FormValues = {
   localPath: string;
   testCommand: string;
   bootstrap: string;
+  /** A ProjectIcon key; "" is none. */
+  icon: ProjectIcon | "";
+  /** A ProjectColor key; "" is none. */
+  color: ProjectColor | "";
   concurrency: string;
   maxIterations: string;
   phases: Record<Phase, PhaseFields>;
@@ -76,6 +83,16 @@ function initialPhases(project?: Json<Project>): Record<Phase, PhaseFields> {
 function optionalCommand(key: "testCommand" | "bootstrap", text: string, editing: boolean) {
   if (text.trim() !== "") return { [key]: text.trim() };
   return editing ? { [key]: null } : {};
+}
+
+/** On create, "none" is not sent (the server leaves it null); on edit, null clears the field. */
+function optionalChoice<K extends "icon" | "color", V extends string>(
+  key: K,
+  value: V | "",
+  editing: boolean,
+): { [P in K]?: V | null } {
+  if (value !== "") return { [key]: value } as { [P in K]: V };
+  return editing ? ({ [key]: null } as { [P in K]: null }) : {};
 }
 
 function buildInput(form: FormValues, editing: boolean): ProjectCreate | ProjectUpdate {
@@ -103,6 +120,8 @@ function buildInput(form: FormValues, editing: boolean): ProjectCreate | Project
     localPath: form.localPath,
     ...optionalCommand("testCommand", form.testCommand, editing),
     ...optionalCommand("bootstrap", form.bootstrap, editing),
+    ...optionalChoice("icon", form.icon, editing),
+    ...optionalChoice("color", form.color, editing),
     ...(Object.keys(agentProfiles).length > 0 && { agentProfiles }),
     ...((editing || Object.keys(limits).length > 0) && { limits }),
   };
@@ -126,6 +145,8 @@ export function ProjectFormDialog({
   const [localPath, setLocalPath] = useState(project?.localPath ?? "");
   const [testCommand, setTestCommand] = useState(project?.testCommand ?? "");
   const [bootstrap, setBootstrap] = useState(project?.bootstrap ?? "");
+  const [icon, setIcon] = useState<ProjectIcon | "">(project?.icon ?? "");
+  const [color, setColor] = useState<ProjectColor | "">(project?.color ?? "");
   const [concurrency, setConcurrency] = useState(String(project?.limits.concurrency ?? ""));
   const [maxIterations, setMaxIterations] = useState(
     String(project?.limits.maxVerificationIterations ?? ""),
@@ -155,6 +176,8 @@ export function ProjectFormDialog({
           localPath,
           testCommand,
           bootstrap,
+          icon,
+          color,
           concurrency,
           maxIterations,
           phases,
@@ -225,6 +248,39 @@ export function ProjectFormDialog({
             onChange={(e) => setBootstrap(e.target.value)}
             placeholder="pnpm install"
           />
+        </div>
+
+        <div className="flex gap-4">
+          <div className="flex flex-1 flex-col gap-1">
+            <Label htmlFor="project-icon">{t.projectForm.icon}</Label>
+            <Select
+              id="project-icon"
+              value={icon}
+              onChange={(e) => setIcon(e.target.value as ProjectIcon | "")}
+            >
+              <option value="">{t.projectForm.noIcon}</option>
+              {PROJECT_ICONS.map((key) => (
+                <option key={key} value={key}>
+                  {t.projectForm.iconNames[key]}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex flex-1 flex-col gap-1">
+            <Label htmlFor="project-color">{t.projectForm.color}</Label>
+            <Select
+              id="project-color"
+              value={color}
+              onChange={(e) => setColor(e.target.value as ProjectColor | "")}
+            >
+              <option value="">{t.projectForm.noColor}</option>
+              {PROJECT_COLORS.map((key) => (
+                <option key={key} value={key}>
+                  {t.projectForm.colorNames[key]}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
 
         <fieldset className="flex flex-col gap-3">

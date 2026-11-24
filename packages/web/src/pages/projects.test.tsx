@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
+import { LANGUAGE_KEY } from "../lib/i18n.ts";
 
 async function openDialog(fake: FakeApi) {
   const app = renderApp("/projects", fake);
@@ -405,5 +406,165 @@ describe("project deletion", () => {
       "El proyecto tiene tareas y no se puede eliminar.",
     );
     expect(screen.getByRole("link", { name: "ocupado" })).toBeTruthy();
+  });
+});
+
+describe("project icon and color in the form", () => {
+  async function createForm(fake = new FakeApi()) {
+    const { user, dialog } = await openDialog(fake);
+    const form = within(dialog);
+    await user.type(form.getByLabelText("Nombre"), "mi-proyecto");
+    await user.type(form.getByLabelText("Repositorio"), "owner/repo");
+    await user.type(form.getByLabelText("Ruta local"), "/repos/mi-proyecto");
+    return { fake, user, form };
+  }
+
+  it("creating with the icon and the color left as none does not send them", async () => {
+    const { fake, user, form } = await createForm();
+    expect((form.getByLabelText("Icono") as HTMLSelectElement).value).toBe("");
+    expect((form.getByLabelText("Color") as HTMLSelectElement).value).toBe("");
+    await user.click(form.getByRole("button", { name: "Crear proyecto" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const body = fake.requests.find((r) => r.method === "POST")?.body as Record<string, unknown>;
+    expect(body).not.toHaveProperty("icon");
+    expect(body).not.toHaveProperty("color");
+  });
+
+  it("creating with an icon and a color sends their keys and the list shows them", async () => {
+    const { fake, user, form } = await createForm();
+    await user.selectOptions(form.getByLabelText("Icono"), "rocket");
+    await user.selectOptions(form.getByLabelText("Color"), "teal");
+    await user.click(form.getByRole("button", { name: "Crear proyecto" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
+      icon: "rocket",
+      color: "teal",
+    });
+    const link = await screen.findByRole("link", { name: "mi-proyecto" });
+    expect(link.querySelector("svg")?.getAttribute("data-icon")).toBe("project-rocket");
+    expect(link.firstElementChild?.className).toContain("text-project-teal");
+  });
+
+  it("editing a project that has them prefills the selects", async () => {
+    const fake = new FakeApi();
+    fake.addProject({ name: "viejo", icon: "database", color: "violet" });
+    const { user } = renderApp("/projects", fake);
+    await user.click(await screen.findByRole("button", { name: "Editar viejo" }));
+    const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
+
+    expect((form.getByLabelText("Icono") as HTMLSelectElement).value).toBe("database");
+    expect((form.getByLabelText("Color") as HTMLSelectElement).value).toBe("violet");
+  });
+
+  it("picking none for both on edit sends null for each and the project ends up without them", async () => {
+    const fake = new FakeApi();
+    const project = fake.addProject({ name: "viejo", icon: "rocket", color: "teal" });
+    const { user } = renderApp("/projects", fake);
+    await user.click(await screen.findByRole("button", { name: "Editar viejo" }));
+    const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
+
+    await user.selectOptions(form.getByLabelText("Icono"), "");
+    await user.selectOptions(form.getByLabelText("Color"), "");
+    await user.click(form.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(fake.requests.find((r) => r.method === "PATCH")?.body).toMatchObject({
+      icon: null,
+      color: null,
+    });
+    expect(fake.projects.find((p) => p.id === project.id)).toMatchObject({
+      icon: null,
+      color: null,
+    });
+  });
+
+  it("editing only the color keeps sending the icon as it was", async () => {
+    const fake = new FakeApi();
+    fake.addProject({ name: "viejo", icon: "rocket", color: "teal" });
+    const { user } = renderApp("/projects", fake);
+    await user.click(await screen.findByRole("button", { name: "Editar viejo" }));
+    const form = within(await screen.findByRole("dialog", { name: "Editar proyecto" }));
+
+    await user.selectOptions(form.getByLabelText("Color"), "pink");
+    await user.click(form.getByRole("button", { name: "Guardar cambios" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(fake.requests.find((r) => r.method === "PATCH")?.body).toMatchObject({
+      icon: "rocket",
+      color: "pink",
+    });
+  });
+
+  it("offers every icon and color in Spanish, each with a 'none' option", async () => {
+    const { form } = await createForm();
+    const names = (label: string) =>
+      within(form.getByLabelText(label))
+        .getAllByRole("option")
+        .map((o) => o.textContent);
+    expect(names("Icono")).toEqual([
+      "Sin icono",
+      "Carpeta",
+      "Código",
+      "Terminal",
+      "Globo",
+      "Base de datos",
+      "Servidor",
+      "Cohete",
+      "Libro",
+      "Paquete",
+      "Móvil",
+      "Nube",
+      "Rayo",
+    ]);
+    expect(names("Color")).toEqual([
+      "Sin color",
+      "Rojo",
+      "Naranja",
+      "Ámbar",
+      "Verde",
+      "Turquesa",
+      "Azul",
+      "Violeta",
+      "Rosa",
+    ]);
+  });
+
+  it("offers them in English when the UI is in English", async () => {
+    localStorage.setItem(LANGUAGE_KEY, "en");
+    const app = renderApp("/projects", new FakeApi());
+    await app.user.click(await screen.findByRole("button", { name: "New project" }));
+    const form = within(await screen.findByRole("dialog", { name: "New project" }));
+    const names = (label: string) =>
+      within(form.getByLabelText(label))
+        .getAllByRole("option")
+        .map((o) => o.textContent);
+    expect(names("Icon")).toEqual([
+      "No icon",
+      "Folder",
+      "Code",
+      "Terminal",
+      "Globe",
+      "Database",
+      "Server",
+      "Rocket",
+      "Book",
+      "Package",
+      "Mobile",
+      "Cloud",
+      "Bolt",
+    ]);
+    expect(names("Color")).toEqual([
+      "No color",
+      "Red",
+      "Orange",
+      "Amber",
+      "Green",
+      "Teal",
+      "Blue",
+      "Violet",
+      "Pink",
+    ]);
   });
 });
