@@ -52,6 +52,20 @@ function rawTaskWithRun(db: ReturnType<typeof freshDatabase>["db"], projectId: s
   return { id: "t1", number: number as number };
 }
 
+// Raw insert for databases migrated only up to an older migration: the current Drizzle schema
+// names columns (such as the project icon and color) that those databases do not have yet.
+let rawProjects = 0;
+function rawProject(db: ReturnType<typeof freshDatabase>["db"]) {
+  rawProjects += 1;
+  const id = randomUUID();
+  db.$client
+    .prepare(
+      "insert into projects (id, name, repo, base_branch, local_path) values (?, ?, 'o/r', 'main', ?)",
+    )
+    .run(id, `raw-${rawProjects}`, `/tmp/raw-${rawProjects}`);
+  return { id };
+}
+
 describe("projects", () => {
   it("generates id, timestamps and configuration defaults", () => {
     const db = migratedDatabase();
@@ -90,7 +104,7 @@ describe("tasks", () => {
       writeFileSync(journalFile, JSON.stringify(journal));
       const { db } = freshDatabase();
       migrate(db, { migrationsFolder: previous });
-      const p = insertProject(db);
+      const p = rawProject(db);
       const raw = db.$client.prepare(
         "insert into tasks (id, project_id, intent, priority, created_at, updated_at) values (?, ?, 'x', 1, ?, 0)",
       );
@@ -135,7 +149,7 @@ describe("tasks", () => {
       writeFileSync(journalFile, JSON.stringify(journal));
       const { db } = freshDatabase();
       migrate(db, { migrationsFolder: previous });
-      const p = insertProject(db);
+      const p = rawProject(db);
       const t = rawTaskWithRun(db, p.id);
       const numberBefore = t.number;
       const insertPaused = db.$client.prepare(
@@ -182,7 +196,7 @@ describe("tasks", () => {
       writeFileSync(journalFile, JSON.stringify(journal));
       const { db } = freshDatabase();
       migrate(db, { migrationsFolder: previous });
-      const p = insertProject(db);
+      const p = rawProject(db);
       const t = rawTaskWithRun(db, p.id);
 
       migrateDatabase(db);
@@ -534,7 +548,7 @@ describe("runs", () => {
       const { db } = freshDatabase();
       migrate(db, { migrationsFolder: previous });
       // Raw insert: the current Drizzle schema names columns the previous database does not have yet.
-      const project = insertProject(db);
+      const project = rawProject(db);
       const taskId = randomUUID();
       db.$client
         .prepare("insert into tasks (id, project_id, intent, priority) values (?, ?, 'Do it', 100)")
@@ -570,7 +584,7 @@ describe("runs", () => {
       writeFileSync(journalFile, JSON.stringify(journal));
       const { db } = freshDatabase();
       migrate(db, { migrationsFolder: previous });
-      const project = insertProject(db);
+      const project = rawProject(db);
       const taskId = randomUUID();
       db.$client
         .prepare("insert into tasks (id, project_id, goal, priority) values (?, ?, 'Do it', 100)")
@@ -671,6 +685,40 @@ describe("runs", () => {
         { id: "p2", profiles: unassigned },
       ]);
       expect(db.select().from(agentProfiles).all()).toEqual([]);
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
+  });
+
+  it("the project icon and color migration leaves existing projects with null and their other fields unchanged", () => {
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-drizzle-before-icon-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8"));
+      const index = journal.entries.findIndex(
+        (e: { tag: string }) => e.tag === "0021_project_icon_color",
+      );
+      expect(index).toBeGreaterThan(-1);
+      journal.entries = journal.entries.slice(0, index);
+      writeFileSync(journalFile, JSON.stringify(journal));
+      const { db } = freshDatabase();
+      migrate(db, { migrationsFolder: previous });
+      db.$client
+        .prepare(
+          "insert into projects (id, name, repo, base_branch, local_path, test_command) values ('p1', 'old', 'o/r', 'develop', '/repos/old', 'pnpm test')",
+        )
+        .run();
+      const before = db.$client.prepare("select * from projects where id = 'p1'").get();
+
+      migrateDatabase(db);
+
+      const after = db.$client.prepare("select * from projects where id = 'p1'").get();
+      expect(after).toEqual({ ...(before as object), icon: null, color: null });
+
+      // Running it again changes nothing.
+      migrateDatabase(db);
+      expect(db.$client.prepare("select * from projects where id = 'p1'").get()).toEqual(after);
     } finally {
       rmSync(previous, { recursive: true, force: true });
     }

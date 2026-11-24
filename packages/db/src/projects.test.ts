@@ -255,3 +255,59 @@ describe("ProjectRepository: agent profiles", () => {
     });
   });
 });
+
+describe("ProjectRepository: icon and color", () => {
+  it("stores and returns the icon and the color of a new project", () => {
+    const { repo } = repository();
+    const project = repo.create({ ...input, icon: "rocket", color: "teal" });
+    expect(project).toMatchObject({ icon: "rocket", color: "teal" });
+    expect(repo.get(project.id)).toMatchObject({ icon: "rocket", color: "teal" });
+  });
+
+  it("a project created without icon or color has null in both", () => {
+    const { repo } = repository();
+    const project = repo.create(input);
+    expect(project).toMatchObject({ icon: null, color: null });
+    expect(repo.get(project.id)).toMatchObject({ icon: null, color: null });
+  });
+
+  it("rejects an icon or a color outside their sets and stores nothing", () => {
+    const { repo } = repository();
+    expect(() => repo.create({ ...input, icon: "unicorn" as never })).toThrow(/icon/);
+    expect(() => repo.create({ ...input, color: "#ff0000" as never })).toThrow(/color/);
+    expect(repo.list()).toEqual([]);
+  });
+
+  it("an update that sends color null clears it and keeps the icon", () => {
+    const { repo } = repository();
+    const { id } = repo.create({ ...input, icon: "rocket", color: "teal" });
+    expect(repo.update(id, { color: null })).toMatchObject({ icon: "rocket", color: null });
+    expect(repo.get(id)).toMatchObject({ icon: "rocket", color: null });
+  });
+
+  it("an update that sets only the icon keeps the color", () => {
+    const { repo } = repository();
+    const { id } = repo.create({ ...input, color: "blue" });
+    expect(repo.update(id, { icon: "database" })).toMatchObject({
+      icon: "database",
+      color: "blue",
+    });
+  });
+
+  it("an update with an invalid icon is rejected and leaves the row unchanged", () => {
+    const { repo } = repository();
+    const { id } = repo.create({ ...input, icon: "rocket" });
+    expect(() => repo.update(id, { icon: "unicorn" as never })).toThrow(/icon/);
+    expect(repo.get(id)?.icon).toBe("rocket");
+  });
+
+  it("an update of other fields does not touch the icon or the color", () => {
+    const { repo } = repository();
+    const { id } = repo.create({ ...input, icon: "bolt", color: "pink" });
+    expect(repo.update(id, { baseBranch: "develop" })).toMatchObject({
+      baseBranch: "develop",
+      icon: "bolt",
+      color: "pink",
+    });
+  });
+});

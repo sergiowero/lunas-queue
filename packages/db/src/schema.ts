@@ -93,6 +93,9 @@ export const projects = sqliteTable("projects", {
   limits: text("limits", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
   testCommand: text("test_command"),
   bootstrap: text("bootstrap"),
+  // Optional visual identity: keys of ProjectIcon and ProjectColor, validated with Zod on write and on read.
+  icon: text("icon"),
+  color: text("color"),
   // The project's herdr workspace; herdr is ephemeral, so it is a hint that gets revalidated.
   herdrWorkspaceId: text("herdr_workspace_id"),
   createdAt: createdAt(),
