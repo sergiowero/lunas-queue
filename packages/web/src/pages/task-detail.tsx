@@ -4,6 +4,7 @@ import type { Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
+import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError, StateBadges } from "../components/status.tsx";
 import { DependenciesPanel } from "../components/task/dependencies.tsx";
 import { EventLogPanel } from "../components/task/event-log.tsx";
@@ -146,12 +147,8 @@ function Header({ task }: { task: Json<Task> }) {
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label={t.taskDetail.project}>
           {project ? (
-            <Link
-              to="/projects/$projectId"
-              params={{ projectId: project.id }}
-              className="hover:underline"
-            >
-              {project.name}
+            <Link to="/projects/$projectId" params={{ projectId: project.id }} className="group">
+              <ProjectLabel name={project.name} icon={project.icon} color={project.color} />
             </Link>
           ) : (
             "…"

@@ -7,6 +7,7 @@ import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { PaneFocusButton } from "../components/pane-focus-button.tsx";
+import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
 import { PauseTaskButton } from "../components/task-actions.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
@@ -63,10 +64,7 @@ export function InProgressPage() {
   const projects = useQuery(queries.projects());
   const projectId = useProjectFilter("inProgress", projects.data);
   const tasks = useQuery(queries.tasks(projectId || undefined));
-  const names = useMemo(
-    () => new Map((projects.data ?? []).map((p) => [p.id, p.name])),
-    [projects.data],
-  );
+  const byId = useMemo(() => new Map((projects.data ?? []).map((p) => [p.id, p])), [projects.data]);
   const inProgress = useMemo(() => tasks.data?.filter(isInProgress), [tasks.data]);
   // One query per task, with the same key as the Runs panel: the live stream invalidates it
   // together with ["task", id], so the Run columns refresh on their own.
@@ -112,9 +110,18 @@ export function InProgressPage() {
           </span>
         ),
       }),
-      column.accessor((t) => names.get(t.projectId) ?? "…", {
+      // The accessor stays the project's name: it is what the column sorts and filters by.
+      column.accessor((t) => byId.get(t.projectId)?.name ?? "…", {
         id: "project",
         header: t.columns.project,
+        cell: (c) => {
+          const project = byId.get(c.row.original.projectId);
+          return project ? (
+            <ProjectLabel name={project.name} icon={project.icon} color={project.color} />
+          ) : (
+            c.getValue()
+          );
+        },
       }),
       column.accessor((task) => stateText(task, t), {
         id: "state",
@@ -156,7 +163,7 @@ export function InProgressPage() {
       }),
       column.display({ id: "actions", header: t.columns.actions, cell: ActionsCell }),
     ],
-    [names, latestRuns, t],
+    [byId, latestRuns, t],
   );
 
   return (

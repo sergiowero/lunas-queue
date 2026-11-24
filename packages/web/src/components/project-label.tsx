@@ -34,7 +34,7 @@ export function ProjectLabel({
       className={cn("inline-flex items-center gap-1.5", color && COLOR_CLASS[color], className)}
     >
       {icon && <ProjectIconGlyph icon={icon} />}
-      <span>{name}</span>
+      <span className="group-hover:underline">{name}</span>
     </span>
   );
 }

@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { DataTable } from "../components/data-table.tsx";
+import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
 import { PauseTaskButton, ResumeTaskButton } from "../components/task-actions.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
@@ -44,10 +45,7 @@ export function QueuePage() {
   const projects = useQuery(queries.projects());
   const projectId = useProjectFilter("queue", projects.data);
   const queue = useQuery(queries.queue(projectId || undefined));
-  const names = useMemo(
-    () => new Map((projects.data ?? []).map((p) => [p.id, p.name])),
-    [projects.data],
-  );
+  const byId = useMemo(() => new Map((projects.data ?? []).map((p) => [p.id, p])), [projects.data]);
 
   const columns = useMemo(
     () => [
@@ -68,9 +66,18 @@ export function QueuePage() {
           </span>
         ),
       }),
-      column.accessor((e) => names.get(e.task.projectId) ?? "…", {
+      // The accessor stays the project's name: it is what the column sorts and filters by.
+      column.accessor((e) => byId.get(e.task.projectId)?.name ?? "…", {
         id: "project",
         header: t.columns.project,
+        cell: (c) => {
+          const project = byId.get(c.row.original.task.projectId);
+          return project ? (
+            <ProjectLabel name={project.name} icon={project.icon} color={project.color} />
+          ) : (
+            c.getValue()
+          );
+        },
       }),
       column.accessor((e) => stateText(e.task, t), {
         id: "state",
@@ -90,7 +97,7 @@ export function QueuePage() {
       }),
       column.display({ id: "actions", header: t.columns.actions, cell: ActionsCell }),
     ],
-    [names, t],
+    [byId, t],
   );
 
   return (
