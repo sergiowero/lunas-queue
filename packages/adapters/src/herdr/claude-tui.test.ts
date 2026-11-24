@@ -70,3 +70,20 @@ describe("usageLimitMessage", () => {
     expect(showsUsageLimit(WRAP_UP_SCREEN)).toBe(USAGE_LIMIT_PATTERN.test(WRAP_UP_SCREEN));
   });
 });
+
+describe("OpenCode usage-limit notices", () => {
+  it.each([
+    "Free usage exceeded, subscribe to Go",
+    "Usage limit reached. It will reset in 2 hours.",
+    "Rate limit exceeded",
+    "Error: insufficient_quota",
+  ])("recognizes %j for OpenCode only", (notice) => {
+    expect(showsUsageLimit(notice, "opencode")).toBe(true);
+    expect(usageLimitMessage(`x\n${notice}`, "opencode")).toContain(notice.slice(0, 20));
+  });
+
+  it("does not apply OpenCode's wording to other agents", () => {
+    expect(showsUsageLimit("Rate limit exceeded", "claude")).toBe(false);
+    expect(showsUsageLimit("Free usage exceeded, subscribe to Go")).toBe(false);
+  });
+});

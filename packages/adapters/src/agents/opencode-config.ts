@@ -55,50 +55,14 @@ export function opencodePhaseConfig(input: OpencodePhaseConfigInput): Record<str
   };
 }
 
-/**
- * Read-only commands a reviewer may run to inspect the diff and the repository. Each command is listed
- * exactly and with arguments (`git diff` / `git diff *`), never as a prefix glob, so `git difftool`
- * and similar programs that run other programs do not match. `git grep` and `rg` are left out on
- * purpose (`-O`/`--open-files-in-pager` and `--pre` execute commands); the reviewer has the `grep`
- * and `glob` tools instead.
- */
-const REVIEWER_READ_ONLY_COMMANDS = [
-  "git diff",
-  "git log",
-  "git show",
-  "git status",
-  "git ls-files",
-  "git blame",
-  "git rev-parse",
-  "git merge-base",
-  "ls",
-  "cat",
-  "head",
-  "tail",
-  "wc",
-  "grep",
-].flatMap((command) => [command, `${command} *`]);
-
-/**
- * Patterns denied after the allowlist (the last matching rule wins): flags that write a file or run
- * an external program, and shell redirections.
- */
-const REVIEWER_DENIED_PATTERNS = [
-  "*--output*",
-  "*--ext-diff*",
-  "*--textconv*",
-  "*--open-files-in-pager*",
-  "*--extcmd*",
-  "*--pre*",
-  "*>*",
-];
-
 /** Environment variable that makes OpenCode ignore `opencode.json` and `.opencode/` of the worktree. */
 export const OPENCODE_DISABLE_PROJECT_CONFIG_ENV = "OPENCODE_DISABLE_PROJECT_CONFIG";
 
 /**
- * Config for a reviewer: it cannot modify the worktree (no edits, only an allowlist of read-only
- * commands), cannot leave it, and has no MCP server and no network tools.
+ * Config for a reviewer: it cannot modify the worktree, cannot leave it, and has no MCP server and no
+ * network tools. It has no shell at all: OpenCode matches `bash` rules against each simple command
+ * and not against its redirections, so no pattern can stop `{ git log; } > file`; the reviewer reads
+ * with `read`, `grep`, `glob` and `list`, and the approver puts the diff in its instructions.
  */
 export function opencodeReviewerConfig(): Record<string, unknown> {
   return {
@@ -109,11 +73,7 @@ export function opencodeReviewerConfig(): Record<string, unknown> {
       glob: "allow",
       list: "allow",
       edit: "deny",
-      bash: {
-        "*": "deny",
-        ...Object.fromEntries(REVIEWER_READ_ONLY_COMMANDS.map((c) => [c, "allow"])),
-        ...Object.fromEntries(REVIEWER_DENIED_PATTERNS.map((c) => [c, "deny"])),
-      },
+      bash: "deny",
       external_directory: "deny",
       webfetch: "deny",
       websearch: "deny",

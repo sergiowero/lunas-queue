@@ -27,6 +27,7 @@ export type * from "./github/types.ts";
 export {
   CODEX_TRUST_ACCEPT_KEYS,
   COPILOT_TRUST_ACCEPT_KEYS,
+  OPENCODE_USAGE_LIMIT_PATTERN,
   showsCodexTrustDialog,
   showsCopilotTrustDialog,
   showsTrustDialog,

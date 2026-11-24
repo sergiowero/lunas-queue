@@ -62,25 +62,48 @@ export const USAGE_LIMIT_PATTERN = new RegExp(
   "i",
 );
 
+/**
+ * What OpenCode's TUI shows when the model cannot continue because of usage: its own notices
+ * (`Free usage exceeded, subscribe to Go`, `Usage limit reached. It will reset in 2 hours`,
+ * `Rate limit exceeded`, validated against OpenCode 1.19.6) and the provider errors it relays
+ * (`rate_limit_error`, `insufficient_quota`, `You exceeded your current quota`). Only applied to
+ * OpenCode Runs, together with Claude's pattern, so Claude's screens keep their narrower detection.
+ */
+export const OPENCODE_USAGE_LIMIT_PATTERN = new RegExp(
+  [
+    "free usage exceeded",
+    "usage limit reached",
+    "rate limit exceeded",
+    "rate[_ ]limit[_ ]error",
+    "insufficient[_ ]quota",
+    "exceeded your current quota",
+    "quota exceeded",
+    "hit your usage limit",
+  ].join("|"),
+  "i",
+);
+
+/** Pattern of the agent kind's usage-limit notice; any kind but OpenCode uses Claude's. */
+function usageLimitPattern(kind?: string): RegExp {
+  return kind === "opencode" ? OPENCODE_USAGE_LIMIT_PATTERN : USAGE_LIMIT_PATTERN;
+}
+
 /** Whether the agent's screen shows the usage-limit notice. */
-export function showsUsageLimit(screen: string): boolean {
-  return USAGE_LIMIT_PATTERN.test(screen);
+export function showsUsageLimit(screen: string, kind?: string): boolean {
+  return usageLimitPattern(kind).test(screen);
 }
 
 /**
- * The notice as Claude draws it, for the escalation note: the last line that mentions it
+ * The notice as the agent draws it, for the escalation note: the last line that mentions it
  * with its contiguous run of at most three lines (the notice and its footer with the reset time).
  */
-export function usageLimitMessage(screen: string): string {
+export function usageLimitMessage(screen: string, kind?: string): string {
+  const pattern = usageLimitPattern(kind);
   const lines = screen.split("\n").map((line) => line.trim());
-  const idx = lines.reduce((last, line, i) => (USAGE_LIMIT_PATTERN.test(line) ? i : last), -1);
+  const idx = lines.reduce((last, line, i) => (pattern.test(line) ? i : last), -1);
   if (idx === -1) return "usage limit reached";
   let start = idx;
-  for (
-    let steps = 0;
-    steps < 2 && start > 0 && USAGE_LIMIT_PATTERN.test(lines[start - 1] ?? "");
-    steps += 1
-  )
+  for (let steps = 0; steps < 2 && start > 0 && pattern.test(lines[start - 1] ?? ""); steps += 1)
     start -= 1;
   const message = lines
     .slice(start, idx + 1)
