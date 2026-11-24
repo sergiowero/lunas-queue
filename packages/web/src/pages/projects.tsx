@@ -4,6 +4,7 @@ import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ProjectDeleteDialog } from "../components/project-delete-dialog.tsx";
 import { ProjectFormDialog } from "../components/project-form-dialog.tsx";
+import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
@@ -49,9 +50,9 @@ export function ProjectsPage() {
                 <Link
                   to="/projects/$projectId"
                   params={{ projectId: project.id }}
-                  className="hover:underline"
+                  className="group"
                 >
-                  {project.name}
+                  <ProjectLabel name={project.name} icon={project.icon} color={project.color} />
                 </Link>
               </CardTitle>
             </CardHeader>

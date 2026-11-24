@@ -148,6 +148,13 @@
       "when": 1795480163260,
       "tag": "0020_agent_kind_opencode",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1795492332930,
+      "tag": "0021_project_icon_color",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 // Completed tasks across all projects; the filter lets you focus on one.
+
 import { PrState, type Task } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -7,6 +8,7 @@ import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { ExternalLinkIcon } from "../components/external-link-icon.tsx";
 import { Pagination } from "../components/pagination.tsx";
+import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
@@ -35,8 +37,8 @@ export function CompletedPage() {
   const projects = useQuery(queries.projects());
   const projectId = useProjectFilter("completed", projects.data);
   const tasks = useQuery(queries.tasks(projectId || undefined));
-  const names = useMemo(
-    () => new Map((projects.data ?? []).map((project) => [project.id, project.name])),
+  const byId = useMemo(
+    () => new Map((projects.data ?? []).map((project) => [project.id, project])),
     [projects.data],
   );
   // Every completed task that passes the filters falls into exactly one of the three lists.
@@ -74,9 +76,18 @@ export function CompletedPage() {
           </span>
         ),
       }),
-      column.accessor((task) => names.get(task.projectId) ?? "…", {
+      // The accessor stays the project's name: it is what the column sorts and filters by.
+      column.accessor((task) => byId.get(task.projectId)?.name ?? "…", {
         id: "project",
         header: t.columns.project,
+        cell: (cell) => {
+          const project = byId.get(cell.row.original.projectId);
+          return project ? (
+            <ProjectLabel name={project.name} icon={project.icon} color={project.color} />
+          ) : (
+            cell.getValue()
+          );
+        },
       }),
       column.accessor("priority", { header: t.columns.priority }),
       // Without a PR: a completed task with a Result shows its type instead of the PR.
@@ -104,7 +115,7 @@ export function CompletedPage() {
         },
       }),
     ],
-    [names, t],
+    [byId, t],
   );
 
   const error = projects.error ?? tasks.error;

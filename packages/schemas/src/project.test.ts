@@ -4,9 +4,13 @@ import {
   AgentProfileUpdate,
   MAX_PHASE_TIMEOUT_MINUTES,
   PhaseProfiles,
+  PROJECT_COLORS,
+  PROJECT_ICONS,
   ProfileModel,
   Project,
+  ProjectColor,
   ProjectCreate,
+  ProjectIcon,
   ProjectLimits,
   ProjectUpdate,
   unassignedPhases,
@@ -218,6 +222,8 @@ describe("Project", () => {
       id: crypto.randomUUID(),
       testCommand: null,
       bootstrap: null,
+      icon: null,
+      color: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -255,5 +261,96 @@ describe("normalization and format", () => {
     const id = uuid();
     const patch = ProjectUpdate.parse({ agentProfiles: { verify: id, deliver: null } });
     expect(patch.agentProfiles).toEqual({ verify: id, deliver: null });
+  });
+});
+
+describe("project icon and color", () => {
+  it("the icon set and the color palette are closed", () => {
+    expect(PROJECT_ICONS).toEqual([
+      "folder",
+      "code",
+      "terminal",
+      "globe",
+      "database",
+      "server",
+      "rocket",
+      "book",
+      "package",
+      "mobile",
+      "cloud",
+      "bolt",
+    ]);
+    expect(PROJECT_COLORS).toEqual([
+      "red",
+      "orange",
+      "amber",
+      "green",
+      "teal",
+      "blue",
+      "violet",
+      "pink",
+    ]);
+    expect(ProjectIcon.safeParse("rocket").success).toBe(true);
+    expect(ProjectColor.safeParse("teal").success).toBe(true);
+  });
+
+  it("a creation request keeps the icon and the color it brings", () => {
+    const project = ProjectCreate.parse({ ...validCreate, icon: "rocket", color: "teal" });
+    expect(project).toMatchObject({ icon: "rocket", color: "teal" });
+  });
+
+  it("a creation request without icon or color leaves them out", () => {
+    const project = ProjectCreate.parse(validCreate);
+    expect(project.icon).toBeUndefined();
+    expect(project.color).toBeUndefined();
+  });
+
+  it("icon and color are independent: each can be set without the other", () => {
+    expect(ProjectCreate.parse({ ...validCreate, icon: "book" }).color).toBeUndefined();
+    expect(ProjectCreate.parse({ ...validCreate, color: "blue" }).icon).toBeUndefined();
+  });
+
+  it.each([
+    ["icon", { icon: "unicorn" }],
+    ["color", { color: "#ff0000" }],
+  ])("rejects a creation request with a %s outside its set, at that path", (path, overrides) => {
+    const result = ProjectCreate.safeParse({ ...validCreate, ...overrides });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((i) => i.path[0])).toContain(path);
+  });
+
+  it.each([
+    ["icon", { icon: "unicorn" }],
+    ["color", { color: "#ff0000" }],
+  ])("rejects an update with a %s outside its set, at that path", (path, patch) => {
+    const result = ProjectUpdate.safeParse(patch);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((i) => i.path[0])).toContain(path);
+  });
+
+  it("an update with color null clears it and leaves the icon out", () => {
+    expect(ProjectUpdate.parse({ color: null })).toEqual({ color: null });
+  });
+
+  it("an update with only an icon leaves the color out", () => {
+    expect(ProjectUpdate.parse({ icon: "database" })).toEqual({ icon: "database" });
+  });
+
+  it("a stored project has a nullable icon and color, never undefined", () => {
+    const now = new Date();
+    const base = {
+      ...ProjectCreate.parse(validCreate),
+      id: crypto.randomUUID(),
+      testCommand: null,
+      bootstrap: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    expect(Project.parse({ ...base, icon: null, color: null })).toMatchObject({
+      icon: null,
+      color: null,
+    });
+    expect(Project.safeParse(base).success).toBe(false);
+    expect(Project.safeParse({ ...base, icon: "unicorn", color: null }).success).toBe(false);
   });
 });

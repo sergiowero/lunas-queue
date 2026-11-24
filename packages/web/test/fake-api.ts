@@ -215,6 +215,8 @@ export class FakeApi {
       limits: {},
       testCommand: null,
       bootstrap: null,
+      icon: null,
+      color: null,
       createdAt: at,
       updatedAt: at,
       ...overrides,

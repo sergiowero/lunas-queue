@@ -98,6 +98,38 @@ function normalizePosixPath(path: string): string {
   return `/${parts.join("/")}`;
 }
 
+// Optional visual identity of a project (docs/decisions/0008-config-proyecto.md): a closed set of
+// built-in icons and a closed palette. The UI maps each key to an SVG and to a theme token.
+export const PROJECT_ICONS = [
+  "folder",
+  "code",
+  "terminal",
+  "globe",
+  "database",
+  "server",
+  "rocket",
+  "book",
+  "package",
+  "mobile",
+  "cloud",
+  "bolt",
+] as const;
+export const ProjectIcon = z.enum(PROJECT_ICONS);
+export type ProjectIcon = z.infer<typeof ProjectIcon>;
+
+export const PROJECT_COLORS = [
+  "red",
+  "orange",
+  "amber",
+  "green",
+  "teal",
+  "blue",
+  "violet",
+  "pink",
+] as const;
+export const ProjectColor = z.enum(PROJECT_COLORS);
+export type ProjectColor = z.infer<typeof ProjectColor>;
+
 const configFields = {
   name: nonEmpty,
   // owner/name on GitHub, as `gh --repo` receives it.
@@ -119,6 +151,8 @@ export const ProjectCreate = z.strictObject({
   ...configFields,
   testCommand: nonEmpty.optional(),
   bootstrap: nonEmpty.optional(),
+  icon: ProjectIcon.optional(),
+  color: ProjectColor.optional(),
 });
 export type ProjectCreate = z.input<typeof ProjectCreate>;
 
@@ -140,6 +174,8 @@ export const ProjectUpdate = z.strictObject({
   limits: ProjectLimits.optional(),
   testCommand: nonEmpty.nullable().optional(),
   bootstrap: nonEmpty.nullable().optional(),
+  icon: ProjectIcon.nullable().optional(),
+  color: ProjectColor.nullable().optional(),
 });
 export type ProjectUpdate = z.input<typeof ProjectUpdate>;
 
@@ -150,6 +186,8 @@ export const Project = z.strictObject({
   limits: ProjectLimits,
   testCommand: nonEmpty.nullable(),
   bootstrap: nonEmpty.nullable(),
+  icon: ProjectIcon.nullable(),
+  color: ProjectColor.nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

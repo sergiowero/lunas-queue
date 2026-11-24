@@ -7,6 +7,7 @@ import type { BlockedAgent, Question, QuestionDelivery, Task } from "@lunasq/sch
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useId, useState } from "react";
+import { ProjectLabel } from "../components/project-label.tsx";
 import { Muted, Section } from "../components/section.tsx";
 import { Loading, MutationError, QueryError, StateBadges } from "../components/status.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
@@ -27,7 +28,16 @@ type Notice = { ok: true; delivery: QuestionDelivery } | { ok: false; error: Err
 function ProjectName({ task }: { task: Json<Task> | undefined }) {
   const projects = useQuery(queries.projects());
   const project = projects.data?.find((p) => p.id === task?.projectId);
-  return project ? <span className="text-xs text-muted-foreground">{project.name}</span> : null;
+  if (!project) return null;
+  // Without a color the name keeps the muted text; with one, the project's token wins.
+  return (
+    <ProjectLabel
+      name={project.name}
+      icon={project.icon}
+      color={project.color}
+      className={project.color ? "text-xs" : "text-xs text-muted-foreground"}
+    />
+  );
 }
 
 function TaskLink({

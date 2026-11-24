@@ -2,6 +2,7 @@
 // would leave that fixed light-theme color on screen.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { PROJECT_COLORS } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import { badgeVariants } from "./components/ui/badge.tsx";
 import { buttonVariants } from "./components/ui/button.tsx";
@@ -138,4 +139,33 @@ describe("Badge success variant", () => {
       expect(dark.has(token), `${token} sin valor oscuro`).toBe(true);
     }
   });
+});
+
+describe("project palette tokens", () => {
+  it("every ProjectColor has a light and a dark token", () => {
+    const light = tokens(block("@theme"));
+    const dark = tokens(block(".dark"));
+    for (const color of PROJECT_COLORS) {
+      expect(light.has(`--color-project-${color}`), `${color} sin valor claro`).toBe(true);
+      expect(dark.has(`--color-project-${color}`), `${color} sin valor oscuro`).toBe(true);
+    }
+  });
+
+  it.each([
+    ["claro", "@theme"],
+    ["oscuro", ".dark"],
+  ])(
+    "en tema %s, cada color cumple el 4.5:1 de AA como texto sobre las superficies",
+    (_, selector) => {
+      const t = tokens(block(selector));
+      for (const color of PROJECT_COLORS) {
+        for (const surface of ["--color-surface", "--color-canvas", "--color-surface-secondary"]) {
+          expect(
+            contrast(t.get(`--color-project-${color}`) ?? "", t.get(surface) ?? ""),
+            `${color} sobre ${surface}`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    },
+  );
 });

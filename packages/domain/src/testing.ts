@@ -60,6 +60,8 @@ export function sampleProject(name: string, overrides: Partial<ProjectCreate> = 
   return Project.parse({
     testCommand: null,
     bootstrap: null,
+    icon: null,
+    color: null,
     ...ProjectCreate.parse({
       name,
       repo: `sergiowero/${name}`,

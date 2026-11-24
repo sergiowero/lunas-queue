@@ -2,6 +2,7 @@
 import type { Task, TaskState } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
+import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
@@ -64,7 +65,9 @@ export function BoardPage() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold">{project.name}</h1>
+          <h1 className="text-xl font-semibold">
+            <ProjectLabel name={project.name} icon={project.icon} color={project.color} />
+          </h1>
           <p className="text-sm text-muted-foreground">{project.repo}</p>
         </div>
         <div className="flex gap-2">

@@ -56,6 +56,16 @@
   --color-accent-fg: #ffffff;
   --color-accent-text: #6d28d9;
 
+  /* Project palette (ProjectColor): text colors that keep AA contrast over the surfaces. */
+  --color-project-red: #b91c1c;
+  --color-project-orange: #c2410c;
+  --color-project-amber: #b45309;
+  --color-project-green: #15803d;
+  --color-project-teal: #0f766e;
+  --color-project-blue: #1d4ed8;
+  --color-project-violet: #6d28d9;
+  --color-project-pink: #be185d;
+
   --shadow-xs: 0 1px 2px 0 rgb(16 16 24 / 0.04);
   --shadow-sm: 0 1px 2px 0 rgb(16 16 24 / 0.05), 0 1px 3px 0 rgb(16 16 24 / 0.04);
   --shadow-md: 0 4px 12px -2px rgb(16 16 24 / 0.08), 0 2px 4px -2px rgb(16 16 24 / 0.04);
@@ -128,6 +138,15 @@
   --color-accent-hover: #a78bfa;
   --color-accent-fg: #ffffff;
   --color-accent-text: #a78bfa;
+
+  --color-project-red: #f87171;
+  --color-project-orange: #fb923c;
+  --color-project-amber: #fbbf24;
+  --color-project-green: #4ade80;
+  --color-project-teal: #2dd4bf;
+  --color-project-blue: #60a5fa;
+  --color-project-violet: #a78bfa;
+  --color-project-pink: #f472b6;
 
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);
