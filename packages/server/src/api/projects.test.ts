@@ -235,29 +235,35 @@ describe("project icon and color over HTTP", () => {
   it.each([
     ["icon", { icon: "unicorn" }],
     ["color", { color: "#ff0000" }],
-  ])("POST with a %s outside its set answers 400 with that path and stores nothing", async (path, extra) => {
-    const { send } = setup();
-    const res = await send("POST", "/api/projects", { ...input, ...extra });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { issues: { path: (string | number)[] }[] };
-    expect(body.issues.map((i) => i.path[0])).toContain(path);
-    const list = await send("GET", "/api/projects");
-    expect(await list.json()).toEqual([]);
-  });
+  ])(
+    "POST with a %s outside its set answers 400 with that path and stores nothing",
+    async (path, extra) => {
+      const { send } = setup();
+      const res = await send("POST", "/api/projects", { ...input, ...extra });
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { issues: { path: (string | number)[] }[] };
+      expect(body.issues.map((i) => i.path[0])).toContain(path);
+      const list = await send("GET", "/api/projects");
+      expect(await list.json()).toEqual([]);
+    },
+  );
 
   it.each([
     ["icon", { icon: "unicorn" }],
     ["color", { color: "#ff0000" }],
-  ])("PATCH with a %s outside its set answers 400 with that path and changes nothing", async (path, extra) => {
-    const { send } = setup();
-    const project = await created(send, { ...input, icon: "rocket", color: "teal" });
-    const res = await send("PATCH", `/api/projects/${project.id}`, extra);
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { issues: { path: (string | number)[] }[] };
-    expect(body.issues.map((i) => i.path[0])).toContain(path);
-    const after = await send("GET", `/api/projects/${project.id}`);
-    expect(await after.json()).toMatchObject({ icon: "rocket", color: "teal" });
-  });
+  ])(
+    "PATCH with a %s outside its set answers 400 with that path and changes nothing",
+    async (path, extra) => {
+      const { send } = setup();
+      const project = await created(send, { ...input, icon: "rocket", color: "teal" });
+      const res = await send("PATCH", `/api/projects/${project.id}`, extra);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { issues: { path: (string | number)[] }[] };
+      expect(body.issues.map((i) => i.path[0])).toContain(path);
+      const after = await send("GET", `/api/projects/${project.id}`);
+      expect(await after.json()).toMatchObject({ icon: "rocket", color: "teal" });
+    },
+  );
 
   it("PATCH with color null clears the color and leaves the icon", async () => {
     const { send } = setup();
