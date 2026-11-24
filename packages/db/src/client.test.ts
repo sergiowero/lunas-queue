@@ -158,13 +158,13 @@ describe("migrations", () => {
 
   it("the appearance migration gives every existing profile an icon and a color of the sets", () => {
     const { db } = freshDatabase();
-    // Database before migration 0021: the journal is trimmed to the first twenty-one.
+    // Database before migration 0022: the journal is trimmed to the first twenty-two.
     const previous = mkdtempSync(join(tmpdir(), "lunasq-migrations-"));
     try {
       cpSync(migrationsFolder, previous, { recursive: true });
       const journalFile = join(previous, "meta", "_journal.json");
       const journal = JSON.parse(readFileSync(journalFile, "utf8")) as { entries: unknown[] };
-      journal.entries = journal.entries.slice(0, 21);
+      journal.entries = journal.entries.slice(0, 22);
       writeFileSync(journalFile, JSON.stringify(journal));
       migrate(db, { migrationsFolder: previous });
     } finally {
