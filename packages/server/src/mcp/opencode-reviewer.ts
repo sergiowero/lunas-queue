@@ -1,6 +1,11 @@
 import { chmod, lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { OPENCODE_CONFIG_ENV, opencodeReviewerConfig, type ProcessRunner } from "@lunasq/adapters";
+import {
+  OPENCODE_CONFIG_ENV,
+  OPENCODE_DISABLE_PROJECT_CONFIG_ENV,
+  opencodeReviewerConfig,
+  type ProcessRunner,
+} from "@lunasq/adapters";
 import type { ReviewerExecutor, ReviewerInput, ReviewerResult } from "./copilot-reviewer.ts";
 
 const REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
@@ -79,7 +84,12 @@ export class OpencodeCliReviewerExecutor implements ReviewerExecutor {
           shellQuote(eventsPath),
         ].join(" "),
         cwd: input.worktreePath,
-        env: { [OPENCODE_CONFIG_ENV]: JSON.stringify(opencodeReviewerConfig()) },
+        env: {
+          [OPENCODE_CONFIG_ENV]: JSON.stringify(opencodeReviewerConfig()),
+          // The worktree is the task's code: its opencode.json or .opencode/ must not widen the
+          // reviewer's permissions nor start local MCP servers.
+          [OPENCODE_DISABLE_PROJECT_CONFIG_ENV]: "1",
+        },
         envAllowlist: ENV_ALLOWLIST,
         timeoutMs: REVIEW_TIMEOUT_MS,
       });

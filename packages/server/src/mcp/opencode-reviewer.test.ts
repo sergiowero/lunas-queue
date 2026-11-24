@@ -80,6 +80,8 @@ describe("OpencodeCliReviewerExecutor", () => {
     const config = JSON.parse(call.env?.OPENCODE_CONFIG_CONTENT ?? "null");
     expect(config.permission).toMatchObject({ edit: "deny", external_directory: "deny" });
     expect(config).not.toHaveProperty("mcp");
+    // The worktree's own opencode.json / .opencode/ cannot change the reviewer's permissions.
+    expect(call.env?.OPENCODE_DISABLE_PROJECT_CONFIG).toBe("1");
     expect(call.envAllowlist).not.toContain("GH_TOKEN");
     // The prompt reached the process through a 0600 file, which is removed afterwards.
     expect(seen[0]).toEqual({ prompt: request.instructions, promptMode: 0o600 });

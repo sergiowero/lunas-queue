@@ -2,6 +2,7 @@ export const packageName = "@lunasq/adapters";
 
 export {
   OPENCODE_CONFIG_ENV,
+  OPENCODE_DISABLE_PROJECT_CONFIG_ENV,
   type OpencodePhaseConfigInput,
   opencodePhaseConfig,
   opencodeReviewerConfig,

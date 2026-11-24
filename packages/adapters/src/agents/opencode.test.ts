@@ -138,7 +138,34 @@ describe("OpenCode inline config", () => {
     });
     const bash = (reviewer.permission as { bash: Record<string, string> }).bash;
     expect(bash["*"]).toBe("deny");
-    expect(bash["git diff*"]).toBe("allow");
-    expect(Object.keys(bash).at(-1)).toBe("*--output*");
+    expect(bash["git diff"]).toBe("allow");
+    expect(bash["git diff *"]).toBe("allow");
+    // No prefix globs: `git diff*` would also match `git difftool --extcmd=…`.
+    expect(Object.keys(bash).filter((k) => k.startsWith("git") && k.endsWith("*"))).toEqual(
+      expect.not.arrayContaining(["git diff*", "git grep*", "git log*"]),
+    );
+    for (const key of Object.keys(bash)) {
+      if (bash[key] === "allow") expect(key).toMatch(/^[a-z-]+( [a-z-]+)?( \*)?$/);
+    }
+    // Commands that run other programs are not allowed at all.
+    expect(Object.keys(bash)).not.toContain("rg *");
+    expect(
+      Object.keys(bash).some((k) => k.startsWith("git grep") || k.startsWith("git difftool")),
+    ).toBe(false);
+    // The denies come last, so they win over the allowlist.
+    const keys = Object.keys(bash);
+    const firstDeny = keys.findIndex((k, i) => i > 0 && bash[k] === "deny");
+    expect(keys.slice(firstDeny).every((k) => bash[k] === "deny")).toBe(true);
+    for (const flag of [
+      "--output",
+      "--ext-diff",
+      "--textconv",
+      "--open-files-in-pager",
+      "--extcmd",
+      "--pre",
+      ">",
+    ]) {
+      expect(bash[`*${flag}*`]).toBe("deny");
+    }
   });
 });

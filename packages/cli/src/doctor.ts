@@ -252,7 +252,7 @@ export async function checkOpencode(ctx: MachineContext): Promise<CheckResult> {
     return fail(
       "opencode",
       `OpenCode ${version}; LunasQ needs ${MINIMUM.opencode} or newer`,
-      "actualiza OpenCode",
+      "update OpenCode",
     );
   }
   return ok("opencode", `OpenCode ${version}`);
