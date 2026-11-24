@@ -37,6 +37,8 @@ import {
   InstructionUpdate,
   MAX_TASK_INSTRUCTIONS,
   PhaseInstructionInput,
+  PROFILE_COLORS,
+  PROFILE_ICONS,
   ProjectCreate,
   ProjectUpdate,
   QuestionAnswer,
@@ -189,6 +191,8 @@ export class FakeApi {
       id: uuid(),
       name: `perfil-${seq}`,
       models: [{ kind: "claude", model: "sonnet", args: [] }],
+      icon: "bot",
+      color: "blue",
       createdAt: at,
       updatedAt: at,
       ...overrides,
@@ -753,7 +757,17 @@ export class FakeApi {
           },
         ];
       }
-      return [201, this.addProfile(input.data as Partial<Json<AgentProfile>>)];
+      // Like the server: a missing icon or color is drawn at random from the sets.
+      const { icon, color, ...rest } = input.data;
+      return [
+        201,
+        this.addProfile({
+          ...(rest as Partial<Json<AgentProfile>>),
+          icon: icon ?? (PROFILE_ICONS[Math.floor(Math.random() * PROFILE_ICONS.length)] as never),
+          color:
+            color ?? (PROFILE_COLORS[Math.floor(Math.random() * PROFILE_COLORS.length)] as never),
+        }),
+      ];
     }
     const profile = this.profiles.find((p) => p.id === id);
     if (!profile) return [404, { error: "not_found" }];

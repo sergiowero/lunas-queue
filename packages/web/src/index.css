@@ -65,6 +65,24 @@
   --color-project-blue: #1d4ed8;
   --color-project-violet: #6d28d9;
   --color-project-pink: #be185d;
+  /* Agent profile colors (PROFILE_COLORS in @lunasq/schemas): a solid fill and a text tone that keeps
+     AA contrast over its own 10% tint, in both themes. */
+  --color-agent-red: #dc2626;
+  --color-agent-red-text: #b91c1c;
+  --color-agent-orange: #ea580c;
+  --color-agent-orange-text: #9a3412;
+  --color-agent-amber: #d97706;
+  --color-agent-amber-text: #92400e;
+  --color-agent-green: #16a34a;
+  --color-agent-green-text: #166534;
+  --color-agent-teal: #0d9488;
+  --color-agent-teal-text: #115e59;
+  --color-agent-blue: #2563eb;
+  --color-agent-blue-text: #1d4ed8;
+  --color-agent-violet: #7c3aed;
+  --color-agent-violet-text: #6d28d9;
+  --color-agent-pink: #db2777;
+  --color-agent-pink-text: #be185d;
 
   --shadow-xs: 0 1px 2px 0 rgb(16 16 24 / 0.04);
   --shadow-sm: 0 1px 2px 0 rgb(16 16 24 / 0.05), 0 1px 3px 0 rgb(16 16 24 / 0.04);
@@ -147,6 +165,22 @@
   --color-project-blue: #60a5fa;
   --color-project-violet: #a78bfa;
   --color-project-pink: #f472b6;
+  --color-agent-red: #ef4444;
+  --color-agent-red-text: #fca5a5;
+  --color-agent-orange: #f97316;
+  --color-agent-orange-text: #fdba74;
+  --color-agent-amber: #f59e0b;
+  --color-agent-amber-text: #fcd34d;
+  --color-agent-green: #22c55e;
+  --color-agent-green-text: #86efac;
+  --color-agent-teal: #14b8a6;
+  --color-agent-teal-text: #5eead4;
+  --color-agent-blue: #3b82f6;
+  --color-agent-blue-text: #93c5fd;
+  --color-agent-violet: #8b5cf6;
+  --color-agent-violet-text: #c4b5fd;
+  --color-agent-pink: #ec4899;
+  --color-agent-pink-text: #f9a8d4;
 
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.3);

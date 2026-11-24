@@ -1,5 +1,5 @@
 // Decorative SVG icons for the actions on a task; the button provides the accessible name.
-import type { ProjectIcon } from "@lunasq/schemas";
+import type { ProfileIcon, ProjectIcon } from "@lunasq/schemas";
 import type { ComponentProps, ReactNode } from "react";
 
 function Icon(props: ComponentProps<"svg"> & { name: string }) {
@@ -126,6 +126,73 @@ export function ProjectIconGlyph({ icon }: { icon: ProjectIcon }) {
   return (
     <Icon name={`project-${icon}`} fill="none" className="shrink-0">
       {PROJECT_ICON_PATHS[icon]}
+    </Icon>
+  );
+}
+
+// Outline glyphs of the agent profile icons (PROFILE_ICONS in @lunasq/schemas), drawn on a 24px grid.
+const PROFILE_GLYPHS: Record<ProfileIcon, ReactNode> = {
+  bot: (
+    <>
+      <rect x="4" y="8" width="16" height="12" rx="2" />
+      <path d="M12 8V4M9 4h6M9 14h.01M15 14h.01" />
+    </>
+  ),
+  sparkles: (
+    <>
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+      <path d="M19 3v4M17 5h4" />
+    </>
+  ),
+  bolt: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
+  brain: (
+    <>
+      <path d="M9.5 3A3.5 3.5 0 0 0 6 6.5 3.5 3.5 0 0 0 4 10a3.5 3.5 0 0 0 1.5 3A3.5 3.5 0 0 0 9 18.5V3z" />
+      <path d="M14.5 3A3.5 3.5 0 0 1 18 6.5a3.5 3.5 0 0 1 2 3.5 3.5 3.5 0 0 1-1.5 3 3.5 3.5 0 0 1-3.5 5.5V3z" />
+    </>
+  ),
+  rocket: (
+    <>
+      <path d="M5 19c-1 1-1.5 3-1.5 3s2-.5 3-1.5" />
+      <path d="M12 15l-3-3a22 22 0 0 1 2-4 12 12 0 0 1 11-5c0 3-1 8-5 12a22 22 0 0 1-4 2z" />
+      <path d="M9 12H4s.5-3 2-4c1.6-1 5 0 5 0M12 15v5s3-.5 4-2c1-1.6 0-5 0-5" />
+    </>
+  ),
+  wrench: (
+    <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.6-.6-.6-2.6z" />
+  ),
+  shield: <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />,
+  flask: (
+    <path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3M7.5 14h9" />
+  ),
+  compass: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M16 8l-2 6-6 2 2-6z" />
+    </>
+  ),
+  leaf: (
+    <>
+      <path d="M5 19C5 10 11 4 20 4c0 9-6 15-15 15z" />
+      <path d="M5 19l8-8" />
+    </>
+  ),
+};
+
+/** An agent profile's icon; decorative, whoever renders it provides the accessible name. */
+export function ProfileGlyph({ icon, size = 12 }: { icon: ProfileIcon; size?: number }) {
+  return (
+    <Icon name={`profile-${icon}`} width={size} height={size} fill="none" strokeWidth={2}>
+      {PROFILE_GLYPHS[icon]}
+    </Icon>
+  );
+}
+
+/** Neutral mark for a Run without a (known) profile: a dashed ring instead of an icon. */
+export function NeutralGlyph({ size = 12 }: { size?: number }) {
+  return (
+    <Icon name="profile-neutral" width={size} height={size} fill="none" strokeWidth={2}>
+      <circle cx="12" cy="12" r="9" strokeDasharray="4 3" />
     </Icon>
   );
 }

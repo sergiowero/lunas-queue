@@ -8,6 +8,10 @@ import {
   EFFORT_LEVELS,
   type EffortLevel,
   MAX_PROFILE_MODELS,
+  PROFILE_COLORS,
+  PROFILE_ICONS,
+  type ProfileColor,
+  type ProfileIcon,
   type ProfileModel,
 } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,7 +20,11 @@ import { ApiError, api, type Json } from "../lib/api.ts";
 import type { Dictionary } from "../lib/dictionary/index.ts";
 import { errorText } from "../lib/error-text.ts";
 import { useT } from "../lib/i18n.ts";
+import { PROFILE_COLOR_SWATCH } from "../lib/profile-appearance.ts";
 import { queries } from "../lib/queries.ts";
+import { cn } from "../lib/utils.ts";
+import { ProfileChip } from "./agent-badge.tsx";
+import { ProfileGlyph } from "./icons.tsx";
 import { Button } from "./ui/button.tsx";
 import { Dialog } from "./ui/dialog.tsx";
 import { Input, Label, Select, Textarea } from "./ui/input.tsx";
@@ -51,9 +59,20 @@ function parseArgs(text: string): string[] {
     .filter((line) => line !== "");
 }
 
-function toInput(name: string, models: ModelFields[]): AgentProfileCreate {
+function randomOf<T>(set: readonly T[]): T {
+  return set[Math.floor(Math.random() * set.length)] as T;
+}
+
+function toInput(
+  name: string,
+  models: ModelFields[],
+  icon: ProfileIcon,
+  color: ProfileColor,
+): AgentProfileCreate {
   return {
     name: name.trim(),
+    icon,
+    color,
     models: models.map(
       ({ kind, model, effort, args }): ProfileModel => ({
         kind,
@@ -97,6 +116,12 @@ export function ProfileFormDialog({
       : [blank()],
   );
 
+  // A new profile starts with a random icon and color already selected.
+  const [icon, setIcon] = useState<ProfileIcon>(() => profile?.icon ?? randomOf(PROFILE_ICONS));
+  const [color, setColor] = useState<ProfileColor>(
+    () => profile?.color ?? randomOf(PROFILE_COLORS),
+  );
+
   const save = useMutation({
     mutationFn: (input: AgentProfileCreate) =>
       profile ? api.updateAgentProfile(profile.id, input) : api.createAgentProfile(input),
@@ -119,7 +144,7 @@ export function ProfileFormDialog({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    save.mutate(toInput(name, models));
+    save.mutate(toInput(name, models, icon, color));
   };
 
   return (
@@ -134,6 +159,82 @@ export function ProfileFormDialog({
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+          <fieldset className="flex flex-col gap-1">
+            <legend className="text-sm font-medium">{t.profileAppearance.icon}</legend>
+            <div
+              role="radiogroup"
+              aria-label={t.profileAppearance.icon}
+              className="flex flex-wrap gap-1"
+            >
+              {PROFILE_ICONS.map((option) => (
+                <label
+                  key={option}
+                  title={t.profileAppearance.icons[option]}
+                  className={cn(
+                    "flex size-8 cursor-pointer items-center justify-center rounded-md border border-border text-text-secondary hover:bg-surface-secondary",
+                    "has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:text-primary-text",
+                    "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="profile-icon"
+                    value={option}
+                    className="sr-only"
+                    aria-label={t.profileAppearance.icons[option]}
+                    checked={icon === option}
+                    onChange={() => setIcon(option)}
+                  />
+                  <ProfileGlyph icon={option} size={16} />
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="flex flex-col gap-1">
+            <legend className="text-sm font-medium">{t.profileAppearance.color}</legend>
+            <div
+              role="radiogroup"
+              aria-label={t.profileAppearance.color}
+              className="flex flex-wrap gap-1"
+            >
+              {PROFILE_COLORS.map((option) => (
+                <label
+                  key={option}
+                  title={t.profileAppearance.colors[option]}
+                  className={cn(
+                    "flex size-8 cursor-pointer items-center justify-center rounded-md border border-border hover:bg-surface-secondary",
+                    "has-[:checked]:border-primary has-[:checked]:ring-2 has-[:checked]:ring-primary/40",
+                    "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="profile-color"
+                    value={option}
+                    className="sr-only"
+                    aria-label={t.profileAppearance.colors[option]}
+                    checked={color === option}
+                    onChange={() => setColor(option)}
+                  />
+                  <span
+                    aria-hidden="true"
+                    className={cn("size-4 rounded-full", PROFILE_COLOR_SWATCH[option])}
+                  />
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>{t.profileAppearance.preview}</span>
+            <ProfileChip
+              name={name.trim() || t.profileAppearance.previewName}
+              icon={icon}
+              color={color}
+            />
+          </div>
         </div>
 
         <fieldset className="flex flex-col gap-3">
