@@ -300,7 +300,11 @@ function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Ta
         <dd>{t.phase[agent.phase]}</dd>
         <dt className="text-muted-foreground">{t.inbox.agent}</dt>
         <dd className="flex flex-wrap items-center gap-2">
-          <AgentBadge profileId={run?.profileId} kind={run?.agentKind ?? null} />
+          <AgentBadge
+            profileId={run?.profileId}
+            kind={run?.agentKind ?? null}
+            pending={runs.isPending}
+          />
           <span className="font-mono">{agent.agentName}</span>
         </dd>
         <dt className="text-muted-foreground">{t.inbox.pane}</dt>

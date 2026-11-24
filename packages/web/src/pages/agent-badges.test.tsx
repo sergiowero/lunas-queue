@@ -44,9 +44,9 @@ describe("Runs table", () => {
     renderApp(`/tasks/${task.id}`, fake);
 
     const runs = within(await screen.findByRole("region", { name: "Runs" }));
-    const badges = await runs.findAllByRole("img", { name: "Agente claude, sin perfil" });
-    expect(badges).toHaveLength(2);
-    for (const badge of badges) {
+    const named = () => runs.queryAllByRole("img", { name: "Agente claude, sin perfil" });
+    await waitFor(() => expect(named()).toHaveLength(2));
+    for (const badge of named()) {
       expect(badge.getAttribute("data-agent-badge")).toBe("neutral");
       expect(badge.textContent).toBe("claude · opus");
     }
@@ -86,7 +86,46 @@ describe("In progress tab", () => {
   });
 });
 
+describe("while the profiles load", () => {
+  it("a profiled Run shows a loading placeholder, then its badge, never the neutral one", async () => {
+    const { fake, project, fast } = seeded();
+    const task = fake.addTask(project.id, { goal: "Cargando", state: "in_progress" });
+    const run = fake.startRun(task.id, "implement");
+    Object.assign(run, { profileId: fast.id });
+    let release = () => {};
+    fake.profilesGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    renderApp(`/tasks/${task.id}`, fake);
+
+    const placeholder = await screen.findByRole("img", { name: "Cargando…" });
+    expect(placeholder.getAttribute("data-agent-badge")).toBe("loading");
+    expect(screen.queryByRole("img", { name: /sin perfil/i })).toBeNull();
+    release();
+    expect(await screen.findByRole("img", { name: "Agente Rápido" })).toBeTruthy();
+  });
+});
+
 describe("Inbox", () => {
+  it("does not claim «no profile» while the Runs load", async () => {
+    const { fake, project, fast } = seeded();
+    const task = fake.addTask(project.id, { goal: "Bloqueada", state: "in_progress" });
+    const run = fake.startRun(task.id, "implement");
+    Object.assign(run, { profileId: fast.id });
+    fake.block(run);
+    let release = () => {};
+    fake.runsGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    renderApp("/inbox", fake);
+
+    const blocked = within(await screen.findByRole("region", { name: "Agentes bloqueados" }));
+    expect(await blocked.findByRole("img", { name: "Cargando…" })).toBeTruthy();
+    expect(blocked.queryByRole("img", { name: "Sin perfil de agente" })).toBeNull();
+    release();
+    expect(await blocked.findByRole("img", { name: "Agente Rápido" })).toBeTruthy();
+  });
+
   it("the blocked agent shows the badge of its Run's profile", async () => {
     const { fake, project, fast } = seeded();
     const task = fake.addTask(project.id, { goal: "Bloqueada", state: "in_progress" });

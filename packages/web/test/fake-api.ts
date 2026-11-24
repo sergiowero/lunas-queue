@@ -129,6 +129,8 @@ export class FakeApi {
   readonly runsFail = new Set<string>();
   /** If set, GET .../runs does not answer until the promise resolves (pending query). */
   runsGate: Promise<void> | null = null;
+  /** If set, GET /api/agent-profiles does not answer until the promise resolves (pending query). */
+  profilesGate: Promise<void> | null = null;
   readonly requests: Request[] = [];
   readonly questions: Json<Question>[] = [];
   /** What the RunWatcher would answer: the agents blocked now. */
@@ -389,6 +391,8 @@ export class FakeApi {
     const body = typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : undefined;
     this.requests.push({ method, path: url.pathname + url.search, body });
     if (this.runsGate && /^\/api\/tasks\/[^/]+\/runs$/.test(url.pathname)) await this.runsGate;
+    if (this.profilesGate && url.pathname === "/api/agent-profiles" && method === "GET")
+      await this.profilesGate;
     if (method === "PUT" && url.pathname === "/api/settings/providers") await this.holdProvidersPut;
     if (method === "PUT" && url.pathname === "/api/settings/concurrency") {
       await this.holdConcurrencyPut;

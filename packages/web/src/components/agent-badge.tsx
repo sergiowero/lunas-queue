@@ -16,13 +16,15 @@ const CHIP =
 const NEUTRAL = "bg-surface-secondary text-text-secondary ring-border";
 
 /**
- * Resolves profiles by id from the shared `agent-profiles` query. `find` answers null while the list
- * loads and for an id that no longer exists, so callers fall back to the neutral badge.
+ * Resolves profiles by id from the shared `agent-profiles` query. `find` answers null for an id that
+ * no longer exists (and once the query failed), so callers fall back to the neutral badge. While the
+ * list loads, `loading` is true and callers show a placeholder instead of a wrong neutral badge.
  */
 export function useAgentProfiles() {
   const profiles = useQuery(queries.agentProfiles());
   const byId = new Map((profiles.data ?? []).map((profile) => [profile.id, profile]));
   return {
+    loading: profiles.isPending,
     find: (profileId: string | null | undefined): Json<AgentProfile> | null =>
       (profileId ? byId.get(profileId) : undefined) ?? null,
   };
@@ -67,16 +69,33 @@ export function AgentBadge({
   profileId,
   kind,
   label,
+  pending,
   className,
 }: {
   profileId: string | null | undefined;
   kind?: AgentKind | null | undefined;
+  /** The work this badge belongs to is still loading (its Run): a placeholder, not a neutral badge. */
+  pending?: boolean | undefined;
   /** Text of the neutral badge instead of the bare kind (a Run shows «claude · opus»). */
   label?: string | undefined;
   className?: string | undefined;
 }) {
   const t = useT();
-  const profile = useAgentProfiles().find(profileId);
+  const { find, loading } = useAgentProfiles();
+  const profile = find(profileId);
+  // A profiled piece of work whose profile list has not arrived yet must not look unprofiled.
+  if (pending || (loading && profileId)) {
+    return (
+      <span
+        role="img"
+        aria-label={t.common.loading}
+        data-agent-badge="loading"
+        className={cn(CHIP, NEUTRAL, className)}
+      >
+        <span aria-hidden="true">…</span>
+      </span>
+    );
+  }
   if (profile) {
     return (
       <ProfileChip
@@ -111,8 +130,9 @@ export function RunAgent({
 }: {
   run: { profileId: string | null; agentKind: AgentKind; model?: string | null };
 }) {
-  const { find } = useAgentProfiles();
+  const { find, loading } = useAgentProfiles();
   const text = formatAgent(run);
+  if (loading && run.profileId) return <AgentBadge profileId={run.profileId} />;
   if (!find(run.profileId)) {
     return <AgentBadge profileId={null} kind={run.agentKind} label={text} />;
   }
