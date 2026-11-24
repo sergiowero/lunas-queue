@@ -1,7 +1,7 @@
 // Agent profiles repository (docs/decisions/agent-profiles.md): global, named lists of models. It
 // validates with the @lunasq/schemas schemas what enters and what leaves the JSON column, publishes
 // the global events that wake the scheduler and implements the domain read port.
-import type { AgentProfileReader } from "@lunasq/domain";
+import { type AgentProfileReader, randomAppearance } from "@lunasq/domain";
 import {
   AGENT_PROFILE_CREATED,
   AGENT_PROFILE_DELETED,
@@ -108,14 +108,24 @@ export function readAgentProfile(db: Reader, profileId: string): AgentProfile | 
 
 export class AgentProfileRepository implements AgentProfileReader {
   private readonly db: LunasqDatabase;
+  private readonly random: () => number;
 
-  constructor(db: LunasqDatabase) {
+  /** `random` is the source of the appearance given to profiles created without one (injectable for tests). */
+  constructor(db: LunasqDatabase, random: () => number = Math.random) {
     this.db = db;
+    this.random = random;
   }
 
   /** Validates `input` (throws ZodError if it does not meet it), stores the profile and publishes the event. */
   create(input: AgentProfileCreate): AgentProfile {
-    const values = AgentProfileCreate.parse(input);
+    const parsed = AgentProfileCreate.parse(input);
+    // Each missing half of the appearance is drawn at random from its set.
+    const random = randomAppearance(this.random);
+    const values = {
+      ...parsed,
+      icon: parsed.icon ?? random.icon,
+      color: parsed.color ?? random.color,
+    };
     try {
       return this.db.transaction((tx) => {
         const [row] = tx.insert(agentProfiles).values(values).returning().all();
@@ -162,7 +172,9 @@ export class AgentProfileRepository implements AgentProfileReader {
         const changed =
           (values.name !== undefined && values.name !== current.name) ||
           (values.models !== undefined &&
-            JSON.stringify(values.models) !== JSON.stringify(current.models));
+            JSON.stringify(values.models) !== JSON.stringify(current.models)) ||
+          (values.icon !== undefined && values.icon !== current.icon) ||
+          (values.color !== undefined && values.color !== current.color);
         if (!changed) return current;
         const [row] = tx
           .update(agentProfiles)

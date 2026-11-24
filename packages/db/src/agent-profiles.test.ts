@@ -1,4 +1,5 @@
 import { type AgentProfileReader, InMemoryAgentProfileReader } from "@lunasq/domain";
+import { PROFILE_COLORS, PROFILE_ICONS } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import { AgentProfileRepository, AgentProfileRepositoryError } from "./agent-profiles.ts";
 import { ProjectRepository } from "./projects.ts";
@@ -76,6 +77,80 @@ describe("AgentProfileRepository.create", () => {
         models: [{ kind: "claude", effort: "high", args: ["--effort", "low"] }],
       }),
     ).toThrow(/--effort/);
+  });
+});
+
+describe("AgentProfileRepository appearance", () => {
+  it("assigns the icon and color of the random source when the create request has none", () => {
+    const db = migratedDatabase();
+    const repo = new AgentProfileRepository(db, () => 0.5);
+    const profile = repo.create({ name: "Fast", models: fastModels });
+    expect(profile.icon).toBe(PROFILE_ICONS[Math.floor(0.5 * PROFILE_ICONS.length)]);
+    expect(profile.color).toBe(PROFILE_COLORS[Math.floor(0.5 * PROFILE_COLORS.length)]);
+    expect(repo.get(profile.id)).toMatchObject({ icon: profile.icon, color: profile.color });
+    expect(eventTypes(db).map((e) => e.type)).toEqual(["agent_profile.created"]);
+  });
+
+  it("keeps the chosen icon and only draws the missing color", () => {
+    const repo = new AgentProfileRepository(migratedDatabase(), () => 0);
+    const profile = repo.create({ name: "Fast", models: fastModels, icon: "leaf" });
+    expect(profile).toMatchObject({ icon: "leaf", color: PROFILE_COLORS[0] });
+    const both = repo.create({ name: "Slow", models: fastModels, icon: "rocket", color: "pink" });
+    expect(both).toMatchObject({ icon: "rocket", color: "pink" });
+  });
+
+  it("updating only the color changes it, keeps icon, name and models and publishes agent_profile.updated", () => {
+    const { db, repo } = repository();
+    const profile = repo.create({ name: "Fast", models: fastModels, icon: "bolt", color: "red" });
+    const updated = repo.update(profile.id, { color: "teal" });
+    expect(updated).toMatchObject({
+      icon: "bolt",
+      color: "teal",
+      name: "Fast",
+      models: profile.models,
+    });
+    expect(repo.get(profile.id)?.color).toBe("teal");
+    expect(eventTypes(db).map((e) => e.type)).toEqual([
+      "agent_profile.created",
+      "agent_profile.updated",
+    ]);
+  });
+
+  it("an update without icon or color keeps the stored ones", () => {
+    const { repo } = repository();
+    const profile = repo.create({
+      name: "Fast",
+      models: fastModels,
+      icon: "flask",
+      color: "amber",
+    });
+    const updated = repo.update(profile.id, { name: "Faster" });
+    expect(updated).toMatchObject({ name: "Faster", icon: "flask", color: "amber" });
+    expect(repo.get(profile.id)).toMatchObject({ icon: "flask", color: "amber" });
+  });
+
+  it("an update that repeats the stored appearance writes and publishes nothing", () => {
+    const { db, repo } = repository();
+    const profile = repo.create({
+      name: "Fast",
+      models: fastModels,
+      icon: "flask",
+      color: "amber",
+    });
+    expect(repo.update(profile.id, { icon: "flask", color: "amber" })).toEqual(profile);
+    expect(eventTypes(db)).toHaveLength(1);
+  });
+
+  it("rejects an icon or color outside the sets and stores nothing", () => {
+    const { db, repo } = repository();
+    expect(() =>
+      repo.create({ name: "Fast", models: fastModels, icon: "star" as never }),
+    ).toThrow();
+    const profile = repo.create({ name: "Ok", models: fastModels });
+    expect(() => repo.update(profile.id, { color: "beige" as never })).toThrow();
+    expect(repo.list()).toHaveLength(1);
+    expect(repo.get(profile.id)?.color).toBe(profile.color);
+    expect(eventTypes(db)).toHaveLength(1);
   });
 });
 
