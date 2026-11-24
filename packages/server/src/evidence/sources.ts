@@ -135,7 +135,7 @@ export class AgentReviewerTranscriptSource implements TranscriptSource {
 
     const out: RawTranscript[] = [
       {
-        title: `${kind === "codex" ? "Codex" : "Copilot"} CLI session`,
+        title: sessionTitle(kind),
         jsonl: null,
         note: "LunasQ captures each reviewer's executions and answers separately",
       },
@@ -205,4 +205,14 @@ export class AgentReviewerTranscriptSource implements TranscriptSource {
     }
     return { jsonl: await readFile(realFile, "utf8") };
   }
+}
+
+const SESSION_TITLES: Record<Exclude<AgentKind, "claude">, string> = {
+  copilot: "Copilot CLI session",
+  codex: "Codex CLI session",
+  opencode: "OpenCode session",
+};
+
+function sessionTitle(kind: Exclude<AgentKind, "claude">): string {
+  return SESSION_TITLES[kind];
 }

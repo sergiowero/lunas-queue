@@ -15,6 +15,8 @@ import {
   type HerdrAdapter,
   type HerdrAgent,
   isHerdrError,
+  OPENCODE_CONFIG_ENV,
+  opencodePhaseConfig,
   showsCodexTrustDialog,
   showsCopilotTrustDialog,
   showsTrustDialog,
@@ -597,7 +599,7 @@ export class PhaseDispatcher implements Dispatcher {
       let run: RunRow = switched;
       run = this.checkOpen(run.id);
       const args = await this.args(run, target.model);
-      const paneId = await this.ensurePane(run, worktree, phase);
+      const paneId = await this.ensurePane(run, worktree, phase, target.model);
       run = this.checkOpen(run.id);
       // Preparation waits for herdr and the file system: the human may have turned the provider off.
       if (!this.settings.providers()[kind]) {
@@ -620,15 +622,24 @@ export class PhaseDispatcher implements Dispatcher {
           args,
           timeoutMs: this.startTimeoutMs,
         });
-        const agent = started.agent;
-        if (agent.status !== "idle" && agent.status !== "blocked") {
-          return await this.herdr.waitAgent({
-            name,
-            until: ["idle", "blocked"],
-            timeoutMs: this.startTimeoutMs,
-          });
+        const settled =
+          started.agent.status !== "idle" && started.agent.status !== "blocked"
+            ? await this.herdr.waitAgent({
+                name,
+                until: ["idle", "blocked"],
+                timeoutMs: this.startTimeoutMs,
+              })
+            : started.agent;
+        if (kind === "opencode" && settled.status === "blocked") {
+          // No known OpenCode startup prompt is accepted, so a block is a failed start of this model
+          // and the profile's next one is tried (no keys are sent).
+          const screen = await this.herdr.readAgent({ name, lines: SCREEN_LINES });
+          throw new DispatchError(
+            "agent_blocked",
+            `agent_blocked: agent ${name} started blocked: ${screen.slice(-300)}`,
+          );
         }
-        return agent;
+        return settled;
       } catch (error) {
         if (isHerdrError(error, "agent_name_taken")) throw error;
         const reason = asError(error).message.replaceAll(run.runToken, "[redacted]");
@@ -741,6 +752,7 @@ export class PhaseDispatcher implements Dispatcher {
     run: RunRow,
     worktree: { workspaceId: string; rootPaneId: string; path: string },
     phase: SchedulablePhase,
+    model: ProfileModel,
   ): Promise<string> {
     if (run.herdrPane !== null) {
       const snap = await this.herdr.snapshot();
@@ -776,6 +788,19 @@ export class PhaseDispatcher implements Dispatcher {
       // The approver waits for the reviewers instead of launching them in the background.
       env.CLAUDE_CODE_FORK_SUBAGENT ??= "0";
     }
+    if (model.kind === "opencode") {
+      // The inline config carries the MCP server and the permissions; the token is read from
+      // LUNASQ_RUN_TOKEN by OpenCode, so it is never written into the config (ADR opencode-provider).
+      if (!this.mcpUrl) {
+        throw new DispatchError(
+          "profile_conflict",
+          "the LunasQ MCP URL is missing to configure OpenCode",
+        );
+      }
+      env[OPENCODE_CONFIG_ENV] = JSON.stringify(
+        opencodePhaseConfig({ mcpUrl: this.mcpUrl, model: model.model, effort: model.effort }),
+      );
+    }
     const pane = await this.herdr.splitPane({
       paneId: worktree.rootPaneId,
       cwd: worktree.path,
@@ -797,14 +822,17 @@ export class PhaseDispatcher implements Dispatcher {
    */
   private async unblockStart(name: string, agent: HerdrAgent, fresh: boolean): Promise<HerdrAgent> {
     const screen = await this.herdr.readAgent({ name, lines: SCREEN_LINES });
+    // OpenCode has no known startup prompt to accept: whatever blocks it stays under human control.
     const acceptKeys =
-      agent.kind === "codex" && showsCodexTrustDialog(screen)
-        ? CODEX_TRUST_ACCEPT_KEYS
-        : agent.kind === "copilot" && showsCopilotTrustDialog(screen)
-          ? COPILOT_TRUST_ACCEPT_KEYS
-          : showsTrustDialog(screen)
-            ? TRUST_ACCEPT_KEYS
-            : undefined;
+      agent.kind === "opencode"
+        ? undefined
+        : agent.kind === "codex" && showsCodexTrustDialog(screen)
+          ? CODEX_TRUST_ACCEPT_KEYS
+          : agent.kind === "copilot" && showsCopilotTrustDialog(screen)
+            ? COPILOT_TRUST_ACCEPT_KEYS
+            : showsTrustDialog(screen)
+              ? TRUST_ACCEPT_KEYS
+              : undefined;
     if (!acceptKeys) {
       if (!fresh) return agent;
       throw new DispatchError(

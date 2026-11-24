@@ -1,5 +1,11 @@
 export const packageName = "@lunasq/adapters";
 
+export {
+  OPENCODE_CONFIG_ENV,
+  type OpencodePhaseConfigInput,
+  opencodePhaseConfig,
+  opencodeReviewerConfig,
+} from "./agents/opencode-config.ts";
 export type { AgentProvider, AgentProviderContext } from "./agents/providers.ts";
 export {
   AgentProviderError,

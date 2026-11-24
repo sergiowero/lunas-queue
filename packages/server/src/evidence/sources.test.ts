@@ -148,6 +148,31 @@ describe("ClaudeTranscriptSource", () => {
     });
   });
 
+  it("titles an OpenCode Run's session «OpenCode session» and reads its reviewer transcripts", async () => {
+    const opencodeEvidencePath = join(root, "opencode-reviewers");
+    const runDir = join(opencodeEvidencePath, "run-1");
+    mkdirSync(runDir, { recursive: true });
+    const agentId = "opencode-session-1";
+    const transcript = join(runDir, `${agentId}.jsonl`);
+    writeFileSync(transcript, '{"type":"assistant","text":"NO FINDINGS"}\n');
+    const source = new AgentReviewerTranscriptSource({
+      claude: new ClaudeTranscriptSource({ claudeDir }),
+      evidencePaths: { opencode: opencodeEvidencePath },
+    });
+
+    const out = await source.forRun({
+      run: run({ agentKind: "opencode" }),
+      worktreePath: worktree,
+      subagents: [subagent({ agentId, stoppedAt: new Date(), transcriptPath: transcript })],
+    });
+
+    expect(out[0]?.title).toBe("OpenCode session");
+    expect(out[1]).toMatchObject({
+      title: `Subagent lunasq-code-reviewer (${agentId})`,
+      jsonl: expect.stringContaining("NO FINDINGS"),
+    });
+  });
+
   it("warns if it does not find the session's transcript", async () => {
     const source = new ClaudeTranscriptSource({ claudeDir });
     const [main] = await source.forRun({ run: run(), worktreePath: worktree, subagents: [] });

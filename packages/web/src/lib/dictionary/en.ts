@@ -44,7 +44,7 @@ export const en: Dictionary = {
       "The provider settings could not be read; if all are disabled, tasks wait in the queue.",
     pausedTitle: "Dispatch paused:",
     pausedBody:
-      "Claude, Copilot, and Codex are disabled, so tasks wait in the queue. Live agents keep running.",
+      "Claude, Copilot, Codex, and OpenCode are disabled, so tasks wait in the queue. Live agents keep running.",
     goToSettings: "Go to Settings",
   },
   state: {
@@ -108,7 +108,7 @@ export const en: Dictionary = {
   },
   usage: {
     title: "Usage",
-    partial: "Recorded usage (partial: Copilot and Codex CLIs do not report usage): ",
+    partial: "Recorded usage (partial: Copilot, Codex, and OpenCode CLIs do not report usage): ",
     summary: (tokens, cost) => `${tokens} tokens · ${cost}`,
     none: "No usage recorded yet.",
     phase: "Phase",
@@ -532,11 +532,13 @@ export const en: Dictionary = {
       claude: "Claude",
       copilot: "Copilot",
       codex: "Codex",
+      opencode: "OpenCode",
     },
     providerDescriptions: {
       claude: "Claude Code",
       copilot: "GitHub Copilot CLI",
       codex: "OpenAI Codex CLI",
+      opencode: "OpenCode CLI",
     },
     providersTitle: "Agent providers",
     providersHelp:

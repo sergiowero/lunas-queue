@@ -291,11 +291,35 @@ describe("task detail", () => {
     const block = await section("Usage");
     expect(
       await block.findByText(
-        /Consumo registrado \(parcial: Copilot y Codex CLI no informan usage\)/,
+        /Consumo registrado \(parcial: Copilot, Codex y OpenCode CLI no informan usage\)/,
       ),
     ).toBeTruthy();
     expect(block.getByText(/360 tokens · \$0,25/)).toBeTruthy();
     expect(block.getByText("Implementación")).toBeTruthy();
+    expect(block.getAllByText("No disponible")).toHaveLength(4);
+  });
+
+  it("shows an OpenCode run without usage as unavailable and marks the totals as partial", async () => {
+    const { fake, task } = seeded();
+    const run = fake.startRun(task.id, "implement");
+    run.agentKind = "opencode";
+    fake.usage.set(task.id, {
+      total: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        costUsd: 0,
+      },
+      byRun: [],
+      byPhase: [],
+      byAgent: [],
+      byModel: [],
+      byReviewer: [],
+    });
+    renderApp(`/tasks/${task.id}`, fake);
+    const block = await section("Usage");
+    expect(await block.findByText(/Consumo registrado \(parcial: .*OpenCode/)).toBeTruthy();
     expect(block.getAllByText("No disponible")).toHaveLength(4);
   });
 

@@ -10,7 +10,7 @@ LunasQ (repository `lunas-queue`) is a multi‑project task queue where a human 
 
 **Scope:** create tasks with goal, priority and dependencies; automatic dispatch to agents in herdr; human gates in refinement; implementation ↔ verification loop; commit, push and PR.
 
-**Supported agents:** Claude Code, GitHub Copilot CLI and OpenAI Codex CLI are selected per phase in each project. Each CLI has its own adapter; the dispatcher uses the registry to build arguments, MCP configuration and fallback order. If a CLI fails before becoming ready, the next enabled one is tried once; if none becomes ready, the task moves to `needs_human` with each provider's diagnosis. Every provider can run verification: Claude Code launches native subagents, while Copilot and Codex use LunasQ's read-only CLI reviewer executors. Provider availability is controlled from Settings. Usage/cost tokens that are not available are shown as such, not as zero. See [ADR codex-provider](decisions/codex-provider.md).
+**Supported agents:** Claude Code, GitHub Copilot CLI, OpenAI Codex CLI and OpenCode are selected per phase in each project. Each CLI has its own adapter; the dispatcher uses the registry to build arguments, MCP configuration and fallback order. If a CLI fails before becoming ready, the next enabled one is tried once; if none becomes ready, the task moves to `needs_human` with each provider's diagnosis. Every provider can run verification: Claude Code launches native subagents, while Copilot, Codex and OpenCode use LunasQ's read-only CLI reviewer executors. Provider availability is controlled from Settings. Usage/cost tokens that are not available are shown as such, not as zero. See [ADR codex-provider](decisions/codex-provider.md) and [ADR opencode-provider](decisions/opencode-provider.md).
 
 **Out of scope (v1):** automatic merge, direct commits to main, production deployment done by LunasQ (it can be configured with project hooks), lanes by task size, acceptance tests hidden from the builder (possible future version) and automatic intake from GitHub issues (planned for v2).
 
@@ -201,7 +201,7 @@ All limits are configurable; the global one defaults to 5 and the others are opt
 
 **Enabled providers (Settings)**
 
-The human enables or disables each agent provider (Claude Code, Copilot CLI and Codex CLI) from the Settings page, e.g. when a CLI is unavailable or its usage limit runs out. It is a global setting (all enabled by default) that the scheduler reads on every pass. A task's **effective provider** is the phase profile's primary if enabled; otherwise the first enabled one in the fallback order (the primary and then the others in registration order). With all disabled the scheduler does not dispatch and tasks stay in `queued`; the UI shows a paused‑dispatch notice. The dispatcher's claim revalidates against the current setting (`providers_disabled`), the launch only tries enabled providers and live agents are never interrupted. Saving the setting records `settings.updated` in the outbox, which wakes the scheduler. Detail: [ADR settings-proveedores](decisions/settings-proveedores.md).
+The human enables or disables each agent provider (Claude Code, Copilot CLI, Codex CLI and OpenCode) from the Settings page, e.g. when a CLI is unavailable or its usage limit runs out. It is a global setting (all enabled by default) that the scheduler reads on every pass. A task's **effective provider** is the phase profile's primary if enabled; otherwise the first enabled one in the fallback order (the primary and then the others in registration order). With all disabled the scheduler does not dispatch and tasks stay in `queued`; the UI shows a paused‑dispatch notice. The dispatcher's claim revalidates against the current setting (`providers_disabled`), the launch only tries enabled providers and live agents are never interrupted. Saving the setting records `settings.updated` in the outbox, which wakes the scheduler. Detail: [ADR settings-proveedores](decisions/settings-proveedores.md).
 
 ## Dispatcher and herdr integration (initial proposal)
 
@@ -213,7 +213,7 @@ The dispatcher is a long‑lived worker with two inputs (DB events and herdr eve
 | --- | --- |
 | One workspace per project | `workspace create` with cwd and label |
 | Per‑task isolation | `worktree create`: creates checkout + branch and opens it as a workspace grouped under the project's |
-| Start an agent | `agent start` with a unique name and `--kind` (`claude`, `copilot` or `codex`) on a free shell pane |
+| Start an agent | `agent start` with a unique name and `--kind` (`claude`, `copilot`, `codex` or `opencode`) on a free shell pane |
 | Send the phase instruction | `agent prompt` (optionally with wait) |
 | Know whether it is working, finished or asking for permission | `events.subscribe` to `pane.agent_status_changed` (per‑pane subscription; see ADR 0004), or `agent wait` |
 | Show task and phase in the sidebar | `pane report-metadata` with tokens (task id, phase, iteration) |
@@ -327,7 +327,7 @@ The repo's `lunasq/` folder ends up with two parts: `hooks/` (configuration, ver
 
 ## MCPs and skills
 
-The contract between the system and any agent is an **own MCP (LunasQ MCP)** plus a **skill per phase**; Claude Code, Copilot CLI and Codex follow the same protocol while provider-specific command and MCP configuration stays in adapters.
+The contract between the system and any agent is an **own MCP (LunasQ MCP)** plus a **skill per phase**; Claude Code, Copilot CLI, Codex and OpenCode follow the same protocol while provider-specific command and MCP configuration stays in adapters.
 
 **LunasQ MCP (own, exposed by the backend)**
 
@@ -435,7 +435,7 @@ Each phase follows a mandatory practice and the three chain together: DDD produc
 
 ## Verification with subagents
 
-The verification phase is **one selected provider session** (one slot) that launches in parallel the reviewer executions that apply to the task (of 4 possible) and acts as approver: it consolidates their findings and issues pass or reject. Claude Code uses native subagents; Copilot and Codex run the same reviewer instructions through LunasQ's read-only CLI executors. For the scheduler and for herdr it remains one live phase agent.
+The verification phase is **one selected provider session** (one slot) that launches in parallel the reviewer executions that apply to the task (of 4 possible) and acts as approver: it consolidates their findings and issues pass or reject. Claude Code uses native subagents; Copilot, Codex and OpenCode run the same reviewer instructions through LunasQ's read-only CLI executors. For the scheduler and for herdr it remains one live phase agent.
 
 **Phase flow**
 
@@ -460,17 +460,17 @@ The verification phase is **one selected provider session** (one slot) that laun
 
 | Guard | Mechanism | What it guarantees |
 | --- | --- | --- |
-| Read‑only reviewers | Claude subagent tools omit Edit/Write; Copilot gets read-only available tools; Codex runs `codex exec --sandbox read-only --ignore-user-config` with approval policy `never` | Reviewers cannot edit the worktree through their configured tools or sandbox |
-| Execution evidence | Claude's `SubagentStart`/`SubagentStop` hooks or LunasQ's Copilot/Codex reviewer executor records each start, stop and private transcript | LunasQ knows which reviewers ran in that Run |
+| Read‑only reviewers | Claude subagent tools omit Edit/Write; Copilot gets read-only available tools; Codex runs `codex exec --sandbox read-only --ignore-user-config` with approval policy `never`; OpenCode runs `opencode run --pure` with an inline config that denies edits and every command outside a read-only allowlist | Reviewers cannot edit the worktree through their configured tools or sandbox |
+| Execution evidence | Claude's `SubagentStart`/`SubagentStop` hooks or LunasQ's Copilot/Codex/OpenCode reviewer executor records each start, stop and private transcript | LunasQ knows which reviewers ran in that Run |
 | Complete verdict | `submit_verdict` requires, for each of the 4 reviewers, its report or the justification for why it was not launched, and is rejected if a reported reviewer does not appear finished in the Run's hooks or CLI-executor records, or if a skipped one did finish ([ADR uw-23-verificacion](decisions/uw-23-verificacion.md)) | Each reviewer runs or is skipped with an audited justification |
 | Test gate | LunasQ runs the project's test command in the worktree before accepting a pass | No pass with a red suite, even if the agent says otherwise |
 
 **Implementation details**
 
-- **Definitions:** LunasQ installs Claude and Copilot reviewer assets in their supported user locations; the Codex executor receives the selected reviewer's instructions from the verification session.
+- **Definitions:** LunasQ installs Claude and Copilot reviewer assets in their supported user locations; the Codex and OpenCode executors receive the selected reviewer's instructions from the verification session.
 - **Models:** Claude reviewers use Opus from their frontmatter; CLI reviewers use the verification profile's configured model. The approver uses the phase profile's default model (`DEFAULT_VERIFY_MODEL`), which the profile can change.
-- **Waiting for results:** Claude receives `CLAUDE_CODE_FORK_SUBAGENT=0`; Copilot and Codex executions are synchronous and return their report before the MCP call completes.
-- **UI/UX reviewers with a browser:** Claude subagents may load the browser MCP declared in their definition; the isolated Copilot/Codex CLI reviewer executors do not inherit other configured MCP servers.
+- **Waiting for results:** Claude receives `CLAUDE_CODE_FORK_SUBAGENT=0`; Copilot, Codex and OpenCode executions are synchronous and return their report before the MCP call completes.
+- **UI/UX reviewers with a browser:** Claude subagents may load the browser MCP declared in their definition; the isolated Copilot/Codex/OpenCode CLI reviewer executors do not inherit other configured MCP servers.
 - **Per‑reviewer consumption:** usage tracking breaks down by subagent with the `agent.name` attribute (requires `OTEL_LOG_TOOL_DETAILS=1` for custom names).
 
 **Implications**
@@ -481,7 +481,7 @@ The verification phase is **one selected provider session** (one slot) that laun
 
 ## Token consumption and cost (read‑only)
 
-Usage collection currently supports Claude Code. Copilot CLI and Codex CLI do not report usage through LunasQ, so the UI marks their consumption as partial instead of presenting zero or an invented estimate.
+Usage collection currently supports Claude Code. Copilot CLI, Codex CLI and OpenCode do not report usage through LunasQ, so the UI marks their consumption as partial instead of presenting zero or an invented estimate.
 
 **What each agent exposes**
 
@@ -491,13 +491,14 @@ Usage collection currently supports Claude Code. Copilot CLI and Codex CLI do no
 | Claude Code | Per‑session JSONL transcript; statusline JSON | `message.usage` per message | `cost.total_cost_usd` per session (statusline) | Session id |
 | Codex CLI | No supported usage source in LunasQ | Not available | Not available | Not collected |
 | GitHub Copilot CLI | No supported usage source in LunasQ | Not available | Not available | Not collected |
+| OpenCode | No supported usage source in LunasQ | Not available | Not available | Not collected |
 | Other agents | Varies by agent | Partial or none | — | Marked *not available* |
 
 **Attribution per task**
 
 1. When creating the pane, the dispatcher passes environment variables with herdr's `--env`: telemetry on, the own collector's endpoint and `OTEL_RESOURCE_ATTRIBUTES` with task id, run id and phase. Claude Code copies those attributes to every metric and event.
 2. Other providers may expose a session identity through herdr, but LunasQ does not infer usage from it.
-3. When the Run closes, Claude's transcript is reconciled as a backup; Copilot and Codex transcripts are used for review evidence only.
+3. When the Run closes, Claude's transcript is reconciled as a backup; Copilot, Codex and OpenCode transcripts are used for review evidence only.
 
 **Data model**
 
@@ -685,8 +686,8 @@ Summary of what has already been decided; each point is reflected in its section
 | Manual intervention | Allowed in any pane; the dispatcher only reacts to MCP signals and herdr state, so what is typed by hand does not end up in the task's history |
 | Factory model | Lights‑on: human gate on the spec and on the merge; no direct commits to main; deployment only via the project's hooks |
 | Brain | engram as a weak dependency: agents use it via its MCP if installed; LunasQ only adds best‑effort instructions in the skills |
-| Verification | A selected provider session that launches applicable Claude subagents or LunasQ-managed Copilot/Codex reviewers and acts as approver; a single slot |
-| Supported agents | Claude Code, GitHub Copilot CLI and OpenAI Codex CLI; configured per phase |
+| Verification | A selected provider session that launches applicable Claude subagents or LunasQ-managed Copilot/Codex/OpenCode reviewers and acts as approver; a single slot |
+| Supported agents | Claude Code, GitHub Copilot CLI, OpenAI Codex CLI and OpenCode; configured per phase |
 | Risk router | Label only (low / medium / high) on the PR; everything still has a human merge |
 | Roadmap | Intake from GitHub issues in v2; tests hidden from the builder later; size lanes not for now |
 | Reviewer definitions | Installed by LunasQ in \~/.claude/agents/lunasq/, with an optional per‑project override |
@@ -709,8 +710,8 @@ Features left out of v1, either by explicit decision or because v1 took the simp
 
 | Feature | What it brings | In v1 | Suggested version |
 | --- | --- | --- | --- |
-| Support for additional coding-agent CLIs | Choose further agents per phase according to cost or strength | Claude Code, Copilot and Codex | v2 |
-| Native subagents for non-Claude providers | Provider-native reviewer fan-out rather than LunasQ-managed CLI executions | LunasQ-managed reviewers for Copilot and Codex | Later |
+| Support for additional coding-agent CLIs | Choose further agents per phase according to cost or strength | Claude Code, Copilot, Codex and OpenCode | v2 |
+| Native subagents for non-Claude providers | Provider-native reviewer fan-out rather than LunasQ-managed CLI executions | LunasQ-managed reviewers for Copilot, Codex and OpenCode | Later |
 | Automatic intake from GitHub issues | Issues with a certain label create tasks in Draft | Tasks created by hand | v2 |
 | Per‑task agent override | Change kind or model on a specific task | Only per‑project and phase profile | v2 |
 | GitHub webhook for merges | Release dependents instantly, without polling | Polling with `gh` | v2 |

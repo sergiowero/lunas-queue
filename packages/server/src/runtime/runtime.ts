@@ -35,6 +35,7 @@ import { subscribeOnFailureHooks } from "../hooks/on-failure.ts";
 import { HookService } from "../hooks/service.ts";
 import { CodexCliReviewerExecutor } from "../mcp/codex-reviewer.ts";
 import { CopilotCliReviewerExecutor } from "../mcp/copilot-reviewer.ts";
+import { OpencodeCliReviewerExecutor } from "../mcp/opencode-reviewer.ts";
 import { OutboxPublisher } from "../outbox/publisher.ts";
 import { SUBAGENT_HOOK_PATH } from "../subagents/routes.ts";
 import { PaneTestGate } from "../test-gate/gate.ts";
@@ -144,6 +145,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const processes = opts.adapters?.processes ?? new ShellProcessRunner();
   const copilotEvidencePath = join(dirname(opts.dbPath), "copilot-reviewers");
   const codexEvidencePath = join(dirname(opts.dbPath), "codex-reviewers");
+  const opencodeEvidencePath = join(dirname(opts.dbPath), "opencode-reviewers");
   const copilotReviewers = new CopilotCliReviewerExecutor({
     processes,
     agentsPath:
@@ -154,6 +156,10 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const codexReviewers = new CodexCliReviewerExecutor({
     processes,
     evidencePath: codexEvidencePath,
+  });
+  const opencodeReviewers = new OpencodeCliReviewerExecutor({
+    processes,
+    evidencePath: opencodeEvidencePath,
   });
   const urls = runtimeUrls(url);
   const paneEnv = opts.telemetry === false ? {} : telemetryEnv(url);
@@ -167,7 +173,11 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     git,
     transcripts: new AgentReviewerTranscriptSource({
       claude: new ClaudeTranscriptSource(),
-      evidencePaths: { copilot: copilotEvidencePath, codex: codexEvidencePath },
+      evidencePaths: {
+        copilot: copilotEvidencePath,
+        codex: codexEvidencePath,
+        opencode: opencodeEvidencePath,
+      },
     }),
   });
   const orchestrator = new Orchestrator({
@@ -202,6 +212,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
     db,
     copilotReviewers,
     codexReviewers,
+    opencodeReviewers,
     telemetry: opts.telemetry !== false,
     ...(opts.scheduler && { scheduler: opts.scheduler }),
     ...(opts.webRoot && { webRoot: opts.webRoot }),

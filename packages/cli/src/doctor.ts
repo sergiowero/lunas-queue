@@ -29,6 +29,7 @@ export const MINIMUM = {
   claude: "2.1.312",
   copilot: "1.0.0",
   codex: "0.122.0",
+  opencode: "1.19.6",
 } as const;
 
 const INSTALL_FIX = "corre `lunasq install`";
@@ -142,7 +143,9 @@ export async function claudeIntegrationState(ctx: MachineContext): Promise<strin
 export async function checkHerdrIntegration(ctx: MachineContext): Promise<CheckResult> {
   if (
     (await checkClaude(ctx)).status !== "ok" &&
-    ((await checkCopilot(ctx)).status === "ok" || (await checkCodex(ctx)).status === "ok")
+    ((await checkCopilot(ctx)).status === "ok" ||
+      (await checkCodex(ctx)).status === "ok" ||
+      (await checkOpencode(ctx)).status === "ok")
   ) {
     return warn(
       "herdr-integration",
@@ -233,6 +236,28 @@ export async function checkCodex(ctx: MachineContext): Promise<CheckResult> {
   return ok("codex", `OpenAI Codex CLI ${version}`);
 }
 
+export async function checkOpencode(ctx: MachineContext): Promise<CheckResult> {
+  const res = await run(ctx, "opencode --version");
+  if (res.exitCode === NOT_FOUND_EXIT_CODE) {
+    return fail("opencode", "OpenCode is not installed", "install OpenCode");
+  }
+  const version = parseVersion(res.stdout);
+  if (res.exitCode !== 0 || !version) {
+    return fail(
+      "opencode",
+      `\`opencode --version\` failed: ${res.stderr.trim() || res.stdout.trim()}`,
+    );
+  }
+  if (compareVersions(version, MINIMUM.opencode) < 0) {
+    return fail(
+      "opencode",
+      `OpenCode ${version}; LunasQ needs ${MINIMUM.opencode} or newer`,
+      "actualiza OpenCode",
+    );
+  }
+  return ok("opencode", `OpenCode ${version}`);
+}
+
 export async function checkGh(ctx: MachineContext): Promise<CheckResult> {
   const res = await run(ctx, "gh auth status");
   if (res.exitCode === NOT_FOUND_EXIT_CODE)
@@ -244,14 +269,15 @@ export async function checkGh(ctx: MachineContext): Promise<CheckResult> {
 
 /** Tools LunasQ does not install: without them `install` does not continue. */
 export async function checkPrerequisites(ctx: MachineContext): Promise<CheckResult[]> {
-  const [herdr, claude, copilot, codex, gh] = await Promise.all([
+  const [herdr, claude, copilot, codex, opencode, gh] = await Promise.all([
     checkHerdr(ctx),
     checkClaude(ctx),
     checkCopilot(ctx),
     checkCodex(ctx),
+    checkOpencode(ctx),
     checkGh(ctx),
   ]);
-  const providers = [claude, copilot, codex];
+  const providers = [claude, copilot, codex, opencode];
   if (providers.some((provider) => provider.status === "ok")) {
     for (const provider of providers) {
       if (provider.status !== "ok") provider.status = "warn";

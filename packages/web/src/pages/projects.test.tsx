@@ -137,7 +137,7 @@ describe("project creation", () => {
 
   it("warns, with a link to Settings, when the selected profile has models of a disabled provider", async () => {
     const fake = new FakeApi();
-    fake.providers = { claude: true, copilot: false, codex: true };
+    fake.providers = { claude: true, copilot: false, codex: true, opencode: true };
     fake.addProfile({
       name: "Con copilot",
       models: [

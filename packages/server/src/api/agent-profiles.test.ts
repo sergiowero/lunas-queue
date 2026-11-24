@@ -115,6 +115,34 @@ describe("POST /api/agent-profiles", () => {
     expect(await (await send("GET", "/api/agent-profiles")).json()).toEqual([]);
   });
 
+  it.each(["--auto", "--model=x", "--port", "--"])(
+    "rejects an OpenCode model with %s in args with 400 invalid_input at [models, 1, args]",
+    async (flag) => {
+      const { send } = setup();
+      const res = await send("POST", "/api/agent-profiles", {
+        name: "Bad",
+        models: [{ kind: "claude" }, { kind: "opencode", args: [flag] }],
+      });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({
+        error: "invalid_input",
+        issues: [{ path: ["models", "1", "args"], message: expect.stringContaining(flag) }],
+      });
+      expect(await (await send("GET", "/api/agent-profiles")).json()).toEqual([]);
+    },
+  );
+
+  it("accepts an OpenCode model with its provider/model name and effort", async () => {
+    const { send } = setup();
+    const profile = await created(send, {
+      name: "Open",
+      models: [{ kind: "opencode", model: "anthropic/claude-sonnet-4", effort: "high" }],
+    });
+    expect(profile.models).toMatchObject([
+      { kind: "opencode", model: "anthropic/claude-sonnet-4", effort: "high", args: [] },
+    ]);
+  });
+
   it("answers 400 if the body is not JSON", async () => {
     const { send } = setup();
     const res = await send("POST", "/api/agent-profiles", "{no");

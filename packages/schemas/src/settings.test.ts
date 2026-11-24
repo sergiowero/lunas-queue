@@ -10,7 +10,12 @@ import {
 
 describe("AgentProviderSettings", () => {
   it("without saved configuration, all providers are enabled", () => {
-    expect(AgentProviderSettings.parse({})).toEqual({ claude: true, copilot: true, codex: true });
+    expect(AgentProviderSettings.parse({})).toEqual({
+      claude: true,
+      copilot: true,
+      codex: true,
+      opencode: true,
+    });
   });
 
   it("respects the boolean of each provider", () => {
@@ -18,11 +23,22 @@ describe("AgentProviderSettings", () => {
       claude: false,
       copilot: true,
       codex: true,
+      opencode: true,
     });
     expect(AgentProviderSettings.parse({ claude: false, copilot: false })).toEqual({
       claude: false,
       copilot: false,
       codex: true,
+      opencode: true,
+    });
+  });
+
+  it("reads settings saved before opencode existed with opencode enabled", () => {
+    expect(AgentProviderSettings.parse({ claude: true, copilot: false, codex: true })).toEqual({
+      claude: true,
+      copilot: false,
+      codex: true,
+      opencode: true,
     });
   });
 
@@ -89,7 +105,7 @@ describe("settings.updated event", () => {
     expect(
       SettingsUpdatedPayload.parse({ providers: { claude: false, copilot: true, codex: true } }),
     ).toEqual({
-      providers: { claude: false, copilot: true, codex: true },
+      providers: { claude: false, copilot: true, codex: true, opencode: true },
     });
     expect(() => SettingsUpdatedPayload.parse({ providers: { claude: false } })).not.toThrow();
     expect(() => SettingsUpdatedPayload.parse({})).toThrow();
@@ -99,7 +115,7 @@ describe("settings.updated event", () => {
     expect(
       SettingsUpdatedPayload.parse({ providers: { claude: true, copilot: true, codex: true } }),
     ).toEqual({
-      providers: { claude: true, copilot: true, codex: true },
+      providers: { claude: true, copilot: true, codex: true, opencode: true },
     });
   });
 
@@ -113,7 +129,7 @@ describe("settings.updated event", () => {
         globalConcurrency: 3,
       }),
     ).toEqual({
-      providers: { claude: true, copilot: false, codex: true },
+      providers: { claude: true, copilot: false, codex: true, opencode: true },
       globalConcurrency: 3,
     });
     expect(() => SettingsUpdatedPayload.parse({ globalConcurrency: 0 })).toThrow();

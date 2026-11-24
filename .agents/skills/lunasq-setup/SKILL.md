@@ -31,7 +31,7 @@ pnpm is pinned in `packageManager`. better-sqlite3 uses prebuilds (it does not c
 pnpm lunasq doctor
 ```
 
-It needs herdr ≥ 0.9.5 with its server running, Codex ≥ 2.1.312 and `gh auth login` done. `lunasq install` does not install those three: if they are missing, ask the user to install them (herdr: `herdr status --json`; gh: `gh auth login`).
+It needs herdr ≥ 0.9.5 with its server running, at least one agent provider CLI (Claude Code ≥ 2.1.312, GitHub Copilot CLI, Codex CLI ≥ 0.122.0 or OpenCode ≥ 1.19.6; a missing one only warns while another is available) and `gh auth login` done. `lunasq install` does not install those: if they are missing, ask the user to install them (herdr: `herdr status --json`; gh: `gh auth login`; OpenCode: `opencode --version`).
 
 ## 4. Install (once, idempotent)
 

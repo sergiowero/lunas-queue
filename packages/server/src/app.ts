@@ -92,6 +92,7 @@ export interface AppDeps {
   telemetry?: boolean;
   copilotReviewers?: CopilotReviewerExecutor;
   codexReviewers?: ReviewerExecutor;
+  opencodeReviewers?: ReviewerExecutor;
   /** Scheduler configuration: the queue shows the same score it dispatches with. */
   scheduler?: SchedulerConfigInput;
   /** Reading the evidence in the repo when the worktree no longer exists; real git by default. */
@@ -110,6 +111,7 @@ export function createApp({
   phaseHooks,
   copilotReviewers,
   codexReviewers,
+  opencodeReviewers,
   hooks,
   questions,
   blocked,
@@ -129,6 +131,7 @@ export function createApp({
     phaseHooks: phaseHooks ?? new NoPhaseHooks(),
     ...(copilotReviewers && { copilotReviewers }),
     ...(codexReviewers && { codexReviewers }),
+    ...(opencodeReviewers && { opencodeReviewers }),
   });
   const tasks = new TaskRepository(db);
   const runs = new RunRepository(db);

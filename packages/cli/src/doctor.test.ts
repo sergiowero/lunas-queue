@@ -39,6 +39,7 @@ describe("doctor", () => {
       "claude",
       "copilot",
       "codex",
+      "opencode",
       "gh",
       "herdr-integration",
       "herdr-toast",
@@ -215,6 +216,43 @@ describe("doctor", () => {
     expect(byId(await runDoctor(ctx), "codex")).toMatchObject({
       status: "warn",
       summary: expect.stringContaining("0.122.0 or newer"),
+    });
+  });
+
+  it("OpenCode can be the only available agent provider", async () => {
+    const { ctx } = machine({
+      ...healthyResponses(),
+      "claude --version": { exitCode: 127 },
+      "copilot --version": { exitCode: 127 },
+      "codex --version": { exitCode: 127 },
+    });
+    const results = await runDoctor(ctx);
+    expect(byId(results, "opencode")?.status).toBe("ok");
+    expect(byId(results, "claude")?.status).toBe("warn");
+    expect(byId(results, "herdr-integration")?.status).toBe("warn");
+  });
+
+  it("warns, without failing, when OpenCode is missing but Claude Code is available", async () => {
+    const { ctx } = await installed({
+      ...healthyResponses(),
+      "opencode --version": { exitCode: 127 },
+    });
+    const results = await runDoctor(ctx);
+    expect(byId(results, "opencode")).toMatchObject({
+      status: "warn",
+      summary: expect.stringContaining("not installed"),
+    });
+    expect(results.filter((r) => r.status === "fail")).toEqual([]);
+  });
+
+  it("warns with the found version and the minimum when OpenCode is older", async () => {
+    const { ctx } = machine({
+      ...healthyResponses(),
+      "opencode --version": { stdout: "1.2.3\n" },
+    });
+    expect(byId(await runDoctor(ctx), "opencode")).toMatchObject({
+      status: "warn",
+      summary: expect.stringMatching(/1\.2\.3.*1\.19\.6 or newer/),
     });
   });
 
