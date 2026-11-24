@@ -38,3 +38,5 @@ Validated against OpenCode 1.19.6.
 - [OpenCode CLI](https://opencode.ai/docs/cli)
 - [OpenCode config](https://opencode.ai/docs/config) and [permissions](https://opencode.ai/docs/permissions)
 - [OpenCode MCP servers](https://opencode.ai/docs/mcp-servers)
+
+- **Usage limits.** The watcher recognizes OpenCode's own notices on its screen (`Free usage exceeded, subscribe to Go`, `Usage limit reached. It will reset in …`, `Rate limit exceeded`, validated against OpenCode 1.19.6) and the provider errors it relays (`rate_limit_error`, `insufficient_quota`) with `OPENCODE_USAGE_LIMIT_PATTERN`, applied only to OpenCode Runs; the Run then falls back to the next model like any other usage limit.
