@@ -6,6 +6,7 @@ import {
   insertTask,
   migratedDatabase,
 } from "@lunasq/db/test-helpers";
+import { PROFILE_COLORS, PROFILE_ICONS } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.ts";
 
@@ -45,8 +46,101 @@ async function created(send: Send, body: object = fast) {
     id: string;
     name: string;
     models: { kind: string; model?: string; args: string[] }[];
+    icon: string;
+    color: string;
   };
 }
+
+const eventTypes = (db: ReturnType<typeof setup>["db"]) =>
+  db.$client
+    .prepare("select type from events where type like 'agent_profile.%' order by id")
+    .pluck()
+    .all();
+
+describe("agent profile appearance", () => {
+  it("POST without icon or color stores a random one of each set and publishes the event", async () => {
+    const { db, send } = setup();
+    const profile = await created(send);
+    expect(PROFILE_ICONS).toContain(profile.icon);
+    expect(PROFILE_COLORS).toContain(profile.color);
+    const [stored] = (await (
+      await send("GET", "/api/agent-profiles")
+    ).json()) as (typeof profile)[];
+    expect(stored).toMatchObject({ icon: profile.icon, color: profile.color });
+    expect(eventTypes(db)).toEqual(["agent_profile.created"]);
+  });
+
+  it("POST keeps the chosen icon and color", async () => {
+    const { send } = setup();
+    const profile = await created(send, { ...fast, icon: "rocket", color: "violet" });
+    expect(profile).toMatchObject({ icon: "rocket", color: "violet" });
+    const res = await send("GET", `/api/agent-profiles/${profile.id}`);
+    expect(await res.json()).toMatchObject({ icon: "rocket", color: "violet" });
+  });
+
+  it.each([
+    ["icon", { icon: "star" }],
+    ["color", { color: "beige" }],
+  ])(
+    "POST with a %s outside the set answers 400 invalid_input with its path and stores nothing",
+    async (path, extra) => {
+      const { db, send } = setup();
+      const res = await send("POST", "/api/agent-profiles", { ...fast, ...extra });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({
+        error: "invalid_input",
+        issues: [{ path: [path] }],
+      });
+      expect(((await (await send("GET", "/api/agent-profiles")).json()) as unknown[]).length).toBe(
+        0,
+      );
+      expect(eventTypes(db)).toEqual([]);
+    },
+  );
+
+  it.each([
+    ["icon", { icon: "star" }],
+    ["color", { color: 7 }],
+  ])(
+    "PATCH with a %s outside the set answers 400 invalid_input and changes nothing",
+    async (path, extra) => {
+      const { db, send } = setup();
+      const profile = await created(send);
+      const res = await send("PATCH", `/api/agent-profiles/${profile.id}`, extra);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({
+        error: "invalid_input",
+        issues: [{ path: [path] }],
+      });
+      expect(await (await send("GET", `/api/agent-profiles/${profile.id}`)).json()).toMatchObject({
+        icon: profile.icon,
+        color: profile.color,
+      });
+      expect(eventTypes(db)).toEqual(["agent_profile.created"]);
+    },
+  );
+
+  it("PATCH with only a color changes it, keeps icon, name and models and publishes agent_profile.updated", async () => {
+    const { db, send } = setup();
+    const profile = await created(send, { ...fast, icon: "brain", color: "red" });
+    const res = await send("PATCH", `/api/agent-profiles/${profile.id}`, { color: "teal" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      icon: "brain",
+      color: "teal",
+      name: "Fast",
+      models: profile.models,
+    });
+    expect(eventTypes(db)).toEqual(["agent_profile.created", "agent_profile.updated"]);
+  });
+
+  it("PATCH without icon or color keeps the stored ones", async () => {
+    const { send } = setup();
+    const profile = await created(send, { ...fast, icon: "shield", color: "green" });
+    const res = await send("PATCH", `/api/agent-profiles/${profile.id}`, { name: "Faster" });
+    expect(await res.json()).toMatchObject({ name: "Faster", icon: "shield", color: "green" });
+  });
+});
 
 describe("POST /api/agent-profiles", () => {
   it("creates the profile with its models in order and answers 201", async () => {
