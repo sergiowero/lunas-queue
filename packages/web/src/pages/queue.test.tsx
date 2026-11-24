@@ -36,6 +36,8 @@ describe("global queue", () => {
     ];
     renderApp("/queue", fake);
 
+    // The badges resolve once the profiles have loaded.
+    await screen.findAllByRole("img", { name: "Agente Default" });
     const rows = await screen.findAllByRole("row");
     const body = rows.slice(1).map((row) => within(row).getAllByRole("cell"));
     // The task cell carries its #N before the goal.
@@ -49,12 +51,13 @@ describe("global queue", () => {
       `#${b.number}Segunda`,
       "lunas-queue",
       "Draften cola",
+      "Default",
       "5 → 30",
       "42.5",
       "120 · $1,50",
       "",
     ]);
-    expect(body[2]?.[5]?.textContent).toBe("—");
+    expect(body[2]?.[6]?.textContent).toBe("—");
     expect(within(rows[1] as HTMLElement).getByRole("link", { name: "Segunda" })).toHaveProperty(
       "href",
       expect.stringContaining(`/tasks/${b.id}`),
@@ -197,7 +200,9 @@ describe("global queue", () => {
     await user.selectOptions(screen.getByLabelText("Proyecto"), "uno");
     await waitFor(() => expect(screen.queryByText("De dos")).toBeNull());
     expect(screen.getByText("De uno")).toBeTruthy();
-    expect(fake.requests.at(-1)?.path).toBe(`/api/queue?projectId=${one.id}`);
+    expect(fake.requests.filter((r) => r.path.startsWith("/api/queue")).at(-1)?.path).toBe(
+      `/api/queue?projectId=${one.id}`,
+    );
   });
 
   it("explains when the queue is empty", async () => {
@@ -416,6 +421,62 @@ describe("global queue", () => {
           .filter((path) => path.startsWith("/api/queue"))
           .at(-1),
       ).toBe("/api/queue");
+    });
+  });
+
+  describe("Agent column", () => {
+    const usage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd: null,
+    };
+
+    it("shows the badge of the profile the project assigns to the task's next phase, or a no-profile mark", async () => {
+      const fake = new FakeApi();
+      const rapido = fake.addProfile({ name: "Rápido", icon: "rocket", color: "teal" });
+      const lento = fake.addProfile({ name: "Lento", icon: "leaf", color: "green" });
+      const assigned = fake.addProject({
+        name: "asignado",
+        agentProfiles: { refine: rapido.id, implement: lento.id, verify: lento.id, deliver: null },
+      });
+      const unassigned = fake.addProject({
+        name: "libre",
+        agentProfiles: { refine: null, implement: null, verify: null, deliver: null },
+      });
+      const toRefine = fake.addTask(assigned.id, { goal: "A refinar", state: "draft" });
+      const toImplement = fake.addTask(assigned.id, {
+        goal: "A implementar",
+        state: "in_progress",
+      });
+      const held = fake.addTask(unassigned.id, { goal: "Sin asignar", state: "draft" });
+      fake.queue = [toRefine, toImplement, held].map((task) => ({
+        task,
+        ready: false,
+        score: null,
+        effectivePriority: null,
+        usage,
+      }));
+      renderApp("/queue", fake);
+
+      const agentOf = async (goal: string) => {
+        const row = (await screen.findByText(goal)).closest("tr") as HTMLElement;
+        return within(row).getAllByRole("cell")[4] as HTMLElement;
+      };
+      const refine = await within(await agentOf("A refinar")).findByRole("img", {
+        name: "Agente Rápido",
+      });
+      expect(refine.getAttribute("data-icon")).toBe("rocket");
+      const implement = await within(await agentOf("A implementar")).findByRole("img", {
+        name: "Agente Lento",
+      });
+      expect(implement.getAttribute("data-color")).toBe("green");
+      const none = await within(await agentOf("Sin asignar")).findByRole("img", {
+        name: "Sin perfil de agente",
+      });
+      expect(none.getAttribute("data-agent-badge")).toBe("neutral");
+      expect(none.textContent).toBe("Sin perfil");
     });
   });
 });

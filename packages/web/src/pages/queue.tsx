@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
+import { AgentBadge } from "../components/agent-badge.tsx";
 import { DataTable } from "../components/data-table.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
@@ -12,6 +13,7 @@ import { PauseTaskButton, ResumeTaskButton } from "../components/task-actions.ts
 import { TaskNumber } from "../components/task-number.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
+import { pendingPhase } from "../lib/attribution.ts";
 import { canPause, canResume, cappedTaskLabel, formatCost, formatTokens } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
@@ -85,6 +87,19 @@ export function QueuePage() {
         cell: (c) => (
           <StateBadges state={c.row.original.task.state} subState={c.row.original.task.subState} />
         ),
+      }),
+      // The agent that will take the task's next phase: the profile its project assigns to it.
+      column.display({
+        id: "agent",
+        header: t.queue.agent,
+        cell: (c) => {
+          const { task } = c.row.original;
+          const phase = pendingPhase(task.state);
+          const project = byId.get(task.projectId);
+          if (!phase) return "—";
+          if (!project) return "…";
+          return <AgentBadge profileId={project.agentProfiles[phase]} />;
+        },
       }),
       column.accessor(priority, { id: "priority", header: t.columns.priority }),
       column.accessor(score, { id: "score", header: t.queue.score }),

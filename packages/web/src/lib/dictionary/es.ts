@@ -397,6 +397,7 @@ export const es = {
     empty: "No hay tareas vivas en la cola.",
     score: "Score",
     usage: "Usage",
+    agent: "Agente",
   },
   inProgressPage: {
     title: "En curso",

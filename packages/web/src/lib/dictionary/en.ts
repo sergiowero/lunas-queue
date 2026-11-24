@@ -397,6 +397,7 @@ export const en: Dictionary = {
     empty: "There are no live tasks in the queue.",
     score: "Score",
     usage: "Usage",
+    agent: "Agent",
   },
   inProgressPage: {
     title: "In progress",

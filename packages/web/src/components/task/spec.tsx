@@ -4,9 +4,11 @@ import type { Spec, SpecContent, SpecDiff, Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type Json } from "../../lib/api.ts";
+import { specVersionRun } from "../../lib/attribution.ts";
 import type { Dictionary } from "../../lib/dictionary/index.ts";
 import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
+import { AgentBadge } from "../agent-badge.tsx";
 import { Muted, Section } from "../section.tsx";
 import { Loading, MutationError, QueryError } from "../status.tsx";
 import { Badge } from "../ui/badge.tsx";
@@ -253,6 +255,7 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
 export function SpecVersions({ task }: { task: Json<Task> }) {
   const t = useT();
   const specs = useQuery(queries.specs(task.id));
+  const runs = useQuery(queries.runs(task.id));
   // The choice holds against the last version there was: if another arrives, the new one is shown so
   // the gate (which only applies to the last one) is not hidden.
   const [choice, setChoice] = useState<{ version: number; latest: number } | null>(null);
@@ -267,6 +270,8 @@ export function SpecVersions({ task }: { task: Json<Task> }) {
       : undefined;
   const spec = chosen ?? latest;
   if (!spec || !latest) return <Muted>{t.spec.notDelivered}</Muted>;
+  // A version authored by the agent is attributed to the refine Run that was working when it arrived.
+  const authorRun = specVersionRun(runs.data ?? [], spec);
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -285,6 +290,7 @@ export function SpecVersions({ task }: { task: Json<Task> }) {
           {t.spec.approval[spec.approval]}
         </Badge>
         <span className="text-xs text-muted-foreground">{t.spec.author(spec.createdBy)}</span>
+        {authorRun && <AgentBadge profileId={authorRun.profileId} kind={authorRun.agentKind} />}
       </div>
       {spec.reviewComments && (
         <p className="text-sm">{t.spec.reviewComments(spec.reviewComments)}</p>

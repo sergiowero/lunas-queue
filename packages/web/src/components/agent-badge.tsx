@@ -4,6 +4,7 @@
 import type { AgentKind, AgentProfile, ProfileColor, ProfileIcon } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import type { Json } from "../lib/api.ts";
+import { formatAgent } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { PROFILE_COLOR_CLASSES } from "../lib/profile-appearance.ts";
 import { queries } from "../lib/queries.ts";
@@ -65,10 +66,13 @@ export function ProfileChip({
 export function AgentBadge({
   profileId,
   kind,
+  label,
   className,
 }: {
   profileId: string | null | undefined;
-  kind?: AgentKind | null;
+  kind?: AgentKind | null | undefined;
+  /** Text of the neutral badge instead of the bare kind (a Run shows «claude · opus»). */
+  label?: string | undefined;
   className?: string | undefined;
 }) {
   const t = useT();
@@ -92,8 +96,30 @@ export function AgentBadge({
     >
       <NeutralGlyph />
       <span aria-hidden="true" className="truncate">
-        {kind ?? t.agentBadge.noProfile}
+        {label ?? kind ?? t.agentBadge.noProfile}
       </span>
+    </span>
+  );
+}
+
+/**
+ * The agent of a Run: the profile's badge followed by the provider and model it ran on
+ * («claude · opus»); without a known profile, the neutral badge already carries that text.
+ */
+export function RunAgent({
+  run,
+}: {
+  run: { profileId: string | null; agentKind: AgentKind; model?: string | null };
+}) {
+  const { find } = useAgentProfiles();
+  const text = formatAgent(run);
+  if (!find(run.profileId)) {
+    return <AgentBadge profileId={null} kind={run.agentKind} label={text} />;
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <AgentBadge profileId={run.profileId} kind={run.agentKind} />
+      <span>{text}</span>
     </span>
   );
 }

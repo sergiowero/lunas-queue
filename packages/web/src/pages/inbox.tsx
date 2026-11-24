@@ -7,6 +7,7 @@ import type { BlockedAgent, Question, QuestionDelivery, Task } from "@lunasq/sch
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useId, useState } from "react";
+import { AgentBadge } from "../components/agent-badge.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
 import { Muted, Section } from "../components/section.tsx";
 import { Loading, MutationError, QueryError, StateBadges } from "../components/status.tsx";
@@ -284,6 +285,9 @@ function QuestionsSection({
 function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Task> | undefined }) {
   const t = useT();
   const queryClient = useQueryClient();
+  // The blocked agent's profile is the one of its Run (the same query as the task's Runs panel).
+  const runs = useQuery(queries.runs(agent.taskId));
+  const run = runs.data?.find((r) => r.id === agent.runId);
   const focus = useMutation({
     mutationFn: () => api.focusBlocked(agent.runId),
     // 404 not_blocked or 409 agent_gone: the list went stale, it is re-requested without waiting for the refresh.
@@ -295,7 +299,10 @@ function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Ta
         <dt className="text-muted-foreground">{t.inbox.phase}</dt>
         <dd>{t.phase[agent.phase]}</dd>
         <dt className="text-muted-foreground">{t.inbox.agent}</dt>
-        <dd className="font-mono">{agent.agentName}</dd>
+        <dd className="flex flex-wrap items-center gap-2">
+          <AgentBadge profileId={run?.profileId} kind={run?.agentKind ?? null} />
+          <span className="font-mono">{agent.agentName}</span>
+        </dd>
         <dt className="text-muted-foreground">{t.inbox.pane}</dt>
         <dd className="font-mono">{agent.paneId}</dd>
         <dt className="text-muted-foreground">{t.inbox.blockedSince}</dt>

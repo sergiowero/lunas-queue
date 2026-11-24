@@ -8,6 +8,7 @@ import type { Json } from "../../lib/api.ts";
 import { formatAgent, formatDate } from "../../lib/format.ts";
 import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
+import { RunAgent } from "../agent-badge.tsx";
 import { DataTable } from "../data-table.tsx";
 import { PAGE_SIZE, Pagination } from "../pagination.tsx";
 import { PaneFocusButton } from "../pane-focus-button.tsx";
@@ -46,7 +47,11 @@ export function RunsPanel({ taskId }: { taskId: string }) {
         cell: (c) => t.phase[c.row.original.phase],
       }),
       column.accessor("iteration", { header: t.runs.iteration }),
-      column.accessor(formatAgent, { id: "agent", header: t.runs.agent }),
+      column.display({
+        id: "agent",
+        header: t.runs.agent,
+        cell: (c) => <RunAgent run={c.row.original} />,
+      }),
       column.display({
         id: "pane",
         header: t.runs.pane,
