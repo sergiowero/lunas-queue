@@ -461,6 +461,8 @@ describe("project icon and color pickers in the form", () => {
 
   it("creating with the icon and the color left as none does not send them", async () => {
     const { fake, user, form } = await createForm();
+    expect((form.getByRole("radio", { name: "Sin icono" }) as HTMLInputElement).checked).toBe(true);
+    expect((form.getByRole("radio", { name: "Sin color" }) as HTMLInputElement).checked).toBe(true);
     await user.click(form.getByRole("button", { name: "Crear proyecto" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
