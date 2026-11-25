@@ -2,7 +2,12 @@ import { spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { TaskCreatedPayload, TaskUpdatedPayload } from "@lunasq/schemas";
+import {
+  PROFILE_COLORS,
+  PROFILE_ICONS,
+  TaskCreatedPayload,
+  TaskUpdatedPayload,
+} from "@lunasq/schemas";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { describe, expect, it } from "vitest";
 import { migrateDatabase, migrationsFolder, openDatabase } from "./client.ts";
@@ -149,6 +154,41 @@ describe("migrations", () => {
     expect(
       new QuestionRepository(db).answer("q", { answer: "Sí", agentAlive: true }),
     ).toMatchObject({ ok: true, question: { options: null, answer: "Sí" } });
+  });
+
+  it("the appearance migration gives every existing profile an icon and a color of the sets", () => {
+    const { db } = freshDatabase();
+    // Database before migration 0022: the journal is trimmed to the first twenty-two.
+    const previous = mkdtempSync(join(tmpdir(), "lunasq-migrations-"));
+    try {
+      cpSync(migrationsFolder, previous, { recursive: true });
+      const journalFile = join(previous, "meta", "_journal.json");
+      const journal = JSON.parse(readFileSync(journalFile, "utf8")) as { entries: unknown[] };
+      journal.entries = journal.entries.slice(0, 22);
+      writeFileSync(journalFile, JSON.stringify(journal));
+      migrate(db, { migrationsFolder: previous });
+    } finally {
+      rmSync(previous, { recursive: true, force: true });
+    }
+    const sqlite = db.$client;
+    const insert = sqlite.prepare("insert into agent_profiles (id, name, models) values (?, ?, ?)");
+    const models = JSON.stringify([{ kind: "claude", model: "opus", args: [] }]);
+    for (let i = 0; i < 40; i++) insert.run(crypto.randomUUID(), `profile-${i}`, models);
+
+    migrateDatabase(db);
+
+    const rows = sqlite
+      .prepare("select name, models, icon, color from agent_profiles order by name")
+      .all() as { name: string; models: string; icon: string; color: string }[];
+    expect(rows).toHaveLength(40);
+    for (const row of rows) {
+      expect(PROFILE_ICONS).toContain(row.icon);
+      expect(PROFILE_COLORS).toContain(row.color);
+      expect(row.models).toBe(models);
+    }
+    expect(new Set(rows.map((r) => r.name)).size).toBe(40);
+    // Random, not constant: 40 rows with the same pair would be a broken draw.
+    expect(new Set(rows.map((r) => `${r.icon}/${r.color}`)).size).toBeGreaterThan(1);
   });
 
   it("the goal migration renames the task column and rewrites the stored event payloads", () => {

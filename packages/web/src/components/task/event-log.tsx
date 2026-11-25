@@ -8,9 +8,11 @@ import type {
 } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import type { Json } from "../../lib/api.ts";
+import { eventRun } from "../../lib/attribution.ts";
 import { formatDate, stripAnsi } from "../../lib/format.ts";
 import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
+import { AgentBadge } from "../agent-badge.tsx";
 import { Muted, Section } from "../section.tsx";
 import { Loading, QueryError, stateText } from "../status.tsx";
 import { Badge } from "../ui/badge.tsx";
@@ -80,6 +82,7 @@ function Detail({ event }: { event: Json<EventView> }) {
 export function EventLogPanel({ taskId }: { taskId: string }) {
   const t = useT();
   const events = useQuery(queries.events(taskId));
+  const runs = useQuery(queries.runs(taskId));
   const count = events.data?.length;
   // Newest first; the cached array (write order) must not be mutated.
   const newestFirst = events.data ? [...events.data].reverse() : [];
@@ -97,19 +100,24 @@ export function EventLogPanel({ taskId }: { taskId: string }) {
             {t.eventLog.show(count ?? 0)}
           </summary>
           <ol className="mt-3 flex flex-col gap-3 text-sm">
-            {newestFirst.map((event) => (
-              <li
-                key={event.id}
-                className="flex flex-wrap items-baseline gap-2 border-b pb-3 last:border-b-0"
-              >
-                <time className="text-xs text-muted-foreground" dateTime={event.createdAt}>
-                  {formatDate(event.createdAt)}
-                </time>
-                <Badge variant="outline">{event.actor}</Badge>
-                <span className="font-mono text-xs">{event.type}</span>
-                <Detail event={event} />
-              </li>
-            ))}
+            {newestFirst.map((event) => {
+              // Only the agent's events are attributed: to the Run that was open when they happened.
+              const run = eventRun(runs.data ?? [], event);
+              return (
+                <li
+                  key={event.id}
+                  className="flex flex-wrap items-baseline gap-2 border-b pb-3 last:border-b-0"
+                >
+                  <time className="text-xs text-muted-foreground" dateTime={event.createdAt}>
+                    {formatDate(event.createdAt)}
+                  </time>
+                  <Badge variant="outline">{event.actor}</Badge>
+                  {run && <AgentBadge profileId={run.profileId} kind={run.agentKind} />}
+                  <span className="font-mono text-xs">{event.type}</span>
+                  <Detail event={event} />
+                </li>
+              );
+            })}
           </ol>
         </details>
       )}

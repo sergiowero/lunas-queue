@@ -36,23 +36,63 @@ export const MAX_PROFILE_MODELS = 10;
 const profileName = nonEmpty.max(100);
 const profileModels = z.array(ProfileModel).min(MIN_PROFILE_MODELS).max(MAX_PROFILE_MODELS);
 
+// Appearance of an agent profile in the UI: one icon and one color of closed sets. The web renders
+// the icon as an inline SVG and the color through a theme token, so both names are stable keys.
+export const PROFILE_ICONS = [
+  "bot",
+  "sparkles",
+  "bolt",
+  "brain",
+  "rocket",
+  "wrench",
+  "shield",
+  "flask",
+  "compass",
+  "leaf",
+] as const;
+export const ProfileIcon = z.enum(PROFILE_ICONS);
+export type ProfileIcon = z.infer<typeof ProfileIcon>;
+
+export const PROFILE_COLORS = [
+  "red",
+  "orange",
+  "amber",
+  "green",
+  "teal",
+  "blue",
+  "violet",
+  "pink",
+] as const;
+export const ProfileColor = z.enum(PROFILE_COLORS);
+export type ProfileColor = z.infer<typeof ProfileColor>;
+
 /** Named, global list of models: the primary first and then its fallbacks in order. */
 export const AgentProfile = z.strictObject({
   id: z.uuid(),
   name: profileName,
   models: profileModels,
+  icon: ProfileIcon,
+  color: ProfileColor,
   createdAt: z.date(),
   updatedAt: z.date(),
 });
 export type AgentProfile = z.infer<typeof AgentProfile>;
 
-export const AgentProfileCreate = z.strictObject({ name: profileName, models: profileModels });
+// Without icon or color, the repository assigns a random one of each set.
+export const AgentProfileCreate = z.strictObject({
+  name: profileName,
+  models: profileModels,
+  icon: ProfileIcon.optional(),
+  color: ProfileColor.optional(),
+});
 export type AgentProfileCreate = z.input<typeof AgentProfileCreate>;
 
 // PATCH: each present field replaces the stored one.
 export const AgentProfileUpdate = z.strictObject({
   name: profileName.optional(),
   models: profileModels.optional(),
+  icon: ProfileIcon.optional(),
+  color: ProfileColor.optional(),
 });
 export type AgentProfileUpdate = z.input<typeof AgentProfileUpdate>;
 

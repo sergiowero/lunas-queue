@@ -58,6 +58,8 @@ describe("Profiles tab", () => {
     expect(await screen.findByText("Rápido")).toBeTruthy();
     expect(fake.requests.find((r) => r.method === "POST")?.body).toEqual({
       name: "Rápido",
+      icon: expect.any(String),
+      color: expect.any(String),
       models: [
         { kind: "claude", model: "sonnet", args: [] },
         { kind: "codex", model: "gpt-5", effort: "high", args: ["--full-auto"] },
@@ -77,6 +79,8 @@ describe("Profiles tab", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(fake.requests.find((r) => r.method === "POST")?.body).toEqual({
       name: "Abierto",
+      icon: expect.any(String),
+      color: expect.any(String),
       models: [{ kind: "opencode", model: "anthropic/claude-sonnet-4", args: [] }],
     });
   });
@@ -111,6 +115,8 @@ describe("Profiles tab", () => {
     expect(request?.path).toBe(`/api/agent-profiles/${profile.id}`);
     expect(request?.body).toEqual({
       name: "Orden",
+      icon: profile.icon,
+      color: profile.color,
       models: [
         { kind: "codex", model: "gpt-5", args: [] },
         { kind: "claude", model: "opus", args: [] },
@@ -258,5 +264,82 @@ describe("profile texts in English", () => {
     await user.click(form.getByRole("button", { name: "Cancel" }));
     await user.click(screen.getByRole("button", { name: "Delete profile Fast" }));
     expect(await screen.findByRole("dialog", { name: "Delete profile" })).toBeTruthy();
+  });
+
+  describe("appearance", () => {
+    it("the new profile dialog preselects an icon and a color, previews the badge and sends the choice", async () => {
+      const fake = new FakeApi();
+      const { user, dialog } = await openCreate(fake);
+
+      const icons = dialog.getAllByRole("radio", {
+        name: /Robot|Destellos|Rayo|Cerebro|Cohete|Llave|Escudo|Matraz|Brújula|Hoja/,
+      });
+      const colors = dialog.getAllByRole("radio", {
+        name: /Rojo|Naranja|Ámbar|Verde|Turquesa|Azul|Violeta|Rosa/,
+      });
+      expect(icons).toHaveLength(10);
+      expect(colors).toHaveLength(8);
+      expect(icons.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(1);
+      expect(colors.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(1);
+      // The preview already shows a badge with the placeholder name.
+      expect(dialog.getByRole("img", { name: "Agente Perfil" })).toBeTruthy();
+
+      await user.type(dialog.getByLabelText("Nombre del perfil"), "Nocturno");
+      await user.click(dialog.getByRole("radio", { name: "Cohete" }));
+      await user.click(dialog.getByRole("radio", { name: "Violeta" }));
+      const preview = dialog.getByRole("img", { name: "Agente Nocturno" });
+      expect(preview.getAttribute("data-icon")).toBe("rocket");
+      expect(preview.getAttribute("data-color")).toBe("violet");
+
+      await user.click(dialog.getByRole("button", { name: "Crear perfil" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(fake.requests.find((r) => r.method === "POST")?.body).toMatchObject({
+        name: "Nocturno",
+        icon: "rocket",
+        color: "violet",
+      });
+      const badge = await screen.findByRole("img", { name: "Agente Nocturno" });
+      expect(badge.getAttribute("data-icon")).toBe("rocket");
+    });
+
+    it("editing a profile picks another icon, sends it in the PATCH and the tab shows the new badge", async () => {
+      const fake = new FakeApi();
+      const profile = fake.addProfile({ name: "Viejo", icon: "bot", color: "green" });
+      const { user } = renderApp("/profiles", fake);
+      expect(
+        (await screen.findByRole("img", { name: "Agente Viejo" })).getAttribute("data-icon"),
+      ).toBe("bot");
+
+      await user.click(await screen.findByRole("button", { name: "Editar perfil Viejo" }));
+      const form = within(await screen.findByRole("dialog", { name: "Editar perfil" }));
+      expect((form.getByRole("radio", { name: "Robot" }) as HTMLInputElement).checked).toBe(true);
+      expect((form.getByRole("radio", { name: "Verde" }) as HTMLInputElement).checked).toBe(true);
+      await user.click(form.getByRole("radio", { name: "Brújula" }));
+      await user.click(form.getByRole("button", { name: "Guardar cambios" }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      const request = fake.requests.find((r) => r.method === "PATCH");
+      expect(request?.path).toBe(`/api/agent-profiles/${profile.id}`);
+      expect(request?.body).toMatchObject({ icon: "compass", color: "green" });
+      await waitFor(() =>
+        expect(screen.getByRole("img", { name: "Agente Viejo" }).getAttribute("data-icon")).toBe(
+          "compass",
+        ),
+      );
+    });
+
+    it("labels the selectors from the active dictionary", async () => {
+      localStorage.setItem(LANGUAGE_KEY, "en");
+      try {
+        const app = renderApp("/profiles");
+        await app.user.click(await screen.findByRole("button", { name: "New profile" }));
+        const dialog = within(await screen.findByRole("dialog", { name: "New profile" }));
+        expect(dialog.getByRole("radio", { name: "Rocket" })).toBeTruthy();
+        expect(dialog.getByRole("radio", { name: "Violet" })).toBeTruthy();
+        expect(dialog.queryByRole("radio", { name: "Cohete" })).toBeNull();
+      } finally {
+        localStorage.removeItem(LANGUAGE_KEY);
+      }
+    });
   });
 });

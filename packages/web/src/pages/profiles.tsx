@@ -4,6 +4,7 @@ import type { AgentProfile } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { ProfileChip } from "../components/agent-badge.tsx";
 import { ProfileDeleteDialog } from "../components/profile-delete-dialog.tsx";
 import { ProfileFormDialog } from "../components/profile-form-dialog.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
@@ -37,7 +38,14 @@ export function ProfilesPage() {
         {profiles.data.map((profile) => (
           <Card key={profile.id}>
             <CardHeader>
-              <CardTitle>{profile.name}</CardTitle>
+              <CardTitle>
+                <ProfileChip
+                  name={profile.name}
+                  icon={profile.icon}
+                  color={profile.color}
+                  className="px-2.5 py-1 text-sm"
+                />
+              </CardTitle>
             </CardHeader>
             <CardContent className="text-sm">
               <ol className="flex flex-col gap-2">

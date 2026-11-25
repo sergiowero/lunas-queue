@@ -34,6 +34,8 @@ export function sampleProfile(
     id: fakeUuid(),
     name,
     models: models.map((m) => ({ args: [], ...m })),
+    icon: "bot",
+    color: "blue",
     createdAt: now,
     updatedAt: now,
   };

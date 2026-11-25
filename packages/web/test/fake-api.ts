@@ -37,6 +37,8 @@ import {
   InstructionUpdate,
   MAX_TASK_INSTRUCTIONS,
   PhaseInstructionInput,
+  PROFILE_COLORS,
+  PROFILE_ICONS,
   ProjectCreate,
   ProjectUpdate,
   QuestionAnswer,
@@ -127,6 +129,10 @@ export class FakeApi {
   readonly runsFail = new Set<string>();
   /** If set, GET .../runs does not answer until the promise resolves (pending query). */
   runsGate: Promise<void> | null = null;
+  /** If true, GET /api/agent-profiles answers 500. */
+  profilesFail = false;
+  /** If set, GET /api/agent-profiles does not answer until the promise resolves (pending query). */
+  profilesGate: Promise<void> | null = null;
   readonly requests: Request[] = [];
   readonly questions: Json<Question>[] = [];
   /** What the RunWatcher would answer: the agents blocked now. */
@@ -189,6 +195,8 @@ export class FakeApi {
       id: uuid(),
       name: `perfil-${seq}`,
       models: [{ kind: "claude", model: "sonnet", args: [] }],
+      icon: "bot",
+      color: "blue",
       createdAt: at,
       updatedAt: at,
       ...overrides,
@@ -385,12 +393,20 @@ export class FakeApi {
     const body = typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : undefined;
     this.requests.push({ method, path: url.pathname + url.search, body });
     if (this.runsGate && /^\/api\/tasks\/[^/]+\/runs$/.test(url.pathname)) await this.runsGate;
+    if (this.profilesGate && url.pathname === "/api/agent-profiles" && method === "GET")
+      await this.profilesGate;
     if (method === "PUT" && url.pathname === "/api/settings/providers") await this.holdProvidersPut;
     if (method === "PUT" && url.pathname === "/api/settings/concurrency") {
       await this.holdConcurrencyPut;
     }
     if (method === "PUT" && url.pathname === "/api/settings/verification") {
       await this.holdVerificationPut;
+    }
+    if (this.profilesFail && url.pathname === "/api/agent-profiles" && method === "GET") {
+      return new Response(JSON.stringify({ error: "internal" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
     }
     const [status, payload] = this.route(method, url, body);
     return new Response(status === 204 ? null : JSON.stringify(payload), {
@@ -753,7 +769,17 @@ export class FakeApi {
           },
         ];
       }
-      return [201, this.addProfile(input.data as Partial<Json<AgentProfile>>)];
+      // Like the server: a missing icon or color is drawn at random from the sets.
+      const { icon, color, ...rest } = input.data;
+      return [
+        201,
+        this.addProfile({
+          ...(rest as Partial<Json<AgentProfile>>),
+          icon: icon ?? (PROFILE_ICONS[Math.floor(Math.random() * PROFILE_ICONS.length)] as never),
+          color:
+            color ?? (PROFILE_COLORS[Math.floor(Math.random() * PROFILE_COLORS.length)] as never),
+        }),
+      ];
     }
     const profile = this.profiles.find((p) => p.id === id);
     if (!profile) return [404, { error: "not_found" }];

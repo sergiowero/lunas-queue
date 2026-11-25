@@ -5,6 +5,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
+import { RunAgent } from "../components/agent-badge.tsx";
 import { DataTable } from "../components/data-table.tsx";
 import { PaneFocusButton } from "../components/pane-focus-button.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
@@ -146,8 +147,13 @@ export function InProgressPage() {
       column.display({
         id: "agent",
         header: t.inProgressPage.agent,
-        cell: (c) =>
-          runCell(latestRuns.get(c.row.original.id), formatAgent, t.inProgressPage.error),
+        cell: (c) => {
+          const run = latestRuns.get(c.row.original.id);
+          if (typeof run !== "object" || run === null) {
+            return runCell(run, formatAgent, t.inProgressPage.error);
+          }
+          return <RunAgent run={run} />;
+        },
       }),
       column.display({
         id: "pane",

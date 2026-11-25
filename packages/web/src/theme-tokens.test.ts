@@ -2,7 +2,7 @@
 // would leave that fixed light-theme color on screen.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PROJECT_COLORS } from "@lunasq/schemas";
+import { PROFILE_COLORS, PROJECT_COLORS } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import { badgeVariants } from "./components/ui/badge.tsx";
 import { buttonVariants } from "./components/ui/button.tsx";
@@ -164,6 +164,28 @@ describe("project palette tokens", () => {
             contrast(t.get(`--color-project-${color}`) ?? "", t.get(surface) ?? ""),
             `${color} sobre ${surface}`,
           ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    },
+  );
+});
+
+describe("agent profile colors", () => {
+  it.each([
+    ["claro", "@theme"],
+    ["oscuro", ".dark"],
+  ])(
+    "en tema %s, cada color de perfil tiene fondo y texto con el 4.5:1 de AA sobre su tinte",
+    (_, selector) => {
+      const t = tokens(block(selector));
+      for (const color of PROFILE_COLORS) {
+        const fill = t.get(`--color-agent-${color}`);
+        const text = t.get(`--color-agent-${color}-text`);
+        expect(fill, `falta --color-agent-${color}`).toBeDefined();
+        expect(text, `falta --color-agent-${color}-text`).toBeDefined();
+        for (const surface of ["--color-surface", "--color-canvas", "--color-surface-secondary"]) {
+          const bg = over(fill ?? "", 0.1, t.get(surface) ?? "");
+          expect(contrast(text ?? "", bg), `${color} sobre ${surface}`).toBeGreaterThanOrEqual(4.5);
         }
       }
     },

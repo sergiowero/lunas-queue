@@ -1,8 +1,9 @@
-import type { AgentProviderSettings } from "@lunasq/schemas";
+import { type AgentProviderSettings, PROFILE_COLORS, PROFILE_ICONS } from "@lunasq/schemas";
 import { describe, expect, it } from "vitest";
 import {
   InMemoryAgentProfileReader,
   phaseProfileId,
+  randomAppearance,
   resolvePhaseModel,
   resolveProjectPhase,
 } from "./agent-profiles.ts";
@@ -113,5 +114,32 @@ describe("InMemoryAgentProfileReader", () => {
     read.models.pop();
     expect(reader.get(alfa.id)?.models).toEqual(alfa.models);
     expect(reader.get(fakeUuid())).toBeNull();
+  });
+});
+
+describe("randomAppearance", () => {
+  it("picks the icon and the color from the sets with the injected random source", () => {
+    expect(randomAppearance(() => 0)).toEqual({ icon: PROFILE_ICONS[0], color: PROFILE_COLORS[0] });
+    expect(randomAppearance(() => 0.999999)).toEqual({
+      icon: PROFILE_ICONS[PROFILE_ICONS.length - 1],
+      color: PROFILE_COLORS[PROFILE_COLORS.length - 1],
+    });
+  });
+
+  it("draws the icon first and the color second", () => {
+    const draws = [0.5, 0.25];
+    const next = () => draws.shift() ?? 0;
+    expect(randomAppearance(next)).toEqual({
+      icon: PROFILE_ICONS[Math.floor(0.5 * PROFILE_ICONS.length)],
+      color: PROFILE_COLORS[Math.floor(0.25 * PROFILE_COLORS.length)],
+    });
+  });
+
+  it("with the default source it always returns members of the sets", () => {
+    for (let i = 0; i < 50; i++) {
+      const { icon, color } = randomAppearance();
+      expect(PROFILE_ICONS).toContain(icon);
+      expect(PROFILE_COLORS).toContain(color);
+    }
   });
 });
