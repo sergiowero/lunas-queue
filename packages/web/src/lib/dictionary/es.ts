@@ -337,6 +337,8 @@ export const es = {
     noIcon: "Sin icono",
     color: "Color",
     noColor: "Sin color",
+    preview: "Vista previa",
+    previewName: "Proyecto",
     iconNames: {
       folder: "Carpeta",
       code: "Código",
@@ -350,6 +352,7 @@ export const es = {
       mobile: "Móvil",
       cloud: "Nube",
       bolt: "Rayo",
+      pokeball: "Pokéball",
     },
     colorNames: {
       red: "Rojo",

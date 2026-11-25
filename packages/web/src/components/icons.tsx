@@ -119,6 +119,13 @@ const PROJECT_ICON_PATHS: Record<ProjectIcon, ReactNode> = {
   ),
   cloud: <path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z" />,
   bolt: <path d="M13 2 3 14h9l-1 8 10-12h-9Z" />,
+  pokeball: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h6.5M15.5 12H22" />
+      <circle cx="12" cy="12" r="3.5" />
+    </>
+  ),
 };
 
 /** The glyph of a ProjectIcon key, decorative (aria-hidden) and drawn in the current text color. */

@@ -333,6 +333,7 @@ describe("project icon and color", () => {
       "mobile",
       "cloud",
       "bolt",
+      "pokeball",
     ]);
     expect(PROJECT_COLORS).toEqual([
       "red",
@@ -345,6 +346,7 @@ describe("project icon and color", () => {
       "pink",
     ]);
     expect(ProjectIcon.safeParse("rocket").success).toBe(true);
+    expect(ProjectIcon.safeParse("pokeball").success).toBe(true);
     expect(ProjectColor.safeParse("teal").success).toBe(true);
   });
 
