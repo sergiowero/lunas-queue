@@ -77,6 +77,8 @@ const RESERVED_CODEX_FLAGS = [
   "-p",
   "--ignore-user-config",
   "--strict-config",
+  "--remote",
+  "--remote-auth-token-env",
 ];
 
 const RESERVED_OPENCODE_FLAGS = [
@@ -119,6 +121,20 @@ function assertNoOptionTerminator(args: string[]): void {
   if (args.includes("--")) {
     throw new AgentProviderError(
       "the agent profile cannot carry --: it would disable the flags LunasQ sets",
+    );
+  }
+}
+
+/**
+ * A bare word among Codex's args is a subcommand (`sandbox`, `exec`, `review`...) or a positional: from
+ * there on the fixed LunasQ flags would be arguments of that subcommand, not session options. Profile
+ * args must be options, with any value attached (`--flag=value`).
+ */
+function assertOnlyOptions(args: string[]): void {
+  const word = args.find((arg) => !arg.startsWith("-"));
+  if (word !== undefined) {
+    throw new AgentProviderError(
+      `the agent profile cannot carry ${word}: only options are allowed, with the value attached (--flag=value)`,
     );
   }
 }
@@ -186,6 +202,7 @@ const codexProvider: AgentProvider = {
   args(profile, context) {
     assertNoReservedArgs(profile.args, RESERVED_CODEX_FLAGS);
     assertNoOptionTerminator(profile.args);
+    assertOnlyOptions(profile.args);
     assertEffortNotDuplicated(profile);
     if (!context.mcpUrl) {
       throw new AgentProviderError("the LunasQ MCP URL is missing to configure Codex CLI");

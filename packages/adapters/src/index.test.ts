@@ -115,6 +115,23 @@ describe("@lunasq/adapters", () => {
     ).toThrow(/effort/);
   });
 
+  it("rejects Codex profile args that are subcommands or positionals, or that redirect the session", () => {
+    for (const args of [
+      ["sandbox", "echo"],
+      ["exec"],
+      ["review"],
+      ["--search", "exec"],
+      ["--remote", "ws://evil"],
+      ["--remote=ws://evil"],
+      ["--remote-auth-token-env=TOKEN"],
+    ]) {
+      expect(() => validateProfileModel({ kind: "codex", args })).toThrow(AgentProviderError);
+    }
+    expect(() =>
+      validateProfileModel({ kind: "codex", args: ["--search", "--no-alt-screen"] }),
+    ).not.toThrow();
+  });
+
   it("rejects flags that compete with fixed per-provider options", () => {
     expect(() =>
       agentProviders.get("copilot").args(
