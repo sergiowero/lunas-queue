@@ -74,7 +74,7 @@ describe("@lunasq/adapters", () => {
       "--config",
       'model_reasoning_effort="high"',
       "--sandbox",
-      "workspace-write",
+      "danger-full-access",
       "--ask-for-approval",
       "never",
       "--config",
@@ -84,6 +84,9 @@ describe("@lunasq/adapters", () => {
       "--config",
       'mcp_servers.lunasq.default_tools_approval_mode="approve"',
     ]);
+    const codexArgs = agentProviders.get("codex").args({ kind: "codex", args: [] }, context);
+    expect(codexArgs).toContain("danger-full-access");
+    expect(codexArgs).not.toContain("workspace-write");
   });
 
   it("validates a profile model against its provider's reserved flags, naming the flag", () => {
@@ -94,9 +97,39 @@ describe("@lunasq/adapters", () => {
     expect(() => validateProfileModel({ kind: "codex", args: ["--sandbox=read-only"] })).toThrow(
       AgentProviderError,
     );
+    for (const args of [
+      ["--sandbox", "read-only"],
+      ["--ask-for-approval=on-request"],
+      ["--config=mcp_servers.evil.command=evil"],
+      ["-cmcp_servers.evil.command=evil"],
+      ["-sread-only"],
+      ["-aon-request"],
+      ["-pNAME"],
+      ["-mgpt-5"],
+      ["-C/tmp"],
+    ]) {
+      expect(() => validateProfileModel({ kind: "codex", args })).toThrow(/LunasQ sets it/);
+    }
     expect(() =>
       validateProfileModel({ kind: "claude", effort: "high", args: ["--effort", "low"] }),
     ).toThrow(/effort/);
+  });
+
+  it("rejects Codex profile args that are subcommands or positionals, or that redirect the session", () => {
+    for (const args of [
+      ["sandbox", "echo"],
+      ["exec"],
+      ["review"],
+      ["--search", "exec"],
+      ["--remote", "ws://evil"],
+      ["--remote=ws://evil"],
+      ["--remote-auth-token-env=TOKEN"],
+    ]) {
+      expect(() => validateProfileModel({ kind: "codex", args })).toThrow(AgentProviderError);
+    }
+    expect(() =>
+      validateProfileModel({ kind: "codex", args: ["--search", "--no-alt-screen"] }),
+    ).not.toThrow();
   });
 
   it("rejects flags that compete with fixed per-provider options", () => {

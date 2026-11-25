@@ -12,6 +12,8 @@ LunasQ (repository `lunas-queue`) is a multi‑project task queue where a human 
 
 **Supported agents:** Claude Code, GitHub Copilot CLI, OpenAI Codex CLI and OpenCode are selected per phase in each project. Each CLI has its own adapter; the dispatcher uses the registry to build arguments, MCP configuration and fallback order. If a CLI fails before becoming ready, the next enabled one is tried once; if none becomes ready, the task moves to `needs_human` with each provider's diagnosis. Every provider can run verification: Claude Code launches native subagents, while Copilot, Codex and OpenCode use LunasQ's read-only CLI reviewer executors. Provider availability is controlled from Settings. Usage/cost tokens that are not available are shown as such, not as zero. See [ADR codex-provider](decisions/codex-provider.md) and [ADR opencode-provider](decisions/opencode-provider.md).
 
+Interactive Codex refinement and implementation sessions run with `--sandbox danger-full-access` and `--ask-for-approval never`; profile arguments cannot override LunasQ-managed sandbox, approval or MCP settings. Codex verification reviewers run separately with `--sandbox read-only`, ignore user configuration and use approval policy `never`.
+
 **Out of scope (v1):** automatic merge, direct commits to main, production deployment done by LunasQ (it can be configured with project hooks), lanes by task size, acceptance tests hidden from the builder (possible future version) and automatic intake from GitHub issues (planned for v2).
 
 Principles:
