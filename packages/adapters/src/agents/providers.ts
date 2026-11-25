@@ -190,7 +190,7 @@ const codexProvider: AgentProvider = {
         : ["--config", `model_reasoning_effort=${JSON.stringify(profile.effort)}`]),
       ...profile.args,
       "--sandbox",
-      "workspace-write",
+      "danger-full-access",
       "--ask-for-approval",
       "never",
       "--config",
