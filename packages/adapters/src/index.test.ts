@@ -101,6 +101,12 @@ describe("@lunasq/adapters", () => {
       ["--sandbox", "read-only"],
       ["--ask-for-approval=on-request"],
       ["--config=mcp_servers.evil.command=evil"],
+      ["-cmcp_servers.evil.command=evil"],
+      ["-sread-only"],
+      ["-aon-request"],
+      ["-pNAME"],
+      ["-mgpt-5"],
+      ["-C/tmp"],
     ]) {
       expect(() => validateProfileModel({ kind: "codex", args })).toThrow(/LunasQ sets it/);
     }

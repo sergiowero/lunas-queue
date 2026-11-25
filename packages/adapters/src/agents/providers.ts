@@ -98,10 +98,17 @@ const RESERVED_OPENCODE_FLAGS = [
   "--variant",
 ];
 
+/**
+ * A reserved flag also matches in its attached short form: `-cfoo=bar` is `-c foo=bar` and `-sread-only`
+ * is `-s read-only` for the CLIs' option parsers, so any arg that starts with a reserved short flag clashes.
+ */
+function clashesWithFlag(arg: string, flag: string): boolean {
+  if (arg === flag || arg.startsWith(`${flag}=`)) return true;
+  return /^-[A-Za-z]$/.test(flag) && arg.startsWith(flag);
+}
+
 function assertNoReservedArgs(args: string[], flags: string[]): void {
-  const clash = args.find((arg) =>
-    flags.some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
-  );
+  const clash = args.find((arg) => flags.some((flag) => clashesWithFlag(arg, flag)));
   if (clash !== undefined) {
     throw new AgentProviderError(`the agent profile cannot carry ${clash}: LunasQ sets it`);
   }
