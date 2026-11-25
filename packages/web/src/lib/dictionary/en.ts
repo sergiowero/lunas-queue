@@ -337,6 +337,8 @@ export const en: Dictionary = {
     noIcon: "No icon",
     color: "Color",
     noColor: "No color",
+    preview: "Preview",
+    previewName: "Project",
     iconNames: {
       folder: "Folder",
       code: "Code",
@@ -350,6 +352,7 @@ export const en: Dictionary = {
       mobile: "Mobile",
       cloud: "Cloud",
       bolt: "Bolt",
+      pokeball: "Pokeball",
     },
     colorNames: {
       red: "Red",

@@ -18,6 +18,18 @@ const COLOR_CLASS: Record<ProjectColor, string> = {
   pink: "text-project-pink",
 };
 
+/** Solid swatch of the project color selector, from the same `--color-project-*` tokens. */
+export const PROJECT_COLOR_SWATCH: Record<ProjectColor, string> = {
+  red: "bg-project-red",
+  orange: "bg-project-orange",
+  amber: "bg-project-amber",
+  green: "bg-project-green",
+  teal: "bg-project-teal",
+  blue: "bg-project-blue",
+  violet: "bg-project-violet",
+  pink: "bg-project-pink",
+};
+
 export function ProjectLabel({
   name,
   icon,

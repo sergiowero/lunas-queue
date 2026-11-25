@@ -21,9 +21,18 @@ import type { Dictionary } from "../lib/dictionary/index.ts";
 import { errorText } from "../lib/error-text.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
+import { cn } from "../lib/utils.ts";
+import { ProjectIconGlyph } from "./icons.tsx";
+import { PROJECT_COLOR_SWATCH, ProjectLabel } from "./project-label.tsx";
 import { Button } from "./ui/button.tsx";
 import { Dialog } from "./ui/dialog.tsx";
 import { Input, Label, Select } from "./ui/input.tsx";
+
+const PICKER_OPTION = cn(
+  "flex size-8 cursor-pointer items-center justify-center rounded-md border border-border hover:bg-surface-secondary",
+  "has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:ring-2 has-[:checked]:ring-primary/40",
+  "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2",
+);
 
 const PHASES: Phase[] = ["refine", "implement", "verify", "deliver"];
 
@@ -250,36 +259,100 @@ export function ProjectFormDialog({
           />
         </div>
 
-        <div className="flex gap-4">
-          <div className="flex flex-1 flex-col gap-1">
-            <Label htmlFor="project-icon">{t.projectForm.icon}</Label>
-            <Select
-              id="project-icon"
-              value={icon}
-              onChange={(e) => setIcon(e.target.value as ProjectIcon | "")}
-            >
-              <option value="">{t.projectForm.noIcon}</option>
-              {PROJECT_ICONS.map((key) => (
-                <option key={key} value={key}>
-                  {t.projectForm.iconNames[key]}
-                </option>
+        <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+          <fieldset className="flex flex-col gap-1">
+            <legend className="text-sm font-medium">{t.projectForm.icon}</legend>
+            <div role="radiogroup" aria-label={t.projectForm.icon} className="flex flex-wrap gap-1">
+              <label
+                title={t.projectForm.noIcon}
+                className={cn(PICKER_OPTION, "text-xs text-text-secondary")}
+              >
+                <input
+                  type="radio"
+                  name="project-icon"
+                  value=""
+                  className="sr-only"
+                  aria-label={t.projectForm.noIcon}
+                  checked={icon === ""}
+                  onChange={() => setIcon("")}
+                />
+                <span aria-hidden="true">∅</span>
+              </label>
+              {PROJECT_ICONS.map((option) => (
+                <label
+                  key={option}
+                  title={t.projectForm.iconNames[option]}
+                  className={cn(PICKER_OPTION, "text-text-secondary")}
+                >
+                  <input
+                    type="radio"
+                    name="project-icon"
+                    value={option}
+                    className="sr-only"
+                    aria-label={t.projectForm.iconNames[option]}
+                    checked={icon === option}
+                    onChange={() => setIcon(option)}
+                  />
+                  <ProjectIconGlyph icon={option} />
+                </label>
               ))}
-            </Select>
-          </div>
-          <div className="flex flex-1 flex-col gap-1">
-            <Label htmlFor="project-color">{t.projectForm.color}</Label>
-            <Select
-              id="project-color"
-              value={color}
-              onChange={(e) => setColor(e.target.value as ProjectColor | "")}
+            </div>
+          </fieldset>
+          <fieldset className="flex flex-col gap-1">
+            <legend className="text-sm font-medium">{t.projectForm.color}</legend>
+            <div
+              role="radiogroup"
+              aria-label={t.projectForm.color}
+              className="flex flex-wrap gap-1"
             >
-              <option value="">{t.projectForm.noColor}</option>
-              {PROJECT_COLORS.map((key) => (
-                <option key={key} value={key}>
-                  {t.projectForm.colorNames[key]}
-                </option>
+              <label
+                title={t.projectForm.noColor}
+                className={cn(PICKER_OPTION, "text-xs text-text-secondary")}
+              >
+                <input
+                  type="radio"
+                  name="project-color"
+                  value=""
+                  className="sr-only"
+                  aria-label={t.projectForm.noColor}
+                  checked={color === ""}
+                  onChange={() => setColor("")}
+                />
+                <span aria-hidden="true">∅</span>
+              </label>
+              {PROJECT_COLORS.map((option) => (
+                <label
+                  key={option}
+                  title={t.projectForm.colorNames[option]}
+                  className={PICKER_OPTION}
+                >
+                  <input
+                    type="radio"
+                    name="project-color"
+                    value={option}
+                    className="sr-only"
+                    aria-label={t.projectForm.colorNames[option]}
+                    checked={color === option}
+                    onChange={() => setColor(option)}
+                  />
+                  <span
+                    aria-hidden="true"
+                    data-swatch={option}
+                    className={cn("size-4 rounded-full", PROJECT_COLOR_SWATCH[option])}
+                  />
+                </label>
               ))}
-            </Select>
+            </div>
+          </fieldset>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>{t.projectForm.preview}</span>
+            <span data-testid="project-preview" className="text-sm">
+              <ProjectLabel
+                name={name.trim() || t.projectForm.previewName}
+                icon={icon || null}
+                color={color || null}
+              />
+            </span>
           </div>
         </div>
 

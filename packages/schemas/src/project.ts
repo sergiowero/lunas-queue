@@ -153,6 +153,7 @@ export const PROJECT_ICONS = [
   "mobile",
   "cloud",
   "bolt",
+  "pokeball",
 ] as const;
 export const ProjectIcon = z.enum(PROJECT_ICONS);
 export type ProjectIcon = z.infer<typeof ProjectIcon>;
