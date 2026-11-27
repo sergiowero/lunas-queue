@@ -35,11 +35,11 @@ export function ProjectDeleteDialog({
           {t.projectDelete.confirmSuffix}
         </p>
         {remove.error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {t.projectDelete.failed(errorText(remove.error))}
           </p>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="mt-1 flex justify-end gap-2 border-t border-border-light pt-4">
           <Button variant="outline" onClick={onClose}>
             {t.common.cancel}
           </Button>

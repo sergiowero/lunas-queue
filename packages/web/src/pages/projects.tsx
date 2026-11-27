@@ -2,10 +2,12 @@ import { type Project, unassignedPhases } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { PlusIcon } from "../components/icons.tsx";
+import { PageHeader } from "../components/page-header.tsx";
 import { ProjectDeleteDialog } from "../components/project-delete-dialog.tsx";
 import { ProjectFormDialog } from "../components/project-form-dialog.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
-import { Loading, QueryError } from "../components/status.tsx";
+import { EmptyState, Loading, QueryError } from "../components/status.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
@@ -34,17 +36,17 @@ export function ProjectsPage() {
   if (projects.error) return <QueryError error={projects.error} />;
   if (!projects.data) return <Loading />;
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{t.projectsPage.title}</h1>
-        <Button onClick={() => setDialog({ kind: "create" })}>{t.projectsPage.new}</Button>
-      </div>
-      {projects.data.length === 0 && (
-        <p className="text-sm text-muted-foreground">{t.projectsPage.empty}</p>
-      )}
+    <div className="flex flex-col gap-5">
+      <PageHeader title={t.projectsPage.title}>
+        <Button onClick={() => setDialog({ kind: "create" })}>
+          <PlusIcon />
+          {t.projectsPage.new}
+        </Button>
+      </PageHeader>
+      {projects.data.length === 0 && <EmptyState>{t.projectsPage.empty}</EmptyState>}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {projects.data.map((project) => (
-          <Card key={project.id}>
+          <Card key={project.id} className="card-interactive flex flex-col">
             <CardHeader>
               <CardTitle>
                 <Link
@@ -56,10 +58,13 @@ export function ProjectsPage() {
                 </Link>
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              <p>{project.repo}</p>
+            <CardContent className="flex flex-1 flex-col gap-1 text-sm text-muted-foreground">
+              <p className="truncate font-mono text-[13px] text-text-secondary">{project.repo}</p>
               <p>
-                {t.projectsPage.baseBranch} {project.baseBranch}
+                {t.projectsPage.baseBranch}{" "}
+                <span className="font-mono text-[13px] text-text-secondary">
+                  {project.baseBranch}
+                </span>
               </p>
               {unassignedPhases(project.agentProfiles).length > 0 && (
                 <Badge variant="destructive" className="mt-2 max-w-full whitespace-normal">
@@ -70,7 +75,7 @@ export function ProjectsPage() {
                   )}
                 </Badge>
               )}
-              <div className="mt-3 flex gap-2">
+              <div className="mt-auto flex gap-2 border-t border-border-light pt-3">
                 <Button
                   variant="outline"
                   size="sm"
@@ -83,6 +88,7 @@ export function ProjectsPage() {
                   variant="outline"
                   size="sm"
                   aria-label={t.projectsPage.deleteAria(project.name)}
+                  className="hover:border-danger/40 hover:bg-danger/[0.06] hover:text-danger-text"
                   onClick={() => setDialog({ kind: "delete", project })}
                 >
                   {t.projectsPage.delete}

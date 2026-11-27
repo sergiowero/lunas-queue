@@ -4,6 +4,7 @@
 import type { InstructionPhase, PhaseInstructionInput } from "@lunasq/schemas";
 import { useState } from "react";
 import { useT } from "../../lib/i18n.ts";
+import { PlusIcon } from "../icons.tsx";
 import { Button } from "../ui/button.tsx";
 import { Label, Select, Textarea } from "../ui/input.tsx";
 
@@ -36,8 +37,8 @@ export function InstructionForm({
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-col gap-1 sm:w-56">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5 sm:w-56">
         <Label htmlFor={`${idPrefix}-phase`}>{t.instructions.phase}</Label>
         <Select
           id={`${idPrefix}-phase`}
@@ -51,7 +52,7 @@ export function InstructionForm({
           ))}
         </Select>
       </div>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${idPrefix}-text`}>{t.instructions.text}</Label>
         <Textarea
           id={`${idPrefix}-text`}
@@ -62,7 +63,8 @@ export function InstructionForm({
         />
       </div>
       <div>
-        <Button size="sm" disabled={empty || pending} onClick={add}>
+        <Button variant="outline" size="sm" disabled={empty || pending} onClick={add}>
+          <PlusIcon />
           {t.instructions.add}
         </Button>
       </div>

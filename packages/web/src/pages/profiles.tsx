@@ -5,9 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ProfileChip } from "../components/agent-badge.tsx";
+import { PlusIcon } from "../components/icons.tsx";
+import { PageHeader } from "../components/page-header.tsx";
 import { ProfileDeleteDialog } from "../components/profile-delete-dialog.tsx";
 import { ProfileFormDialog } from "../components/profile-form-dialog.tsx";
-import { Loading, QueryError } from "../components/status.tsx";
+import { EmptyState, Loading, QueryError } from "../components/status.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
@@ -25,18 +27,17 @@ export function ProfilesPage() {
   if (profiles.error) return <QueryError error={profiles.error} />;
   if (!profiles.data) return <Loading />;
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">{t.profilesPage.title}</h1>
-        <Button onClick={() => setDialog({ kind: "create" })}>{t.profilesPage.new}</Button>
-      </div>
-      <p className="text-sm text-muted-foreground">{t.profilesPage.help}</p>
-      {profiles.data.length === 0 && (
-        <p className="text-sm text-muted-foreground">{t.profilesPage.empty}</p>
-      )}
+    <div className="flex flex-col gap-5">
+      <PageHeader title={t.profilesPage.title} description={t.profilesPage.help}>
+        <Button onClick={() => setDialog({ kind: "create" })}>
+          <PlusIcon />
+          {t.profilesPage.new}
+        </Button>
+      </PageHeader>
+      {profiles.data.length === 0 && <EmptyState>{t.profilesPage.empty}</EmptyState>}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {profiles.data.map((profile) => (
-          <Card key={profile.id}>
+          <Card key={profile.id} className="card-interactive flex flex-col">
             <CardHeader>
               <CardTitle>
                 <ProfileChip
@@ -47,7 +48,7 @@ export function ProfilesPage() {
                 />
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm">
+            <CardContent className="flex flex-1 flex-col gap-3 text-sm">
               <ol className="flex flex-col gap-2">
                 {profile.models.map((model, index) => {
                   const disabled =
@@ -66,7 +67,10 @@ export function ProfilesPage() {
                       {disabled && (
                         <>
                           <Badge variant="destructive">{t.profilesPage.providerDisabled}</Badge>
-                          <Link to="/settings" className="text-xs underline">
+                          <Link
+                            to="/settings"
+                            className="text-xs text-primary-text underline underline-offset-2"
+                          >
                             {t.profilesPage.enableInSettings}
                           </Link>
                         </>
@@ -75,7 +79,7 @@ export function ProfilesPage() {
                   );
                 })}
               </ol>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-auto flex gap-2 border-t border-border-light pt-3">
                 <Button
                   variant="outline"
                   size="sm"
@@ -88,6 +92,7 @@ export function ProfilesPage() {
                   variant="outline"
                   size="sm"
                   aria-label={t.profilesPage.deleteAria(profile.name)}
+                  className="hover:border-danger/40 hover:bg-danger/[0.06] hover:text-danger-text"
                   onClick={() => setDialog({ kind: "delete", profile })}
                 >
                   {t.profilesPage.delete}

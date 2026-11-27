@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { type ExecutionsState, HookCard } from "../components/hooks/hook-card.tsx";
 import { Muted, Section } from "../components/section.tsx";
-import { Loading, QueryError } from "../components/status.tsx";
+import { EmptyState, Loading, QueryError } from "../components/status.tsx";
 import type { Json } from "../lib/api.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
@@ -59,7 +59,7 @@ export function HooksPage() {
 
   if (projects.error) return <QueryError error={projects.error} />;
   if (!projects.data) return <Loading />;
-  if (!project) return <p className="text-sm">{t.board.notFound}</p>;
+  if (!project) return <EmptyState>{t.board.notFound}</EmptyState>;
 
   const executionsOf = (point: HookPoint): Execution[] | "loading" | "failed" =>
     executions.data
@@ -76,20 +76,24 @@ export function HooksPage() {
   const empty = points.filter((p) => !visible.includes(p));
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">{t.hooksPage.title(project.name)}</h1>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">{t.hooksPage.title(project.name)}</h1>
         <p className="text-sm text-muted-foreground">
           {t.hooksPage.asIn}
           {project.baseBranch}
           {hooks.data && (
             <>
               {" "}
-              (<code>{hooks.data.baseRef.slice(0, 7)}</code>)
+              (<code className="font-mono text-xs">{hooks.data.baseRef.slice(0, 7)}</code>)
             </>
           )}
           {t.hooksPage.changedByPr}
-          <Link to="/projects/$projectId" params={{ projectId }} className="underline">
+          <Link
+            to="/projects/$projectId"
+            params={{ projectId }}
+            className="text-primary-text underline underline-offset-2"
+          >
             {t.hooksPage.backToBoard}
           </Link>
         </p>
@@ -101,7 +105,7 @@ export function HooksPage() {
       ) : (
         <>
           {hooks.data.configError && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="alert-danger">
               {t.hooksPage.invalidConfig}
               {hooks.data.configError}
             </p>

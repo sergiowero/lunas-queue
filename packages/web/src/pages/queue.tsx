@@ -7,6 +7,7 @@ import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { AgentBadge } from "../components/agent-badge.tsx";
 import { DataTable } from "../components/data-table.tsx";
+import { PageHeader } from "../components/page-header.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
 import { PauseTaskButton, ResumeTaskButton } from "../components/task-actions.tsx";
@@ -51,17 +52,21 @@ export function QueuePage() {
 
   const columns = useMemo(
     () => [
-      column.display({ id: "position", header: "#", cell: (c) => c.row.index + 1 }),
+      column.display({
+        id: "position",
+        header: "#",
+        cell: (c) => <span className="text-text-muted">{c.row.index + 1}</span>,
+      }),
       column.accessor((e) => cappedTaskLabel(e.task), {
         id: "goal",
         header: t.columns.task,
         cell: (c) => (
-          <span className="flex items-baseline gap-2">
+          <span className="flex min-w-48 items-baseline gap-2">
             <TaskNumber number={c.row.original.task.number} />
             <Link
               to="/tasks/$taskId"
               params={{ taskId: c.row.original.task.id }}
-              className="font-medium hover:underline"
+              className="font-medium transition-colors hover:text-primary-text hover:underline"
             >
               {c.getValue()}
             </Link>
@@ -107,8 +112,11 @@ export function QueuePage() {
       column.display({
         id: "usage",
         header: t.queue.usage,
-        cell: (c) =>
-          `${formatTokens(c.row.original.usage)} · ${formatCost(c.row.original.usage.costUsd)}`,
+        cell: (c) => (
+          <span className="whitespace-nowrap text-text-secondary">
+            {`${formatTokens(c.row.original.usage)} · ${formatCost(c.row.original.usage.costUsd)}`}
+          </span>
+        ),
       }),
       column.display({ id: "actions", header: t.columns.actions, cell: ActionsCell }),
     ],
@@ -116,10 +124,9 @@ export function QueuePage() {
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t.queue.title}</h1>
-        <div className="flex w-64 flex-col gap-1">
+    <div className="flex flex-col gap-5">
+      <PageHeader title={t.queue.title}>
+        <div className="flex w-64 flex-col gap-1.5">
           <Label htmlFor="queue-project">{t.columns.project}</Label>
           <Select
             id="queue-project"
@@ -134,7 +141,7 @@ export function QueuePage() {
             ))}
           </Select>
         </div>
-      </div>
+      </PageHeader>
       {queue.error ? (
         <QueryError error={queue.error} />
       ) : queue.data ? (

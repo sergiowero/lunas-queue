@@ -7,6 +7,7 @@ import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { RunAgent } from "../components/agent-badge.tsx";
 import { DataTable } from "../components/data-table.tsx";
+import { PageHeader } from "../components/page-header.tsx";
 import { PaneFocusButton } from "../components/pane-focus-button.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
@@ -99,12 +100,12 @@ export function InProgressPage() {
         id: "goal",
         header: t.columns.task,
         cell: (c) => (
-          <span className="flex items-baseline gap-2">
+          <span className="flex min-w-48 items-baseline gap-2">
             <TaskNumber number={c.row.original.number} />
             <Link
               to="/tasks/$taskId"
               params={{ taskId: c.row.original.id }}
-              className="font-medium hover:underline"
+              className="font-medium transition-colors hover:text-primary-text hover:underline"
             >
               {c.getValue()}
             </Link>
@@ -173,10 +174,9 @@ export function InProgressPage() {
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t.inProgressPage.title}</h1>
-        <div className="flex w-64 flex-col gap-1">
+    <div className="flex flex-col gap-5">
+      <PageHeader title={t.inProgressPage.title}>
+        <div className="flex w-64 flex-col gap-1.5">
           <Label htmlFor="in-progress-project">{t.columns.project}</Label>
           <Select
             id="in-progress-project"
@@ -191,7 +191,7 @@ export function InProgressPage() {
             ))}
           </Select>
         </div>
-      </div>
+      </PageHeader>
       {tasks.error ? (
         <QueryError error={tasks.error} />
       ) : inProgress ? (

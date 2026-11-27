@@ -203,3 +203,52 @@ export function NeutralGlyph({ size = 12 }: { size?: number }) {
     </Icon>
   );
 }
+
+// Navigation glyphs (outline, 16px): decorative, the link text names the page.
+const NAV_GLYPHS = {
+  queue: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
+  inProgress: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+  completed: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+    </>
+  ),
+  inbox: (
+    <>
+      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z" />
+    </>
+  ),
+  projects: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />,
+  profiles: (
+    <>
+      <rect x="4" y="8" width="16" height="12" rx="2" />
+      <path d="M12 8V4M9 4h6M9 14h.01M15 14h.01" />
+    </>
+  ),
+} satisfies Record<string, ReactNode>;
+
+export function NavGlyph({ name }: { name: keyof typeof NAV_GLYPHS }) {
+  return (
+    <Icon
+      name={`nav-${name}`}
+      width={16}
+      height={16}
+      fill="none"
+      className="shrink-0 opacity-70 group-aria-[current=page]:opacity-100"
+    >
+      {NAV_GLYPHS[name]}
+    </Icon>
+  );
+}
+
+/** Warning triangle for the global notices (16px, outline). */
+export function WarningIcon() {
+  return (
+    <Icon name="warning" width={16} height={16} fill="none" className="shrink-0 text-warning-text">
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+      <path d="M12 9v4M12 17h.01" />
+    </Icon>
+  );
+}

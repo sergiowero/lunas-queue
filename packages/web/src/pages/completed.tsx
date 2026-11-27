@@ -7,6 +7,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { DataTable } from "../components/data-table.tsx";
 import { ExternalLinkIcon } from "../components/external-link-icon.tsx";
+import { PageHeader } from "../components/page-header.tsx";
 import { Pagination } from "../components/pagination.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
@@ -64,12 +65,12 @@ export function CompletedPage() {
         id: "goal",
         header: t.columns.task,
         cell: (cell) => (
-          <span className="flex items-baseline gap-2">
+          <span className="flex min-w-48 items-baseline gap-2">
             <TaskNumber number={cell.row.original.number} />
             <Link
               to="/tasks/$taskId"
               params={{ taskId: cell.row.original.id }}
-              className="font-medium hover:underline"
+              className="font-medium transition-colors hover:text-primary-text hover:underline"
             >
               {cell.getValue()}
             </Link>
@@ -133,53 +134,50 @@ export function CompletedPage() {
   const restRows = lists.rest.slice(currentRestPage * PAGE_SIZE, (currentRestPage + 1) * PAGE_SIZE);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t.completedPage.title}</h1>
-        <div className="flex flex-wrap gap-4">
-          <div className="flex w-64 flex-col gap-1">
-            <Label htmlFor="completed-project">{t.columns.project}</Label>
-            <Select
-              id="completed-project"
-              value={projectId}
-              onChange={(event) => {
-                setFilters({ projectId: event.target.value });
-                setResearchPage(0);
-                setRestPage(0);
-              }}
-            >
-              <option value="">{t.allProjects}</option>
-              {(projects.data ?? []).map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex w-64 flex-col gap-1">
-            <Label htmlFor="completed-pr-state">{t.completedPage.prState}</Label>
-            <Select
-              id="completed-pr-state"
-              value={prFilter}
-              onChange={(event) => {
-                setFilters({ prFilter: event.target.value });
-                setResearchPage(0);
-                setRestPage(0);
-              }}
-            >
-              <option value="">{t.allProjects}</option>
-              {PrState.options.map((state) => (
-                <option key={state} value={state}>
-                  {state}
-                </option>
-              ))}
-              <option value={NO_PR}>{t.completedPage.noPr}</option>
-            </Select>
-          </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader title={t.completedPage.title}>
+        <div className="flex w-56 flex-col gap-1.5">
+          <Label htmlFor="completed-project">{t.columns.project}</Label>
+          <Select
+            id="completed-project"
+            value={projectId}
+            onChange={(event) => {
+              setFilters({ projectId: event.target.value });
+              setResearchPage(0);
+              setRestPage(0);
+            }}
+          >
+            <option value="">{t.allProjects}</option>
+            {(projects.data ?? []).map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </Select>
         </div>
-      </div>
-      <section aria-labelledby="completed-open-heading" className="flex flex-col gap-2">
-        <h2 id="completed-open-heading" className="text-base font-semibold">
+        <div className="flex w-56 flex-col gap-1.5">
+          <Label htmlFor="completed-pr-state">{t.completedPage.prState}</Label>
+          <Select
+            id="completed-pr-state"
+            value={prFilter}
+            onChange={(event) => {
+              setFilters({ prFilter: event.target.value });
+              setResearchPage(0);
+              setRestPage(0);
+            }}
+          >
+            <option value="">{t.allProjects}</option>
+            {PrState.options.map((state) => (
+              <option key={state} value={state}>
+                {state}
+              </option>
+            ))}
+            <option value={NO_PR}>{t.completedPage.noPr}</option>
+          </Select>
+        </div>
+      </PageHeader>
+      <section aria-labelledby="completed-open-heading" className="flex flex-col gap-2.5">
+        <h2 id="completed-open-heading" className="text-[15px] font-semibold tracking-tight">
           {t.completedPage.withOpenPr}
         </h2>
         <DataTable
@@ -189,8 +187,8 @@ export function CompletedPage() {
           empty={t.completedPage.emptyOpen}
         />
       </section>
-      <section aria-labelledby="completed-research-heading" className="flex flex-col gap-2">
-        <h2 id="completed-research-heading" className="text-base font-semibold">
+      <section aria-labelledby="completed-research-heading" className="flex flex-col gap-2.5">
+        <h2 id="completed-research-heading" className="text-[15px] font-semibold tracking-tight">
           {t.completedPage.research}
         </h2>
         <DataTable
@@ -205,8 +203,8 @@ export function CompletedPage() {
           onPageChange={setResearchPage}
         />
       </section>
-      <details data-testid="completed-rest" className="rounded-md border border-border px-3 py-2">
-        <summary className="cursor-pointer text-base font-semibold">
+      <details data-testid="completed-rest" className="card px-4 py-3">
+        <summary className="cursor-pointer text-[15px] font-semibold tracking-tight">
           {t.completedPage.rest(lists.rest.length)}
         </summary>
         <div className="mt-3 flex flex-col gap-3">

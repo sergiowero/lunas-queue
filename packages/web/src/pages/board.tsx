@@ -2,8 +2,9 @@
 import type { Task, TaskState } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
+import { PlusIcon } from "../components/icons.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
-import { Loading, QueryError } from "../components/status.tsx";
+import { EmptyState, Loading, QueryError } from "../components/status.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
@@ -17,13 +18,13 @@ const route = getRouteApi("/projects/$projectId");
 function TaskCard({ task }: { task: Json<Task> }) {
   const t = useT();
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-background p-3 text-sm shadow-sm">
+    <li className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 text-sm shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-border-strong hover:shadow-sm">
       <div className="flex items-baseline gap-2">
         <TaskNumber number={task.number} />
         <Link
           to="/tasks/$taskId"
           params={{ taskId: task.id }}
-          className="font-medium hover:underline"
+          className="font-medium transition-colors hover:text-primary-text hover:underline"
         >
           {taskLabel(task)}
         </Link>
@@ -38,7 +39,12 @@ function TaskCard({ task }: { task: Json<Task> }) {
         ))}
       </div>
       {task.prUrl && (
-        <a href={task.prUrl} target="_blank" rel="noreferrer" className="text-xs underline">
+        <a
+          href={task.prUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-primary-text underline underline-offset-2"
+        >
           PR {task.prState ?? ""}
         </a>
       )}
@@ -56,19 +62,19 @@ export function BoardPage() {
   const error = projects.error ?? tasks.error;
   if (error) return <QueryError error={error} />;
   if (!projects.data || !tasks.data) return <Loading />;
-  if (!project) return <p className="text-sm">{t.board.notFound}</p>;
+  if (!project) return <EmptyState>{t.board.notFound}</EmptyState>;
 
   const byState = new Map<TaskState, Json<Task>[]>(BOARD_STATES.map((s) => [s, []]));
   for (const task of tasks.data) byState.get(task.state)?.push(task);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">
             <ProjectLabel name={project.name} icon={project.icon} color={project.color} />
           </h1>
-          <p className="text-sm text-muted-foreground">{project.repo}</p>
+          <p className="font-mono text-[13px] text-muted-foreground">{project.repo}</p>
         </div>
         <div className="flex gap-2">
           <Link
@@ -85,11 +91,12 @@ export function BoardPage() {
             className={buttonVariants({ size: "sm" })}
             aria-label={t.board.newTaskAria}
           >
+            <PlusIcon />
             {t.board.newTask}
           </Link>
         </div>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-3 sm:-mx-6 sm:px-6">
         {BOARD_STATES.map((state) => {
           const items = byState.get(state) ?? [];
           const headingId = `column-${state}`;
@@ -97,13 +104,23 @@ export function BoardPage() {
             <section
               key={state}
               aria-labelledby={headingId}
-              className="flex w-64 shrink-0 flex-col gap-2 rounded-lg bg-muted p-2"
+              className="flex min-h-40 w-72 shrink-0 flex-col gap-2 rounded-xl border border-border-light bg-surface-secondary/70 p-2"
             >
-              <h2 id={headingId} className="px-1 text-sm font-semibold">
-                {t.state[state]}
-              </h2>
+              <div className="flex items-center gap-2 px-1.5 pt-1 pb-0.5">
+                <h2 id={headingId} className="text-[13px] font-semibold">
+                  {t.state[state]}
+                </h2>
+                <span
+                  aria-hidden="true"
+                  className="text-xs font-medium text-text-muted tabular-nums"
+                >
+                  {items.length}
+                </span>
+              </div>
               {items.length === 0 ? (
-                <p className="px-1 text-xs text-muted-foreground">{t.board.noTasks}</p>
+                <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+                  {t.board.noTasks}
+                </p>
               ) : (
                 <ul className="flex flex-col gap-2">
                   {items.map((task) => (
