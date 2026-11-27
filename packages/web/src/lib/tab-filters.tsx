@@ -1,5 +1,6 @@
 // Filter store: each tab's filters live above the router, so they survive the page unmounting when
-// the user navigates to another route and back. In memory only: reloading resets them to All.
+// the user navigates to another route and back. They are also saved in localStorage, so a reload
+// keeps them; a project that no longer exists falls back to All (validProjectId).
 import {
   createContext,
   type ReactNode,
@@ -24,6 +25,41 @@ const ALL: TabFilters = {
   completed: { projectId: "", prFilter: "" },
 };
 
+/** localStorage key of the saved filters. */
+export const TAB_FILTERS_KEY = "lunasq:tab-filters";
+
+/** The saved filters merged over All; anything missing or not a string stays All. */
+function storedFilters(): TabFilters {
+  try {
+    const raw = globalThis.localStorage?.getItem(TAB_FILTERS_KEY);
+    if (!raw) return ALL;
+    const saved: unknown = JSON.parse(raw);
+    if (typeof saved !== "object" || saved === null) return ALL;
+    const pick = <T extends TabName>(tab: T): TabFilters[T] => {
+      const value = (saved as Record<string, unknown>)[tab];
+      const merged: Record<string, string> = { ...ALL[tab] };
+      if (typeof value === "object" && value !== null) {
+        for (const key of Object.keys(merged)) {
+          const field = (value as Record<string, unknown>)[key];
+          if (typeof field === "string") merged[key] = field;
+        }
+      }
+      return merged as TabFilters[T];
+    };
+    return { queue: pick("queue"), inProgress: pick("inProgress"), completed: pick("completed") };
+  } catch {
+    return ALL;
+  }
+}
+
+function saveFilters(filters: TabFilters) {
+  try {
+    globalThis.localStorage?.setItem(TAB_FILTERS_KEY, JSON.stringify(filters));
+  } catch {
+    // Without storage the filters hold for this session.
+  }
+}
+
 type Store = {
   filters: TabFilters;
   update: <T extends TabName>(tab: T, patch: Partial<TabFilters[T]>) => void;
@@ -32,7 +68,8 @@ type Store = {
 const TabFiltersContext = createContext<Store | null>(null);
 
 export function TabFiltersProvider({ children }: { children: ReactNode }) {
-  const [filters, setFilters] = useState<TabFilters>(ALL);
+  const [filters, setFilters] = useState<TabFilters>(storedFilters);
+  useEffect(() => saveFilters(filters), [filters]);
   const update = useCallback<Store["update"]>((tab, patch) => {
     setFilters((current) => ({ ...current, [tab]: { ...current[tab], ...patch } }));
   }, []);

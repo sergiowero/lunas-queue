@@ -9,7 +9,8 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 import type { Json } from "../lib/api.ts";
-import { BOARD_STATES, taskLabel } from "../lib/format.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
+import { BOARD_STATES, cappedTaskLabel, fullLabelTitle } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
@@ -25,8 +26,9 @@ function TaskCard({ task }: { task: Json<Task> }) {
           to="/tasks/$taskId"
           params={{ taskId: task.id }}
           className="font-medium transition-colors hover:text-primary-text hover:underline"
+          title={fullLabelTitle(task)}
         >
-          {taskLabel(task)}
+          {cappedTaskLabel(task)}
         </Link>
       </div>
       <div className="flex flex-wrap gap-1">
@@ -58,6 +60,7 @@ export function BoardPage() {
   const projects = useQuery(queries.projects());
   const tasks = useQuery(queries.tasks(projectId));
   const project = projects.data?.find((p) => p.id === projectId);
+  useDocumentTitle(project?.name);
 
   const error = projects.error ?? tasks.error;
   if (error) return <QueryError error={error} />;

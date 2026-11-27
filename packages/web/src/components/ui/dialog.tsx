@@ -1,13 +1,19 @@
 import { type ReactNode, useEffect, useId } from "react";
 
-/** Modal popup: closes with Escape or when the background is clicked. Whoever uses it mounts it only while open. */
+/**
+ * Modal popup: closes with Escape or when the background is clicked. Forms pass
+ * `dismissible={false}` so a stray click outside does not throw away what was typed; Escape and
+ * their Cancel button still close them. Whoever uses it mounts it only while open.
+ */
 export function Dialog({
   title,
   onClose,
+  dismissible = true,
   children,
 }: {
   title: string;
   onClose: () => void;
+  dismissible?: boolean;
   children: ReactNode;
 }) {
   const titleId = useId();
@@ -25,7 +31,7 @@ export function Dialog({
       <div
         aria-hidden="true"
         className="fixed inset-0 animate-fade-in bg-black/45 backdrop-blur-[3px]"
-        onClick={onClose}
+        onClick={dismissible ? onClose : undefined}
       />
       <div
         role="dialog"

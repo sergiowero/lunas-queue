@@ -318,7 +318,7 @@ describe("global queue", () => {
       expect(screen.queryByText("De dos")).toBeNull();
     });
 
-    it("starts with every filter on All in each of the three tabs of a fresh app", async () => {
+    it("starts on All in each tab and restores chosen filters in a fresh app", async () => {
       const { fake } = twoProjects();
       const completed = { state: "completed", subState: null } as const;
       fake.addTask(fake.projects[0]?.id as string, {
@@ -359,8 +359,7 @@ describe("global queue", () => {
       expect((screen.getByLabelText("Estado del PR") as HTMLSelectElement).value).toBe("");
       expect(screen.getByText("Open de dos")).toBeTruthy();
 
-      // The store belongs to the app instance: filters chosen here must not reach a fresh app
-      // (guards against a module-level store that would outlive the instance).
+      // Filters chosen here are saved, so a fresh app (a reload) starts with them.
       await user.selectOptions(project(), fake.projects[0]?.id as string);
       await user.selectOptions(screen.getByLabelText("Estado del PR"), "merged");
       await router.navigate({ to: "/queue" });
@@ -372,12 +371,12 @@ describe("global queue", () => {
       expect((screen.getByLabelText("Estado del PR") as HTMLSelectElement).value).toBe("merged");
       unmount();
 
-      // ... and still a fresh instance starts on All.
+      // ... and a fresh instance restores them.
       renderApp("/completed", fake);
-      await screen.findByText("Open de dos");
-      expect(project().value).toBe("");
-      expect((screen.getByLabelText("Estado del PR") as HTMLSelectElement).value).toBe("");
-      expect(screen.getByText("Merged de uno")).toBeTruthy();
+      await screen.findByText("Merged de uno");
+      expect(project().value).toBe(fake.projects[0]?.id);
+      expect((screen.getByLabelText("Estado del PR") as HTMLSelectElement).value).toBe("merged");
+      expect(screen.queryByText("Open de dos")).toBeNull();
     });
 
     it("falls back to All when the stored project was removed", async () => {

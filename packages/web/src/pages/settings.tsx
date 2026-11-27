@@ -19,6 +19,7 @@ import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
 import { Input, Label } from "../components/ui/input.tsx";
 import { api } from "../lib/api.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
 import { useErrorText } from "../lib/error-text.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
@@ -66,6 +67,7 @@ function Switch({
 
 export function SettingsPage() {
   const t = useT();
+  useDocumentTitle(t.settings.title);
   return (
     <div className="flex max-w-4xl flex-col gap-5">
       <PageHeader title={t.settings.title} />

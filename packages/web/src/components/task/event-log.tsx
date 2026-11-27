@@ -1,4 +1,5 @@
 // Task Event log: who moved it, when and why (docs/design.md §Audit).
+
 import type {
   EventView,
   TASK_TRANSITIONED,
@@ -9,12 +10,13 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import type { Json } from "../../lib/api.ts";
 import { eventRun } from "../../lib/attribution.ts";
-import { formatDate, stripAnsi } from "../../lib/format.ts";
+import { stripAnsi } from "../../lib/format.ts";
 import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
 import { AgentBadge } from "../agent-badge.tsx";
 import { Muted, Section } from "../section.tsx";
 import { Loading, QueryError, stateText } from "../status.tsx";
+import { Time } from "../time.tsx";
 import { Badge } from "../ui/badge.tsx";
 
 // Types only from @lunasq/schemas: importing its values pulls zod into the bundle.
@@ -110,12 +112,9 @@ export function EventLogPanel({ taskId }: { taskId: string }) {
                     aria-hidden="true"
                     className="absolute top-1.5 -left-[25px] size-2 rounded-full border-2 border-surface bg-border-strong ring-1 ring-border"
                   />
-                  <time
-                    className="text-xs text-muted-foreground tabular-nums"
-                    dateTime={event.createdAt}
-                  >
-                    {formatDate(event.createdAt)}
-                  </time>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    <Time iso={event.createdAt} />
+                  </span>
                   <Badge variant="outline">{event.actor}</Badge>
                   {run && <AgentBadge profileId={run.profileId} kind={run.agentKind} />}
                   <span className="font-mono text-xs font-medium">{event.type}</span>

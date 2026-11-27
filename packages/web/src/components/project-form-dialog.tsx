@@ -197,7 +197,11 @@ export function ProjectFormDialog({
   };
 
   return (
-    <Dialog title={project ? t.projectForm.editTitle : t.projectForm.newTitle} onClose={onClose}>
+    <Dialog
+      title={project ? t.projectForm.editTitle : t.projectForm.newTitle}
+      onClose={onClose}
+      dismissible={false}
+    >
       <form onSubmit={submit} className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="project-name">{t.projectForm.name}</Label>

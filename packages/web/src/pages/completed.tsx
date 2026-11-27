@@ -12,10 +12,12 @@ import { Pagination } from "../components/pagination.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
+import { Time } from "../components/time.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { cappedTaskLabel } from "../lib/format.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
+import { cappedTaskLabel, fullLabelTitle } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 import { useProjectFilter, useTabFilters } from "../lib/tab-filters.tsx";
@@ -31,6 +33,7 @@ const PAGE_SIZE = 20;
 
 export function CompletedPage() {
   const t = useT();
+  useDocumentTitle(t.completedPage.title);
   const [filters, setFilters] = useTabFilters("completed");
   const { prFilter } = filters;
   const [researchPage, setResearchPage] = useState(0);
@@ -51,6 +54,8 @@ export function CompletedPage() {
         (prFilter === "" ||
           (prFilter === NO_PR ? task.prState === null : task.prState === prFilter)),
     );
+    // Most recently completed first: what the human just finished is what they look for.
+    completed.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     const isResearch = (task: Row) => task.resultKind === "research";
     return {
       open: completed.filter((task) => task.prState === "open" && !isResearch(task)),
@@ -71,6 +76,7 @@ export function CompletedPage() {
               to="/tasks/$taskId"
               params={{ taskId: cell.row.original.id }}
               className="font-medium transition-colors hover:text-primary-text hover:underline"
+              title={fullLabelTitle(cell.row.original)}
             >
               {cell.getValue()}
             </Link>
@@ -91,6 +97,11 @@ export function CompletedPage() {
         },
       }),
       column.accessor("priority", { header: t.columns.priority }),
+      column.display({
+        id: "completedAt",
+        header: t.completedPage.completedAt,
+        cell: (cell) => <Time iso={cell.row.original.updatedAt} />,
+      }),
       // Without a PR: a completed task with a Result shows its type instead of the PR.
       // A display column: the label depends on the language and TanStack Table would cache
       // an accessor's value per row.

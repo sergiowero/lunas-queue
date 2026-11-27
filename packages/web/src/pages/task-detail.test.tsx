@@ -1048,9 +1048,26 @@ describe("task detail: phase instructions", () => {
     await user.click(
       await region.findByRole("button", { name: "Quitar la instrucción de Verificación" }),
     );
+    // Nothing is removed until the second click confirms it.
+    expect(region.getByText("¿Quitar la instrucción?")).toBeTruthy();
+    expect(fake.instructions.get(task.id)).toHaveLength(2);
+    await user.click(region.getByRole("button", { name: "Sí, quitar" }));
     await waitFor(() => expect(texts(region)).toHaveLength(1));
     expect(region.queryByText("corre la suite e2e")).toBeNull();
     expect(fake.instructions.get(task.id)).toHaveLength(1);
+  });
+
+  it("keeps the instruction when the removal is not confirmed", async () => {
+    const { fake, task } = withInstructions();
+    const { user } = renderApp(`/tasks/${task.id}`, fake);
+    const region = await section("Instrucciones");
+    await user.click(
+      await region.findByRole("button", { name: "Quitar la instrucción de Verificación" }),
+    );
+    await user.click(region.getByRole("button", { name: "No" }));
+    expect(region.queryByText("¿Quitar la instrucción?")).toBeNull();
+    expect(texts(region)).toHaveLength(2);
+    expect(fake.requests.some((r) => r.method === "DELETE")).toBe(false);
   });
 
   it("shows the API error when an operation fails", async () => {
@@ -1072,6 +1089,7 @@ describe("task detail: phase instructions", () => {
     // A different error for the removal, so its own alert cannot be confused with the add error.
     fake.instructionsError = { status: 404, error: "not_found", message: "instruction not found" };
     await user.click(region.getByRole("button", { name: "Quitar la instrucción de Verificación" }));
+    await user.click(region.getByRole("button", { name: "Sí, quitar" }));
     await waitFor(() => expect(region.getAllByRole("alert")).toHaveLength(2));
     expect(region.getAllByRole("alert").map((a) => a.textContent)).toContain(
       "No se encontró lo que se pidió.",

@@ -148,7 +148,11 @@ export function ProfileFormDialog({
   };
 
   return (
-    <Dialog title={profile ? t.profileForm.editTitle : t.profileForm.newTitle} onClose={onClose}>
+    <Dialog
+      title={profile ? t.profileForm.editTitle : t.profileForm.newTitle}
+      onClose={onClose}
+      dismissible={false}
+    >
       <form onSubmit={submit} className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="profile-name">{t.profileForm.name}</Label>

@@ -4,6 +4,7 @@ import type { Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
+import { CopyButton } from "../components/copy-button.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
 import { EmptyState, Loading, QueryError, StateBadges } from "../components/status.tsx";
 import { DependenciesPanel } from "../components/task/dependencies.tsx";
@@ -17,11 +18,13 @@ import { SpecPanel } from "../components/task/spec.tsx";
 import { UsagePanel } from "../components/task/usage.tsx";
 import { PauseTaskButton, ResumeTaskButton } from "../components/task-actions.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
+import { Time } from "../components/time.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { ApiError, api, type Json } from "../lib/api.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
 import { useErrorText } from "../lib/error-text.ts";
-import { canPause, canResume, formatDate, isTerminal } from "../lib/format.ts";
+import { canPause, canResume, cappedTaskLabel, isTerminal, taskLabel } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
@@ -118,6 +121,28 @@ function HoldNotice({ task }: { task: Json<Task> }) {
   );
 }
 
+/** The originating task by number and name; its id until the task list has loaded. */
+function CausedByLink({ taskId }: { taskId: string }) {
+  const tasks = useQuery(queries.tasks());
+  const origin = tasks.data?.find((candidate) => candidate.id === taskId);
+  return (
+    <Link
+      to="/tasks/$taskId"
+      params={{ taskId }}
+      className="text-primary-text underline underline-offset-2"
+      title={origin ? taskLabel(origin) : undefined}
+    >
+      {origin ? (
+        <>
+          <TaskNumber number={origin.number} /> {cappedTaskLabel(origin)}
+        </>
+      ) : (
+        taskId
+      )}
+    </Link>
+  );
+}
+
 function Header({ task }: { task: Json<Task> }) {
   const t = useT();
   const projects = useQuery(queries.projects());
@@ -167,16 +192,28 @@ function Header({ task }: { task: Json<Task> }) {
         </Field>
         <Field label={t.taskDetail.priority}>{task.priority}</Field>
         <Field label={t.taskDetail.verificationIteration}>{task.verificationIteration}</Field>
-        <Field label={t.taskDetail.created}>{formatDate(task.createdAt)}</Field>
+        <Field label={t.taskDetail.created}>
+          <Time iso={task.createdAt} />
+        </Field>
         <Field label={t.taskDetail.branch}>
-          <span className={task.branch ? "font-mono text-[13px]" : undefined}>
-            {task.branch ?? "—"}
-          </span>
+          {task.branch ? (
+            <>
+              <span className="font-mono text-[13px]">{task.branch}</span>
+              <CopyButton value={task.branch} label={t.taskDetail.branch} />
+            </>
+          ) : (
+            "—"
+          )}
         </Field>
         <Field label={t.taskDetail.worktree}>
-          <span className={task.worktreePath ? "font-mono text-[13px]" : undefined}>
-            {task.worktreePath ?? "—"}
-          </span>
+          {task.worktreePath ? (
+            <>
+              <span className="font-mono text-[13px]">{task.worktreePath}</span>
+              <CopyButton value={task.worktreePath} label={t.taskDetail.worktree} />
+            </>
+          ) : (
+            "—"
+          )}
         </Field>
         <Field label={t.taskDetail.pr}>
           {task.prUrl ? (
@@ -194,16 +231,11 @@ function Header({ task }: { task: Json<Task> }) {
             "—"
           )}
           {task.prState && ` (${task.prState})`}
+          {task.prUrl && <CopyButton value={task.prUrl} label={t.taskDetail.pr} />}
         </Field>
         {task.causedBy && (
           <Field label={t.taskDetail.causedBy}>
-            <Link
-              to="/tasks/$taskId"
-              params={{ taskId: task.causedBy }}
-              className="text-primary-text underline underline-offset-2"
-            >
-              {task.causedBy}
-            </Link>
+            <CausedByLink taskId={task.causedBy} />
           </Field>
         )}
       </dl>
@@ -215,6 +247,7 @@ export function TaskDetailPage() {
   const t = useT();
   const { taskId } = route.useParams();
   const task = useQuery(queries.task(taskId));
+  useDocumentTitle(task.data ? `#${task.data.number} · ${cappedTaskLabel(task.data)}` : null);
   if (task.error) {
     if (task.error instanceof ApiError && task.error.status === 404) {
       return <EmptyState>{t.taskDetail.notFound}</EmptyState>;

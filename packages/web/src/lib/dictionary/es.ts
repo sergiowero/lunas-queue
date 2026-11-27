@@ -23,6 +23,10 @@ export const es = {
     output: "Salida",
     root: "(raíz)",
     body: "(cuerpo)",
+    copy: "Copiar",
+    copied: "Copiado",
+    copyAria: (what: string) => `Copiar ${what}`,
+    createTask: "Crear una tarea",
   },
   nav: {
     queue: "Cola",
@@ -100,6 +104,7 @@ export const es = {
     pane: "Pane",
     started: "Inicio",
     ended: "Fin",
+    duration: "Duración",
     result: "Resultado",
     inProgress: "en curso",
     failureReason: "Motivo del fallo",
@@ -171,6 +176,9 @@ export const es = {
     cancel: "Cancelar",
     remove: "Quitar",
     removeAria: (phase: string) => `Quitar la instrucción de ${phase}`,
+    confirmRemove: "¿Quitar la instrucción?",
+    yesRemove: "Sí, quitar",
+    no: "No",
   },
   hooks: {
     task: "Tarea",
@@ -422,6 +430,7 @@ export const es = {
     emptyRest: "No hay otras tareas completadas.",
     pr: "PR",
     prButton: (state: string) => `PR ${state}`,
+    completedAt: "Completada",
   },
   board: {
     notFound: "El proyecto no existe.",

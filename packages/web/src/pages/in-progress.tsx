@@ -1,5 +1,6 @@
 // In progress tab: tasks in In progress and any task with a running agent (running sub-state), across all projects.
 // It reads the task list, so the live stream refreshes it when ["tasks"] is invalidated.
+
 import type { RunView, Task } from "@lunasq/schemas";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -7,6 +8,7 @@ import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { RunAgent } from "../components/agent-badge.tsx";
 import { DataTable } from "../components/data-table.tsx";
+import { EmptyWithNewTask } from "../components/empty-state.tsx";
 import { PageHeader } from "../components/page-header.tsx";
 import { PaneFocusButton } from "../components/pane-focus-button.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
@@ -15,7 +17,8 @@ import { PauseTaskButton } from "../components/task-actions.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
-import { canPause, cappedTaskLabel, formatAgent } from "../lib/format.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
+import { canPause, cappedTaskLabel, formatAgent, fullLabelTitle } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { isInProgress } from "../lib/in-progress.ts";
 import { queries } from "../lib/queries.ts";
@@ -62,6 +65,7 @@ function ActionsCell({ row }: CellContext<Row, unknown>) {
 
 export function InProgressPage() {
   const t = useT();
+  useDocumentTitle(t.inProgressPage.title);
   const [, setFilters] = useTabFilters("inProgress");
   const projects = useQuery(queries.projects());
   const projectId = useProjectFilter("inProgress", projects.data);
@@ -106,6 +110,7 @@ export function InProgressPage() {
               to="/tasks/$taskId"
               params={{ taskId: c.row.original.id }}
               className="font-medium transition-colors hover:text-primary-text hover:underline"
+              title={fullLabelTitle(c.row.original)}
             >
               {c.getValue()}
             </Link>
@@ -199,7 +204,12 @@ export function InProgressPage() {
           columns={columns}
           data={inProgress}
           getRowId={(t) => t.id}
-          empty={t.inProgressPage.empty}
+          empty={
+            <EmptyWithNewTask
+              message={t.inProgressPage.empty}
+              {...(projectId ? { projectId } : {})}
+            />
+          }
         />
       ) : (
         <Loading />

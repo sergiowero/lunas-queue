@@ -1,5 +1,6 @@
 // Generic table over TanStack Table with shadcn/ui pieces.
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import type { ReactNode } from "react";
 import { cn } from "../lib/utils.ts";
 import { EmptyState } from "./status.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table.tsx";
@@ -15,7 +16,8 @@ export function DataTable<T>({
   columns: ColumnDef<T, any>[];
   data: T[];
   getRowId: (row: T) => string;
-  empty: string;
+  /** What an empty table shows: a sentence, optionally with a next step. */
+  empty: ReactNode;
   /** In its own card (page lists); false when the table already sits inside a card. */
   framed?: boolean;
 }) {
@@ -24,7 +26,7 @@ export function DataTable<T>({
     return framed ? (
       <EmptyState>{empty}</EmptyState>
     ) : (
-      <p className="text-sm text-muted-foreground">{empty}</p>
+      <div className="text-sm text-muted-foreground">{empty}</div>
     );
   }
   return (
