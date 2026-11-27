@@ -19,33 +19,40 @@ function Content({ spec }: { spec: Json<Spec> }) {
   const t = useT();
   const { domainModel, requirements, criteria, taskList } = spec.content;
   return (
-    <div className="flex flex-col gap-3 text-sm">
-      <p>
-        <span className="font-medium">{t.spec.boundedContext}</span> {domainModel.boundedContext}
-      </p>
-      <p>
-        <span className="font-medium">{t.spec.deliverable}</span>{" "}
-        {t.spec.deliverables[spec.content.deliverable]}
-      </p>
-      <div>
-        <h3 className="font-medium">{t.spec.requirements}</h3>
-        <ul className="list-disc pl-5">
+    <div className="flex flex-col gap-5 text-sm leading-relaxed">
+      <div className="flex flex-col gap-1 rounded-lg bg-surface-secondary/60 px-4 py-3">
+        <p>
+          <span className="font-medium">{t.spec.boundedContext}</span> {domainModel.boundedContext}
+        </p>
+        <p>
+          <span className="font-medium">{t.spec.deliverable}</span>{" "}
+          {t.spec.deliverables[spec.content.deliverable]}
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <h3 className="eyebrow">{t.spec.requirements}</h3>
+        <ul className="flex list-disc flex-col gap-1 pl-5 marker:text-text-muted">
           {requirements.map((r, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: the texts can repeat and the list is not reordered.
             <li key={i}>{r}</li>
           ))}
         </ul>
       </div>
-      <div>
-        <h3 className="font-medium">{t.spec.criteria}</h3>
-        <ul aria-label={t.spec.criteria} className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
+        <h3 className="eyebrow">{t.spec.criteria}</h3>
+        <ul aria-label={t.spec.criteria} className="flex flex-col gap-1.5">
           {criteria.map((c) => (
-            <li key={c.id}>{t.spec.criterion(c.id, c.given, c.when, c.outcome)}</li>
+            <li
+              key={c.id}
+              className="rounded-lg border border-border-light bg-surface-secondary/40 px-3 py-2"
+            >
+              {t.spec.criterion(c.id, c.given, c.when, c.outcome)}
+            </li>
           ))}
         </ul>
       </div>
-      <div>
-        <h3 className="font-medium">{t.spec.tasks}</h3>
+      <div className="flex flex-col gap-1.5">
+        <h3 className="eyebrow">{t.spec.tasks}</h3>
         <ul className="flex flex-col gap-1">
           {taskList.map((item) => (
             <li key={item.id}>{`${item.id}: ${item.title} (${item.criterionIds.join(", ")})`}</li>
@@ -100,12 +107,12 @@ function Diff({ taskId, version }: { taskId: string; version: number }) {
   if (diff.data.from === null) return <Muted>{t.spec.firstVersion}</Muted>;
   const lines = diffLines(diff.data, t);
   return (
-    <div className="flex flex-col gap-1 text-sm">
-      <h3 className="font-medium">{t.spec.changesAgainst(diff.data.from)}</h3>
+    <div className="flex flex-col gap-1.5 text-sm">
+      <h3 className="eyebrow">{t.spec.changesAgainst(diff.data.from)}</h3>
       {diff.data.identical || lines.length === 0 ? (
         <Muted>{t.spec.noChanges}</Muted>
       ) : (
-        <ul className="font-mono text-xs">
+        <ul className="flex flex-col gap-0.5 rounded-lg border border-border bg-surface-secondary/50 p-3 font-mono text-xs">
           {lines.map((line, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: the lines can repeat and the list is not reordered.
             <li key={i}>{line}</li>
@@ -159,7 +166,7 @@ function Editor({
         </Button>
       </div>
       {parseError && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="alert-danger">
           {parseError}
         </p>
       )}
@@ -208,7 +215,7 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
   const pending = approve.isPending || requestChanges.isPending || editAndApprove.isPending;
   const error = approve.error ?? requestChanges.error ?? editAndApprove.error;
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+    <div className="flex flex-col gap-3 rounded-xl border border-primary/25 bg-primary/[0.03] p-4">
       {editing ? (
         <Editor
           spec={spec}
@@ -221,7 +228,7 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
         />
       ) : (
         <>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={() => approve.mutate()} disabled={pending}>
               {t.spec.approve(spec.version)}
             </Button>
@@ -293,7 +300,9 @@ export function SpecVersions({ task }: { task: Json<Task> }) {
         {authorRun && <AgentBadge profileId={authorRun.profileId} kind={authorRun.agentKind} />}
       </div>
       {spec.reviewComments && (
-        <p className="text-sm">{t.spec.reviewComments(spec.reviewComments)}</p>
+        <p className="rounded-lg border-l-2 border-warning bg-warning/[0.07] px-3 py-2 text-sm">
+          {t.spec.reviewComments(spec.reviewComments)}
+        </p>
       )}
       <Content spec={spec} />
       <Diff taskId={task.id} version={spec.version} />

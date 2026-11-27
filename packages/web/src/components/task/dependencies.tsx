@@ -28,13 +28,20 @@ function Links({
   const t = useT();
   if (links.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1">
-      <h3 className="text-sm font-medium">{title}</h3>
-      <ul className="flex flex-col gap-1 text-sm">
+    <div className="flex flex-col gap-1.5">
+      <h3 className="eyebrow">{title}</h3>
+      <ul className="flex flex-col gap-1.5 text-sm">
         {links.map((link) => (
-          <li key={link.taskId} className="flex flex-wrap items-center gap-2">
+          <li
+            key={link.taskId}
+            className="flex min-h-9 flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-secondary/50 py-1 pr-1 pl-3"
+          >
             <TaskNumber number={link.number} />
-            <Link to="/tasks/$taskId" params={{ taskId: link.taskId }} className="hover:underline">
+            <Link
+              to="/tasks/$taskId"
+              params={{ taskId: link.taskId }}
+              className="font-medium transition-colors hover:text-primary-text hover:underline"
+            >
               {taskLabel(link)}
             </Link>
             <Badge variant="secondary">{t.state[link.state]}</Badge>
@@ -90,7 +97,7 @@ function AddDependency({ task, taken }: { task: Json<Task>; taken: Set<string> }
 
   return (
     <form
-      className="flex flex-col gap-2"
+      className="flex flex-col gap-1.5"
       onSubmit={(event) => {
         event.preventDefault();
         add.mutate(selected, { onSuccess: () => setSelected("") });
@@ -126,13 +133,13 @@ function AddDependency({ task, taken }: { task: Json<Task>; taken: Set<string> }
               </optgroup>
             ))}
           </Select>
-          <Button type="submit" size="sm" disabled={selected === "" || add.isPending}>
+          <Button type="submit" disabled={selected === "" || add.isPending}>
             {t.dependencies.addButton}
           </Button>
         </div>
       )}
       {add.error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="alert-danger">
           {errorText(add.error)}
         </p>
       )}
@@ -165,7 +172,7 @@ export function DependenciesPanel({ task }: { task: Json<Task> }) {
             </>
           )}
           {remove.error && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="alert-danger">
               {errorText(remove.error)}
             </p>
           )}

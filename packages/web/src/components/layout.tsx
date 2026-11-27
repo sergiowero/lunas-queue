@@ -6,7 +6,7 @@ import { useLiveUpdates } from "../lib/live.ts";
 import { useOpenPrCount } from "../lib/open-prs.ts";
 import { cn } from "../lib/utils.ts";
 import { DispatchPausedBanner } from "./dispatch-paused-banner.tsx";
-import { PlusIcon, SettingsIcon } from "./icons.tsx";
+import { NavGlyph, PlusIcon, SettingsIcon } from "./icons.tsx";
 import { LanguageToggle } from "./language-toggle.tsx";
 import { ProfilesBanner } from "./profiles-banner.tsx";
 import { ThemeToggle } from "./theme-toggle.tsx";
@@ -14,7 +14,7 @@ import { Badge } from "./ui/badge.tsx";
 import { buttonVariants } from "./ui/button.tsx";
 
 const nav =
-  "shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text";
+  "group inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text";
 const active = { className: "bg-primary/10 text-primary-text hover:bg-primary/10" };
 
 /** LunasQ brand: tile with an indigo-violet gradient and three moon phases in a row (new, quarter, full). */
@@ -60,8 +60,9 @@ export function Layout() {
             <BrandMark />
             <span className="hidden sm:inline">LunasQ</span>
           </Link>
-          <nav className="order-last -my-2 flex w-full min-w-0 gap-1 overflow-x-auto px-1 py-2 lg:order-none lg:w-auto">
+          <nav className="order-last -my-2 flex w-full min-w-0 gap-1 overflow-x-auto px-1 py-2 [scrollbar-width:none] lg:order-none lg:w-auto">
             <Link to="/queue" className={nav} activeProps={active}>
+              <NavGlyph name="queue" />
               {t.nav.queue}
             </Link>
             <Link
@@ -70,9 +71,10 @@ export function Layout() {
               activeProps={active}
               aria-label={inProgressCount > 0 ? t.nav.inProgressAria(inProgressCount) : undefined}
             >
+              <NavGlyph name="inProgress" />
               {t.nav.inProgress}
               {inProgressCount > 0 && (
-                <Badge variant="secondary" className="ml-1.5">
+                <Badge variant="secondary" className="ml-0.5 tabular-nums">
                   {inProgressCount}
                 </Badge>
               )}
@@ -83,9 +85,10 @@ export function Layout() {
               activeProps={active}
               aria-label={openPrs > 0 ? t.nav.completedAria(openPrs) : t.nav.completed}
             >
+              <NavGlyph name="completed" />
               {t.nav.completed}
               {openPrs > 0 && (
-                <Badge variant="success" className="ml-1.5">
+                <Badge variant="success" className="ml-0.5 tabular-nums">
                   {openPrs}
                 </Badge>
               )}
@@ -96,9 +99,10 @@ export function Layout() {
               activeProps={active}
               aria-label={count > 0 ? t.nav.inboxAria(count) : t.nav.inbox}
             >
+              <NavGlyph name="inbox" />
               {t.nav.inbox}
               {count > 0 && (
-                <Badge variant="destructive" className="ml-1.5">
+                <Badge variant="destructive" className="ml-0.5 tabular-nums">
                   {count}
                 </Badge>
               )}
@@ -109,9 +113,11 @@ export function Layout() {
               activeOptions={{ exact: true }}
               activeProps={active}
             >
+              <NavGlyph name="projects" />
               {t.nav.projects}
             </Link>
             <Link to="/profiles" className={nav} activeProps={active}>
+              <NavGlyph name="profiles" />
               {t.nav.profiles}
             </Link>
           </nav>
@@ -134,7 +140,7 @@ export function Layout() {
       </header>
       <DispatchPausedBanner />
       <ProfilesBanner />
-      <main className="mx-auto max-w-7xl px-6 py-6">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         <Outlet />
       </main>
     </div>

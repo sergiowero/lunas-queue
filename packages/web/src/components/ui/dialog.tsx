@@ -24,16 +24,16 @@ export function Dialog({
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
       <div
         aria-hidden="true"
-        className="fixed inset-0 bg-black/40 backdrop-blur-[2px]"
+        className="fixed inset-0 animate-fade-in bg-black/45 backdrop-blur-[3px]"
         onClick={onClose}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative w-full max-w-2xl rounded-2xl border border-border bg-surface-elevated p-6 shadow-xl"
+        className="relative my-auto w-full max-w-2xl animate-dialog-in rounded-2xl border border-border bg-surface-elevated p-6 shadow-xl"
       >
-        <h2 id={titleId} className="mb-4 text-base font-semibold tracking-tight">
+        <h2 id={titleId} className="mb-5 text-lg font-semibold tracking-tight">
           {title}
         </h2>
         {children}

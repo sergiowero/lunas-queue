@@ -49,14 +49,14 @@ export function UsagePanel({ taskId }: { taskId: string }) {
         <Loading />
       ) : (
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium">
+          <p className="text-base font-semibold tracking-tight tabular-nums">
             {`${unavailableProvider ? t.usage.partial : ""}${t.usage.summary(formatTokens(data.total), formatCost(data.total.costUsd))}`}
           </p>
           {runRows?.length === 0 ? (
             <Muted>{t.usage.none}</Muted>
           ) : (
             <div className="flex flex-col gap-3">
-              <Table>
+              <Table className="whitespace-nowrap">
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t.usage.phase}</TableHead>

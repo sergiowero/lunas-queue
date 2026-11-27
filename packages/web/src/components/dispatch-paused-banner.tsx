@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
+import { WarningIcon } from "./icons.tsx";
 
 export function DispatchPausedBanner() {
   const t = useT();
@@ -14,11 +15,15 @@ export function DispatchPausedBanner() {
   // seen may have changed. Only an already known pause is shown as a pause.
   if (settings.isError && !paused) {
     return (
-      <div role="status" className="border-b border-border bg-warning/10 text-sm text-text">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 px-6 py-2">
+      <div role="status" className="border-b border-warning/25 bg-warning/10 text-sm text-text">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2.5 sm:px-6">
+          <WarningIcon />
           <strong>{t.dispatch.unknownTitle}</strong>
           <span>{t.dispatch.unknownBody}</span>
-          <Link to="/settings" className="font-medium underline">
+          <Link
+            to="/settings"
+            className="font-medium underline underline-offset-2 hover:text-warning-text"
+          >
             {t.dispatch.goToSettings}
           </Link>
         </div>
@@ -27,11 +32,15 @@ export function DispatchPausedBanner() {
   }
   if (!paused) return null;
   return (
-    <div role="status" className="border-b border-border bg-warning/10 text-sm text-text">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 px-6 py-2">
+    <div role="status" className="border-b border-warning/25 bg-warning/10 text-sm text-text">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2.5 sm:px-6">
+        <WarningIcon />
         <strong>{t.dispatch.pausedTitle}</strong>
         <span>{t.dispatch.pausedBody}</span>
-        <Link to="/settings" className="font-medium underline">
+        <Link
+          to="/settings"
+          className="font-medium underline underline-offset-2 hover:text-warning-text"
+        >
           {t.dispatch.goToSettings}
         </Link>
       </div>
