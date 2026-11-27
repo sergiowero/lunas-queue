@@ -32,7 +32,10 @@ export const MINIMUM = {
   opencode: "1.19.6",
 } as const;
 
-const INSTALL_FIX = "corre `lunasq install`";
+const INSTALL_FIX = "run `lunasq install`";
+
+const versionFix = (command: string, tool: string) =>
+  `check that \`${command}\` works in a terminal; reinstall ${tool} if it does not`;
 
 const ok = (id: string, summary: string): CheckResult => ({ id, status: "ok", summary });
 const warn = (id: string, summary: string, fix?: string): CheckResult => ({
@@ -56,7 +59,7 @@ export function checkNode(ctx: MachineContext): CheckResult {
     return fail(
       "node",
       `Node.js ${version}; LunasQ needs ${MINIMUM.node} or newer`,
-      "instala Node.js 26 LTS",
+      "install Node.js 26 LTS",
     );
   }
   return ok("node", `Node.js ${version}`);
@@ -69,7 +72,7 @@ export function checkSqlite(ctx: MachineContext): CheckResult {
   } catch (err) {
     return fail(
       "sqlite",
-      `better-sqlite3 no carga: ${message(err)}`,
+      `better-sqlite3 does not load: ${message(err)}`,
       "reinstall lunasq on a platform with a better-sqlite3 prebuild (ADR 0003)",
     );
   }
@@ -93,6 +96,7 @@ export async function checkHerdr(ctx: MachineContext): Promise<CheckResult[]> {
       fail(
         "herdr",
         `\`herdr status --json\` did not return JSON: ${res.stderr.trim() || res.stdout.trim()}`,
+        `check that \`herdr status --json\` works in a terminal; update herdr to ${MINIMUM.herdr} or newer`,
       ),
     ];
   }
@@ -103,7 +107,7 @@ export async function checkHerdr(ctx: MachineContext): Promise<CheckResult[]> {
       fail(
         "herdr",
         `herdr ${version || "unknown"}; LunasQ needs ${MINIMUM.herdr} or newer`,
-        "actualiza herdr",
+        `update herdr to ${MINIMUM.herdr} or newer`,
       ),
     ];
   }
@@ -113,6 +117,7 @@ export async function checkHerdr(ctx: MachineContext): Promise<CheckResult[]> {
       : warn(
           "herdr",
           `herdr ${version} speaks protocol ${protocol}; LunasQ was verified with ${MINIMUM.herdrProtocol}`,
+          `use a herdr version that speaks protocol ${MINIMUM.herdrProtocol}, or update LunasQ`,
         ),
   ];
   if (!status.server?.running) {
@@ -124,7 +129,7 @@ export async function checkHerdr(ctx: MachineContext): Promise<CheckResult[]> {
       fail(
         "herdr-server",
         `the herdr server (${status.server.version}) is not compatible with the client`,
-        "reinicia herdr",
+        "restart herdr",
       ),
     );
   } else {
@@ -150,6 +155,7 @@ export async function checkHerdrIntegration(ctx: MachineContext): Promise<CheckR
     return warn(
       "herdr-integration",
       "herdr integration for Claude Code skipped: a non-Claude provider is available",
+      "install Claude Code and run `lunasq install` if you want to use it (optional)",
     );
   }
   const state = await claudeIntegrationState(ctx);
@@ -183,13 +189,17 @@ export async function checkClaude(ctx: MachineContext): Promise<CheckResult> {
   }
   const version = parseVersion(res.stdout);
   if (res.exitCode !== 0 || !version) {
-    return fail("claude", `\`claude --version\` failed: ${res.stderr.trim() || res.stdout.trim()}`);
+    return fail(
+      "claude",
+      `\`claude --version\` failed: ${res.stderr.trim() || res.stdout.trim()}`,
+      versionFix("claude --version", "Claude Code"),
+    );
   }
   if (compareVersions(version, MINIMUM.claude) < 0) {
     return fail(
       "claude",
       `Claude Code ${version}; LunasQ needs ${MINIMUM.claude} or newer`,
-      "actualiza Claude Code",
+      "update Claude Code",
     );
   }
   return ok("claude", `Claude Code ${version}`);
@@ -205,13 +215,14 @@ export async function checkCopilot(ctx: MachineContext): Promise<CheckResult> {
     return fail(
       "copilot",
       `\`copilot --version\` failed: ${res.stderr.trim() || res.stdout.trim()}`,
+      versionFix("copilot --version", "GitHub Copilot CLI"),
     );
   }
   if (compareVersions(version, MINIMUM.copilot) < 0) {
     return fail(
       "copilot",
       `GitHub Copilot CLI ${version}; LunasQ needs ${MINIMUM.copilot} or newer`,
-      "actualiza GitHub Copilot CLI",
+      "update GitHub Copilot CLI",
     );
   }
   return ok("copilot", `GitHub Copilot CLI ${version}`);
@@ -224,13 +235,17 @@ export async function checkCodex(ctx: MachineContext): Promise<CheckResult> {
   }
   const version = parseVersion(res.stdout);
   if (res.exitCode !== 0 || !version) {
-    return fail("codex", `\`codex --version\` failed: ${res.stderr.trim() || res.stdout.trim()}`);
+    return fail(
+      "codex",
+      `\`codex --version\` failed: ${res.stderr.trim() || res.stdout.trim()}`,
+      versionFix("codex --version", "OpenAI Codex CLI"),
+    );
   }
   if (compareVersions(version, MINIMUM.codex) < 0) {
     return fail(
       "codex",
       `OpenAI Codex CLI ${version}; LunasQ needs ${MINIMUM.codex} or newer`,
-      "actualiza OpenAI Codex CLI",
+      "update OpenAI Codex CLI",
     );
   }
   return ok("codex", `OpenAI Codex CLI ${version}`);
@@ -246,6 +261,7 @@ export async function checkOpencode(ctx: MachineContext): Promise<CheckResult> {
     return fail(
       "opencode",
       `\`opencode --version\` failed: ${res.stderr.trim() || res.stdout.trim()}`,
+      versionFix("opencode --version", "OpenCode"),
     );
   }
   if (compareVersions(version, MINIMUM.opencode) < 0) {
@@ -264,7 +280,7 @@ export async function checkGh(ctx: MachineContext): Promise<CheckResult> {
     return fail("gh", "gh is not installed", "install GitHub CLI");
   if (res.exitCode !== 0)
     return fail("gh", "gh has no authenticated session", "run `gh auth login`");
-  return ok("gh", "gh autenticado");
+  return ok("gh", "gh authenticated");
 }
 
 /** Tools LunasQ does not install: without them `install` does not continue. */
@@ -315,7 +331,7 @@ export async function checkAssets(ctx: MachineContext): Promise<CheckResult[]> {
         );
       }
       const changes = await drift(t.src, t.dest);
-      if (changes.length === 0) return ok(id, `${label} en ${t.dest}`);
+      if (changes.length === 0) return ok(id, `${label} in ${t.dest}`);
       const state = existsSync(t.dest) ? `outdated (${changes.join(", ")})` : "not installed";
       return fail(id, `${label}: ${state}`, INSTALL_FIX);
     }),
@@ -345,7 +361,13 @@ export async function checkLunasqFiles(ctx: MachineContext): Promise<CheckResult
     config = await readConfig(ctx.paths.config);
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
-    return [fail("config", `invalid configuration: ${err.message}`, `fix ${ctx.paths.config}`)];
+    return [
+      fail(
+        "config",
+        `invalid configuration in ${ctx.paths.config}: ${err.message}`,
+        "fix it or delete it and run `lunasq install`",
+      ),
+    ];
   }
   if (!config) return [fail("config", "LunasQ is not installed", INSTALL_FIX)];
   const urls = runtimeUrls(baseUrl(config));
@@ -384,10 +406,11 @@ export async function checkLunasqFiles(ctx: MachineContext): Promise<CheckResult
 
 export async function checkEngram(ctx: MachineContext): Promise<CheckResult> {
   const res = await run(ctx, "command -v engram");
-  if (res.exitCode === 0) return ok("engram", "engram instalado");
+  if (res.exitCode === 0) return ok("engram", "engram installed");
   return warn(
     "engram",
     "engram is not installed: agents work without persistent memory (optional)",
+    "install engram to give agents persistent memory",
   );
 }
 

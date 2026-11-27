@@ -8,6 +8,7 @@ import { syncAssets } from "./assets.ts";
 import {
   baseUrl,
   ConfigError,
+  configErrorMessage,
   DEFAULT_PORT,
   type LunasqConfig,
   readConfig,
@@ -49,7 +50,7 @@ export async function install(
     current = await readConfig(ctx.paths.config);
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
-    throw new Error(`invalid configuration in ${ctx.paths.config}: ${err.message}`);
+    throw new Error(configErrorMessage(ctx.paths.config, err));
   }
 
   const changes: string[] = [];
