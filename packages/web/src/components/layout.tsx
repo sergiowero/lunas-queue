@@ -1,4 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
+import { useTitleWriter } from "../lib/document-title.ts";
 import { useT } from "../lib/i18n.ts";
 import { useInProgressCount } from "../lib/in-progress.ts";
 import { useInbox } from "../lib/inbox.ts";
@@ -46,6 +47,7 @@ export function Layout() {
   useLiveUpdates();
   const t = useT();
   const { count } = useInbox();
+  useTitleWriter(count);
   const inProgressCount = useInProgressCount();
   const openPrs = useOpenPrCount();
   return (

@@ -1,5 +1,6 @@
 // Global queue (docs/design.md §Front end): the ready set in the scheduler order and then the
 // other live tasks. The score and the usage are computed by the server.
+
 import type { QueueEntry } from "@lunasq/schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -7,6 +8,7 @@ import { type CellContext, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { AgentBadge } from "../components/agent-badge.tsx";
 import { DataTable } from "../components/data-table.tsx";
+import { EmptyWithNewTask } from "../components/empty-state.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
 import { Loading, QueryError, StateBadges, stateText } from "../components/status.tsx";
 import { PauseTaskButton, ResumeTaskButton } from "../components/task-actions.tsx";
@@ -14,7 +16,15 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { Label, Select } from "../components/ui/input.tsx";
 import type { Json } from "../lib/api.ts";
 import { pendingPhase } from "../lib/attribution.ts";
-import { canPause, canResume, cappedTaskLabel, formatCost, formatTokens } from "../lib/format.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
+import {
+  canPause,
+  canResume,
+  cappedTaskLabel,
+  formatCost,
+  formatTokens,
+  fullLabelTitle,
+} from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 import { useProjectFilter, useTabFilters } from "../lib/tab-filters.tsx";
@@ -43,6 +53,7 @@ function ActionsCell({ row }: CellContext<Entry, unknown>) {
 
 export function QueuePage() {
   const t = useT();
+  useDocumentTitle(t.queue.title);
   const [, setFilters] = useTabFilters("queue");
   const projects = useQuery(queries.projects());
   const projectId = useProjectFilter("queue", projects.data);
@@ -62,6 +73,7 @@ export function QueuePage() {
               to="/tasks/$taskId"
               params={{ taskId: c.row.original.task.id }}
               className="font-medium hover:underline"
+              title={fullLabelTitle(c.row.original.task)}
             >
               {c.getValue()}
             </Link>
@@ -142,7 +154,7 @@ export function QueuePage() {
           columns={columns}
           data={queue.data}
           getRowId={(e) => e.task.id}
-          empty={t.queue.empty}
+          empty={<EmptyWithNewTask message={t.queue.empty} {...(projectId ? { projectId } : {})} />}
         />
       ) : (
         <Loading />

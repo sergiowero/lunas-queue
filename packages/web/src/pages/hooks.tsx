@@ -7,6 +7,7 @@ import { type ExecutionsState, HookCard } from "../components/hooks/hook-card.ts
 import { Muted, Section } from "../components/section.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import type { Json } from "../lib/api.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
@@ -56,6 +57,7 @@ export function HooksPage() {
   const hooks = useQuery(queries.projectHooks(projectId));
   const executions = useQuery(queries.hookExecutions(projectId));
   const project = projects.data?.find((p) => p.id === projectId);
+  useDocumentTitle(project ? t.hooksPage.title(project.name) : null);
 
   if (projects.error) return <QueryError error={projects.error} />;
   if (!projects.data) return <Loading />;

@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { TabFiltersProvider, useTabFilters } from "./tab-filters.tsx";
+import { TAB_FILTERS_KEY, TabFiltersProvider, useTabFilters } from "./tab-filters.tsx";
 
 function wrapper({ children }: { children: ReactNode }) {
   return <TabFiltersProvider>{children}</TabFiltersProvider>;
@@ -34,7 +34,7 @@ describe("tab filter store", () => {
     expect(result.current.completed).toEqual({ projectId: "", prFilter: "merged" });
   });
 
-  it("starts a new store instance on All even after another instance chose filters", () => {
+  it("restores the filters another instance chose, as after a reload", () => {
     const first = renderHook(useAllTabs, { wrapper });
     act(() => first.result.current.setQueue({ projectId: "p1" }));
     act(() => first.result.current.setCompleted({ projectId: "p1", prFilter: "merged" }));
@@ -44,8 +44,23 @@ describe("tab filter store", () => {
 
     const second = renderHook(useAllTabs, { wrapper });
 
-    expect(second.result.current.queue).toEqual({ projectId: "" });
-    expect(second.result.current.completed).toEqual({ projectId: "", prFilter: "" });
+    expect(second.result.current.queue).toEqual({ projectId: "p1" });
+    expect(second.result.current.completed).toEqual({ projectId: "p1", prFilter: "merged" });
+  });
+
+  it("starts on All when the saved filters are missing or malformed", () => {
+    localStorage.setItem(TAB_FILTERS_KEY, "{not json");
+    const broken = renderHook(useAllTabs, { wrapper });
+    expect(broken.result.current.queue).toEqual({ projectId: "" });
+    broken.unmount();
+
+    localStorage.setItem(
+      TAB_FILTERS_KEY,
+      JSON.stringify({ queue: { projectId: 7 }, completed: null }),
+    );
+    const wrong = renderHook(useAllTabs, { wrapper });
+    expect(wrong.result.current.queue).toEqual({ projectId: "" });
+    expect(wrong.result.current.completed).toEqual({ projectId: "", prFilter: "" });
   });
 
   it("refuses to be used outside the provider", () => {

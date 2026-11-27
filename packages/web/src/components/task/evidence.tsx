@@ -1,10 +1,12 @@
 // Evidence file `lunasq/tasks/{id}.md` (written by the evidence service), in markdown: from the worktree or,
 // if it was already cleaned up, from the task's branch or the base branch after the merge. It starts collapsed,
 // with the same style as the Event log.
+
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
+import { CopyButton } from "../copy-button.tsx";
 import { MarkdownText } from "../markdown-text.tsx";
 import { Muted, Section } from "../section.tsx";
 import { Loading, QueryError } from "../status.tsx";
@@ -51,6 +53,7 @@ function EvidenceBody({ evidence }: { evidence: ReturnType<typeof useEvidence> }
           <p className="text-xs text-muted-foreground">
             {t.evidence.from(t.evidence.source[evidence.data.source])}
             <code>{evidence.data.path}</code>
+            <CopyButton value={evidence.data.path} label={evidence.data.path} />
           </p>
           <MarkdownText>{evidence.data.markdown}</MarkdownText>
         </div>

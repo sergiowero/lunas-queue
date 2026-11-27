@@ -96,6 +96,8 @@ export function InstructionsPanel({
   const t = useT();
   const errorText = useErrorText();
   const [editing, setEditing] = useState<string | null>(null);
+  // The instruction whose removal waits for a second click, as Cancel task does.
+  const [confirming, setConfirming] = useState<string | null>(null);
   const add = useInstructionMutation(taskId, (input: { phase: InstructionPhase; text: string }) =>
     api.addInstruction(taskId, input),
   );
@@ -135,15 +137,34 @@ export function InstructionsPanel({
                     >
                       {t.instructions.edit}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={t.instructions.removeAria(t.phase[instruction.phase])}
-                      disabled={remove.isPending}
-                      onClick={() => remove.mutate(instruction.id)}
-                    >
-                      {t.instructions.remove}
-                    </Button>
+                    {confirming === instruction.id ? (
+                      <span className="flex items-center gap-1">
+                        <span>{t.instructions.confirmRemove}</span>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={remove.isPending && remove.variables === instruction.id}
+                          onClick={() =>
+                            remove.mutate(instruction.id, { onSettled: () => setConfirming(null) })
+                          }
+                        >
+                          {t.instructions.yesRemove}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setConfirming(null)}>
+                          {t.instructions.no}
+                        </Button>
+                      </span>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={t.instructions.removeAria(t.phase[instruction.phase])}
+                        disabled={remove.isPending && remove.variables === instruction.id}
+                        onClick={() => setConfirming(instruction.id)}
+                      >
+                        {t.instructions.remove}
+                      </Button>
+                    )}
                   </>
                 )}
               </li>

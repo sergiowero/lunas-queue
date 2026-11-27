@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import type { Json } from "../../lib/api.ts";
-import { formatDate } from "../../lib/format.ts";
 import { useT } from "../../lib/i18n.ts";
 import { queries } from "../../lib/queries.ts";
 import { RunAgent } from "../agent-badge.tsx";
@@ -14,6 +13,7 @@ import { PAGE_SIZE, Pagination } from "../pagination.tsx";
 import { PaneFocusButton } from "../pane-focus-button.tsx";
 import { Section } from "../section.tsx";
 import { Loading, QueryError } from "../status.tsx";
+import { Elapsed, Time } from "../time.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Button } from "../ui/button.tsx";
 import { HandoffDialog } from "./handoff-dialog.tsx";
@@ -60,12 +60,17 @@ export function RunsPanel({ taskId }: { taskId: string }) {
       column.display({
         id: "started",
         header: t.runs.started,
-        cell: (c) => formatDate(c.row.original.startedAt),
+        cell: (c) => <Time iso={c.row.original.startedAt} />,
       }),
       column.display({
         id: "ended",
         header: t.runs.ended,
-        cell: (c) => formatDate(c.row.original.endedAt),
+        cell: (c) => <Time iso={c.row.original.endedAt} />,
+      }),
+      column.display({
+        id: "duration",
+        header: t.runs.duration,
+        cell: (c) => <Elapsed start={c.row.original.startedAt} end={c.row.original.endedAt} />,
       }),
       column.accessor("result", {
         header: t.runs.result,

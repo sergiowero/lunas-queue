@@ -6,7 +6,7 @@
 import type { PhaseInstructionInput } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { Loading, QueryError } from "../components/status.tsx";
 import { InstructionForm } from "../components/task/instruction-form.tsx";
 import { TaskNumber, taskLabel as taskNumberLabel } from "../components/task-number.tsx";
@@ -15,9 +15,11 @@ import { Button } from "../components/ui/button.tsx";
 import { Input, Label, Select, Textarea } from "../components/ui/input.tsx";
 import { ApiError, api } from "../lib/api.ts";
 import type { Dictionary } from "../lib/dictionary/index.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
 import { errorText } from "../lib/error-text.ts";
 import { isTerminal, taskLabel } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
+import { onModEnter } from "../lib/keyboard.ts";
 import { queries } from "../lib/queries.ts";
 
 const route = getRouteApi("/tasks/new");
@@ -40,11 +42,13 @@ function describe(error: Error, t: Dictionary): string {
 
 export function NewTaskPage() {
   const t = useT();
+  useDocumentTitle(t.newTask.title);
   const search = route.useSearch();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [projectId, setProjectId] = useState(search.projectId ?? "");
   const [goal, setGoal] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
   const [tags, setTags] = useState("");
   const [priority, setPriority] = useState(String(DEFAULT_PRIORITY));
   const [dependsOn, setDependsOn] = useState<string[]>([]);
@@ -92,7 +96,7 @@ export function NewTaskPage() {
   const chosen = dependsOn.flatMap((id) => (candidates.data ?? []).filter((c) => c.id === id));
 
   return (
-    <form onSubmit={submit} className="flex max-w-2xl flex-col gap-4">
+    <form ref={formRef} onSubmit={submit} className="flex max-w-2xl flex-col gap-4">
       <h1 className="text-xl font-semibold">{t.newTask.title}</h1>
       <div className="flex flex-col gap-1">
         <Label htmlFor="task-project">{t.newTask.project}</Label>
@@ -123,6 +127,9 @@ export function NewTaskPage() {
           rows={5}
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
+          onKeyDown={onModEnter(() => formRef.current?.requestSubmit())}
+          // With the project already chosen (?projectId) the goal is the first thing to type.
+          autoFocus={search.projectId !== undefined}
           placeholder={t.newTask.goalPlaceholder}
         />
       </div>

@@ -8,7 +8,8 @@ import { TaskNumber } from "../components/task-number.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 import type { Json } from "../lib/api.ts";
-import { BOARD_STATES, taskLabel } from "../lib/format.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
+import { BOARD_STATES, cappedTaskLabel, fullLabelTitle } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
@@ -24,8 +25,9 @@ function TaskCard({ task }: { task: Json<Task> }) {
           to="/tasks/$taskId"
           params={{ taskId: task.id }}
           className="font-medium hover:underline"
+          title={fullLabelTitle(task)}
         >
-          {taskLabel(task)}
+          {cappedTaskLabel(task)}
         </Link>
       </div>
       <div className="flex flex-wrap gap-1">
@@ -52,6 +54,7 @@ export function BoardPage() {
   const projects = useQuery(queries.projects());
   const tasks = useQuery(queries.tasks(projectId));
   const project = projects.data?.find((p) => p.id === projectId);
+  useDocumentTitle(project?.name);
 
   const error = projects.error ?? tasks.error;
   if (error) return <QueryError error={error} />;
@@ -99,9 +102,17 @@ export function BoardPage() {
               aria-labelledby={headingId}
               className="flex w-64 shrink-0 flex-col gap-2 rounded-lg bg-muted p-2"
             >
-              <h2 id={headingId} className="px-1 text-sm font-semibold">
-                {t.state[state]}
-              </h2>
+              <div className="flex items-center justify-between gap-2 px-1">
+                <h2 id={headingId} className="text-sm font-semibold">
+                  {t.state[state]}
+                </h2>
+                {items.length > 0 && (
+                  // The cards themselves are the accessible count; the number is a visual aid.
+                  <Badge variant="secondary" aria-hidden="true">
+                    {items.length}
+                  </Badge>
+                )}
+              </div>
               {items.length === 0 ? (
                 <p className="px-1 text-xs text-muted-foreground">{t.board.noTasks}</p>
               ) : (

@@ -8,17 +8,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useId, useState } from "react";
 import { AgentBadge } from "../components/agent-badge.tsx";
+import { CopyButton } from "../components/copy-button.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
 import { Muted, Section } from "../components/section.tsx";
 import { Loading, MutationError, QueryError, StateBadges } from "../components/status.tsx";
 import { TaskNumber } from "../components/task-number.tsx";
+import { Time } from "../components/time.tsx";
 import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Label, Textarea } from "../components/ui/input.tsx";
 import { api, type Json } from "../lib/api.ts";
-import { cappedTaskLabel, formatDate } from "../lib/format.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
+import { cappedTaskLabel, fullLabelTitle } from "../lib/format.ts";
 import { useT } from "../lib/i18n.ts";
 import { type Inbox, type TasksById, useInbox } from "../lib/inbox.ts";
+import { onModEnter } from "../lib/keyboard.ts";
 import { invalidateInbox } from "../lib/live.ts";
 import { queries } from "../lib/queries.ts";
 
@@ -53,7 +57,13 @@ function TaskLink({
   return (
     <>
       {task && <TaskNumber number={task.number} />}
-      <Link id={id} to="/tasks/$taskId" params={{ taskId }} className="font-medium underline">
+      <Link
+        id={id}
+        to="/tasks/$taskId"
+        params={{ taskId }}
+        className="font-medium underline"
+        title={task ? fullLabelTitle(task) : undefined}
+      >
         {task ? cappedTaskLabel(task) : taskId}
       </Link>
     </>
@@ -132,7 +142,7 @@ function EscalatedSection({
             <Item key={task.id} task={task} taskId={task.id}>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <StateBadges state={task.state} subState={task.subState} />
-                <span>{t.inbox.since(formatDate(task.updatedAt))}</span>
+                <Time iso={task.updatedAt} format={t.inbox.since} />
               </div>
             </Item>
           ))}
@@ -183,11 +193,14 @@ function QuestionItem({
     },
   });
   const field = `answer-${question.id}`;
+  const submit = () => {
+    if (!send.isPending && answer !== "") send.mutate();
+  };
   return (
     <Item task={task} taskId={question.taskId}>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {phase && <Badge variant="outline">{t.phase[phase]}</Badge>}
-        <span>{t.inbox.asked(formatDate(question.createdAt))}</span>
+        <Time iso={question.createdAt} format={t.inbox.asked} />
       </div>
       <p className="whitespace-pre-wrap text-sm font-medium">{question.question}</p>
       {question.context && (
@@ -228,13 +241,19 @@ function QuestionItem({
               aria-label={t.inbox.otherAnswer}
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={onModEnter(submit)}
             />
           )}
         </fieldset>
       ) : (
         <>
           <Label htmlFor={field}>{t.inbox.answer}</Label>
-          <Textarea id={field} value={typed} onChange={(e) => setTyped(e.target.value)} />
+          <Textarea
+            id={field}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={onModEnter(submit)}
+          />
         </>
       )}
       <Button
@@ -311,13 +330,18 @@ function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Ta
         <dt className="text-muted-foreground">{t.inbox.pane}</dt>
         <dd className="font-mono">{agent.paneId}</dd>
         <dt className="text-muted-foreground">{t.inbox.blockedSince}</dt>
-        <dd>{formatDate(agent.since)}</dd>
+        <dd>
+          <Time iso={agent.since} />
+        </dd>
       </dl>
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={() => focus.mutate()} disabled={focus.isPending}>
           {t.inbox.openPane}
         </Button>
-        <code className="text-xs text-muted-foreground">{`herdr agent focus ${agent.agentName}`}</code>
+        <span className="inline-flex items-center">
+          <code className="text-xs text-muted-foreground">{`herdr agent focus ${agent.agentName}`}</code>
+          <CopyButton value={`herdr agent focus ${agent.agentName}`} label="herdr agent focus" />
+        </span>
       </div>
       {focus.isSuccess && (
         <p role="status" className="text-sm">
@@ -352,6 +376,7 @@ function BlockedSection({ blocked, tasks }: { blocked: Inbox["blocked"]; tasks: 
 
 export function InboxPage() {
   const t = useT();
+  useDocumentTitle(t.inbox.title);
   const inbox = useInbox();
   // Only with the three queries successful: one that failed cannot be read as «nothing pending».
   const loaded = inbox.tasks.isSuccess && inbox.questions.isSuccess && inbox.blocked.isSuccess;

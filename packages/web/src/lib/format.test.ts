@@ -7,7 +7,9 @@ import {
   canResume,
   cappedTaskLabel,
   formatAgent,
+  formatRelative,
   formatTimeout,
+  fullLabelTitle,
 } from "./format.ts";
 
 describe("formatTimeout", () => {
@@ -79,5 +81,29 @@ describe("cappedTaskLabel", () => {
   it("does not split a character outside the BMP", () => {
     const capped = cappedTaskLabel(task(null, "😀".repeat(80)));
     expect(capped).toBe(`${"😀".repeat(69)}...`);
+  });
+});
+
+describe("formatRelative", () => {
+  const now = Date.parse("2026-11-27T12:00:00Z");
+  const ago = (seconds: number) => new Date(now - seconds * 1000).toISOString();
+
+  it("says now under a minute and uses the largest whole unit after that", () => {
+    expect(formatRelative(ago(10), now)).toBe("ahora");
+    expect(formatRelative(ago(3 * 60), now)).toBe("hace 3 min");
+    expect(formatRelative(ago(2 * 3600 + 59), now)).toBe("hace 2 h");
+    expect(formatRelative(ago(86_400), now)).toBe("ayer");
+  });
+
+  it("shows a dash without a date", () => {
+    expect(formatRelative(null, now)).toBe("—");
+  });
+});
+
+describe("fullLabelTitle", () => {
+  it("returns the full label only when the list label was cut", () => {
+    expect(fullLabelTitle({ title: null, goal: "Corto" })).toBeUndefined();
+    const long = "x".repeat(TASK_TITLE_MAX + 10);
+    expect(fullLabelTitle({ title: null, goal: long })).toBe(long);
   });
 });

@@ -12,11 +12,13 @@ import { Badge } from "../components/ui/badge.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
 import type { Json } from "../lib/api.ts";
+import { useDocumentTitle } from "../lib/document-title.ts";
 import { useT } from "../lib/i18n.ts";
 import { queries } from "../lib/queries.ts";
 
 export function ProfilesPage() {
   const t = useT();
+  useDocumentTitle(t.profilesPage.title);
   const profiles = useQuery(queries.agentProfiles());
   const settings = useQuery(queries.providerSettings());
   const [dialog, setDialog] = useState<

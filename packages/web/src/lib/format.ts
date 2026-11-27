@@ -19,6 +19,12 @@ export function cappedTaskLabel(task: { title: string | null; goal: string }): s
   return chars.slice(0, TASK_TITLE_MAX - ELLIPSIS.length).join("") + ELLIPSIS;
 }
 
+/** Hover text for a capped label: the full label when `cappedTaskLabel` cut it, otherwise none. */
+export function fullLabelTitle(task: { title: string | null; goal: string }): string | undefined {
+  const label = taskLabel(task);
+  return cappedTaskLabel(task) === label ? undefined : label;
+}
+
 /** A Run's agent: its kind and, if any, its model («claude · opus»). */
 export function formatAgent(run: { agentKind: string; model?: string | null }): string {
   return run.model ? `${run.agentKind} · ${run.model}` : run.agentKind;
@@ -69,6 +75,32 @@ export function formatDate(iso: string | null): string {
     dateFormats.set(key, format);
   }
   return format.format(new Date(iso));
+}
+
+const relativeFormats = new Map<string, Intl.RelativeTimeFormat>();
+
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 365 * 86_400],
+  ["month", 30 * 86_400],
+  ["day", 86_400],
+  ["hour", 3_600],
+  ["minute", 60],
+];
+
+/** «hace 3 min» / «3 min ago»: the largest whole unit; under a minute, «ahora» / «now». */
+export function formatRelative(iso: string | null, now = Date.now()): string {
+  if (!iso) return "—";
+  const key = locale();
+  let format = relativeFormats.get(key);
+  if (!format) {
+    format = new Intl.RelativeTimeFormat(key, { numeric: "auto", style: "short" });
+    relativeFormats.set(key, format);
+  }
+  const seconds = Math.round((new Date(iso).getTime() - now) / 1000);
+  for (const [unit, size] of RELATIVE_UNITS) {
+    if (Math.abs(seconds) >= size) return format.format(Math.trunc(seconds / size), unit);
+  }
+  return format.format(0, "second");
 }
 
 function integer(value: number): string {

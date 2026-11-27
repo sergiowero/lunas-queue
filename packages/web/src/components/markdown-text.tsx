@@ -16,6 +16,8 @@ const components: Components = {
   ),
   th: ({ node: _node, ...props }) => <th {...props} className={`${cell} bg-muted font-semibold`} />,
   td: ({ node: _node, ...props }) => <td {...props} className={cell} />,
+  // Links in a Result or evidence point outside the app: open them in a new tab.
+  a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
   img: ({ node: _node, ...props }) => (
     <img {...props} className="h-auto max-w-full" alt={props.alt ?? ""} />
   ),

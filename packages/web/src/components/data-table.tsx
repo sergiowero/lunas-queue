@@ -1,5 +1,6 @@
 // Generic table over TanStack Table with shadcn/ui pieces.
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
+import type { ReactNode } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table.tsx";
 
 export function DataTable<T>({
@@ -12,10 +13,11 @@ export function DataTable<T>({
   columns: ColumnDef<T, any>[];
   data: T[];
   getRowId: (row: T) => string;
-  empty: string;
+  /** What an empty table shows: a sentence, optionally with a next step. */
+  empty: ReactNode;
 }) {
   const table = useReactTable({ columns, data, getRowId, getCoreRowModel: getCoreRowModel() });
-  if (data.length === 0) return <p className="text-sm text-muted-foreground">{empty}</p>;
+  if (data.length === 0) return <div className="text-sm text-muted-foreground">{empty}</div>;
   return (
     <Table>
       <TableHeader>

@@ -24,6 +24,10 @@ export const en: Dictionary = {
     output: "Output",
     root: "(root)",
     body: "(body)",
+    copy: "Copy",
+    copied: "Copied",
+    copyAria: (what) => `Copy ${what}`,
+    createTask: "Create a task",
   },
   nav: {
     queue: "Queue",
@@ -101,6 +105,7 @@ export const en: Dictionary = {
     pane: "Pane",
     started: "Started",
     ended: "Ended",
+    duration: "Duration",
     result: "Result",
     inProgress: "in progress",
     failureReason: "Failure reason",
@@ -172,6 +177,9 @@ export const en: Dictionary = {
     cancel: "Cancel",
     remove: "Remove",
     removeAria: (phase) => `Remove the ${phase} instruction`,
+    confirmRemove: "Remove the instruction?",
+    yesRemove: "Yes, remove",
+    no: "No",
   },
   hooks: {
     task: "Task",
@@ -422,6 +430,7 @@ export const en: Dictionary = {
     emptyRest: "There are no other completed tasks.",
     pr: "PR",
     prButton: (state) => `PR ${state}`,
+    completedAt: "Completed",
   },
   board: {
     notFound: "The project does not exist.",

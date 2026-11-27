@@ -1,9 +1,10 @@
 import type { HookExecutionView, HookView } from "@lunasq/schemas";
 import { Link } from "@tanstack/react-router";
 import type { Json } from "../../lib/api.ts";
-import { formatDate, formatDuration, formatTimeout } from "../../lib/format.ts";
+import { formatDuration, formatTimeout } from "../../lib/format.ts";
 import { useT } from "../../lib/i18n.ts";
 import { Muted } from "../section.tsx";
+import { Time } from "../time.tsx";
 import { Badge } from "../ui/badge.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table.tsx";
 
@@ -18,7 +19,9 @@ function ExecutionRow({ execution: e }: { execution: Execution }) {
           {e.taskTitle ?? e.taskGoal}
         </Link>
       </TableCell>
-      <TableCell>{formatDate(e.at)}</TableCell>
+      <TableCell>
+        <Time iso={e.at} />
+      </TableCell>
       <TableCell>
         <span className="inline-flex gap-1">
           <Badge variant={e.passed ? "secondary" : "destructive"}>

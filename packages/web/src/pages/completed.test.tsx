@@ -4,6 +4,9 @@ import { FakeApi } from "../../test/fake-api.ts";
 import { renderApp } from "../../test/render.tsx";
 import { buttonVariants } from "../components/ui/button.tsx";
 
+// Completed lists show the most recently completed first: in the seeds, number 01 is the newest.
+const newest = (i: number) => new Date(Date.UTC(2030, 0, 1) - i * 60_000).toISOString();
+
 describe("Completed tab", () => {
   it("links from the navigation and lists completed tasks of all projects", async () => {
     const fake = new FakeApi();
@@ -307,6 +310,7 @@ describe("Completed tab", () => {
         fake.addTask(project.id, {
           ...completed,
           goal: `Abierta ${String(i).padStart(2, "0")}`,
+          updatedAt: newest(i),
           prUrl: `https://github.com/o/r/pull/${i}`,
           prState: "open",
         });
@@ -315,6 +319,7 @@ describe("Completed tab", () => {
         fake.addTask(project.id, {
           ...completed,
           goal: `Resto ${String(i).padStart(2, "0")}`,
+          updatedAt: newest(i),
           prState: "merged",
         });
       }
@@ -505,6 +510,7 @@ describe("Completed tab", () => {
           ...completed,
           goal: `Dos ${String(i).padStart(2, "0")}`,
           prState: "closed",
+          updatedAt: newest(i),
         });
       }
       const { user } = renderApp("/completed", fake);
@@ -558,7 +564,7 @@ describe("Completed tab", () => {
       const fake = new FakeApi();
       const project = fake.addProject({ name: "uno" });
       for (let i = 1; i <= count; i++) {
-        research(fake, project.id, `Inv ${String(i).padStart(2, "0")}`);
+        research(fake, project.id, `Inv ${String(i).padStart(2, "0")}`, { updatedAt: newest(i) });
       }
       return fake;
     }
@@ -672,7 +678,7 @@ describe("Completed tab", () => {
       const fake = seedResearch(45);
       const two = fake.addProject({ name: "dos" });
       for (let i = 1; i <= 25; i++) {
-        research(fake, two.id, `Dos ${String(i).padStart(2, "0")}`);
+        research(fake, two.id, `Dos ${String(i).padStart(2, "0")}`, { updatedAt: newest(i) });
       }
       const { user } = renderApp("/completed", fake);
 

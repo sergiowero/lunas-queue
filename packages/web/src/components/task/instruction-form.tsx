@@ -1,9 +1,11 @@
 // Phase selector + text + Add: how a human writes an instruction for the agent of one phase
 // (refine, implement or verify). Shared by the new-task form and the task detail. It is not a
 // <form>: the new-task page already is one, so Add is a plain button.
+
 import type { InstructionPhase, PhaseInstructionInput } from "@lunasq/schemas";
 import { useState } from "react";
 import { useT } from "../../lib/i18n.ts";
+import { onModEnter } from "../../lib/keyboard.ts";
 import { Button } from "../ui/button.tsx";
 import { Label, Select, Textarea } from "../ui/input.tsx";
 
@@ -58,6 +60,9 @@ export function InstructionForm({
           rows={3}
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={onModEnter(() => {
+            if (!pending) void add();
+          })}
           placeholder={t.instructions.textPlaceholder}
         />
       </div>

@@ -1,5 +1,6 @@
 // Spec versions, their content and the diff against the previous one (ADR 0013), with the gate: approve,
 // request changes or edit and approve. Only the task detail mounts it: the inbox links to it (ADR 0015).
+
 import type { Spec, SpecContent, SpecDiff, Task } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -7,6 +8,7 @@ import { api, type Json } from "../../lib/api.ts";
 import { specVersionRun } from "../../lib/attribution.ts";
 import type { Dictionary } from "../../lib/dictionary/index.ts";
 import { useT } from "../../lib/i18n.ts";
+import { onModEnter } from "../../lib/keyboard.ts";
 import { queries } from "../../lib/queries.ts";
 import { AgentBadge } from "../agent-badge.tsx";
 import { Muted, Section } from "../section.tsx";
@@ -234,6 +236,9 @@ function Review({ task, spec }: { task: Json<Task>; spec: Json<Spec> }) {
             id={`comments-${spec.id}`}
             value={comments}
             onChange={(e) => setComments(e.target.value)}
+            onKeyDown={onModEnter(() => {
+              if (!pending && comments.trim() !== "") requestChanges.mutate();
+            })}
             placeholder={t.spec.commentsPlaceholder}
           />
           <Button
