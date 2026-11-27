@@ -92,7 +92,8 @@ export class PaneTestGate implements TestGate {
       : {
           headSha: null,
           result: null,
-          error: "the project has no test command configured",
+          error:
+            "the project has no test command configured: use ask_human so the human configures one",
           durationMs: 0,
         };
     const { result, error } = execution;

@@ -29,7 +29,7 @@ They were fixed in this unit:
 The following remain as new tasks, to queue in LunasQ (`docs/pilot.md`):
 
 - **Hooks not connected to their phase (fixed afterwards):** `before_refinement`, `after_refinement`, `before_implementation` and `on_failure` were in the schema and in `docs/design.md`, but nothing ran them, so a hook in any of them did nothing and did not warn. They are now connected: the dispatcher runs the `before_*` ones, `submit_spec` runs `after_refinement` and the `run.failed` event triggers `on_failure` ([ADR uw-10-hooks](uw-10-hooks.md), [ADR uw-16-dispatcher](uw-16-dispatcher.md)).
-- **Creating a task does not wake the scheduler:** the task waits until the next tick (30 s by default) to start refinement. The UI shows "queued" without explaining the wait.
+- **Creating a task did not wake the scheduler (fixed afterwards):** the task waited until the next tick (30 s by default) to start refinement. `task.created` and `task.dependency_removed` now go through the outbox, which wakes the scheduler.
 
 ## Verification
 

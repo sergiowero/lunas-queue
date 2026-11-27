@@ -516,7 +516,10 @@ describe("submit_result", () => {
     const result = await call("submit_result", {
       handoff: resultFor(run, { phase: "implementation" }),
     });
-    expect(result.body).toMatchObject({ error: "no_worktree" });
+    expect(result.body).toMatchObject({
+      error: "no_worktree",
+      message: "the task has no registered worktree: call report_failure",
+    });
     expect(h.taskOf(task.id)).toMatchObject(implementing);
   });
 
@@ -863,7 +866,12 @@ describe("submit_for_verification", () => {
     });
     expect(result).toMatchObject({
       isError: true,
-      body: { error: "test_gate_failed", output: "FAIL order.test.ts" },
+      body: {
+        error: "test_gate_failed",
+        message:
+          "the test gate is red: fix the failures, commit and call submit_for_verification again",
+        output: "FAIL order.test.ts",
+      },
     });
     expect(h.taskOf(task.id)).toMatchObject(implementing);
     expect(runOf(h, run.id)?.endedAt).toBeNull();
@@ -931,6 +939,19 @@ describe("submit_for_verification", () => {
     expect(next && runOf(h, next.id)).toMatchObject({ endedAt: null, handoff: null });
   });
 
+  it("without an approved spec it asks the agent to report the failure", async () => {
+    const h = mcpHarness();
+    const { task, run, call } = await h.ready("implement", implementing, { approved: false });
+    const result = await call("submit_for_verification", {
+      handoff: handoffFor("implementation", run),
+    });
+    expect(result.body).toMatchObject({
+      error: "no_approved_spec",
+      message: "the task has no approved spec: call report_failure",
+    });
+    expect(h.taskOf(task.id)).toMatchObject(implementing);
+  });
+
   it("a worktree with uncommitted changes is rejected before the gate", async () => {
     const h = mcpHarness();
     const { task, run, call } = await h.ready("implement", implementing);
@@ -940,6 +961,7 @@ describe("submit_for_verification", () => {
     });
     expect(result.body).toMatchObject({
       error: "dirty_worktree",
+      message: "the worktree has uncommitted changes: commit or discard them, then call again",
       issues: [{ path: "src/order.ts" }],
     });
     expect(h.testGate.calls).toHaveLength(0);
@@ -1200,7 +1222,10 @@ describe("submit_verdict", () => {
       ["ask_human", { question: "¿Algo más?" }],
       ["report_failure", { reason: "me arrepentí" }],
     ] as const) {
-      expect((await call(tool, args)).body).toMatchObject({ error: "tool_not_allowed" });
+      expect((await call(tool, args)).body).toMatchObject({
+        error: "tool_not_allowed",
+        message: `the Run already recorded its verdict; ${tool} is not accepted, only get_task_context, submit_verdict`,
+      });
     }
     expect(h.taskOf(task.id)).toMatchObject(verifying);
     expect(runOf(h, run.id)).toMatchObject({ endedAt: null, result: null });

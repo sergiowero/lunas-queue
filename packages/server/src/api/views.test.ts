@@ -250,6 +250,9 @@ describe("GET /api/tasks/:id/evidence", () => {
       status: 404,
       body: { error: "evidence_not_found" },
     });
-    expect((await get(`/api/tasks/${missing}/evidence`)).body).toEqual({ error: "not_found" });
+    expect((await get(`/api/tasks/${missing}/evidence`)).body).toEqual({
+      error: "not_found",
+      message: `task ${missing} not found`,
+    });
   });
 });

@@ -14,11 +14,12 @@ import {
 import { createMcpHonoApp } from "@modelcontextprotocol/hono";
 import { McpServer, WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
 import type { Hono } from "hono";
+import pkg from "../../package.json" with { type: "json" };
 import type { LunasqMcpService, Outcome, ToolName } from "./service.ts";
 
 export const RUN_TOKEN_HEADER = "x-lunasq-run-token";
 
-const SERVER_INFO = { name: "lunasq", version: "1.0.0" };
+export const SERVER_INFO = { name: "lunasq", version: pkg.version };
 
 type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
 
@@ -32,7 +33,7 @@ function toResult(outcome: Outcome<unknown>): ToolResult {
 }
 
 const HANDOFF_HINT =
-  "The handoff is JSON with the versioned schema in packages/schemas/json-schema (schemaVersion 1); if it does not comply, the call is rejected with the errors by path and you can fix it and retry.";
+  "The handoff is JSON with schemaVersion 1, taskId, runId, phase and summary plus the phase's own fields; the phase skill (refine-task, implement-task or verify-task) describes them with a valid example. If it does not comply, the call is rejected with the errors by path and you can fix it and retry.";
 
 function buildServer(service: LunasqMcpService, token: string | undefined): McpServer {
   const server = new McpServer(SERVER_INFO);

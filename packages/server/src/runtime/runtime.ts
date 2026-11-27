@@ -210,6 +210,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const testGate = new PaneTestGate({ db, git, herdr, worktrees: orchestrator.worktrees });
   const app = createApp({
     db,
+    log,
     copilotReviewers,
     codexReviewers,
     opencodeReviewers,
@@ -259,7 +260,7 @@ function compose(opts: RuntimeOptions, db: LunasqDatabase, url: string, log: (m:
   const unsubscribeDelivery = subscribeDelivery({
     publisher,
     delivery,
-    onError: (error, taskId) => log(`entrega: ${taskId}: ${error.message}`),
+    onError: (error, taskId) => log(`delivery: ${taskId}: ${error.message}`),
   });
 
   return {
@@ -285,7 +286,7 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
   let listening: Awaited<ReturnType<typeof listen>>;
   try {
     listening = await listen(opts.port, hostname, (req, env) =>
-      handler ? handler(req, env) : new Response("arrancando", { status: 503 }),
+      handler ? handler(req, env) : new Response("starting", { status: 503 }),
     );
   } catch (err) {
     db.$client.close();
@@ -340,7 +341,7 @@ export async function startRuntime(opts: RuntimeOptions): Promise<Runtime> {
     void delivery
       .recover()
       .catch((error: unknown) =>
-        log(`entrega: ${error instanceof Error ? error.message : String(error)}`),
+        log(`delivery: ${error instanceof Error ? error.message : String(error)}`),
       );
   } catch (err) {
     await stop();

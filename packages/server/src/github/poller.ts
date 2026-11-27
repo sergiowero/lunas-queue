@@ -166,5 +166,5 @@ function toError(error: unknown): Error {
 
 function defaultError(error: Error, pr: TrackedPr | null): void {
   const where = pr ? `task ${pr.taskId} (${pr.url})` : "read";
-  console.error(`[pr-poller] fallo en ${where}: ${error.message}`);
+  console.error(`[pr-poller] failure in ${where}: ${error.message}`);
 }

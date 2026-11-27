@@ -10,7 +10,7 @@ import type { AgentFocuser } from "./questions.ts";
 export function runRoutes(runs: RunRepository, focus?: AgentFocuser): Hono {
   return new Hono().post("/:runId/focus", async (c) => {
     const run = runs.get(c.req.param("runId"));
-    if (!run) return notFound(c);
+    if (!run) return notFound(c, `run ${c.req.param("runId")}`);
     if (!run.herdrPane || !run.herdrName) {
       return c.json({ error: "no_pane", message: "the Run has no herdr pane" }, 409);
     }

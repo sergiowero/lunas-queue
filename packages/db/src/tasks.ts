@@ -163,7 +163,12 @@ export class TaskRepository implements DependencyGraphReader {
         causedBy: row.causedBy,
         dependsOn: links,
       };
-      appendEvent(tx, { taskId: row.id, type: TASK_CREATED, actor: "human", payload });
+      // Published: a new task may be ready to dispatch, so the scheduler wakes.
+      appendEvent(
+        tx,
+        { taskId: row.id, type: TASK_CREATED, actor: "human", payload },
+        { publish: true },
+      );
       for (const instruction of instructions) insertInstruction(tx, row.id, instruction);
       return toTask(row);
     });
@@ -366,7 +371,12 @@ export class TaskRepository implements DependencyGraphReader {
         dependsOnId,
         crossProject: task.projectId !== target?.projectId,
       };
-      appendEvent(tx, { taskId, type: TASK_DEPENDENCY_REMOVED, actor: "human", payload });
+      // Published: removing the edge may unblock the task, so the scheduler wakes.
+      appendEvent(
+        tx,
+        { taskId, type: TASK_DEPENDENCY_REMOVED, actor: "human", payload },
+        { publish: true },
+      );
       return { removed: true };
     });
   }

@@ -14,7 +14,7 @@
 - **Invalid token.** Without a header, with an unknown token or with the token of a closed Run, the handshake and `tools/list` work, but every `tools/call` answers `isError` with `invalid_run_token` and has no effects. 401 is not answered because MCP clients interpret it as a request for OAuth.
 - **Guards.** Every tool goes through these guards, in order:
   1. Active Run (`ended_at IS NULL`).
-  2. Tool allowed in the Run's phase (`tool_not_allowed`): `submit_spec` in refine; `submit_result` in refine and implement; `update_checklist` and `submit_for_verification` in implement; `submit_verdict` in verify. `get_task_context`, `ask_human` and `report_failure` are accepted in all.
+  2. Tool allowed in the Run's phase (`tool_not_allowed`): `submit_spec` in refine; `submit_result` in refine and implement; `update_checklist` and `submit_for_verification` in implement; `submit_verdict` in verify. `get_task_context`, `ask_human` and `report_failure` are accepted in all. The message lists the tools accepted in the Run's phase, so the agent knows its exit.
   3. `get_task_context` already read (`context_required`).
   4. In verify, if the Run already recorded a pass verdict, only `get_task_context` and `submit_verdict` are accepted. This way the token, which stays alive for delivery, can no longer take the task to `waiting_human` or close the Run as failed.
 - **Context read.** The column `runs.context_read_at` (migration `0003`) stores the first call to `get_task_context`; repeating it does not move the mark. Being a column and not an event, the guard is a lookup by the Run's key.

@@ -17,6 +17,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { migrateDatabase } from "./client.ts";
 import { listEvents } from "./event-log.ts";
+import { listPendingOutbox } from "./outbox.ts";
 import * as schema from "./schema.ts";
 import { taskDependencies, taskInstructions, tasks } from "./schema.ts";
 import {
@@ -126,6 +127,29 @@ describe("TaskRepository.create", () => {
   it("validates the input", () => {
     const { create } = repository();
     expect(() => create({ priority: -1 })).toThrow();
+  });
+});
+
+describe("TaskRepository outbox", () => {
+  it("publishes task.created so the scheduler wakes", () => {
+    const { db, create } = repository();
+    const task = create();
+    expect(listPendingOutbox(db).map((p) => [p.message.topic, p.message.taskId])).toEqual([
+      [TASK_CREATED, task.id],
+    ]);
+  });
+
+  it("publishes task.dependency_removed but not task.dependency_added", () => {
+    const { db, repo, create } = repository();
+    const a = create();
+    const b = create();
+    repo.addDependency(b.id, a.id);
+    repo.removeDependency(b.id, a.id);
+    expect(listPendingOutbox(db).map((p) => [p.message.topic, p.message.taskId])).toEqual([
+      [TASK_CREATED, a.id],
+      [TASK_CREATED, b.id],
+      [TASK_DEPENDENCY_REMOVED, b.id],
+    ]);
   });
 });
 
