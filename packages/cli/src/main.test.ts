@@ -42,10 +42,39 @@ describe("lunasq", () => {
     expect(err.join("\n")).toContain("invalid --port");
   });
 
+  it("help shows the first run, the environment variables and the exit codes", async () => {
+    const { deps, out } = setup();
+    await main(["--help"], deps);
+    const help = out.join("\n");
+    expect(help).toContain("lunasq install && lunasq doctor && lunasq start");
+    for (const name of ["LUNASQ_HOME", "CLAUDE_CONFIG_DIR", "COPILOT_HOME", "HERDR_CONFIG_PATH"]) {
+      expect(help).toContain(name);
+    }
+    expect(help).toMatch(/Exit codes:[\s\S]*0[\s\S]*1[\s\S]*2/);
+  });
+
+  it("an option that does not apply to the command exits with 2", async () => {
+    const { deps, err } = setup();
+    expect(await main(["start", "--port", "8000"], deps)).toBe(2);
+    expect(err.at(-1)).toContain("--port only applies to `lunasq install`");
+    expect(await main(["install", "--json"], deps)).toBe(2);
+    expect(err.at(-1)).toContain("--json only applies to `lunasq doctor`");
+  });
+
+  it("start with a broken configuration says how to fix it", async () => {
+    const { deps, ctx, err } = setup();
+    await install(ctx);
+    writeFileSync(ctx.paths.config, "{");
+    expect(await main(["start"], deps)).toBe(1);
+    expect(err.at(-1)).toBe(
+      `invalid configuration in ${ctx.paths.config}: the file is not valid JSON; fix it or delete it and run \`lunasq install\``,
+    );
+  });
+
   it("install leaves doctor green and exits with 0", async () => {
     const { deps, out } = setup();
     expect(await main(["install", "--port", "8124"], deps)).toBe(0);
-    expect(out.join("\n")).toContain("Instalado:");
+    expect(out.join("\n")).toContain("Installed:");
     expect(await main(["doctor"], deps)).toBe(0);
     expect(out.at(-1)).toContain("✓ LunasQ MCP registered");
   });
@@ -59,8 +88,12 @@ describe("lunasq", () => {
   it("doctor exits with 1 if something fails and --json gives the results", async () => {
     const { deps, out } = setup();
     expect(await main(["doctor", "--json"], deps)).toBe(1);
-    const results = JSON.parse(out[0] ?? "[]") as { id: string; status: string }[];
-    expect(results.find((r) => r.id === "config")?.status).toBe("fail");
+    const report = JSON.parse(out[0] ?? "{}") as {
+      ok: boolean;
+      checks: { id: string; status: string }[];
+    };
+    expect(report.ok).toBe(false);
+    expect(report.checks.find((r) => r.id === "config")?.status).toBe("fail");
   });
 
   it("start without installing exits with 1", async () => {
@@ -94,6 +127,7 @@ describe("lunasq", () => {
       telemetry: false,
     });
     expect(out).toContain("LunasQ at http://127.0.0.1:8125");
+    expect(out.at(-1)).toBe("Stopping LunasQ…");
     expect(out.some((line) => line.includes("Updated LunasQ assets"))).toBe(false);
     expect(stop).toHaveBeenCalledOnce();
   });
@@ -166,14 +200,26 @@ describe("lunasq", () => {
     expect(startRuntime.mock.calls[1]?.[0]).not.toHaveProperty("webRoot");
   });
 
+  it("a busy port exits with 1 and says what to do", async () => {
+    const { deps, ctx, err } = setup();
+    await install(ctx, { port: 8126 });
+    const startRuntime = async (): Promise<Runtime> => {
+      throw Object.assign(new Error("listen EADDRINUSE"), { code: "EADDRINUSE" });
+    };
+    expect(await main(["start"], { ...deps, startRuntime })).toBe(1);
+    expect(err.at(-1)).toBe(
+      "port 8126 is in use: is LunasQ already running? Open http://localhost:8126 or change it with `lunasq install --port <n>`",
+    );
+  });
+
   it("an unexpected error exits with 1 and its message", async () => {
     const { deps, ctx, err } = setup();
     await install(ctx);
     const startRuntime = async (): Promise<Runtime> => {
-      throw new Error("listen EADDRINUSE");
+      throw new Error("boom");
     };
     expect(await main(["start"], { ...deps, startRuntime })).toBe(1);
-    expect(err).toContain("lunasq start: listen EADDRINUSE");
+    expect(err).toContain("lunasq start: boom");
   });
 });
 

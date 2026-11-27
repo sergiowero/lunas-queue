@@ -80,7 +80,7 @@ describe("doctor", () => {
       "config",
     ]);
     expect(
-      results.filter((r) => r.status === "fail").every((r) => r.fix === "corre `lunasq install`"),
+      results.filter((r) => r.status === "fail").every((r) => r.fix === "run `lunasq install`"),
     ).toBe(true);
   });
 
@@ -284,7 +284,26 @@ describe("doctor", () => {
   it("an invalid configuration fails", async () => {
     const { ctx } = await installed();
     writeFileSync(ctx.paths.config, '{"port": -1}');
-    expect(byId(await runDoctor(ctx), "config")?.status).toBe("fail");
+    const config = byId(await runDoctor(ctx), "config");
+    expect(config?.status).toBe("fail");
+    expect(config?.fix).toBe("fix it or delete it and run `lunasq install`");
+  });
+
+  it("every failure and warning says how to fix it", async () => {
+    const { ctx } = await installed({
+      ...healthyResponses(),
+      "herdr status --json": { stdout: "not json" },
+      "claude --version": { exitCode: 1, stderr: "boom" },
+      "copilot --version": { exitCode: 1, stderr: "boom" },
+      "codex --version": { exitCode: 1, stderr: "boom" },
+      "opencode --version": { exitCode: 1, stderr: "boom" },
+      "command -v engram": { exitCode: 1 },
+    });
+    const results = await runDoctor(ctx);
+    for (const id of ["herdr", "claude", "copilot", "codex", "opencode", "engram"]) {
+      expect(byId(results, id)?.fix, id).toBeTruthy();
+    }
+    expect(byId(results, "claude")?.fix).toContain("`claude --version`");
   });
 
   it("without engram it only warns", async () => {
