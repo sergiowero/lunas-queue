@@ -159,6 +159,13 @@ const fail = (code: McpErrorCode, message: string, extra: Partial<McpError> = {}
 
 const AFTER_VERDICT: readonly ToolName[] = ["get_task_context", "submit_verdict"];
 
+/** Tools accepted in a phase, in TOOL_PHASES order: the tool_not_allowed message lists them. */
+function toolsOfPhase(phase: Phase): ToolName[] {
+  return (Object.keys(TOOL_PHASES) as ToolName[]).filter((tool) =>
+    TOOL_PHASES[tool].includes(phase),
+  );
+}
+
 const HANDOFF_PHASE: Readonly<Record<Phase, HandoffPhase | null>> = {
   refine: "refinement",
   implement: "implementation",
@@ -228,7 +235,10 @@ export class LunasqMcpService {
       );
     }
     if (!TOOL_PHASES[tool].includes(run.phase)) {
-      return fail("tool_not_allowed", `${tool} is not accepted in phase ${run.phase}`);
+      return fail(
+        "tool_not_allowed",
+        `${tool} is not accepted in phase ${run.phase}; the tools of this phase are: ${toolsOfPhase(run.phase).join(", ")}`,
+      );
     }
     if (tool !== "get_task_context" && !run.contextReadAt) {
       return fail("context_required", `call get_task_context before ${tool}`);
@@ -237,7 +247,7 @@ export class LunasqMcpService {
     if (run.phase === "verify" && run.handoff !== null && !AFTER_VERDICT.includes(tool)) {
       return fail(
         "tool_not_allowed",
-        `the Run already recorded its verdict; ${tool} is not accepted`,
+        `the Run already recorded its verdict; ${tool} is not accepted, only ${AFTER_VERDICT.join(", ")}`,
       );
     }
     return { ok: true, data: run };
@@ -348,7 +358,8 @@ export class LunasqMcpService {
     input: UpdateChecklistInput,
   ): Outcome<{ checklist: ChecklistItem[] }> {
     const spec = this.#specs.approved(run.taskId);
-    if (!spec) return fail("no_approved_spec", "the task has no approved spec");
+    if (!spec)
+      return fail("no_approved_spec", "the task has no approved spec: call report_failure");
     const known = new Set(spec.content.taskList.map((t) => t.id));
     const unknown = input.items.filter((i) => !known.has(i.taskId));
     if (unknown.length > 0) {
@@ -397,7 +408,8 @@ export class LunasqMcpService {
       return fail("reviewer_already_running", `${input.reviewer} is already running in this Run`);
     }
     const task = this.#tasks.get(run.taskId);
-    if (!task?.worktreePath) return fail("no_worktree", "the task has no registered worktree");
+    if (!task?.worktreePath)
+      return fail("no_worktree", "the task has no registered worktree: call report_failure");
 
     this.#reviewersInFlight.add(key);
     const agentId = `${run.agentKind}-${randomUUID()}`;
@@ -434,7 +446,8 @@ export class LunasqMcpService {
     if (!parsed.ok) return parsed;
     const handoff = parsed.data;
     const spec = this.#specs.approved(run.taskId);
-    if (!spec) return fail("no_approved_spec", "the task has no approved spec");
+    if (!spec)
+      return fail("no_approved_spec", "the task has no approved spec: call report_failure");
     const coverage = checkCriteria(
       spec,
       handoff.body.criterionTests.map((c) => c.criterionId),
@@ -444,7 +457,8 @@ export class LunasqMcpService {
     if (!coverage.ok) return coverage;
 
     const { task, project } = this.#taskAndProject(run);
-    if (!task.worktreePath) return fail("no_worktree", "the task has no registered worktree");
+    if (!task.worktreePath)
+      return fail("no_worktree", "the task has no registered worktree: call report_failure");
     // After a blocked hook the task already escalated: a retry does not run hooks or the gate again.
     const moved = notRunning(task, "in_progress");
     if (moved) return moved;
@@ -507,7 +521,8 @@ export class LunasqMcpService {
     const moved = notRunning(task, origin);
     if (moved) return moved;
     if (run.phase === "implement") {
-      if (!task.worktreePath) return fail("no_worktree", "the task has no registered worktree");
+      if (!task.worktreePath)
+        return fail("no_worktree", "the task has no registered worktree: call report_failure");
       if (
         await this.#commits.branchHasCommits({
           worktreePath: task.worktreePath,
@@ -548,7 +563,8 @@ export class LunasqMcpService {
     if (!parsed.ok) return parsed;
     let handoff = parsed.data;
     const spec = this.#specs.approved(run.taskId);
-    if (!spec) return fail("no_approved_spec", "the task has no approved spec");
+    if (!spec)
+      return fail("no_approved_spec", "the task has no approved spec: call report_failure");
     const coverage = checkCriteria(
       spec,
       handoff.body.criteriaVerdicts.map((c) => c.criterionId),
@@ -710,7 +726,8 @@ export class LunasqMcpService {
   async #checkPass(run: RunRow): Promise<Extract<Outcome<never>, { ok: false }> | null> {
     const { task, project } = this.#taskAndProject(run);
     const worktreePath = task.worktreePath;
-    if (!worktreePath) return fail("no_worktree", "the task has no registered worktree");
+    if (!worktreePath)
+      return fail("no_worktree", "the task has no registered worktree: call report_failure");
     const expected = this.#gatedHead(run.taskId);
     // The verifier's reversion test touches the code: the gate runs on what is committed.
     const unchanged = async () =>
@@ -767,9 +784,13 @@ export class LunasqMcpService {
   async #dirty(worktreePath: string): Promise<Extract<Outcome<never>, { ok: false }> | null> {
     const dirty = await this.#commits.uncommitted(worktreePath);
     if (dirty.length === 0) return null;
-    return fail("dirty_worktree", "the worktree has uncommitted changes", {
-      issues: dirty.map((file) => ({ path: file, message: "uncommitted change" })),
-    });
+    return fail(
+      "dirty_worktree",
+      "the worktree has uncommitted changes: commit or discard them, then call again",
+      {
+        issues: dirty.map((file) => ({ path: file, message: "uncommitted change" })),
+      },
+    );
   }
 
   async #runGate(
@@ -787,7 +808,11 @@ export class LunasqMcpService {
       trigger,
     });
     if (!gate.passed) {
-      return fail("test_gate_failed", "the test gate is red", { output: gate.output });
+      return fail(
+        "test_gate_failed",
+        "the test gate is red: fix the failures, commit and call submit_for_verification again",
+        { output: gate.output },
+      );
     }
     return null;
   }

@@ -22,7 +22,3 @@ The pilot has two parts. The e2e suite (`pnpm e2e`, [ADR uw-29-e2e](decisions/uw
 ## What to record
 
 Each deviation from the script is a finding. Turn it into a LunasQ task (goal with the symptom, the script step and what you expected) and link it with **originated by** to the task where it appeared.
-
-## e2e suite findings (ready to queue)
-
-- **Wake the scheduler when a task is created:** today a new task waits for the next tick (30 s). `POST /api/tasks` should wake it, as answering a question already does.

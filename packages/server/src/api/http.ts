@@ -31,7 +31,12 @@ export async function readOptionalJson(
   }
 }
 
-export const notFound = (c: Context) => c.json({ error: "not_found" }, 404);
+/** 404 not_found; `what` (e.g. "task <id>") becomes the message "<what> not found". */
+export const notFound = (c: Context, what?: string) =>
+  c.json(what ? { error: "not_found", message: `${what} not found` } : { error: "not_found" }, 404);
+
+export const invalidJson = (c: Context) =>
+  c.json({ error: "invalid_json", message: "the request body is not valid JSON" }, 400);
 
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 

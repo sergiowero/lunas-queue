@@ -31,5 +31,5 @@ export function subscribeDelivery(opts: SubscribeDeliveryOptions): () => void {
 }
 
 function defaultError(error: Error, taskId: string) {
-  console.error(`entrega de ${taskId}:`, error);
+  console.error(`delivery of ${taskId}:`, error);
 }

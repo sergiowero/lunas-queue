@@ -300,5 +300,5 @@ function asError(error: unknown): Error {
 }
 
 function defaultError(error: Error, subject: string | null): void {
-  console.error(`[reconciler] fallo${subject ? ` en ${subject}` : ""}: ${error.message}`);
+  console.error(`[reconciler] failure${subject ? ` in ${subject}` : ""}: ${error.message}`);
 }

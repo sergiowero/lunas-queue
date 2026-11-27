@@ -6,7 +6,7 @@ import { AgentProviderError, validateProfileModel } from "@lunasq/adapters";
 import { type AgentProfileRepository, AgentProfileRepositoryError } from "@lunasq/db";
 import { AgentProfileCreate, AgentProfileUpdate, type ProfileModel } from "@lunasq/schemas";
 import { type Context, Hono } from "hono";
-import { invalidInput, localOriginOnly, notFound, readJson } from "./http.ts";
+import { invalidInput, invalidJson, localOriginOnly, notFound, readJson } from "./http.ts";
 
 type Issue = { path: PropertyKey[]; message: string };
 
@@ -53,7 +53,7 @@ export function agentProfileRoutes(profiles: AgentProfileRepository): Hono {
     .get("/", (c) => c.json(profiles.list()))
     .post("/", async (c) => {
       const json = await readJson(c);
-      if (!json.ok) return c.json({ error: "invalid_json" }, 400);
+      if (!json.ok) return invalidJson(c);
       const input = AgentProfileCreate.safeParse(json.body);
       if (!input.success) return invalidInput(c, input.error);
       const issues = flagIssues(input.data.models);
@@ -66,25 +66,27 @@ export function agentProfileRoutes(profiles: AgentProfileRepository): Hono {
     })
     .get("/:id", (c) => {
       const profile = profiles.get(c.req.param("id"));
-      return profile ? c.json(profile) : notFound(c);
+      return profile ? c.json(profile) : notFound(c, `agent profile ${c.req.param("id")}`);
     })
     .patch("/:id", async (c) => {
       const json = await readJson(c);
-      if (!json.ok) return c.json({ error: "invalid_json" }, 400);
+      if (!json.ok) return invalidJson(c);
       const patch = AgentProfileUpdate.safeParse(json.body);
       if (!patch.success) return invalidInput(c, patch.error);
       const issues = flagIssues(patch.data.models);
       if (issues.length > 0) return invalidInput(c, { issues });
       try {
         const profile = profiles.update(c.req.param("id"), patch.data);
-        return profile ? c.json(profile) : notFound(c);
+        return profile ? c.json(profile) : notFound(c, `agent profile ${c.req.param("id")}`);
       } catch (error) {
         return repositoryError(c, error);
       }
     })
     .delete("/:id", (c) => {
       try {
-        return profiles.delete(c.req.param("id")) ? c.body(null, 204) : notFound(c);
+        return profiles.delete(c.req.param("id"))
+          ? c.body(null, 204)
+          : notFound(c, `agent profile ${c.req.param("id")}`);
       } catch (error) {
         return repositoryError(c, error);
       }
