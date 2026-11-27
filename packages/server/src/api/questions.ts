@@ -11,7 +11,7 @@ import {
 } from "@lunasq/schemas";
 import { Hono } from "hono";
 import type { AnswerOutcome } from "../questions/service.ts";
-import { invalidInput, notFound, readJson } from "./http.ts";
+import { invalidInput, invalidJson, notFound, readJson } from "./http.ts";
 
 export interface QuestionAnswerer {
   answer(id: string, input: QuestionAnswer): Promise<AnswerOutcome>;
@@ -48,15 +48,15 @@ export function questionRoutes(questions: QuestionRepository, answerer?: Questio
     })
     .get("/:id", (c) => {
       const row = questions.get(c.req.param("id"));
-      return row ? c.json(toQuestion(row)) : notFound(c);
+      return row ? c.json(toQuestion(row)) : notFound(c, `question ${c.req.param("id")}`);
     })
     .post("/:id/answer", async (c) => {
       const json = await readJson(c);
-      if (!json.ok) return c.json({ error: "invalid_json" }, 400);
+      if (!json.ok) return invalidJson(c);
       const input = QuestionAnswer.safeParse(json.body);
       if (!input.success) return invalidInput(c, input.error);
       const id = c.req.param("id");
-      if (!questions.get(id)) return notFound(c);
+      if (!questions.get(id)) return notFound(c, `question ${id}`);
       if (!answerer) return c.json({ error: "answering_unavailable" }, 503);
       const result = await answerer.answer(id, input.data);
       if (!result.ok) {

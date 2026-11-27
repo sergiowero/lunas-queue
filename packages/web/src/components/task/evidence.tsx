@@ -25,8 +25,12 @@ export function EvidencePanel({ taskId }: { taskId: string }) {
         aria-expanded={expanded}
         aria-controls={expanded ? contentId : undefined}
         onClick={() => setExpanded((open) => !open)}
-        className="cursor-pointer text-left text-sm text-muted-foreground hover:underline"
+        className="group inline-flex cursor-pointer items-center gap-2 self-start rounded-md text-left text-sm text-muted-foreground transition-colors hover:text-text"
       >
+        <span
+          aria-hidden="true"
+          className="mx-[0.15em] size-[0.4em] -rotate-45 border-r-[1.5px] border-b-[1.5px] border-current opacity-70 transition-transform duration-200 group-aria-expanded:rotate-45"
+        />
         {expanded ? t.evidence.hide : t.evidence.show}
       </button>
       {expanded ? (
@@ -52,7 +56,9 @@ function EvidenceBody({ evidence }: { evidence: ReturnType<typeof useEvidence> }
         <div className="flex flex-col gap-3">
           <p className="text-xs text-muted-foreground">
             {t.evidence.from(t.evidence.source[evidence.data.source])}
-            <code>{evidence.data.path}</code>
+            <code className="rounded bg-surface-secondary px-1 py-0.5 font-mono">
+              {evidence.data.path}
+            </code>
             <CopyButton value={evidence.data.path} label={evidence.data.path} />
           </p>
           <MarkdownText>{evidence.data.markdown}</MarkdownText>

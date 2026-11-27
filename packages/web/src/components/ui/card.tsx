@@ -6,18 +6,18 @@ export function Card({ className, ...props }: ComponentProps<"section">) {
 }
 
 export function CardHeader({ className, ...props }: ComponentProps<"header">) {
-  return <header className={cn("flex flex-col gap-1 p-4 pb-2", className)} {...props} />;
+  return <header className={cn("flex flex-col gap-1 px-5 pt-4 pb-2", className)} {...props} />;
 }
 
 export function CardTitle({ className, ...props }: ComponentProps<"h2">) {
   return (
     <h2
-      className={cn("text-base font-semibold leading-none tracking-tight", className)}
+      className={cn("text-[15px] font-semibold leading-tight tracking-tight", className)}
       {...props}
     />
   );
 }
 
 export function CardContent({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("p-4 pt-2", className)} {...props} />;
+  return <div className={cn("px-5 pt-2 pb-5", className)} {...props} />;
 }

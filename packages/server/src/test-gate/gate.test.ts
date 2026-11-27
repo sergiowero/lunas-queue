@@ -160,6 +160,7 @@ describe("PaneTestGate", () => {
     const result = await gate.run(input(null));
     expect(result.passed).toBe(false);
     expect(result.output).toMatch(/no test command/);
+    expect(result.output).toMatch(/use ask_human/);
     expect(panes).toEqual([]);
     expect(events()).toMatchObject([
       { command: null, exitCode: null, passed: false, error: expect.stringMatching(/command/) },

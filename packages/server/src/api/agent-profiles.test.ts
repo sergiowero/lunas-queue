@@ -241,7 +241,10 @@ describe("POST /api/agent-profiles", () => {
     const { send } = setup();
     const res = await send("POST", "/api/agent-profiles", "{no");
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "invalid_json" });
+    expect(await res.json()).toEqual({
+      error: "invalid_json",
+      message: "the request body is not valid JSON",
+    });
   });
 });
 

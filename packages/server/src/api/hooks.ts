@@ -32,7 +32,7 @@ export function hookRoutes({ projects, views, hooks }: HookRoutesDeps): Hono {
       try {
         return c.json(await hooks.listHooks(projectId(c)));
       } catch (error) {
-        if (isHookError(error, "project_not_found")) return notFound(c);
+        if (isHookError(error, "project_not_found")) return notFound(c, `project ${projectId(c)}`);
         // Without network or the base branch it is unknown which hooks exist: it is not a server failure.
         const message = error instanceof Error ? error.message : String(error);
         return c.json({ error: "hooks_unavailable", message }, 502);
@@ -42,7 +42,7 @@ export function hookRoutes({ projects, views, hooks }: HookRoutesDeps): Hono {
       const query = HookExecutionsQuery.safeParse(c.req.query());
       if (!query.success) return invalidInput(c, query.error);
       const id = projectId(c);
-      if (!projects.get(id)) return notFound(c);
+      if (!projects.get(id)) return notFound(c, `project ${projectId(c)}`);
       return c.json(views.hookExecutions(id, query.data.limit));
     });
 }

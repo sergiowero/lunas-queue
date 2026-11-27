@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { type Runtime, type RuntimeOptions, startRuntime } from "@lunasq/server";
 import pkg from "../package.json" with { type: "json" };
 import { syncAssets } from "./assets.ts";
-import { ConfigError, isPort, readConfig } from "./config.ts";
+import { ConfigError, configErrorMessage, isPort, readConfig } from "./config.ts";
 import { type MachineContext, machineContext } from "./context.ts";
 import { formatResults, isGreen, runDoctor } from "./doctor.ts";
 import { install } from "./install.ts";
@@ -17,7 +17,24 @@ Usage:
   lunasq doctor [--json]        checks that the machine is ready
   lunasq start                  starts LunasQ on localhost
   lunasq --version
+
+First run:
+  lunasq install && lunasq doctor && lunasq start
+
+Environment:
+  LUNASQ_HOME         LunasQ's directory (default ~/.lunasq)
+  CLAUDE_CONFIG_DIR   Claude Code's directory, where skills and subagents go (default ~/.claude)
+  COPILOT_HOME        GitHub Copilot CLI's directory (default ~/.copilot)
+  HERDR_CONFIG_PATH   herdr's configuration (default ~/.config/herdr/config.toml)
+
+Exit codes:
+  0   success (doctor: no check failed)
+  1   something failed (doctor: at least one check failed)
+  2   invalid command, option or argument
 `;
+
+/** Options that only apply to one command. */
+const COMMAND_OPTIONS = { port: "install", json: "doctor" } as const;
 
 export interface MainDeps {
   context?: () => MachineContext;
@@ -56,6 +73,12 @@ export async function main(argv: string[], deps: MainDeps = {}): Promise<number>
     return 2;
   }
   const { command, values } = parsed;
+  for (const [option, only] of Object.entries(COMMAND_OPTIONS)) {
+    if (values[option as keyof typeof COMMAND_OPTIONS] !== undefined && command !== only) {
+      err(`--${option} only applies to \`lunasq ${only}\`\n\n${USAGE}`);
+      return 2;
+    }
+  }
 
   if (values.version) {
     out(VERSION);
@@ -70,8 +93,11 @@ export async function main(argv: string[], deps: MainDeps = {}): Promise<number>
     switch (command) {
       case "doctor": {
         const results = await runDoctor(context());
-        out(values.json ? JSON.stringify(results, null, 2) : formatResults(results));
-        return isGreen(results) ? 0 : 1;
+        const ok = isGreen(results);
+        out(
+          values.json ? JSON.stringify({ ok, checks: results }, null, 2) : formatResults(results),
+        );
+        return ok ? 0 : 1;
       }
       case "install": {
         let port: number | undefined;
@@ -89,7 +115,7 @@ export async function main(argv: string[], deps: MainDeps = {}): Promise<number>
         }
         out(
           result.changes.length > 0
-            ? `Instalado:\n${result.changes.map((c) => `  · ${c}`).join("\n")}`
+            ? `Installed:\n${result.changes.map((c) => `  · ${c}`).join("\n")}`
             : "Everything was already up to date.",
         );
         out(`\n${formatResults(result.checks)}`);
@@ -118,7 +144,7 @@ async function start(
     config = await readConfig(ctx.paths.config);
   } catch (e) {
     if (!(e instanceof ConfigError)) throw e;
-    err(`invalid configuration in ${ctx.paths.config}: ${e.message}`);
+    err(configErrorMessage(ctx.paths.config, e));
     return 1;
   }
   if (!config) {
@@ -132,18 +158,29 @@ async function start(
   if (assets.changes.length > 0) {
     out(`Updated LunasQ assets:\n${assets.changes.map((change) => `  · ${change}`).join("\n")}`);
   }
-  const runtime = await (deps.startRuntime ?? startRuntime)({
-    dbPath: ctx.paths.db,
-    port: config.port,
-    mcpConfigPath: ctx.paths.mcpConfig,
-    hookSettingsPath: ctx.paths.hookSettings,
-    copilotAgentsPath: ctx.paths.copilotAgents,
-    telemetry: config.telemetry,
-    ...(ctx.webRoot && { webRoot: ctx.webRoot }),
-    log: err,
-  });
+  let runtime: Runtime;
+  try {
+    runtime = await (deps.startRuntime ?? startRuntime)({
+      dbPath: ctx.paths.db,
+      port: config.port,
+      mcpConfigPath: ctx.paths.mcpConfig,
+      hookSettingsPath: ctx.paths.hookSettings,
+      copilotAgentsPath: ctx.paths.copilotAgents,
+      telemetry: config.telemetry,
+      ...(ctx.webRoot && { webRoot: ctx.webRoot }),
+      log: err,
+    });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EADDRINUSE") throw e;
+    const port = config.port;
+    err(
+      `port ${port} is in use: is LunasQ already running? Open http://localhost:${port} or change it with \`lunasq install --port <n>\``,
+    );
+    return 1;
+  }
   out(`LunasQ at ${runtime.url}`);
   await (deps.untilSignal ?? untilSignal)();
+  out("Stopping LunasQ…");
   await runtime.stop();
   return 0;
 }

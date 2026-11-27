@@ -13,6 +13,7 @@ import {
 } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useId, useState } from "react";
+import { PageHeader } from "../components/page-header.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { Button } from "../components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card.tsx";
@@ -48,7 +49,7 @@ function Switch({
         if (!disabled) onChange(!checked);
       }}
       className={cn(
-        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60",
+        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-200 aria-disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60",
         // The off state uses a gray with enough contrast against the card (≥3:1) to spot it.
         checked ? "border-primary bg-primary" : "border-text-muted bg-text-muted",
       )}
@@ -56,7 +57,7 @@ function Switch({
       <span
         aria-hidden="true"
         className={cn(
-          "inline-block size-4 rounded-full bg-white shadow transition-transform",
+          "inline-block size-4 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out-expo",
           checked ? "translate-x-6" : "translate-x-1",
         )}
       />
@@ -68,8 +69,8 @@ export function SettingsPage() {
   const t = useT();
   useDocumentTitle(t.settings.title);
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">{t.settings.title}</h1>
+    <div className="flex max-w-4xl flex-col gap-5">
+      <PageHeader title={t.settings.title} />
       <ProvidersSection />
       <ConcurrencySection />
       <VerificationSection />
@@ -132,13 +133,15 @@ function ConcurrencySection() {
     <Card>
       <CardHeader>
         <CardTitle>{t.settings.concurrencyTitle}</CardTitle>
-        <p className="text-sm text-muted-foreground">{t.settings.concurrencyHelp}</p>
+        <p className="max-w-prose pt-1 text-sm text-muted-foreground">
+          {t.settings.concurrencyHelp}
+        </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {!settings.data && !settings.error && <Loading />}
         {settings.data && (
           <form onSubmit={submit} noValidate className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor={inputId}>{t.settings.concurrentAgents}</Label>
               <Input
                 id={inputId}
@@ -168,7 +171,7 @@ function ConcurrencySection() {
           </form>
         )}
         {settings.error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {settings.data
               ? savedUnread === null
                 ? t.settings.limitUpdateFailed
@@ -178,7 +181,7 @@ function ConcurrencySection() {
           </p>
         )}
         {update.error && effective !== undefined && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {t.settings.limitSaveFailed(effective, errorText(update.error))}
           </p>
         )}
@@ -236,13 +239,15 @@ function VerificationSection() {
     <Card>
       <CardHeader>
         <CardTitle>{t.settings.verificationTitle}</CardTitle>
-        <p className="text-sm text-muted-foreground">{t.settings.verificationHelp}</p>
+        <p className="max-w-prose pt-1 text-sm text-muted-foreground">
+          {t.settings.verificationHelp}
+        </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {!settings.data && !settings.error && <Loading />}
         {settings.data && (
           <form onSubmit={submit} noValidate className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor={inputId}>{t.settings.maxIterations}</Label>
               <Input
                 id={inputId}
@@ -272,7 +277,7 @@ function VerificationSection() {
           </form>
         )}
         {settings.error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {settings.data
               ? savedUnread === null
                 ? t.settings.iterationsUpdateFailed
@@ -282,7 +287,7 @@ function VerificationSection() {
           </p>
         )}
         {update.error && effective !== undefined && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {t.settings.iterationsSaveFailed(effective, errorText(update.error))}
           </p>
         )}
@@ -320,33 +325,38 @@ function ProvidersSection() {
     <Card>
       <CardHeader>
         <CardTitle>{t.settings.providersTitle}</CardTitle>
-        <p className="text-sm text-muted-foreground">{t.settings.providersHelp}</p>
+        <p className="max-w-prose pt-1 text-sm text-muted-foreground">{t.settings.providersHelp}</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {AgentKind.options.map((kind) => (
-          <div key={kind} className="flex items-center justify-between gap-4">
-            <div className="flex flex-col">
-              <span className="font-medium">{t.settings.providers[kind]}</span>
-              <span className="text-sm text-muted-foreground">
-                {t.settings.providerDescriptions[kind]}
-              </span>
+        <div className="flex flex-col divide-y divide-border-light">
+          {AgentKind.options.map((kind) => (
+            <div
+              key={kind}
+              className="flex items-center justify-between gap-4 py-3 first:pt-1 last:pb-1"
+            >
+              <div className="flex flex-col gap-0.5">
+                <span className="font-medium">{t.settings.providers[kind]}</span>
+                <span className="text-sm text-muted-foreground">
+                  {t.settings.providerDescriptions[kind]}
+                </span>
+              </div>
+              <Switch
+                label={t.settings.providers[kind]}
+                checked={current[kind]}
+                disabled={update.isPending}
+                onChange={(checked) => update.mutate({ [kind]: checked })}
+              />
             </div>
-            <Switch
-              label={t.settings.providers[kind]}
-              checked={current[kind]}
-              disabled={update.isPending}
-              onChange={(checked) => update.mutate({ [kind]: checked })}
-            />
-          </div>
-        ))}
+          ))}
+        </div>
         {settings.error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {savedButUnread ? t.settings.providersSavedUnread : t.settings.providersUpdateFailed}
             {errorText(settings.error)}
           </p>
         )}
         {update.error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {t.settings.saveFailed(errorText(update.error))}
           </p>
         )}

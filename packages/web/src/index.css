@@ -216,6 +216,48 @@
   input[type="radio"] {
     accent-color: var(--color-primary);
   }
+
+  /* Disclosures: a chevron that turns when open, instead of the native triangle. */
+  summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    list-style: none;
+    user-select: none;
+    border-radius: 0.375rem;
+    transition: color 150ms ease;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary::before {
+    content: "";
+    flex-shrink: 0;
+    width: 0.4em;
+    height: 0.4em;
+    margin-inline: 0.15em 0.1em;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 200ms var(--ease-out-expo);
+    opacity: 0.7;
+  }
+
+  details[open] > summary::before {
+    transform: rotate(45deg);
+  }
+
+  summary:hover {
+    color: var(--color-text);
+  }
+
+  /* Thin, theme-aware scrollbars for the wide tables and long logs. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
 }
 
 @layer components {
@@ -228,6 +270,72 @@
   .eyebrow {
     @apply text-[11px] font-semibold uppercase tracking-[0.06em] text-text-muted;
   }
+
+  /* Select with a neutral gray chevron that reads over both themes, instead of the native arrow. */
+  .select-chevron {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8a94' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.6rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem;
+  }
+
+  /* Inline error and success notices. */
+  .alert-danger {
+    @apply rounded-lg border border-danger/25 bg-danger/[0.06] px-3 py-2 text-sm text-destructive;
+  }
+
+  .notice-success {
+    @apply rounded-lg border border-success/25 bg-success/[0.07] px-3 py-2 text-sm text-success-text;
+  }
+
+  /* Card that reacts to the pointer: lists of projects and profiles. */
+  .card-interactive {
+    @apply transition-[border-color,box-shadow] duration-200 hover:border-border-strong hover:shadow-sm;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes live-ping {
+  75%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 180ms ease-out both;
+}
+
+@utility animate-dialog-in {
+  animation: dialog-in 260ms var(--ease-out-expo) both;
+}
+
+@utility animate-page-in {
+  animation: page-in 320ms var(--ease-out-expo) both;
+}
+
+@utility animate-live-ping {
+  animation: live-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
 /* Theme switch: circular reveal with View Transitions (lib/theme.ts animates the clip-path). */

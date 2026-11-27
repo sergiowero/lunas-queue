@@ -29,7 +29,7 @@ import { Dialog } from "./ui/dialog.tsx";
 import { Input, Label, Select } from "./ui/input.tsx";
 
 const PICKER_OPTION = cn(
-  "flex size-8 cursor-pointer items-center justify-center rounded-md border border-border hover:bg-surface-secondary",
+  "flex size-8 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:border-border-strong",
   "has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:ring-2 has-[:checked]:ring-primary/40",
   "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2",
 );
@@ -202,8 +202,8 @@ export function ProjectFormDialog({
       onClose={onClose}
       dismissible={false}
     >
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
+      <form onSubmit={submit} className="flex flex-col gap-5">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="project-name">{t.projectForm.name}</Label>
           <Input
             id="project-name"
@@ -213,8 +213,8 @@ export function ProjectFormDialog({
             onChange={(e) => setName(e.target.value)}
           />
         </div>
-        <div className="flex gap-4">
-          <div className="flex flex-1 flex-col gap-1">
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="flex flex-1 flex-col gap-1.5">
             <Label htmlFor="project-repo">{t.projectForm.repo}</Label>
             <Input
               id="project-repo"
@@ -224,7 +224,7 @@ export function ProjectFormDialog({
               placeholder="owner/name"
             />
           </div>
-          <div className="flex w-40 flex-col gap-1">
+          <div className="flex flex-col gap-1.5 sm:w-40">
             <Label htmlFor="project-base-branch">{t.projectForm.baseBranch}</Label>
             <Input
               id="project-base-branch"
@@ -234,7 +234,7 @@ export function ProjectFormDialog({
             />
           </div>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="project-local-path">{t.projectForm.localPath}</Label>
           <Input
             id="project-local-path"
@@ -244,7 +244,7 @@ export function ProjectFormDialog({
             placeholder={t.projectForm.localPathPlaceholder}
           />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="project-test-command">{t.projectForm.testCommand}</Label>
           <Input
             id="project-test-command"
@@ -253,7 +253,7 @@ export function ProjectFormDialog({
             placeholder="pnpm test"
           />
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="project-bootstrap">{t.projectForm.bootstrap}</Label>
           <Input
             id="project-bootstrap"
@@ -263,9 +263,9 @@ export function ProjectFormDialog({
           />
         </div>
 
-        <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-secondary/40 p-4">
           <fieldset className="flex flex-col gap-1">
-            <legend className="text-sm font-medium">{t.projectForm.icon}</legend>
+            <legend className="mb-1 text-[13px] font-semibold">{t.projectForm.icon}</legend>
             <div role="radiogroup" aria-label={t.projectForm.icon} className="flex flex-wrap gap-1">
               <label
                 title={t.projectForm.noIcon}
@@ -303,7 +303,7 @@ export function ProjectFormDialog({
             </div>
           </fieldset>
           <fieldset className="flex flex-col gap-1">
-            <legend className="text-sm font-medium">{t.projectForm.color}</legend>
+            <legend className="mb-1 text-[13px] font-semibold">{t.projectForm.color}</legend>
             <div
               role="radiogroup"
               aria-label={t.projectForm.color}
@@ -361,9 +361,9 @@ export function ProjectFormDialog({
         </div>
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="text-sm font-medium">{t.projectForm.limits}</legend>
-          <div className="flex gap-4">
-            <div className="flex flex-1 flex-col gap-1">
+          <legend className="mb-1 text-[13px] font-semibold">{t.projectForm.limits}</legend>
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <div className="flex flex-1 flex-col gap-1.5">
               <Label htmlFor="project-concurrency">{t.projectForm.concurrency}</Label>
               <Input
                 id="project-concurrency"
@@ -375,7 +375,7 @@ export function ProjectFormDialog({
                 placeholder={t.projectForm.concurrencyPlaceholder}
               />
             </div>
-            <div className="flex flex-1 flex-col gap-1">
+            <div className="flex flex-1 flex-col gap-1.5">
               <Label htmlFor="project-max-iterations">{t.projectForm.maxIterations}</Label>
               <Input
                 id="project-max-iterations"
@@ -396,14 +396,15 @@ export function ProjectFormDialog({
         </fieldset>
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="text-sm font-medium">{t.projectForm.agentByPhase}</legend>
+          <legend className="mb-1 text-[13px] font-semibold">{t.projectForm.agentByPhase}</legend>
           {PHASES.map((phase) => (
-            <div key={phase} className="flex flex-col gap-2 rounded-md border border-border p-3">
-              <h3 className="text-xs font-medium uppercase text-muted-foreground">
-                {t.phase[phase]}
-              </h3>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-1">
+            <div
+              key={phase}
+              className="flex flex-col gap-2 rounded-lg border border-border bg-surface-secondary/40 p-4"
+            >
+              <h3 className="eyebrow">{t.phase[phase]}</h3>
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <div className="flex flex-1 flex-col gap-1.5">
                   <Label htmlFor={`project-profile-${phase}`}>
                     {t.projectForm.profile(t.phase[phase])}
                   </Label>
@@ -420,7 +421,7 @@ export function ProjectFormDialog({
                     ))}
                   </Select>
                 </div>
-                <div className="flex w-40 flex-col gap-1">
+                <div className="flex flex-col gap-1.5 sm:w-40">
                   <Label htmlFor={`project-timeout-${phase}`}>
                     {t.projectForm.timeout(t.phase[phase])}
                   </Label>
@@ -440,7 +441,7 @@ export function ProjectFormDialog({
                   {t.projectForm.disabledModels(
                     disabledKinds(profiles.data, providers.data, phases[phase].profile).join(", "),
                   )}{" "}
-                  <Link to="/settings" className="underline">
+                  <Link to="/settings" className="font-medium underline underline-offset-2">
                     {t.projectForm.enableInSettings}
                   </Link>
                 </p>
@@ -455,7 +456,7 @@ export function ProjectFormDialog({
           {profiles.data?.length === 0 && (
             <p className="text-xs text-muted-foreground">
               {t.projectForm.noProfilesYet}{" "}
-              <Link to="/profiles" className="underline">
+              <Link to="/profiles" className="text-primary-text underline underline-offset-2">
                 {t.projectForm.createProfile}
               </Link>
             </p>
@@ -463,13 +464,13 @@ export function ProjectFormDialog({
         </fieldset>
 
         {save.error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {project
               ? t.projectForm.saveFailed(describe(save.error, t))
               : t.projectForm.createFailed(describe(save.error, t))}
           </p>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="mt-1 flex justify-end gap-2 border-t border-border-light pt-4">
           <Button variant="outline" onClick={onClose}>
             {t.common.cancel}
           </Button>

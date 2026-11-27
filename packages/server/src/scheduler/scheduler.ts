@@ -213,5 +213,5 @@ function toError(error: unknown): Error {
 
 function defaultError(error: Error, failed: DispatchDecision | DependencyEscalation | null): void {
   const where = failed ? `task ${failed.taskId}` : "read";
-  console.error(`[scheduler] fallo en ${where}: ${error.message}`);
+  console.error(`[scheduler] failure in ${where}: ${error.message}`);
 }

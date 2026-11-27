@@ -113,6 +113,7 @@ export function RunsPanel({ taskId }: { taskId: string }) {
             data={data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)}
             getRowId={(r) => r.id}
             empty={t.runs.empty}
+            framed={false}
           />
           <Pagination
             page={page}

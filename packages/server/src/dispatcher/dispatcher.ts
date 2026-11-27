@@ -919,5 +919,5 @@ function asError(error: unknown): Error {
 }
 
 function defaultError(error: Error, runId: string | null): void {
-  console.error(`[dispatcher] fallo en ${runId ? `Run ${runId}` : "recover"}: ${error.message}`);
+  console.error(`[dispatcher] failure in ${runId ? `Run ${runId}` : "recover"}: ${error.message}`);
 }

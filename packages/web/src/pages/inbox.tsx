@@ -9,6 +9,7 @@ import { Link } from "@tanstack/react-router";
 import { type ReactNode, useId, useState } from "react";
 import { AgentBadge } from "../components/agent-badge.tsx";
 import { CopyButton } from "../components/copy-button.tsx";
+import { PageHeader } from "../components/page-header.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
 import { Muted, Section } from "../components/section.tsx";
 import { Loading, MutationError, QueryError, StateBadges } from "../components/status.tsx";
@@ -61,7 +62,7 @@ function TaskLink({
         id={id}
         to="/tasks/$taskId"
         params={{ taskId }}
-        className="font-medium underline"
+        className="font-medium underline decoration-border-strong underline-offset-4 transition-colors hover:text-primary-text hover:decoration-current"
         title={task ? fullLabelTitle(task) : undefined}
       >
         {task ? cappedTaskLabel(task) : taskId}
@@ -84,7 +85,7 @@ function Item({
   return (
     <article
       aria-labelledby={id}
-      className="flex flex-col gap-3 rounded-md border border-border p-3"
+      className="flex flex-col gap-3 rounded-lg border border-border bg-surface-secondary/40 p-4 transition-colors hover:border-border-strong"
     >
       <header className="flex flex-wrap items-baseline gap-2">
         <TaskLink id={id} task={task} taskId={taskId} />
@@ -99,7 +100,7 @@ function Item({
 function SpecsSection({ refined, tasks }: { refined: Json<Task>[]; tasks: Inbox["tasks"] }) {
   const t = useT();
   return (
-    <Section title={t.inbox.specsTitle}>
+    <Section title={t.inbox.specsTitle} count={refined.length}>
       {tasks.error ? (
         <QueryError error={tasks.error} />
       ) : tasks.isPending ? (
@@ -107,9 +108,12 @@ function SpecsSection({ refined, tasks }: { refined: Json<Task>[]; tasks: Inbox[
       ) : refined.length === 0 ? (
         <Muted>{t.inbox.specsEmpty}</Muted>
       ) : (
-        <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
+        <ul className="flex flex-col divide-y divide-border-light overflow-hidden rounded-lg border border-border">
           {refined.map((task) => (
-            <li key={task.id} className="flex flex-wrap items-baseline gap-2 px-3 py-2">
+            <li
+              key={task.id}
+              className="flex flex-wrap items-baseline gap-2 px-4 py-2.5 transition-colors hover:bg-surface-secondary/60"
+            >
               <TaskLink task={task} taskId={task.id} />
               <ProjectName task={task} />
             </li>
@@ -129,7 +133,7 @@ function EscalatedSection({
 }) {
   const t = useT();
   return (
-    <Section title={t.inbox.escalatedTitle}>
+    <Section title={t.inbox.escalatedTitle} count={escalated.length}>
       {tasks.error ? (
         <QueryError error={tasks.error} />
       ) : tasks.isPending ? (
@@ -137,7 +141,7 @@ function EscalatedSection({
       ) : escalated.length === 0 ? (
         <Muted>{t.inbox.escalatedEmpty}</Muted>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {escalated.map((task) => (
             <Item key={task.id} task={task} taskId={task.id}>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -202,15 +206,22 @@ function QuestionItem({
         {phase && <Badge variant="outline">{t.phase[phase]}</Badge>}
         <Time iso={question.createdAt} format={t.inbox.asked} />
       </div>
-      <p className="whitespace-pre-wrap text-sm font-medium">{question.question}</p>
+      <p className="whitespace-pre-wrap text-[15px] leading-relaxed font-medium">
+        {question.question}
+      </p>
       {question.context && (
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground">{question.context}</p>
+        <p className="whitespace-pre-wrap border-l-2 border-border-strong pl-3 text-sm text-muted-foreground">
+          {question.context}
+        </p>
       )}
       {options ? (
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-[13px] font-medium">{t.inbox.answer}</legend>
           {options.map((option, index) => (
-            <label key={option.label} className="flex items-start gap-2 text-sm">
+            <label
+              key={option.label}
+              className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition-colors hover:border-border-strong has-[:checked]:border-primary/60 has-[:checked]:bg-primary/[0.06]"
+            >
               <input
                 type="radio"
                 name={field}
@@ -226,7 +237,7 @@ function QuestionItem({
               </span>
             </label>
           ))}
-          <label className="flex items-start gap-2 text-sm">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition-colors hover:border-border-strong has-[:checked]:border-primary/60 has-[:checked]:bg-primary/[0.06]">
             <input
               type="radio"
               name={field}
@@ -277,10 +288,10 @@ function QuestionsSection({
   const t = useT();
   const [notice, setNotice] = useState<Notice | null>(null);
   return (
-    <Section title={t.inbox.questionsTitle}>
+    <Section title={t.inbox.questionsTitle} count={questions.data?.length}>
       <div className="flex flex-col gap-4">
         {notice?.ok && (
-          <p role="status" className="text-sm">
+          <p role="status" className="notice-success">
             {t.inbox.delivery[notice.delivery]}
           </p>
         )}
@@ -314,7 +325,7 @@ function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Ta
   });
   return (
     <Item task={task} taskId={agent.taskId}>
-      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+      <dl className="grid grid-cols-[max-content_1fr] items-center gap-x-6 gap-y-1.5 text-sm">
         <dt className="text-muted-foreground">{t.inbox.phase}</dt>
         <dd>{t.phase[agent.phase]}</dd>
         <dt className="text-muted-foreground">{t.inbox.agent}</dt>
@@ -339,12 +350,12 @@ function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Ta
           {t.inbox.openPane}
         </Button>
         <span className="inline-flex items-center">
-          <code className="text-xs text-muted-foreground">{`herdr agent focus ${agent.agentName}`}</code>
+          <code className="rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs text-muted-foreground">{`herdr agent focus ${agent.agentName}`}</code>
           <CopyButton value={`herdr agent focus ${agent.agentName}`} label="herdr agent focus" />
         </span>
       </div>
       {focus.isSuccess && (
-        <p role="status" className="text-sm">
+        <p role="status" className="notice-success">
           {t.inbox.paneFocused}
         </p>
       )}
@@ -356,7 +367,7 @@ function BlockedItem({ agent, task }: { agent: Json<BlockedAgent>; task: Json<Ta
 function BlockedSection({ blocked, tasks }: { blocked: Inbox["blocked"]; tasks: TasksById }) {
   const t = useT();
   return (
-    <Section title={t.inbox.blockedTitle}>
+    <Section title={t.inbox.blockedTitle} count={blocked.data?.length}>
       {blocked.error ? (
         <QueryError error={blocked.error} />
       ) : blocked.isPending ? (
@@ -364,7 +375,7 @@ function BlockedSection({ blocked, tasks }: { blocked: Inbox["blocked"]; tasks: 
       ) : blocked.data.length === 0 ? (
         <Muted>{t.inbox.blockedEmpty}</Muted>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {blocked.data.map((b) => (
             <BlockedItem key={b.runId} agent={b} task={tasks.get(b.taskId)} />
           ))}
@@ -381,11 +392,11 @@ export function InboxPage() {
   // Only with the three queries successful: one that failed cannot be read as «nothing pending».
   const loaded = inbox.tasks.isSuccess && inbox.questions.isSuccess && inbox.blocked.isSuccess;
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-baseline gap-3">
-        <h1 className="text-xl font-semibold">{t.inbox.title}</h1>
-        {loaded && inbox.count === 0 && <Muted>{t.inbox.nothing}</Muted>}
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title={t.inbox.title}
+        description={loaded && inbox.count === 0 ? t.inbox.nothing : undefined}
+      />
       <SpecsSection refined={inbox.refined} tasks={inbox.tasks} />
       <EscalatedSection escalated={inbox.escalated} tasks={inbox.tasks} />
       <QuestionsSection questions={inbox.questions} tasks={inbox.byId} />

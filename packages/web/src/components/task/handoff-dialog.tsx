@@ -36,7 +36,7 @@ function ValueView({
   if (Array.isArray(value)) {
     const occurrences = new Map<string, number>();
     return (
-      <details className="rounded-md border border-border px-3 py-2">
+      <details className="rounded-lg border border-border px-3 py-2.5">
         <summary className="cursor-pointer text-sm font-medium">
           {label} ({value.length})
         </summary>
@@ -66,7 +66,7 @@ function ValueView({
 
   if (isRecord(value)) {
     return (
-      <section className="rounded-md border border-border p-3">
+      <section className="rounded-lg border border-border p-3">
         <h4 className="mb-2 text-sm font-medium">{label}</h4>
         <RecordView value={value} />
       </section>
@@ -116,14 +116,14 @@ function HandoffValue({ handoff, onClose }: { handoff: unknown; onClose: () => v
           )}
         </div>
         {typeof summary === "string" && (
-          <section className="rounded-md bg-muted p-4">
+          <section className="rounded-lg border border-border-light bg-surface-secondary/60 p-4">
             <h3 className="mb-1 text-sm font-semibold">{t.handoff.summary}</h3>
             <p className="whitespace-pre-wrap text-sm">{summary}</p>
           </section>
         )}
         {body !== undefined && <ValueView label={t.handoff.content} value={body} />}
         {hasMetadata && (
-          <details className="rounded-md border border-border px-3 py-2">
+          <details className="rounded-lg border border-border px-3 py-2.5">
             <summary className="cursor-pointer text-sm font-medium">{t.handoff.metadata}</summary>
             <div className="mt-3">
               <RecordView value={metadata} />

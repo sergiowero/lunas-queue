@@ -1,6 +1,8 @@
 // Generic table over TanStack Table with shadcn/ui pieces.
 import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import type { ReactNode } from "react";
+import { cn } from "../lib/utils.ts";
+import { EmptyState } from "./status.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table.tsx";
 
 export function DataTable<T>({
@@ -8,6 +10,7 @@ export function DataTable<T>({
   data,
   getRowId,
   empty,
+  framed = true,
 }: {
   // biome-ignore lint/suspicious/noExplicitAny: the columns mix value types per cell.
   columns: ColumnDef<T, any>[];
@@ -15,33 +18,43 @@ export function DataTable<T>({
   getRowId: (row: T) => string;
   /** What an empty table shows: a sentence, optionally with a next step. */
   empty: ReactNode;
+  /** In its own card (page lists); false when the table already sits inside a card. */
+  framed?: boolean;
 }) {
   const table = useReactTable({ columns, data, getRowId, getCoreRowModel: getCoreRowModel() });
-  if (data.length === 0) return <div className="text-sm text-muted-foreground">{empty}</div>;
+  if (data.length === 0) {
+    return framed ? (
+      <EmptyState>{empty}</EmptyState>
+    ) : (
+      <div className="text-sm text-muted-foreground">{empty}</div>
+    );
+  }
   return (
-    <Table>
-      <TableHeader>
-        {table.getHeaderGroups().map((group) => (
-          <TableRow key={group.id}>
-            {group.headers.map((header) => (
-              <TableHead key={header.id}>
-                {flexRender(header.column.columnDef.header, header.getContext())}
-              </TableHead>
-            ))}
-          </TableRow>
-        ))}
-      </TableHeader>
-      <TableBody>
-        {table.getRowModel().rows.map((row) => (
-          <TableRow key={row.id}>
-            {row.getVisibleCells().map((cell) => (
-              <TableCell key={cell.id}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <div className={cn(framed && "card overflow-hidden")}>
+      <Table>
+        <TableHeader className={cn(framed && "bg-surface-secondary/60")}>
+          {table.getHeaderGroups().map((group) => (
+            <TableRow key={group.id}>
+              {group.headers.map((header) => (
+                <TableHead key={header.id}>
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.map((row) => (
+            <TableRow key={row.id}>
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

@@ -23,7 +23,8 @@ import { Badge } from "../ui/badge.tsx";
 const TRANSITIONED: typeof TASK_TRANSITIONED = "task.transitioned";
 const TEST_GATE: typeof TEST_GATE_EXECUTED = "test_gate.executed";
 
-const PRE = "max-h-80 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-xs";
+const PRE =
+  "max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg border border-border-light bg-surface-secondary/70 p-3 font-mono text-xs";
 
 function TransitionDetail({ payload }: { payload: TaskTransitionedPayload }) {
   const t = useT();
@@ -101,21 +102,22 @@ export function EventLogPanel({ taskId }: { taskId: string }) {
           <summary className="cursor-pointer text-sm text-muted-foreground">
             {t.eventLog.show(count ?? 0)}
           </summary>
-          <ol className="mt-3 flex flex-col gap-3 text-sm">
+          <ol className="relative mt-4 ml-1.5 flex flex-col gap-4 border-l border-border pl-5 text-sm">
             {newestFirst.map((event) => {
               // Only the agent's events are attributed: to the Run that was open when they happened.
               const run = eventRun(runs.data ?? [], event);
               return (
-                <li
-                  key={event.id}
-                  className="flex flex-wrap items-baseline gap-2 border-b pb-3 last:border-b-0"
-                >
-                  <span className="text-xs text-muted-foreground">
+                <li key={event.id} className="relative flex flex-wrap items-baseline gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-1.5 -left-[25px] size-2 rounded-full border-2 border-surface bg-border-strong ring-1 ring-border"
+                  />
+                  <span className="text-xs text-muted-foreground tabular-nums">
                     <Time iso={event.createdAt} />
                   </span>
                   <Badge variant="outline">{event.actor}</Badge>
                   {run && <AgentBadge profileId={run.profileId} kind={run.agentKind} />}
-                  <span className="font-mono text-xs">{event.type}</span>
+                  <span className="font-mono text-xs font-medium">{event.type}</span>
                   <Detail event={event} />
                 </li>
               );

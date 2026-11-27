@@ -36,7 +36,7 @@ function ExecutionRow({ execution: e }: { execution: Execution }) {
           <summary className="cursor-pointer text-xs text-muted-foreground">
             {t.hooks.output}
           </summary>
-          <pre className="max-h-64 overflow-auto text-xs whitespace-pre-wrap">
+          <pre className="mt-1 max-h-64 overflow-auto rounded-lg border border-border-light bg-surface-secondary/70 p-3 font-mono text-xs whitespace-pre-wrap">
             {e.output || t.hooks.noOutput}
           </pre>
         </details>

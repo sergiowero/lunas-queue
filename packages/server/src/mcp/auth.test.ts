@@ -2,6 +2,7 @@
 import { closeRun, listEvents, RunRepository } from "@lunasq/db";
 import { insertRun } from "@lunasq/db/test-helpers";
 import { describe, expect, it } from "vitest";
+import pkg from "../../package.json" with { type: "json" };
 import { TOOL_NAMES, TOOL_PHASES } from "./service.ts";
 import { handoffFor, mcpHarness, resultFor } from "./test-helpers.ts";
 
@@ -15,6 +16,12 @@ describe("LunasQ MCP: transport", () => {
     expect(tools.map((t) => t.name).sort()).toEqual([...TOOL_NAMES].sort());
     const checklist = tools.find((t) => t.name === "update_checklist");
     expect(checklist?.inputSchema).toMatchObject({ type: "object", required: ["items"] });
+  });
+
+  it("reports the server version from package.json", async () => {
+    const h = mcpHarness();
+    const { client } = await h.connect("cualquiera");
+    expect(client.getServerVersion()).toMatchObject({ name: "lunasq", version: pkg.version });
   });
 
   it("rejects a Host that is not localhost (DNS rebinding)", async () => {
@@ -111,6 +118,10 @@ describe("LunasQ MCP: phase and context", () => {
     const { run, call } = await h.ready("implement", running);
     const result = await call("submit_spec", { handoff: handoffFor("refinement", run) });
     expect(result).toMatchObject({ isError: true, body: { error: "tool_not_allowed" } });
+    expect(result.body).toMatchObject({
+      message:
+        "submit_spec is not accepted in phase implement; the tools of this phase are: get_task_context, ask_human, report_failure, update_checklist, submit_for_verification, submit_result",
+    });
   });
 
   it("the exit tools require get_task_context first", async () => {

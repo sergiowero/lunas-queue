@@ -46,7 +46,9 @@ describe("npm package", () => {
   it("the bundle runs, applies the migrations and finds the assets next to itself", async () => {
     expect((await lunasq("--version")).stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
     const { stdout } = await lunasq("doctor", "--json");
-    const results = JSON.parse(stdout) as { id: string; status: string }[];
+    const { checks: results } = JSON.parse(stdout) as {
+      checks: { id: string; status: string }[];
+    };
     expect(results.find((r) => r.id === "sqlite")?.status).toBe("ok");
     expect(results.map((r) => r.id)).toEqual(
       expect.arrayContaining([

@@ -153,8 +153,8 @@ export function ProfileFormDialog({
       onClose={onClose}
       dismissible={false}
     >
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
+      <form onSubmit={submit} className="flex flex-col gap-5">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="profile-name">{t.profileForm.name}</Label>
           <Input
             id="profile-name"
@@ -165,9 +165,9 @@ export function ProfileFormDialog({
           />
         </div>
 
-        <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-secondary/40 p-4">
           <fieldset className="flex flex-col gap-1">
-            <legend className="text-sm font-medium">{t.profileAppearance.icon}</legend>
+            <legend className="mb-1 text-[13px] font-semibold">{t.profileAppearance.icon}</legend>
             <div
               role="radiogroup"
               aria-label={t.profileAppearance.icon}
@@ -178,7 +178,7 @@ export function ProfileFormDialog({
                   key={option}
                   title={t.profileAppearance.icons[option]}
                   className={cn(
-                    "flex size-8 cursor-pointer items-center justify-center rounded-md border border-border text-text-secondary hover:bg-surface-secondary",
+                    "flex size-8 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface transition-colors text-text-secondary hover:border-border-strong",
                     "has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:text-primary-text",
                     "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2",
                   )}
@@ -198,7 +198,7 @@ export function ProfileFormDialog({
             </div>
           </fieldset>
           <fieldset className="flex flex-col gap-1">
-            <legend className="text-sm font-medium">{t.profileAppearance.color}</legend>
+            <legend className="mb-1 text-[13px] font-semibold">{t.profileAppearance.color}</legend>
             <div
               role="radiogroup"
               aria-label={t.profileAppearance.color}
@@ -209,7 +209,7 @@ export function ProfileFormDialog({
                   key={option}
                   title={t.profileAppearance.colors[option]}
                   className={cn(
-                    "flex size-8 cursor-pointer items-center justify-center rounded-md border border-border hover:bg-surface-secondary",
+                    "flex size-8 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface transition-colors hover:border-border-strong",
                     "has-[:checked]:border-primary has-[:checked]:ring-2 has-[:checked]:ring-primary/40",
                     "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2",
                   )}
@@ -242,17 +242,17 @@ export function ProfileFormDialog({
         </div>
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="text-sm font-medium">{t.profileForm.models}</legend>
+          <legend className="mb-1 text-[13px] font-semibold">{t.profileForm.models}</legend>
           {models.map((model, index) => {
             const position = index + 1;
             const disabled = settings.data !== undefined && settings.data[model.kind] === false;
             return (
               <div
                 key={model.key}
-                className="flex flex-col gap-2 rounded-md border border-border p-3"
+                className="flex flex-col gap-2 rounded-lg border border-border bg-surface-secondary/40 p-4"
               >
                 <div className="flex items-end gap-2">
-                  <div className="flex flex-1 flex-col gap-1">
+                  <div className="flex flex-1 flex-col gap-1.5">
                     <Label htmlFor={`profile-kind-${model.key}`}>
                       {t.profileForm.provider(position)}
                     </Label>
@@ -298,8 +298,8 @@ export function ProfileFormDialog({
                 {disabled && (
                   <p className="text-xs text-warning-text">{t.profileForm.providerDisabled}</p>
                 )}
-                <div className="flex gap-4">
-                  <div className="flex flex-1 flex-col gap-1">
+                <div className="flex flex-col gap-4 sm:flex-row">
+                  <div className="flex flex-1 flex-col gap-1.5">
                     <Label htmlFor={`profile-model-${model.key}`}>
                       {t.profileForm.model(position)}
                     </Label>
@@ -309,7 +309,7 @@ export function ProfileFormDialog({
                       onChange={(e) => patch(index, { model: e.target.value })}
                     />
                   </div>
-                  <div className="flex w-40 flex-col gap-1">
+                  <div className="flex flex-col gap-1.5 sm:w-40">
                     <Label htmlFor={`profile-effort-${model.key}`}>
                       {t.profileForm.effort(position)}
                     </Label>
@@ -327,7 +327,7 @@ export function ProfileFormDialog({
                     </Select>
                   </div>
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor={`profile-args-${model.key}`}>
                     {t.profileForm.args(position)}
                   </Label>
@@ -368,13 +368,13 @@ export function ProfileFormDialog({
         </fieldset>
 
         {save.error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {profile
               ? t.profileForm.saveFailed(describe(save.error, t))
               : t.profileForm.createFailed(describe(save.error, t))}
           </p>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="mt-1 flex justify-end gap-2 border-t border-border-light pt-4">
           <Button variant="outline" onClick={onClose}>
             {t.common.cancel}
           </Button>

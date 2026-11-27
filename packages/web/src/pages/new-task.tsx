@@ -7,6 +7,7 @@ import type { PhaseInstructionInput } from "@lunasq/schemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useRef, useState } from "react";
+import { PageHeader } from "../components/page-header.tsx";
 import { Loading, QueryError } from "../components/status.tsx";
 import { InstructionForm } from "../components/task/instruction-form.tsx";
 import { TaskNumber, taskLabel as taskNumberLabel } from "../components/task-number.tsx";
@@ -96,130 +97,134 @@ export function NewTaskPage() {
   const chosen = dependsOn.flatMap((id) => (candidates.data ?? []).filter((c) => c.id === id));
 
   return (
-    <form ref={formRef} onSubmit={submit} className="flex max-w-2xl flex-col gap-4">
-      <h1 className="text-xl font-semibold">{t.newTask.title}</h1>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="task-project">{t.newTask.project}</Label>
-        <Select
-          id="task-project"
-          required
-          value={projectId}
-          onChange={(e) => {
-            setProjectId(e.target.value);
-            setDependsOn([]);
-          }}
-        >
-          <option value="" disabled>
-            {t.newTask.chooseProject}
-          </option>
-          {projects.data.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="task-goal">{t.newTask.goal}</Label>
-        <Textarea
-          id="task-goal"
-          required
-          rows={5}
-          value={goal}
-          onChange={(e) => setGoal(e.target.value)}
-          onKeyDown={onModEnter(() => formRef.current?.requestSubmit())}
-          // With the project already chosen (?projectId) the goal is the first thing to type.
-          autoFocus={search.projectId !== undefined}
-          placeholder={t.newTask.goalPlaceholder}
-        />
-      </div>
-      <div className="flex gap-4">
-        <div className="flex flex-1 flex-col gap-1">
-          <Label htmlFor="task-tags">{t.newTask.tags}</Label>
-          <Input
-            id="task-tags"
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            placeholder="auth, ui"
-          />
-        </div>
-        <div className="flex w-40 flex-col gap-1">
-          <Label htmlFor="task-priority">{t.newTask.priority}</Label>
-          <Input
-            id="task-priority"
-            type="number"
-            min={0}
-            step={1}
+    <form ref={formRef} onSubmit={submit} className="flex max-w-3xl flex-col gap-5">
+      <PageHeader title={t.newTask.title} />
+      <div className="card flex flex-col gap-5 p-5 sm:p-6">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="task-project">{t.newTask.project}</Label>
+          <Select
+            id="task-project"
             required
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
+            value={projectId}
+            onChange={(e) => {
+              setProjectId(e.target.value);
+              setDependsOn([]);
+            }}
+          >
+            <option value="" disabled>
+              {t.newTask.chooseProject}
+            </option>
+            {projects.data.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="task-goal">{t.newTask.goal}</Label>
+          <Textarea
+            id="task-goal"
+            required
+            rows={5}
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            onKeyDown={onModEnter(() => formRef.current?.requestSubmit())}
+            // With the project already chosen (?projectId) the goal is the first thing to type.
+            autoFocus={search.projectId !== undefined}
+            placeholder={t.newTask.goalPlaceholder}
           />
         </div>
-      </div>
-      {(groups.length > 0 || chosen.length > 0) && (
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="task-depends-on">{t.newTask.dependsOn}</Label>
-          {groups.length > 0 && (
-            // Controlled with value="": choosing a task adds it and the selector goes back to the placeholder.
-            <Select id="task-depends-on" value="" onChange={(e) => add(e.target.value)}>
-              <option value="">{t.newTask.addDependency}</option>
-              {groups.map(({ project, tasks }) => (
-                <optgroup
-                  key={project.id}
-                  label={
-                    project.id === projectId
-                      ? project.name
-                      : t.dependencies.otherProjectGroup(project.name)
-                  }
-                >
-                  {tasks.map((task) => (
-                    <option key={task.id} value={task.id}>
-                      {`${taskNumberLabel(task.number)} · ${taskLabel(task)}`}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </Select>
-          )}
-          {chosen.length > 0 && (
-            <ul aria-label={t.newTask.chosenDependencies} className="flex flex-col gap-1 text-sm">
-              {chosen.map((task) => (
-                <li
-                  key={task.id}
-                  className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5"
-                >
-                  <TaskNumber number={task.number} />
-                  <span data-goal className="flex-1">
-                    {taskLabel(task)}
-                  </span>
-                  {task.projectId !== projectId && (
-                    <Badge variant="destructive" title={projectName.get(task.projectId)}>
-                      {t.newTask.otherProject}
-                    </Badge>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={t.newTask.removeAria(task.goal)}
-                    onClick={() => remove(task.id)}
-                  >
-                    {t.newTask.remove}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="flex flex-col gap-5 sm:flex-row sm:gap-4">
+          <div className="flex flex-1 flex-col gap-1.5">
+            <Label htmlFor="task-tags">{t.newTask.tags}</Label>
+            <Input
+              id="task-tags"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="auth, ui"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5 sm:w-40">
+            <Label htmlFor="task-priority">{t.newTask.priority}</Label>
+            <Input
+              id="task-priority"
+              type="number"
+              min={0}
+              step={1}
+              required
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+            />
+          </div>
         </div>
-      )}
-      <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium">{t.instructions.title}</h2>
-        <p className="text-xs text-muted-foreground">{t.instructions.hint}</p>
+        {(groups.length > 0 || chosen.length > 0) && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="task-depends-on">{t.newTask.dependsOn}</Label>
+            {groups.length > 0 && (
+              // Controlled with value="": choosing a task adds it and the selector goes back to the placeholder.
+              <Select id="task-depends-on" value="" onChange={(e) => add(e.target.value)}>
+                <option value="">{t.newTask.addDependency}</option>
+                {groups.map(({ project, tasks }) => (
+                  <optgroup
+                    key={project.id}
+                    label={
+                      project.id === projectId
+                        ? project.name
+                        : t.dependencies.otherProjectGroup(project.name)
+                    }
+                  >
+                    {tasks.map((task) => (
+                      <option key={task.id} value={task.id}>
+                        {`${taskNumberLabel(task.number)} · ${taskLabel(task)}`}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </Select>
+            )}
+            {chosen.length > 0 && (
+              <ul aria-label={t.newTask.chosenDependencies} className="flex flex-col gap-1 text-sm">
+                {chosen.map((task) => (
+                  <li
+                    key={task.id}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-surface-secondary/50 py-1 pr-1 pl-3"
+                  >
+                    <TaskNumber number={task.number} />
+                    <span data-goal className="flex-1">
+                      {taskLabel(task)}
+                    </span>
+                    {task.projectId !== projectId && (
+                      <Badge variant="destructive" title={projectName.get(task.projectId)}>
+                        {t.newTask.otherProject}
+                      </Badge>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={t.newTask.removeAria(task.goal)}
+                      onClick={() => remove(task.id)}
+                    >
+                      {t.newTask.remove}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="card flex flex-col gap-3 p-5 sm:p-6">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="text-[15px] font-semibold tracking-tight">{t.instructions.title}</h2>
+          <p className="text-sm text-muted-foreground">{t.instructions.hint}</p>
+        </div>
         {instructions.length > 0 && (
           <ul aria-label={t.instructions.listAria} className="flex flex-col gap-1 text-sm">
             {instructions.map((instruction) => (
               <li
                 key={instruction.key}
-                className="flex flex-wrap items-start gap-2 rounded-md border border-border px-3 py-1.5"
+                className="flex flex-wrap items-start gap-2 rounded-lg border border-border bg-surface-secondary/50 py-1 pr-1 pl-3"
               >
                 <Badge variant="secondary">{t.phase[instruction.phase]}</Badge>
                 <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
@@ -247,12 +252,12 @@ export function NewTaskPage() {
         />
       </div>
       {create.error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="alert-danger">
           {t.newTask.createFailed(describe(create.error, t))}
         </p>
       )}
-      <div>
-        <Button type="submit" disabled={create.isPending || projectId === ""}>
+      <div className="flex justify-end">
+        <Button type="submit" size="lg" disabled={create.isPending || projectId === ""}>
           {t.newTask.create}
         </Button>
       </div>

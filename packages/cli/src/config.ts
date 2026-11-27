@@ -18,6 +18,10 @@ export class ConfigError extends Error {
   }
 }
 
+/** The message for a ConfigError, with the path and what to do about it. */
+export const configErrorMessage = (path: string, err: ConfigError) =>
+  `invalid configuration in ${path}: ${err.message}; fix it or delete it and run \`lunasq install\``;
+
 export function isPort(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 65535;
 }
@@ -47,7 +51,7 @@ export async function readConfig(path: string): Promise<LunasqConfig | undefined
   try {
     json = JSON.parse(text);
   } catch {
-    throw new ConfigError(`${path} is not valid JSON`);
+    throw new ConfigError("the file is not valid JSON");
   }
   return parseConfig(json);
 }

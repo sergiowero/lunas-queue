@@ -78,7 +78,7 @@ function EditInstruction({
         </Button>
       </div>
       {save.error && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="alert-danger">
           {errorText(save.error)}
         </p>
       )}
@@ -107,15 +107,15 @@ export function InstructionsPanel({
   return (
     <Section title={t.instructions.title}>
       <div className="flex flex-col gap-3">
-        <p className="text-xs text-muted-foreground">{t.instructions.hint}</p>
+        <p className="text-sm text-muted-foreground">{t.instructions.hint}</p>
         {instructions.length === 0 ? (
           <Muted>{t.instructions.empty}</Muted>
         ) : (
-          <ul aria-label={t.instructions.listAria} className="flex flex-col gap-1 text-sm">
+          <ul aria-label={t.instructions.listAria} className="flex flex-col gap-1.5 text-sm">
             {instructions.map((instruction) => (
               <li
                 key={instruction.id}
-                className="flex flex-wrap items-start gap-2 rounded-md border border-border px-3 py-1.5"
+                className="flex flex-wrap items-start gap-2 rounded-lg border border-border bg-surface-secondary/50 py-1 pr-1 pl-3"
               >
                 {editing === instruction.id ? (
                   <EditInstruction
@@ -172,7 +172,7 @@ export function InstructionsPanel({
           </ul>
         )}
         {remove.error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {errorText(remove.error)}
           </p>
         )}
@@ -182,7 +182,7 @@ export function InstructionsPanel({
           onAdd={(input) => add.mutateAsync(input)}
         />
         {add.error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="alert-danger">
             {errorText(add.error)}
           </p>
         )}

@@ -292,7 +292,7 @@ describe("DeliveryService.deliver", () => {
       });
     }
     const first = await h.service.deliver(h.task.id);
-    if (first.status !== "delivered") throw new Error(`entrega: ${first.status}`);
+    if (first.status !== "delivered") throw new Error(`delivery: ${first.status}`);
 
     // Another PR was merged and GitHub marks this one in conflict: the poller reopens the task.
     expect(new TaskPrRepository(h.db).recordPrConflict(h.task.id, first.prUrl)).toBe(true);

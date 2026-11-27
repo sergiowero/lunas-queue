@@ -168,23 +168,23 @@ export function taskViewRoutes(deps: ViewDeps): Hono {
   return new Hono()
     .get("/:id/runs", (c) => {
       const runs = deps.views.runs(c.req.param("id"));
-      return runs ? c.json(runs) : notFound(c);
+      return runs ? c.json(runs) : notFound(c, `task ${c.req.param("id")}`);
     })
     .get("/:id/events", (c) => {
       const events = deps.views.events(c.req.param("id"));
-      return events ? c.json(events) : notFound(c);
+      return events ? c.json(events) : notFound(c, `task ${c.req.param("id")}`);
     })
     .get("/:id/usage", (c) => {
       const usage = deps.views.usage(c.req.param("id"));
-      return usage ? c.json(usage) : notFound(c);
+      return usage ? c.json(usage) : notFound(c, `task ${c.req.param("id")}`);
     })
     .get("/:id/hold", (c) => {
       const task = deps.tasks.get(c.req.param("id"));
-      return task ? c.json(holdOf(deps, task)) : notFound(c);
+      return task ? c.json(holdOf(deps, task)) : notFound(c, `task ${c.req.param("id")}`);
     })
     .get("/:id/evidence", async (c) => {
       const task = deps.tasks.get(c.req.param("id"));
-      if (!task) return notFound(c);
+      if (!task) return notFound(c, `task ${c.req.param("id")}`);
       const evidence = await findEvidence(deps, task);
       return evidence ? c.json(evidence) : c.json({ error: "evidence_not_found" }, 404);
     });

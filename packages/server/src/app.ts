@@ -102,6 +102,8 @@ export interface AppDeps {
   now?: () => Date;
   /** How often the SSE change stream looks at the Event log. */
   changeStreamIntervalMs?: number;
+  /** Where unexpected errors (500 internal) are logged with their stack; silent without it. */
+  log?: (message: string) => void;
 }
 
 export function createApp({
@@ -122,6 +124,7 @@ export function createApp({
   git = new RealGit(),
   now = () => new Date(),
   changeStreamIntervalMs = DEFAULT_CHANGE_STREAM_INTERVAL_MS,
+  log,
 }: AppDeps): Hono {
   const runner = new ShellProcessRunner();
   const mcp = new LunasqMcpService({
@@ -174,8 +177,15 @@ export function createApp({
       ) {
         return c.json({ error: error.code, message: error.message }, 500);
       }
+      log?.(`api: ${c.req.method} ${c.req.path}: ${error.stack ?? error.message}`);
       return c.json({ error: "internal" }, 500);
-    });
+    })
+    // Unknown API routes answer JSON like the rest of the API; the rest keep Hono's plain 404.
+    .notFound((c) =>
+      c.req.path === "/api" || c.req.path.startsWith("/api/")
+        ? c.json({ error: "not_found", message: `no route for ${c.req.method} ${c.req.path}` }, 404)
+        : c.text("404 Not Found", 404),
+    );
   if (telemetry) app.route("/", usageRoutes(db));
   return webRoot ? app.route("/", webRoutes(webRoot)) : app;
 }

@@ -3,7 +3,7 @@
 import { type ProjectRepository, ProjectRepositoryError } from "@lunasq/db";
 import { ProjectCreate, ProjectUpdate } from "@lunasq/schemas";
 import { type Context, Hono } from "hono";
-import { invalidInput, notFound, readJson } from "./http.ts";
+import { invalidInput, invalidJson, notFound, readJson } from "./http.ts";
 
 function repositoryError(c: Context, error: unknown) {
   if (error instanceof ProjectRepositoryError && error.code === "profile_not_found") {
@@ -20,7 +20,7 @@ export function projectRoutes(projects: ProjectRepository): Hono {
     .get("/", (c) => c.json(projects.list()))
     .post("/", async (c) => {
       const json = await readJson(c);
-      if (!json.ok) return c.json({ error: "invalid_json" }, 400);
+      if (!json.ok) return invalidJson(c);
       const input = ProjectCreate.safeParse(json.body);
       if (!input.success) return invalidInput(c, input.error);
       try {
@@ -31,23 +31,25 @@ export function projectRoutes(projects: ProjectRepository): Hono {
     })
     .get("/:id", (c) => {
       const project = projects.get(c.req.param("id"));
-      return project ? c.json(project) : notFound(c);
+      return project ? c.json(project) : notFound(c, `project ${c.req.param("id")}`);
     })
     .patch("/:id", async (c) => {
       const json = await readJson(c);
-      if (!json.ok) return c.json({ error: "invalid_json" }, 400);
+      if (!json.ok) return invalidJson(c);
       const patch = ProjectUpdate.safeParse(json.body);
       if (!patch.success) return invalidInput(c, patch.error);
       try {
         const project = projects.update(c.req.param("id"), patch.data);
-        return project ? c.json(project) : notFound(c);
+        return project ? c.json(project) : notFound(c, `project ${c.req.param("id")}`);
       } catch (error) {
         return repositoryError(c, error);
       }
     })
     .delete("/:id", (c) => {
       try {
-        return projects.delete(c.req.param("id")) ? c.body(null, 204) : notFound(c);
+        return projects.delete(c.req.param("id"))
+          ? c.body(null, 204)
+          : notFound(c, `project ${c.req.param("id")}`);
       } catch (error) {
         return repositoryError(c, error);
       }

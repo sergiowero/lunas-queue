@@ -6,7 +6,7 @@ import { getRouteApi, Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { CopyButton } from "../components/copy-button.tsx";
 import { ProjectLabel } from "../components/project-label.tsx";
-import { Loading, QueryError, StateBadges } from "../components/status.tsx";
+import { EmptyState, Loading, QueryError, StateBadges } from "../components/status.tsx";
 import { DependenciesPanel } from "../components/task/dependencies.tsx";
 import { EventLogPanel } from "../components/task/event-log.tsx";
 import { EvidencePanel } from "../components/task/evidence.tsx";
@@ -32,8 +32,8 @@ const route = getRouteApi("/tasks/$taskId");
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
+    <div className="flex min-w-0 flex-col gap-1">
+      <dt className="eyebrow">{label}</dt>
       <dd className="text-sm break-all">{children}</dd>
     </div>
   );
@@ -55,14 +55,19 @@ function CancelTask({ task }: { task: Json<Task> }) {
   });
   if (!confirming) {
     return (
-      <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
+      <Button
+        variant="outline"
+        size="sm"
+        className="hover:border-danger/40 hover:bg-danger/[0.06] hover:text-danger-text"
+        onClick={() => setConfirming(true)}
+      >
         {t.taskDetail.cancel}
       </Button>
     );
   }
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <span>{t.taskDetail.confirmCancel}</span>
+    <div className="flex flex-wrap animate-fade-in items-center gap-2 rounded-lg border border-danger/25 bg-danger/[0.06] py-1 pr-1 pl-3 text-sm">
+      <span className="font-medium">{t.taskDetail.confirmCancel}</span>
       <Button
         variant="destructive"
         size="sm"
@@ -91,18 +96,24 @@ function HoldNotice({ task }: { task: Json<Task> }) {
   if (!held || !hold.data?.hold) return null;
   const { reason, phase, projectId, projectName } = hold.data.hold;
   return (
-    <div role="status" className="rounded-lg border border-border bg-warning/10 p-3 text-sm">
+    <div
+      role="status"
+      className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm"
+    >
       <p>{t.taskDetail.hold[reason](projectName, t.phase[phase])}</p>
       {reason === "profile_missing" ? (
         <Link
           to="/projects"
           search={{ edit: projectId }}
-          className="mt-1 inline-block font-medium underline"
+          className="mt-1 inline-block font-medium underline underline-offset-2 hover:text-warning-text"
         >
           {t.taskDetail.hold.editProject}
         </Link>
       ) : (
-        <Link to="/settings" className="mt-1 inline-block font-medium underline">
+        <Link
+          to="/settings"
+          className="mt-1 inline-block font-medium underline underline-offset-2 hover:text-warning-text"
+        >
           {t.taskDetail.hold.enableInSettings}
         </Link>
       )}
@@ -118,7 +129,7 @@ function CausedByLink({ taskId }: { taskId: string }) {
     <Link
       to="/tasks/$taskId"
       params={{ taskId }}
-      className="underline"
+      className="text-primary-text underline underline-offset-2"
       title={origin ? taskLabel(origin) : undefined}
     >
       {origin ? (
@@ -137,17 +148,17 @@ function Header({ task }: { task: Json<Task> }) {
   const projects = useQuery(queries.projects());
   const project = projects.data?.find((p) => p.id === task.projectId);
   return (
-    <header className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-baseline gap-2">
+    <header className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex items-baseline gap-2.5">
             <TaskNumber number={task.number} className="text-base" />
-            <h1 className="text-xl font-semibold whitespace-pre-wrap">
+            <h1 className="text-2xl font-semibold tracking-tight whitespace-pre-wrap">
               {task.title ?? <GoalText goal={task.goal} />}
             </h1>
           </div>
           {task.title && (
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+            <p className="max-w-3xl text-sm text-muted-foreground whitespace-pre-wrap">
               <GoalText goal={task.goal} />
             </p>
           )}
@@ -169,7 +180,7 @@ function Header({ task }: { task: Json<Task> }) {
         ))}
         {task.riskLabel && <Badge variant="outline">{t.taskDetail.risk(task.riskLabel)}</Badge>}
       </div>
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <dl className="card grid grid-cols-2 gap-x-6 gap-y-4 px-5 py-4 sm:grid-cols-4">
         <Field label={t.taskDetail.project}>
           {project ? (
             <Link to="/projects/$projectId" params={{ projectId: project.id }} className="group">
@@ -187,7 +198,7 @@ function Header({ task }: { task: Json<Task> }) {
         <Field label={t.taskDetail.branch}>
           {task.branch ? (
             <>
-              {task.branch}
+              <span className="font-mono text-[13px]">{task.branch}</span>
               <CopyButton value={task.branch} label={t.taskDetail.branch} />
             </>
           ) : (
@@ -197,7 +208,7 @@ function Header({ task }: { task: Json<Task> }) {
         <Field label={t.taskDetail.worktree}>
           {task.worktreePath ? (
             <>
-              {task.worktreePath}
+              <span className="font-mono text-[13px]">{task.worktreePath}</span>
               <CopyButton value={task.worktreePath} label={t.taskDetail.worktree} />
             </>
           ) : (
@@ -206,7 +217,12 @@ function Header({ task }: { task: Json<Task> }) {
         </Field>
         <Field label={t.taskDetail.pr}>
           {task.prUrl ? (
-            <a href={task.prUrl} target="_blank" rel="noreferrer" className="underline">
+            <a
+              href={task.prUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary-text underline underline-offset-2 hover:decoration-2"
+            >
               {task.prUrl}
             </a>
           ) : task.resultKind ? (
@@ -234,13 +250,13 @@ export function TaskDetailPage() {
   useDocumentTitle(task.data ? `#${task.data.number} · ${cappedTaskLabel(task.data)}` : null);
   if (task.error) {
     if (task.error instanceof ApiError && task.error.status === 404) {
-      return <p className="text-sm">{t.taskDetail.notFound}</p>;
+      return <EmptyState>{t.taskDetail.notFound}</EmptyState>;
     }
     return <QueryError error={task.error} />;
   }
   if (!task.data) return <Loading />;
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Header task={task.data} />
       <HoldNotice task={task.data} />
       <ResultPanel task={task.data} />

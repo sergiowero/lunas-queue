@@ -5,7 +5,7 @@ import { useT } from "../lib/i18n.ts";
 export function EmptyWithNewTask({ message, projectId }: { message: string; projectId?: string }) {
   const t = useT();
   return (
-    <p className="flex flex-wrap items-baseline gap-x-2">
+    <span className="inline-flex flex-wrap items-baseline justify-center gap-x-2">
       <span>{message}</span>
       <Link
         to="/tasks/new"
@@ -14,6 +14,6 @@ export function EmptyWithNewTask({ message, projectId }: { message: string; proj
       >
         {t.common.createTask}
       </Link>
-    </p>
+    </span>
   );
 }
